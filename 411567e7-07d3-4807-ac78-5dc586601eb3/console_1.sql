@@ -4,7 +4,7 @@ create function dwh.get_cum_qty_from_orig_orders_interval(in_order_id bigint, in
     immutable
 as
 $function$
--- 20230628
+-- 20230628 https://dashfinancial.atlassian.net/browse/DS-6961
 declare
     l_cum_qty bigint;
 
@@ -34,7 +34,7 @@ begin
         from dwh.flat_trade_record tr
         where tr.order_id = r.order_id
           and tr.date_id >= r.create_date_id
-          and tr.date_id <= in_max_date_id
+          and tr.date_id <= in_max_date_id -- this part was added compring to the original function
           and tr.is_busted = 'N'
         group by tr.order_id
         ) tr on true
