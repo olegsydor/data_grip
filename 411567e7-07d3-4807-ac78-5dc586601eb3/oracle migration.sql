@@ -14,6 +14,16 @@
    and SINO.INTERNAL_ORDER_ID = p_order_id;
 
 
-select * from dwh.client_order co
+select
+null as  "StrategyInID",
+       co.TRANSACTION_ID as "TransactionID",
+       co.INSTRUMENT_ID as "InstrumentID",
+       SILS.L1_SCOPE as "L1Scope",
+       co.SIDE as "Side",
+       co.EXCHANGE_ID as "ExchangeID",
+       SILS.PRICE as "Price",
+       SILS.QUANTITY as "Qty"
+
+from dwh.client_order co
 join dwh.l1_snapshot ls on ls.transaction_id = co.transaction_id and ls.start_date_id = co.create_date_id
-where co.internal_order_id =
+where co.internal_order_id = 1
