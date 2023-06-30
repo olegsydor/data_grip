@@ -48,7 +48,7 @@ select * from dash360.get_user_permissions('P', 'BARC.jloftus')
             co.TRANSACTION_ID as "TransactionID",
             co.INSTRUMENT_ID  as "InstrumentID",
 --            ls.exchange_id,
-            co.EXCHANGE_ID    as "ExchangeID",
+            ls.EXCHANGE_ID    as "ExchangeID",
             ls.bid_price      as "Bid Price",
             ls.bid_quantity   as "Bid Qty",
             ls.ask_price      as "Ask Price",
@@ -58,7 +58,7 @@ select * from dash360.get_user_permissions('P', 'BARC.jloftus')
                    on ls.transaction_id = co.transaction_id
                        and ls.start_date_id = co.create_date_id
      where co.create_date_id = 20230629
-       and co.internal_order_id = 793027343579
+       and co.internal_order_id = 230182765287
 
      select * from strategy_transaction_output;
 
