@@ -63,9 +63,9 @@ select * from dash360.get_user_permissions('P', 'BARC.jloftus')
      select * from strategy_transaction_output;
 
 
-select * from dwh.d_osr_param_dictionary
-select * from dwh.d_osr_param_set
-select * from dwh.d_routing_table
+select * from dwh.d_osr_param_dictionary;
+select * from dwh.d_osr_param_set;
+select * from dwh.d_routing_table;
 
 SELECT
     CASE b.RISK_MGMT_CONF_SCOPE
