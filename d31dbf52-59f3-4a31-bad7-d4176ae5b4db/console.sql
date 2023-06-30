@@ -14,22 +14,21 @@
    and SINO.INTERNAL_ORDER_ID = p_order_id;
 
 
-     select null              as "StrategyInID",
+     select co.internal_order_id,
+         null              as "StrategyInID",
             co.TRANSACTION_ID as "TransactionID",
             co.INSTRUMENT_ID  as "InstrumentID",
---        SILS.L1_SCOPE as "L1Scope",
-            ls.exchange_id,
-            co.SIDE           as "Side",
+--            ls.exchange_id,
             co.EXCHANGE_ID    as "ExchangeID",
---        SILS.PRICE as "Price",
---        SILS.QUANTITY as "Qty"
-            ls.bid_price      as "Price",
-            ls.bid_quantity   as "Qty"
+            ls.bid_price      as "Bid Price",
+            ls.bid_quantity   as "Bid Qty",
+            ls.ask_price      as "Ask Price",
+            ls.bid_quantity   as "Ask Qty"
      from dwh.client_order co
-              join lateral (select *
-                            from dwh.l1_snapshot ls
-                            where ls.transaction_id = co.transaction_id
-                              and ls.start_date_id = co.create_date_id
-                              and co.exchange_id in ('NBBO', 'BOX')
-                            limit 2) ls on true
-     where co.internal_order_id = 1
+              join dwh.l1_snapshot ls
+                   on ls.transaction_id = co.transaction_id
+                       and ls.start_date_id = co.create_date_id
+     where co.create_date_id = 20230629
+       and co.internal_order_id = 793027343579
+
+     select * from strategy_transaction_output
