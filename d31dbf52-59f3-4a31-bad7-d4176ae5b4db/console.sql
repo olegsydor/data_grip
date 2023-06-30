@@ -60,4 +60,55 @@ select * from dash360.get_user_permissions('P', 'BARC.jloftus')
      where co.create_date_id = 20230629
        and co.internal_order_id = 793027343579
 
-     select * from strategy_transaction_output
+     select * from strategy_transaction_output;
+
+
+select * from dwh.d_osr_param_dictionary
+select * from dwh.d_osr_param_set
+select * from dwh.d_routing_table
+
+SELECT
+    CASE b.RISK_MGMT_CONF_SCOPE
+        WHEN 'T' THEN 'Trading Firm (Cloud)'
+        WHEN 'A' THEN 'Account (Cloud)'
+        WHEN 'H' THEN 'Account (HFT)'
+        WHEN 'B' THEN 'Account (Crosses)'
+        WHEN 'U' THEN 'Trading Firm (Crosses)'
+        WHEN 'G' THEN 'DASH Global Parametes'
+        WHEN 'C' THEN 'Trader (Cloud)'
+        WHEN 'D' THEN 'Trader (Crosses)'
+    END AS RISK_MGMT_CONF_SCOPE_TEXT,
+    tf.TRADING_FIRM_NAME,
+    a.ACCOUNT_NAME,
+    b.CREATE_TIME,
+    CASE b.RISK_CHANGE_TYPE
+        WHEN 'P' THEN 'Permanent'
+        WHEN 'T' THEN 'Temporary'
+    END AS RISK_CHANGE_TYPE,
+    CASE b.RISK_CHANGE_REASON
+        WHEN 'C' THEN 'Client Request'
+        WHEN 'L' THEN 'Limit Breach'
+        WHEN 'R' THEN 'Reverting'
+        WHEN 'S' THEN 'Soft Limit Breach'
+        --WHEN 'A' THEN 'Auto-Reverting'
+    END AS RISK_CHANGE_REASON,
+    u.USER_NAME,
+    u.FIRST_NAME || ' ' || u.LAST_NAME AS full_name,
+    t.OSR_PARAM_CODE,
+    p.OSR_PARAM_NAME,
+    p.OSR_PARAM_TYPE,
+    p.OSR_PARAM_DESC,
+    t.OSR_PARAM_OLD_VALUE,
+    t.OSR_PARAM_NEW_VALUE,
+    trd.TRADER_ID
+FROM risk_limit_audit_trail t
+INNER JOIN RISK_LIMIT_AUDIT_TRAIL_BATCH b ON b.RISK_LIMIT_AUDIT_BATCH_ID=t.RISK_LIMIT_AUDIT_BATCH_ID
+LEFT JOIN USER_IDENTIFIER u ON u.USER_ID=b.USER_ID
+LEFT JOIN OSR_PARAM_DICTIONARY p ON p.OSR_PARAM_CODE=t.OSR_PARAM_CODE
+LEFT JOIN account a ON a.ACCOUNT_ID = b.ACCOUNT_ID
+LEFT JOIN trading_firm tf ON tf.TRADING_FIRM_ID=b.TRADING_FIRM_ID
+LEFT JOIN genesis2.trader trd ON trd.trader_internal_id = b.trader_internal_id
+WHERE b.CREATE_TIME between p_start_date and p_end_date
+  and coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(t.OSR_PARAM_OLD_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_OLD_VALUE end, '-1') <>
+      coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(t.OSR_PARAM_NEW_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_NEW_VALUE end, '-2')
+ORDER BY b.CREATE_TIME ASC;
