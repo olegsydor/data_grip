@@ -98,23 +98,33 @@ select sr.routing_table_id,
 
 
 
-select em.routing_table_id--, e.max_date
+select *--em.routing_table_id--, e.max_date
 from genesis2.routing_table rt
-         left join lateral (select sr.routing_table_id,
-                                   st.start_date_id-- as max_date
+         left join (select sr.routing_table_id,
+                                   max(st.start_date_id) as max_date
                             from strategy_routing_table sr
                                      join strategy_transaction st on (sr.transaction_id = st.transaction_id)
-                            where sr.routing_table_id = rt.routing_table_id
-                              and rownum = 1
-                            order by 2 desc
-             ) em on em.routing_table_id = rt.routing_table_id
+                            group by sr.routing_table_id
+    ) em on em.routing_table_id = rt.routing_table_id
 where rt.routing_table_id = 20469;
 
 
-select department_name, employee_id, employee_name
-from   departments d
-       left join lateral (select employee_id, employee_name
-                          from   employees e
-                          where  salary >= 2000
-                          and    e.department_id = d.department_id) e
-                 on e.department_id = d.department_id
+select rt.ROUTING_TABLE_ID,
+       (select first_value(st.start_date_id) over (partition by sr.transaction_id order by st.START_DATE_ID) max_date_id
+                            from strategy_routing_table sr
+                                     join strategy_transaction st on (sr.transaction_id = st.transaction_id)
+                            where sr.ROUTING_TABLE_ID = rt.ROUTING_TABLE_ID
+                            and ROWNUM = 1
+    ) as r
+from genesis2.routing_table rt
+         where r is not null;
+
+
+select rt.ROUTING_TABLE_ID, r.*
+from genesis2.routing_table rt
+join        (select sr.ROUTING_TABLE_ID, max(st.start_date_id)
+                            from strategy_routing_table sr
+                                     join strategy_transaction st on (sr.transaction_id = st.transaction_id)
+                            group by sr.ROUTING_TABLE_ID
+    )  r on rt.routing_table_id = r.ROUTING_TABLE_ID
+
