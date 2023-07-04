@@ -102,8 +102,30 @@ from dwh.d_routing_table rt
          left outer join dwh.d_trading_firm tf1 on tf1.trading_firm_id = rta.trading_firm_id and tf1.is_active
          left outer join dwh.d_target_strategy ts on ts.target_strategy_id = rt.target_strategy
 -- where rt.is_deleted = 'N'
-where rt.routing_table_id = 20469
-and rt.is_active;
+where rt.routing_table_id in (20469,
+                              21389,
+                              13733,
+                              12455,
+                              12632,
+                              16563,
+                              19812,
+                              24362,
+                              18043,
+                              15683,
+                              16083,
+                              12454,
+                              24727,
+                              11920,
+                              19526,
+                              23955,
+                              10303,
+                              24000,
+                              23135,
+                              24794)
+  and rt.is_active;
+
+
+
 
 select *
 -- from dwh.d_routing_table rt
