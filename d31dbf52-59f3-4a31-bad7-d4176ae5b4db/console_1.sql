@@ -124,9 +124,66 @@ where rt.routing_table_id in (20469,
                               24794)
   and rt.is_active;
 
-
+select drt.routing_table_id, co.create_date_id from dwh.d_routing_table drt
+left join lateral (select co.create_date_id from dwh.client_order co where drt.routing_table_id = co.routing_table_id
+                                                     and co.routing_table_id is not null
+                                                     order by create_date_id desc limit 1) co on true;
 
 
 select *
 -- from dwh.d_routing_table rt
-from staging.routing_table rt
+from staging.routing_table rt;
+
+select rt.routing_table_id                   as routing_table_id,
+       rt.routing_table_name                 as routing_table_name,
+       rt.routing_table_desc                 as routing_table_desc,
+       case
+           when rt.instrument_type_id = 'O' then 'Option'
+           when rt.instrument_type_id = 'E' then 'Equity'
+           when rt.instrument_type_id = 'M' then 'Multileg'
+           else rt.instrument_type_id end    as instrument_type,
+       ts.target_strategy_name               as target_strategy,
+       rt.fee_sensitivity                    as fee_sensitivity,
+       case
+           when rt.intended_scope_of_use = 'D' then 'Default'
+           when rt.intended_scope_of_use = 'A' then 'Account-specific'
+           when rt.intended_scope_of_use = 'T' then 'Trading firm-specific'
+           else rt.intended_scope_of_use end as routing_table_scope,
+--        ac.account_class_name                 as account_class,
+--        cg.capacity_group_name                as capacity_group,
+       case
+           when rt.routing_table_type = 'C' then 'Instrument Class'
+           when rt.routing_table_type = 'T' then 'Global'
+           when rt.routing_table_type = 'S' then 'Symbol'
+           when rt.routing_table_type = 'L' then 'Symbol List'
+           else rt.routing_table_type end    as routing_table_type,
+       case
+           when rt.instr_class_id = 'NN' then 'Nickel Non-Premium'
+           when rt.instr_class_id = 'NP' then 'Nickel Premium'
+           when rt.instr_class_id = 'PN' then 'Penny Non-Premium'
+           when rt.instr_class_id = 'PP' then 'Penny Premium'
+           else rt.instr_class_id end        as instrument_class,
+       rt.symbol_list_id                     as symbol_list,
+       rt.root_symbol                        as symbol,
+       rt.symbol_suffix                      as symbol_sfx,
+       rta.last_routed_time
+from dwh.d_routing_table rt
+         left join lateral (select co.account_id,
+                                   co.routing_table_id,
+                                   co.process_time last_routed_time
+                            from dwh.client_order co
+                            where co.routing_table_id = rt.routing_table_id
+                              and co.parent_order_id is null
+                              and co.multileg_reporting_type in ('1', '2')
+                              and co.routing_table_id is not null
+                            order by co.process_time desc
+                            limit 1
+    ) rta on true
+         left join data_marts.d_sub_strategy ss on ss.sub_strategy_id = rt.target_strategy
+         left join dwh.d_trading_firm tf on rt.owner_trading_firm_id = tf.trading_firm_id and tf.is_active
+         left outer join dwh.d_account acc on acc.account_id = rta.account_id and acc.is_active
+         left outer join dwh.d_target_strategy ts on ts.target_strategy_id = rt.target_strategy
+where rt.is_active
+
+
+
