@@ -295,3 +295,21 @@ $$
     end;
 $$;
 
+-- daily_update
+insert into trash.so_routing_max_time_usage (routing_table_id, account_id, last_routed_time)
+select distinct on (co.routing_table_id) co.routing_table_id,
+                                         co.account_id   as account_id,
+                                         co.process_time as last_routed_time
+from dwh.client_order co
+where true
+  and co.routing_table_id in (select routing_table_id
+                              from dwh.d_routing_table rt
+                              where is_active)
+  and co.parent_order_id is null
+  and co.multileg_reporting_type in ('1', '2')
+  and co.routing_table_id is not null
+  and co.create_date_id = :f_date_id
+order by routing_table_id, last_routed_time desc
+on conflict (routing_table_id) do update
+    set account_id       = excluded.account_id,
+        last_routed_time = excluded.last_routed_time;
