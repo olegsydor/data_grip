@@ -258,7 +258,7 @@ select * from trash.so_routing_max_time_usage
 where last_routed_time is not null;
 
 
-
+-- the first loading
 do
 $$
     declare
@@ -267,7 +267,7 @@ $$
     begin
         for f_date_id in
             select to_char(id, 'YYYYMMDD')::int4
-            from generate_series('2023-07-19'::date, '2023-01-01'::date, interval '-1 day') as id
+            from generate_series('2022-12-31'::date, '2022-01-01'::date, interval '-1 day') as id
             loop
                 begin
                     insert into trash.so_routing_max_time_usage (routing_table_id, account_id, last_routed_time)
@@ -295,25 +295,3 @@ $$
     end;
 $$;
 
-
-select co.routing_table_id,
-       max(co.account_id) as account_id,
-       max(co.process_time) as last_routed_time
-from dwh.client_order co
-where true
-  and co.routing_table_id in (select routing_table_id
-                              from trash.so_routing_max_time_usage rt
-                              where rt.last_routed_time is null)
-and co.parent_order_id is null
-  and co.multileg_reporting_type in ('1', '2')
-  and co.routing_table_id is not null
-  and co.create_date_id = 20230705
-group by co.routing_table_id
-on conflict (routing_table_id) do update
-set account_id = excluded.account_id,
-    last_routed_time = excluded.last_routed_time;
-
-
-
-
-    end;
