@@ -267,7 +267,7 @@ $$
     begin
         for f_date_id in
             select to_char(id, 'YYYYMMDD')::int4
-            from generate_series('2022-12-31'::date, '2022-01-01'::date, interval '-1 day') as id
+            from generate_series('2021-12-31'::date, '2021-01-01'::date, interval '-1 day') as id
             loop
                 begin
                     insert into trash.so_routing_max_time_usage (routing_table_id, account_id, last_routed_time)
