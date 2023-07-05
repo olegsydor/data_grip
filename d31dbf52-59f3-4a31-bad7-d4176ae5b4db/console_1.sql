@@ -215,6 +215,7 @@ begin
                                             and co.parent_order_id is null
                                             and co.multileg_reporting_type in ('1', '2')
                                             and co.routing_table_id is not null
+--                                           and co.create_date_id > 20230303
                                           order by co.process_time desc
                                           limit 1
                   ) rta on true
@@ -226,4 +227,93 @@ begin
               where rt.is_active) x;
 end;
 $fx$;
-select * from dwh.d_account_class
+
+
+
+select distinct on (co.routing_table_id) co.account_id,
+                                         co.routing_table_id,
+                                         co.process_time last_routed_time
+from dwh.d_routing_table rt
+         join dwh.client_order co on (rt.routing_table_id = co.routing_table_id)
+where true
+  and rt.is_active
+  and rt.routing_table_id = 401
+  and co.parent_order_id is null
+  and co.multileg_reporting_type in ('1', '2')
+  and co.routing_table_id is not null
+  and co.create_date_id > 20230303
+order by co.routing_table_id, co.process_time desc;
+
+select routing_table_id,
+       null::int8 as account_id,
+       null::timestamp as last_routed_time
+into trash.so_routing_max_time_usage
+from dwh.d_routing_table rt
+where true
+  and rt.is_active;
+
+alter table trash.so_routing_max_time_usage add constraint routing_max_time_usage_pk primary key (routing_table_id);
+
+select * from trash.so_routing_max_time_usage
+where last_routed_time is not null;
+
+
+
+do
+$$
+    declare
+        f_date_id int4;
+        f_row_cnt int4;
+    begin
+        for f_date_id in
+            select to_char(id, 'YYYYMMDD')::int4
+            from generate_series('2023-07-19'::date, '2023-01-01'::date, interval '-1 day') as id
+            loop
+                begin
+                    insert into trash.so_routing_max_time_usage (routing_table_id, account_id, last_routed_time)
+                    select distinct on (co.routing_table_id) co.routing_table_id,
+                                                             co.account_id   as account_id,
+                                                             co.process_time as last_routed_time
+                    from dwh.client_order co
+                    where true
+                      and co.routing_table_id in (select routing_table_id
+                                                  from trash.so_routing_max_time_usage rt
+                                                  where rt.last_routed_time is null)
+                      and co.parent_order_id is null
+                      and co.multileg_reporting_type in ('1', '2')
+                      and co.routing_table_id is not null
+                      and co.create_date_id = f_date_id
+                    order by routing_table_id, last_routed_time desc
+                    on conflict (routing_table_id) do update
+                        set account_id       = excluded.account_id,
+                            last_routed_time = excluded.last_routed_time;
+                    get diagnostics f_row_cnt = row_count;
+                    raise notice 'time: %, date_id: %, count of updated rows: %', clock_timestamp(), f_date_id, f_row_cnt;
+                    commit;
+                end;
+            end loop;
+    end;
+$$;
+
+
+select co.routing_table_id,
+       max(co.account_id) as account_id,
+       max(co.process_time) as last_routed_time
+from dwh.client_order co
+where true
+  and co.routing_table_id in (select routing_table_id
+                              from trash.so_routing_max_time_usage rt
+                              where rt.last_routed_time is null)
+and co.parent_order_id is null
+  and co.multileg_reporting_type in ('1', '2')
+  and co.routing_table_id is not null
+  and co.create_date_id = 20230705
+group by co.routing_table_id
+on conflict (routing_table_id) do update
+set account_id = excluded.account_id,
+    last_routed_time = excluded.last_routed_time;
+
+
+
+
+    end;
