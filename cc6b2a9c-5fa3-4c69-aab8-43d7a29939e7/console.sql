@@ -2,9 +2,9 @@ with MD as (select sr.routing_table_id,
                    max(st.start_date_id) as max_date
             from strategy_routing_table sr
                      join strategy_transaction st on (sr.transaction_id = st.transaction_id)
---             where sr.ROUTING_TABLE_ID = 24876
+             where sr.ROUTING_TABLE_ID = 22224
             group by sr.routing_table_id
-
+22224|BD_SPY_FS3||Option|SENSOR|3|Default|Standard|Broker/Dealer|Symbol|||SPY||12909|wchv|2022-10-04 16:11:59.583233
 	union
 
     select sd1.routing_table_id,
