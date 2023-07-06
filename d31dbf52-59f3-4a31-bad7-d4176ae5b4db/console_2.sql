@@ -11,10 +11,10 @@ declare
 
 begin
     return query
-        select 'routing_table_id|routing_table_name|routing_table_desc|instrument_type|target_strategy|fee_sensitivity|routing_table_scope|account_class|capacity_group|routing_table_type|instrument_class|symbol_list|symbol|symbol_sfx|account_id|account_name|last_routed_time';
+        select 'Routing Table Name|Description|Security Type|Target Strategy|Fee Sensitivity|Scope|Account Class|Capacity Group|Routing Table Type|Instrument Class|Symbol List|Symbol|Symbol Suffix|Trading Firm|Account|Last Used Date';
 
     return query
-        select coalesce(routing_table_id::text, '') || '|' ||
+        select -- coalesce(routing_table_id::text, '') || '|' ||
                coalesce(routing_table_name, '') || '|' ||
                coalesce(routing_table_desc, '') || '|' ||
                coalesce(instrument_type, '') || '|' ||
@@ -28,9 +28,10 @@ begin
                coalesce(symbol_list, '') || '|' ||
                coalesce(symbol, '') || '|' ||
                coalesce(symbol_sfx, '') || '|' ||
-               coalesce(account_id::text, '') || '|' ||
+--                coalesce(account_id::text, '') || '|' ||
+               coalesce(trading_firm_name, '') || '|' ||
                coalesce(account_name, '') || '|' ||
-               coalesce(to_char(last_routed_time, 'YYYY-MM-DD HH24:MI:SS.US'), '')
+               coalesce(to_char(last_routed_time, 'MM/DD/YYYY'), '')
         from (select rt.routing_table_id                   as routing_table_id,
                      rt.routing_table_name                 as routing_table_name,
                      rt.routing_table_desc                 as routing_table_desc,
@@ -64,6 +65,7 @@ begin
                      rt.root_symbol                        as symbol,
                      rt.symbol_suffix                      as symbol_sfx,
                      rta.account_id                        as account_id,
+                     tf.trading_firm_name as trading_firm_name,
                      da.account_name                       as account_name,
                      rta.last_routed_time
               from dwh.d_routing_table rt
@@ -76,9 +78,9 @@ begin
                   ) rta on true
                        left join dwh.d_account da on da.account_id = rta.account_id
                        left join dwh.d_account_class dac on da.account_class_id = dac.account_class_id
-                       left join dwh.d_capacity_group dag
-                                 on dag.capacity_group_id = rt.capacity_group_id
+                       left join dwh.d_capacity_group dag on dag.capacity_group_id = rt.capacity_group_id
                        left outer join dwh.d_target_strategy ts on ts.target_strategy_id = rt.target_strategy
+              left outer join dwh.d_trading_firm tf on tf.trading_firm_id = da.trading_firm_id
               where rt.is_active) x;
 end;
 $fx$;

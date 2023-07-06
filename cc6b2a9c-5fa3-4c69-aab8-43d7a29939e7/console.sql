@@ -211,3 +211,6 @@ select sr.ROUTING_TABLE_ID, max(st.start_date_id) max_date
                             and sr.routing_table_id = 20469
                             group by sr.ROUTING_TABLE_ID;
 
+
+
+select * from genesis2.REPORTING_SL.getAllocations(null, null,date '2023-07-03', date '2023-07-04');

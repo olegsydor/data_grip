@@ -155,10 +155,10 @@ declare
 
 begin
     return query
-        select 'routing_table_id|routing_table_name|routing_table_desc|instrument_type|target_strategy|fee_sensitivity|routing_table_scope|account_class|capacity_group|routing_table_type|instrument_class|symbol_list|symbol|symbol_sfx|last_routed_time';
+        select 'routing_table_name|routing_table_desc|instrument_type|target_strategy|fee_sensitivity|routing_table_scope|account_class|capacity_group|routing_table_type|instrument_class|symbol_list|symbol|symbol_sfx|last_routed_time';
 
     return query
-        select coalesce(routing_table_id::text, '') ||'|'||
+        select --coalesce(routing_table_id::text, '') ||'|'||
                coalesce(routing_table_name, '') ||'|'||
                coalesce(routing_table_desc, '') ||'|'||
                coalesce(instrument_type, '') ||'|'||
@@ -313,3 +313,11 @@ order by routing_table_id, last_routed_time desc
 on conflict (routing_table_id) do update
     set account_id       = excluded.account_id,
         last_routed_time = excluded.last_routed_time;
+
+
+select *
+from trash.reporting_getallocations(
+--      in_trading_firm_id ,
+--      in_account_ids ,
+        in_date_begin := 20230705,
+        in_date_end := 20230706);
