@@ -142,7 +142,10 @@ select *
 from staging.routing_table rt;
 
 select * from dash360.report_routing_table_last_used_date();
-drop function if exists trash.report_routing_table_usage;
+
+
+
+drop function if exists dash360.report_routing_table_last_used_date;
 create function dash360.report_routing_table_last_used_date()
     returns table
             (
@@ -213,7 +216,7 @@ begin
                        left join lateral (select co.account_id,
                                                  co.routing_table_id,
                                                  co.last_routed_time
-                                          from trash.so_routing_max_time_usage co
+                                          from dwh.routing_max_time_usage co
                                           where co.routing_table_id = rt.routing_table_id
                                           limit 1
                   ) rta on true
@@ -228,7 +231,7 @@ $fx$;
 comment on function dash360.report_routing_table_last_used_date is 'Last Used Date of Routing Table';
 
 
-
+select * from dash360.report_routing_table_last_used_date()
 select distinct on (co.routing_table_id) co.account_id,
                                          co.routing_table_id,
                                          co.process_time last_routed_time
@@ -321,9 +324,76 @@ on conflict (routing_table_id) do update
         last_routed_time = excluded.last_routed_time;
 
 
-select *
-from trash.reporting_getallocations(
---      in_trading_firm_id ,
---      in_account_ids ,
-        in_date_begin := 20230705,
-        in_date_end := 20230706);
+drop function if exists staging.update_routing_table_last_usage_date;
+create function staging.update_routing_table_last_usage_date(in_start_date_id int4 default null, in_end_date_id int4 default null)
+    returns int4
+    language plpgsql
+as
+$fx$
+-- 202307070 SO https://dashfinancial.atlassian.net/browse/DEVREQ-3307 last_routed_time update
+declare
+    out_row_cnt     int4;
+    l_start_date_id int4;
+    l_end_date_id   int4;
+    l_load_id       int;
+    l_step_id       int;
+begin
+    l_start_date_id := coalesce(in_start_date_id, to_char(public.get_last_workdate(CURRENT_DATE), 'YYYYMMDD')::int4);
+    l_end_date_id := coalesce(in_end_date_id, public.get_dateid(current_date));
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'update_routing_table_last_usage_date for ' || l_start_date_id::text || ' - ' ||
+                           l_end_date_id::text || ' STARTED===', 0, 'O')
+    into l_step_id;
+
+    insert into dwh.routing_max_time_usage (routing_table_id, account_id, last_routed_time)
+    select distinct on (co.routing_table_id) co.routing_table_id,
+                                             co.account_id   as account_id,
+                                             co.process_time as last_routed_time
+    from dwh.client_order co
+    where true
+      and co.routing_table_id in (select routing_table_id
+                                  from dwh.d_routing_table rt
+                                  where is_active)
+      and co.parent_order_id is null
+      and co.multileg_reporting_type in ('1', '2')
+      and co.routing_table_id is not null
+      and co.create_date_id between l_start_date_id and l_end_date_id
+    order by routing_table_id, last_routed_time desc
+    on conflict (routing_table_id) do update
+        set account_id       = excluded.account_id,
+            last_routed_time = excluded.last_routed_time;
+
+    get diagnostics out_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id,
+                           'update_routing_table_last_usage_date for ' || l_start_date_id::text || ' - ' ||
+                           l_end_date_id::text || ' FINISHED===', 0, 'O')
+    into l_step_id;
+    return out_row_cnt;
+end;
+$fx$;
+comment on function staging.update_routing_table_last_usage_date is 'Update of last_routed_time for routing_tables';
+
+select * from staging.update_routing_table_last_usage_date();
+
+alter table trash.so_routing_max_time_usage set schema dwh;
+alter table dwh.so_routing_max_time_usage rename to routing_max_time_usage;
+
+select * from dwh.routing_max_time_usage
+where last_routed_time is not null
+
+
+
+
+
+
+
+
+
+
+
+
+
+
