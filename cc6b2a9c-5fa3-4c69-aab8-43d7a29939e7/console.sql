@@ -328,13 +328,41 @@ where
 	AND oai."TradeDate" BETWEEN :l_trunc_start_date AND :l_trunc_end_date;
 
 
-with tm as (select *
-            from generate_series('2023-07-01'::timestamp, '2023-07-02'::timestamp, interval '5 minutes') as t_start)
-SELECT tm.t_start, tm.t_start + interval '5 minutes', r.cnt
-from tm
-         left join lateral (
-    select count(*) as cnt
-    from genesis2.rt_allocation_trade_record
---where trade_record_time::date = '2023-07-03'
-    WHERE trade_record_time between tm.t_start and tm.t_start + interval '5 minutes'
-    limit 1) r on true
+
+DECLARE
+  l_cursor  SYS_REFCURSOR;
+  l_ename   emp.ename%TYPE;
+  l_empno   emp.empno%TYPE;
+  l_deptno  emp.deptno%TYPE;
+   type batch_accounts is table of NUMBER;
+   amm batch_accounts := batch_accounts(28411,26636);
+BEGIN
+REPORTING_SL.getActiveParentGTCOrders(amm);
+
+  LOOP
+    FETCH l_cursor
+    INTO  l_ename, l_empno, l_deptno;
+    EXIT WHEN l_cursor%NOTFOUND;
+    DBMS_OUTPUT.PUT_LINE(l_ename || ' | ' || l_empno || ' | ' || l_deptno);
+  END LOOP;
+  CLOSE l_cursor;
+END;
+/
+
+
+
+declare
+      l_cursor  SYS_REFCURSOR;
+   type batch_accounts is table of NUMBER;
+   amm batch_accounts := batch_accounts(28411,26636);
+    symbol_cursor  record_cursor;
+BEGIN
+
+  REPORTING_SL.getActiveParentGTCOrders(amm);
+  loop
+    fetch symbol_cursor bulk collect into ;
+--     exit when symbol_cursor%notfound;
+--     dbms_output.put_line( symbol_record.* );
+  end loop;
+  CLOSE l_cursor;
+end;
