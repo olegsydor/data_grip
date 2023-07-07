@@ -326,3 +326,15 @@ where
 -- 	AND (p_tf_id IS NULL OR a.trading_firm_id=p_tf_id)
 -- 	AND (p_accounts IS NULL OR a.ACCOUNT_ID MEMBER p_accounts)
 	AND oai."TradeDate" BETWEEN :l_trunc_start_date AND :l_trunc_end_date;
+
+
+with tm as (select *
+            from generate_series('2023-07-01'::timestamp, '2023-07-02'::timestamp, interval '5 minutes') as t_start)
+SELECT tm.t_start, tm.t_start + interval '5 minutes', r.cnt
+from tm
+         left join lateral (
+    select count(*) as cnt
+    from genesis2.rt_allocation_trade_record
+--where trade_record_time::date = '2023-07-03'
+    WHERE trade_record_time between tm.t_start and tm.t_start + interval '5 minutes'
+    limit 1) r on true
