@@ -141,9 +141,9 @@ select *
 -- from dwh.d_routing_table rt
 from staging.routing_table rt;
 
-select * from trash.report_routing_table_usage();
+select * from dash360.report_routing_table_last_used_date();
 drop function if exists trash.report_routing_table_usage;
-create function trash.report_routing_table_usage(in_date_id int4 default null)
+create function dash360.report_routing_table_last_used_date()
     returns table
             (
                 export_row text
@@ -151,28 +151,28 @@ create function trash.report_routing_table_usage(in_date_id int4 default null)
     language plpgsql
 as
 $fx$
-declare
-
+    -- 20230707 SO https://dashfinancial.atlassian.net/browse/DEVREQ-3307
 begin
     return query
-        select 'routing_table_name|routing_table_desc|instrument_type|target_strategy|fee_sensitivity|routing_table_scope|account_class|capacity_group|routing_table_type|instrument_class|symbol_list|symbol|symbol_sfx|last_routed_time';
+        select 'Routing Table Name|Description|Security Type|Target Strategy|Fee Sensitivity|Scope|Account Class|Capacity Group|Routing Table Type|Instrument Class|Symbol List|Symbol|Symbol Suffix|Trading Firm|Account|Last Used Date';
 
     return query
-        select --coalesce(routing_table_id::text, '') ||'|'||
-               coalesce(routing_table_name, '') ||'|'||
-               coalesce(routing_table_desc, '') ||'|'||
-               coalesce(instrument_type, '') ||'|'||
-               coalesce(target_strategy, '') ||'|'||
-               coalesce(fee_sensitivity::text, '') ||'|'||
-               coalesce(routing_table_scope, '') ||'|'||
-               coalesce(account_class, '') ||'|'||
-               coalesce(capacity_group, '') ||'|'||
-               coalesce(routing_table_type, '') ||'|'||
-               coalesce(instrument_class, '') ||'|'||
-               coalesce(symbol_list, '') ||'|'||
-               coalesce(symbol, '') ||'|'||
-               coalesce(symbol_sfx, '') ||'|'||
-               coalesce(to_char(last_routed_time, 'YYYY-MM-DD HH24:MI:SS.US'), '')
+        select coalesce(routing_table_name, '') || '|' ||
+               coalesce(routing_table_desc, '') || '|' ||
+               coalesce(instrument_type, '') || '|' ||
+               coalesce(target_strategy, '') || '|' ||
+               coalesce(fee_sensitivity::text, '') || '|' ||
+               coalesce(routing_table_scope, '') || '|' ||
+               coalesce(account_class, '') || '|' ||
+               coalesce(capacity_group, '') || '|' ||
+               coalesce(routing_table_type, '') || '|' ||
+               coalesce(instrument_class, '') || '|' ||
+               coalesce(symbol_list, '') || '|' ||
+               coalesce(symbol, '') || '|' ||
+               coalesce(symbol_sfx, '') || '|' ||
+               coalesce(trading_firm_name, '') || '|' ||
+               coalesce(account_name, '') || '|' ||
+               coalesce(to_char(last_routed_time, 'MM/DD/YYYY'), '')
         from (select rt.routing_table_id                   as routing_table_id,
                      rt.routing_table_name                 as routing_table_name,
                      rt.routing_table_desc                 as routing_table_desc,
@@ -205,28 +205,27 @@ begin
                      rt.symbol_list_id                     as symbol_list,
                      rt.root_symbol                        as symbol,
                      rt.symbol_suffix                      as symbol_sfx,
+                     rta.account_id                        as account_id,
+                     tf.trading_firm_name                  as trading_firm_name,
+                     da.account_name                       as account_name,
                      rta.last_routed_time
               from dwh.d_routing_table rt
                        left join lateral (select co.account_id,
                                                  co.routing_table_id,
-                                                 co.process_time last_routed_time
-                                          from dwh.client_order co
+                                                 co.last_routed_time
+                                          from trash.so_routing_max_time_usage co
                                           where co.routing_table_id = rt.routing_table_id
-                                            and co.parent_order_id is null
-                                            and co.multileg_reporting_type in ('1', '2')
-                                            and co.routing_table_id is not null
---                                           and co.create_date_id > 20230303
-                                          order by co.process_time desc
                                           limit 1
                   ) rta on true
-                       join dwh.d_account da on da.account_id = rta.account_id
+                       left join dwh.d_account da on da.account_id = rta.account_id
                        left join dwh.d_account_class dac on da.account_class_id = dac.account_class_id
-                       left join dwh.d_capacity_group dag
-                                 on dag.capacity_group_id = rt.capacity_group_id
+                       left join dwh.d_capacity_group dag on dag.capacity_group_id = rt.capacity_group_id
                        left outer join dwh.d_target_strategy ts on ts.target_strategy_id = rt.target_strategy
+                       left outer join dwh.d_trading_firm tf on tf.trading_firm_id = da.trading_firm_id
               where rt.is_active) x;
 end;
 $fx$;
+comment on function dash360.report_routing_table_last_used_date is 'Last Used Date of Routing Table';
 
 
 
@@ -295,7 +294,14 @@ $$
     end;
 $$;
 
+
+select public.get_last_workdate(CURRENT_DATE);
+select public.get_business_date_back(in_offset := 1)
 -- daily_update
+
+create function staging.update_routing_table_last_usage_date(in_start_date_id int4, in_end_date_id int4 default null)
+returns int4
+language plpgsql
 insert into trash.so_routing_max_time_usage (routing_table_id, account_id, last_routed_time)
 select distinct on (co.routing_table_id) co.routing_table_id,
                                          co.account_id   as account_id,
