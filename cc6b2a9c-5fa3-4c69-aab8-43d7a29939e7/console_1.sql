@@ -182,3 +182,59 @@ END;
 exit
 /
 
+
+
+    select
+		  ac.account_name as account_name,
+      CL.CREATE_TIME at time zone DBTIMEZONE_GENESIS2 as creation_date,
+      ORS.ORDER_STATUS_DESCRIPTION as ord_status,
+      I.INSTRUMENT_TYPE_ID as sec_type,
+      CL.SIDE as side,
+      I.SYMBOL as symbol,
+      --EDC.EX_DESTINATION_CODE_NAME as ex_dest,
+      EXCH.EXCHANGE_ID exchange_id,
+      EXCH.EXCHANGE_NAME ex_dest,
+      (CASE WHEN EXCH.EXCHANGE_ID LIKE '%ML' THEN 'Y' ELSE 'N' END) is_bdma,
+      CL.ORDER_QTY as ord_qty,
+      CAST((SELECT SUM(LAST_QTY) FROM EXECUTION_TODAY WHERE ORDER_ID = CL.ORDER_ID AND EXEC_TYPE IN ('F','G') AND IS_BUSTED = 'N') as NUMBER(13,0)) as ex_qty,
+      CL.ORDER_TYPE as ord_type,
+      CL.PRICE as price,
+      EX.AVG_PX as avg_px,
+      EX.LEAVES_QTY as lvs_qty,
+      decode(CL.MULTILEG_REPORTING_TYPE,'1','N','2','Y') as is_mleg,
+      LEG.CLIENT_LEG_REF_ID as leg_id,
+      cl.OPEN_CLOSE as open_close,
+      CL.DASH_CLIENT_ORDER_ID as dash_id,
+      CL.CLIENT_ORDER_ID as cl_ord_id,
+      ORIG.CLIENT_ORDER_ID as orig_cl_ord_id,
+      PARENTCO.CLIENT_ORDER_ID as parent_cl_ord_id,
+      (select FIELD_VALUE from FIX_MESSAGE_FIELD where FIX_MESSAGE_ID = CL.FIX_MESSAGE_ID and TAG_NUM = 10441) as occ_data,
+      OC.OPRA_SYMBOL as osi_symbol,
+      CL.CLIENT_ID as client_id,
+      PARENTCO.SUB_SYSTEM_ID as subsystem,
+      OC.STRIKE_PRICE as strike_px,
+      OC.PUT_CALL as put_call,
+      OC.MATURITY_YEAR as exp_year,
+      OC.MATURITY_MONTH as exp_month,
+      OC.MATURITY_DAY as exp_day,
+      CL.ORDER_ID as order_id,
+      FC.FIX_COMP_ID as sender_comp_id
+      FROM CLIENT_ORDER_TODAY CL
+      INNER JOIN INSTRUMENT I ON I.INSTRUMENT_ID = CL.INSTRUMENT_ID
+      LEFT JOIN CLIENT_ORDER_TODAY ORIG ON (ORIG.ORDER_ID = CL.ORIG_ORDER_ID)
+      INNER JOIN CLIENT_ORDER_TODAY PARENTCO ON (CL.PARENT_ORDER_ID = PARENTCO.ORDER_ID)
+      LEFT JOIN CLIENT_ORDER_LEG LEG ON (LEG.ORDER_ID = CL.ORDER_ID)
+      INNER JOIN ACCOUNT AC ON (CL.ACCOUNT_ID = AC.ACCOUNT_ID)
+      INNER JOIN TRADING_FIRM tf ON (tf.TRADING_FIRM_ID = ac.TRADING_FIRM_ID )
+      LEFT JOIN OPTION_CONTRACT OC on (OC.INSTRUMENT_ID = CL.INSTRUMENT_ID)
+      LEFT JOIN OPTION_SERIES OS on (OC.OPTION_SERIES_ID = OS.OPTION_SERIES_ID)
+      INNER JOIN EXCHANGE EXCH ON CL.EXCHANGE_ID = EXCH.EXCHANGE_ID
+      INNER JOIN EXECUTION_TODAY EX ON (CL.ORDER_ID = EX.ORDER_ID)
+      INNER JOIN ORDER_STATUS ORS ON ORS.ORDER_STATUS = EX.ORDER_STATUS
+      LEFT JOIN FIX_CONNECTION FC ON (CL.FIX_CONNECTION_ID = FC.FIX_CONNECTION_ID)
+      WHERE CL.PARENT_ORDER_ID IS NOT NULL
+      --AND tf.TRADING_FIRM_ID <> 'baml' AND tf.TRADING_FIRM_ID <> 'eroom01'
+      AND CL.TRANS_TYPE IN ('D','G')
+      AND CL.TIME_IN_FORCE in ('1','6')
+      AND CL.MULTILEG_REPORTING_TYPE in ('1','2')
+    and ROWNUM < 1
