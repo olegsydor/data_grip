@@ -139,6 +139,239 @@ $function$
 ;
 
 
+with aliasesToInsert as (
+    SELECT distinct
+        update_time,
+        is_deleted,
+        deleted_time,
+        deleted_by,
+        reference_alias_id,
+        user_id,
+        account_alias,
+        account,
+        CASE
+            WHEN option_range = ANY (@RangeNames)
+                THEN option_range
+            ELSE
+                null
+            END AS option_range,
+        equity_range,
+        CASE
+            WHEN cmta = ANY (@CMTAs)
+                THEN cmta
+            ELSE
+                null
+            END AS cmta,
+        CASE
+            WHEN give_up = ANY (@GiveUps)
+                THEN give_up
+            ELSE
+                null
+            END as give_up,
+        mpid,
+        ftid,
+        CASE
+            WHEN customer_user_id = user_id
+                THEN @TargetUserId
+            WHEN customer_user_id = ANY (@CustomerUserIds)
+                THEN customer_user_id
+            WHEN customer_user_id IS NULL OR customer_user_id = 0
+                THEN @TargetUserId
+            ELSE
+                @TargetUserId
+        END as customer_user_id,
+        CASE
+            WHEN dash_alias_id = ANY (@DashAliases)
+                THEN dash_alias_id
+            ELSE
+                null
+            END as dash_alias_id,
+        locate_id,
+        sub_acct_1,
+        sub_acct_2,
+        sub_acct_3,
+        commission,
+        soc_gen_salestrader,
+        soc_gen_capacity,
+        NULL::int4 AS soc_gen_portfolio_id, -- portfolios are not shared between users
+        broker_dealer,
+        fdid,
+        account_holder_type,
+        imid,
+        affiliate_flag,
+        is_representative,
+        alias_button_orig_side,
+        alias_button_contra_side,
+        creation_source,
+        last_updated_source,
+        actionable_id_ref,
+        updated_by,
+        equity_route_type,
+        equity_route_destination,
+        equity_destination_entity_id,
+        single_option_route_type,
+        single_option_route_destination,
+        spread_option_route_type,
+        spread_option_route_destination,
+        spread_with_stock_route_type,
+        spread_with_stock_route_destination,
+        cross_single_option_route_type,
+        cross_single_option_route_destination,
+        cross_single_option_mechanism,
+        cross_spread_option_route_type,
+        cross_spread_option_route_destination,
+        cross_spread_option_mechanism,
+        cross_spread_with_stock_route_type,
+        cross_spread_with_stock_route_destination,
+        cross_spread_with_stock_mechanism,
+        single_option_destination_entity_id,
+        spread_option_destination_entity_id,
+        spread_with_stock_destination_entity_id,
+        cross_single_option_destination_entity_id,
+        cross_spread_option_destination_entity_id,
+        cross_spread_with_stock_destination_entity_id,
+        еquity_сboe_par_destination,
+        single_option_сboe_par_destination,
+        spread_option_сboe_par_destination,
+        spread_with_stock_сboe_par_destination,
+        client_info
+        FROM blaze7_settings.user_account_alias
+        where user_id <> 0 and is_deleted is not true
+        and alias_id = ANY(@AliasesIds)
+    )
+    insert into blaze7_settings.user_account_alias(update_time, is_deleted, deleted_time,
+    deleted_by, reference_alias_id, user_id, account_alias, account, option_range, equity_range,
+    cmta, give_up, mpid, ftid, customer_user_id, dash_alias_id, locate_id, sub_acct_1, sub_acct_2,
+    sub_acct_3, commission, soc_gen_salestrader, soc_gen_capacity, soc_gen_portfolio_id, broker_dealer, fdid,
+    account_holder_type, imid, affiliate_flag, is_representative, alias_button_orig_side, alias_button_contra_side, creation_source,
+    last_updated_source, actionable_id_ref, updated_by, manual_create_time,
+    equity_route_type,
+    equity_route_destination,
+    equity_destination_entity_id,
+    single_option_route_type,
+    single_option_route_destination,
+    spread_option_route_type,
+    spread_option_route_destination,
+    spread_with_stock_route_type,
+    spread_with_stock_route_destination,
+    cross_single_option_route_type,
+    cross_single_option_route_destination,
+    cross_single_option_mechanism,
+    cross_spread_option_route_type,
+    cross_spread_option_route_destination,
+    cross_spread_option_mechanism,
+    cross_spread_with_stock_route_type,
+    cross_spread_with_stock_route_destination,
+    cross_spread_with_stock_mechanism,
+    single_option_destination_entity_id,
+    spread_option_destination_entity_id,
+    spread_with_stock_destination_entity_id,
+    cross_single_option_destination_entity_id,
+    cross_spread_option_destination_entity_id,
+    cross_spread_with_stock_destination_entity_id,
+    еquity_сboe_par_destination,
+    single_option_сboe_par_destination,
+    spread_option_сboe_par_destination,
+    spread_with_stock_сboe_par_destination,
+    client_info)
+    SELECT NOW(), is_deleted, deleted_time,
+    deleted_by, NULL, @TargetUserId, account_alias, account, option_range, equity_range,
+    cmta, give_up, mpid, ftid, customer_user_id, dash_alias_id, locate_id, sub_acct_1, sub_acct_2,
+    sub_acct_3, commission, soc_gen_salestrader, soc_gen_capacity, soc_gen_portfolio_id, broker_dealer, fdid,
+    account_holder_type, imid, affiliate_flag, is_representative, 'N', 'N', 'A',
+    'A', actionable_id_ref, @UserId, NOW(),
+    equity_route_type,
+    equity_route_destination,
+    equity_destination_entity_id,
+    single_option_route_type,
+    single_option_route_destination,
+    spread_option_route_type,
+    spread_option_route_destination,
+    spread_with_stock_route_type,
+    spread_with_stock_route_destination,
+    cross_single_option_route_type,
+    cross_single_option_route_destination,
+    cross_single_option_mechanism,
+    cross_spread_option_route_type,
+    cross_spread_option_route_destination,
+    cross_spread_option_mechanism,
+    cross_spread_with_stock_route_type,
+    cross_spread_with_stock_route_destination,
+    cross_spread_with_stock_mechanism,
+    single_option_destination_entity_id,
+    spread_option_destination_entity_id,
+    spread_with_stock_destination_entity_id,
+    cross_single_option_destination_entity_id,
+    cross_spread_option_destination_entity_id,
+    cross_spread_with_stock_destination_entity_id,
+    еquity_сboe_par_destination,
+    single_option_сboe_par_destination,
+    spread_option_сboe_par_destination,
+    spread_with_stock_сboe_par_destination,
+    client_info
+    from aliasesToInsert
+    WHERE option_range is not null AND give_up is not null
+    ON conflict(user_id, account_alias) WHERE (is_deleted is null or is_deleted <> true )
+DO UPDATE SET
+    account = excluded.account,
+    option_range = excluded.option_range,
+    equity_range = excluded.equity_range,
+    cmta = excluded.cmta,
+    give_up = excluded.give_up,
+    mpid = excluded.mpid,
+    ftid = excluded.ftid,
+    customer_user_id = excluded.customer_user_id,
+    dash_alias_id = excluded.dash_alias_id,
+    locate_id = excluded.locate_id,
+    sub_acct_1 = excluded.sub_acct_1,
+    sub_acct_2 = excluded.sub_acct_2,
+    sub_acct_3 = excluded.sub_acct_3,
+    commission = excluded.commission,
+    soc_gen_salestrader = excluded.soc_gen_salestrader,
+    soc_gen_capacity = excluded.soc_gen_capacity,
+    soc_gen_portfolio_id = excluded.soc_gen_portfolio_id,
+    broker_dealer = excluded.broker_dealer,
+    fdid = excluded.fdid,
+    account_holder_type = excluded.account_holder_type,
+    imid = excluded.imid,
+    affiliate_flag = excluded.affiliate_flag,
+    is_representative = excluded.is_representative,
+    alias_button_orig_side = 'N',
+    alias_button_contra_side = 'N',
+    actionable_id_ref = excluded.actionable_id_ref,
+    update_time = NOW(),
+    last_updated_source = 'A',
+    equity_route_type = excluded.equity_route_type,
+    equity_route_destination = excluded.equity_route_destination,
+    equity_destination_entity_id = excluded.equity_destination_entity_id,
+    single_option_route_type = excluded.single_option_route_type,
+    single_option_route_destination = excluded.single_option_route_destination,
+    spread_option_route_type = excluded.spread_option_route_type,
+    spread_option_route_destination = excluded.spread_option_route_destination,
+    spread_with_stock_route_type = excluded.spread_with_stock_route_type,
+    spread_with_stock_route_destination = excluded.spread_with_stock_route_destination,
+    cross_single_option_route_type = excluded.cross_single_option_route_type,
+    cross_single_option_route_destination = excluded.cross_single_option_route_destination,
+    cross_single_option_mechanism = excluded.cross_single_option_mechanism,
+    cross_spread_option_route_type = excluded.cross_spread_option_route_type,
+    cross_spread_option_route_destination = excluded.cross_spread_option_route_destination,
+    cross_spread_option_mechanism = excluded.cross_spread_option_mechanism,
+    cross_spread_with_stock_route_type = excluded.cross_spread_with_stock_route_type,
+    cross_spread_with_stock_route_destination = excluded.cross_spread_with_stock_route_destination,
+    cross_spread_with_stock_mechanism = excluded.cross_spread_with_stock_mechanism,
+    single_option_destination_entity_id  = excluded.single_option_destination_entity_id,
+    spread_option_destination_entity_id = excluded.spread_option_destination_entity_id,
+    spread_with_stock_destination_entity_id = excluded.spread_with_stock_destination_entity_id,
+    cross_single_option_destination_entity_id = excluded.cross_single_option_destination_entity_id,
+    cross_spread_option_destination_entity_id = excluded.cross_spread_option_destination_entity_id,
+    cross_spread_with_stock_destination_entity_id = excluded.cross_spread_with_stock_destination_entity_id,
+    еquity_сboe_par_destination = excluded.еquity_сboe_par_destination,
+    single_option_сboe_par_destination = excluded.single_option_сboe_par_destination,
+    spread_option_сboe_par_destination = excluded.spread_option_сboe_par_destination,
+    spread_with_stock_сboe_par_destination = excluded.spread_with_stock_сboe_par_destination,
+    client_info = excluded.client_info
+    RETURNING *;
+
 
 CREATE OR REPLACE FUNCTION dash360.get_parent_orders_trade_activity(in_account_ids integer[] DEFAULT '{}'::integer[],
                                                                     in_exchange_ids character varying[] DEFAULT '{}'::character varying(6)[],
