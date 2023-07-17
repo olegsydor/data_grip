@@ -314,74 +314,99 @@ begin
 end;
 $function$
 ;
+drop function dash360.get_risk_limit_audit_trail;
+create function dash360.get_risk_limit_audit_trail(in_start_date date default null, in_end_date date default null)
+    returns table
+            (
+                risk_mgmt_conf_scope_text text,
+                trading_firm_name         varchar(60),
+                account_name              varchar(30),
+                create_time               timestamptz,
+                risk_change_type          text,
+                risk_change_reason        text,
+                user_name                 varchar(30),
+                full_name                 text,
+                osr_param_code            varchar(6),
+                osr_param_name            varchar(256),
+                osr_param_type            bpchar(1),
+                osr_param_desc            varchar(1024),
+                osr_param_old_value       varchar(256),
+                osr_param_new_value       varchar(256),
+                trader_id                 varchar(30)
+            )
+    language plpgsql
+as
+$fx$
 
-create function dash360.get_risk_limit_audit_trail(in_start_date IN DATE, in_end_date IN DATE)
-    RETURNs table ()
-as $fx$
-
-DECLARE
-
-  l_start_date   timestamp without time zone;
-  l_end_date     timestamp without time zone;
-
-   l_load_id        integer;
-   l_step_id        integer;
+declare
+    l_start_date timestamp without time zone;
+    l_end_date   timestamp without time zone;
+    l_load_id    integer;
+    l_step_id    integer;
 
 begin
-  select nextval('public.load_timing_seq') into l_load_id;
-  l_step_id:=1;
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
 
-   select public.load_log(l_load_id, l_step_id, 'dash360.get_risk_limit_audit_trail STARTED===', 0, 'O')
-   into l_step_id;
+    select public.load_log(l_load_id, l_step_id, 'dash360.get_risk_limit_audit_trail STARTED===', 0, 'O')
+    into l_step_id;
 
-  l_start_date := coalesce(in_start_date, current_date - interval '1 day');
-  l_end_date := coalesce(in_end_date, current_date + interval '1 day');
+    l_start_date := coalesce(in_start_date, current_date - interval '1 day');
+    l_end_date := coalesce(in_end_date, current_date + interval '1 day');
 
-return query
-  SELECT
-    CASE b.RISK_MGMT_CONF_SCOPE
-        WHEN 'T' THEN 'Trading Firm (Cloud)'
-        WHEN 'A' THEN 'Account (Cloud)'
-        WHEN 'H' THEN 'Account (HFT)'
-        WHEN 'B' THEN 'Account (Crosses)'
-        WHEN 'U' THEN 'Trading Firm (Crosses)'
-        WHEN 'G' THEN 'DASH Global Parametes'
-        WHEN 'C' THEN 'Trader (Cloud)'
-        WHEN 'D' THEN 'Trader (Crosses)'
-    END AS RISK_MGMT_CONF_SCOPE_TEXT,
-    tf.TRADING_FIRM_NAME,
-    a.ACCOUNT_NAME,
-    b.CREATE_TIME,
-    CASE b.RISK_CHANGE_TYPE
-        WHEN 'P' THEN 'Permanent'
-        WHEN 'T' THEN 'Temporary'
-    END AS RISK_CHANGE_TYPE,
-    CASE b.RISK_CHANGE_REASON
-        WHEN 'C' THEN 'Client Request'
-        WHEN 'L' THEN 'Limit Breach'
-        WHEN 'R' THEN 'Reverting'
-        WHEN 'S' THEN 'Soft Limit Breach'
-        --WHEN 'A' THEN 'Auto-Reverting'
-    END AS RISK_CHANGE_REASON,
-    u.USER_NAME,
-    u.FIRST_NAME || ' ' || u.LAST_NAME AS full_name,
-    b.OSR_PARAM_CODE,
-    p.OSR_PARAM_NAME,
-    p.OSR_PARAM_TYPE,
-    p.OSR_PARAM_DESC,
-    b.OSR_PARAM_OLD_VALUE,
-    b.OSR_PARAM_NEW_VALUE,
-    trd.TRADER_ID
-      FROM staging.risk_limits_audit_trail_v b
-LEFT JOIN dwh.d_user_identifier u ON u.USER_ID=b.USER_ID
-LEFT JOIN dwh.d_osr_param_dictionary p ON p.OSR_PARAM_CODE=b.OSR_PARAM_CODE
-LEFT JOIN dwh.d_account a ON a.ACCOUNT_ID = b.ACCOUNT_ID
-LEFT JOIN dwh.d_trading_firm tf ON tf.TRADING_FIRM_ID=b.TRADING_FIRM_ID
-LEFT JOIN dwh.d_trader trd ON trd.trader_internal_id = b.trader_internal_id
-WHERE b.CREATE_TIME between to_timestamp('2023-07-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and  to_timestamp('2023-07-18 00:00:00', 'YYYY-MM-DD HH24:MI:SS')
---  and coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(b.OSR_PARAM_OLD_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_OLD_VALUE end, '-1') <>
---      coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(b.OSR_PARAM_NEW_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_NEW_VALUE end, '-2')
-AND tf.trading_firm_name = 'Piper Sandler & Co'
-      ORDER BY b.CREATE_TIME ASC;
+    return query
+        select case b.risk_mgmt_conf_scope
+                   when 'T' then 'Trading Firm (Cloud)'
+                   when 'A' then 'Account (Cloud)'
+                   when 'H' then 'Account (HFT)'
+                   when 'B' then 'Account (Crosses)'
+                   when 'U' then 'Trading Firm (Crosses)'
+                   when 'G' then 'DASH Global Parametes'
+                   when 'C' then 'Trader (Cloud)'
+                   when 'D' then 'Trader (Crosses)'
+                   end                            as risk_mgmt_conf_scope_text,
+               tf.trading_firm_name,
+               a.account_name,
+               b.create_time,
+               case b.risk_change_type
+                   when 'P' then 'Permanent'
+                   when 'T' then 'Temporary'
+                   end                            as risk_change_type,
+               case b.risk_change_reason
+                   when 'C' then 'Client Request'
+                   when 'L' then 'Limit Breach'
+                   when 'R' THEN 'Reverting'
+                   when 'S' THEN 'Soft Limit Breach'
+                   --WHEN 'A' THEN 'Auto-Reverting'
+                   end                            as risk_change_reason,
+               u.user_name,
+               u.first_name || ' ' || u.last_name as full_name,
+               b.osr_param_code,
+               p.osr_param_name,
+               p.osr_param_type,
+               p.osr_param_desc,
+               b.osr_param_old_value,
+               b.osr_param_new_value,
+               trd.trader_id
+        from staging.risk_limits_audit_trail_v b
+                 left join dwh.d_user_identifier u on u.user_id = b.user_id
+                 left join dwh.d_osr_param_dictionary p on p.osr_param_code = b.osr_param_code
+                 left join dwh.d_account a on a.account_id = b.account_id
+                 left join dwh.d_trading_firm tf on tf.trading_firm_id = b.trading_firm_id
+                 left join dwh.d_trader trd on trd.trader_internal_id = b.trader_internal_id
+        where b.create_time between l_start_date and l_end_date
+          and case
+                  when b.osr_param_type = 'F' then b.osr_param_old_value::numeric is distinct from b.osr_param_new_value::numeric
+                  else true end
+          and case
+                  when b.osr_param_type != 'F' then b.osr_param_old_value is distinct from b.osr_param_new_value
+                  else true end
+        order by b.create_time;
 
-$fx$
+    select public.load_log(l_load_id, l_step_id, 'dash360.get_risk_limit_audit_trail FINISHED===', 0, 'O')
+    into l_step_id;
+end;
+
+$fx$;
+
+select * from dash360.get_risk_limit_audit_trail('2023-01-07', '2023-07-12')
