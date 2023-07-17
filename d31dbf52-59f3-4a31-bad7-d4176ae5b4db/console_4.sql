@@ -315,4 +315,73 @@ end;
 $function$
 ;
 
-select * from trash.so_to_del
+create function dash360.get_risk_limit_audit_trail(in_start_date IN DATE, in_end_date IN DATE)
+    RETURNs table ()
+as $fx$
+
+DECLARE
+
+  l_start_date   timestamp without time zone;
+  l_end_date     timestamp without time zone;
+
+   l_load_id        integer;
+   l_step_id        integer;
+
+begin
+  select nextval('public.load_timing_seq') into l_load_id;
+  l_step_id:=1;
+
+   select public.load_log(l_load_id, l_step_id, 'dash360.get_risk_limit_audit_trail STARTED===', 0, 'O')
+   into l_step_id;
+
+  l_start_date := coalesce(in_start_date, current_date - interval '1 day');
+  l_end_date := coalesce(in_end_date, current_date + interval '1 day');
+
+return query
+  SELECT
+    CASE b.RISK_MGMT_CONF_SCOPE
+        WHEN 'T' THEN 'Trading Firm (Cloud)'
+        WHEN 'A' THEN 'Account (Cloud)'
+        WHEN 'H' THEN 'Account (HFT)'
+        WHEN 'B' THEN 'Account (Crosses)'
+        WHEN 'U' THEN 'Trading Firm (Crosses)'
+        WHEN 'G' THEN 'DASH Global Parametes'
+        WHEN 'C' THEN 'Trader (Cloud)'
+        WHEN 'D' THEN 'Trader (Crosses)'
+    END AS RISK_MGMT_CONF_SCOPE_TEXT,
+    tf.TRADING_FIRM_NAME,
+    a.ACCOUNT_NAME,
+    b.CREATE_TIME,
+    CASE b.RISK_CHANGE_TYPE
+        WHEN 'P' THEN 'Permanent'
+        WHEN 'T' THEN 'Temporary'
+    END AS RISK_CHANGE_TYPE,
+    CASE b.RISK_CHANGE_REASON
+        WHEN 'C' THEN 'Client Request'
+        WHEN 'L' THEN 'Limit Breach'
+        WHEN 'R' THEN 'Reverting'
+        WHEN 'S' THEN 'Soft Limit Breach'
+        --WHEN 'A' THEN 'Auto-Reverting'
+    END AS RISK_CHANGE_REASON,
+    u.USER_NAME,
+    u.FIRST_NAME || ' ' || u.LAST_NAME AS full_name,
+    b.OSR_PARAM_CODE,
+    p.OSR_PARAM_NAME,
+    p.OSR_PARAM_TYPE,
+    p.OSR_PARAM_DESC,
+    b.OSR_PARAM_OLD_VALUE,
+    b.OSR_PARAM_NEW_VALUE,
+    trd.TRADER_ID
+      FROM staging.risk_limits_audit_trail_v b
+LEFT JOIN dwh.d_user_identifier u ON u.USER_ID=b.USER_ID
+LEFT JOIN dwh.d_osr_param_dictionary p ON p.OSR_PARAM_CODE=b.OSR_PARAM_CODE
+LEFT JOIN dwh.d_account a ON a.ACCOUNT_ID = b.ACCOUNT_ID
+LEFT JOIN dwh.d_trading_firm tf ON tf.TRADING_FIRM_ID=b.TRADING_FIRM_ID
+LEFT JOIN dwh.d_trader trd ON trd.trader_internal_id = b.trader_internal_id
+WHERE b.CREATE_TIME between to_timestamp('2023-07-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and  to_timestamp('2023-07-18 00:00:00', 'YYYY-MM-DD HH24:MI:SS')
+--  and coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(b.OSR_PARAM_OLD_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_OLD_VALUE end, '-1') <>
+--      coalesce(case when p.OSR_PARAM_TYPE = 'F' then to_char(trunc(to_number(b.OSR_PARAM_NEW_VALUE, '9999999999999999999999999999999.9999999999999999999999'))) else t.OSR_PARAM_NEW_VALUE end, '-2')
+AND tf.trading_firm_name = 'Piper Sandler & Co'
+      ORDER BY b.CREATE_TIME ASC;
+
+$fx$
