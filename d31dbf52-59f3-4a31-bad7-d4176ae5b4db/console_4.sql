@@ -314,3 +314,5 @@ begin
 end;
 $function$
 ;
+
+select * from trash.so_to_del
