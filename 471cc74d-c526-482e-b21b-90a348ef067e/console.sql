@@ -6,8 +6,16 @@ ALTER TABLE Blaze7_dev.dbo.TOrderMisc1_EDW ALTER COLUMN BoxQOOAnnouncedTime date
 
 
 
-use Blaze7_dev
+use Blaze7_dev;
 select * from TPrices_EDW
-where pg_order_id = 535802370555133952
+where date_id = 20230718
+    and pg_order_id = 535822291003523072
 
 SELECT SYSDATETIME(), SYSUTCDATETIME()
+
+use Blaze7_dev;
+select *
+--delete
+from TOrderMisc1_EDW
+where date_id = 20230718
+    and pg_order_id = 535822291003523072
