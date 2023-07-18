@@ -694,8 +694,9 @@ where rn = 1
 limit 1;
 ---------------
 
-select * from blaze7.torder_edw(20230718)
-create or replace function blaze7.torder_edw(in_start_date_id int4 default null,
+select * from blaze7.torder_edw(20230718);
+drop function blaze7.f_torder_edw;
+create function blaze7.f_torder_edw(in_start_date_id int4 default null,
                                   in_end_date_id int4 default null,
                                   in_last_mod_time timestamp default null)
     returns table
@@ -806,8 +807,7 @@ create or replace function blaze7.torder_edw(in_start_date_id int4 default null,
                 tradedate              int8,
                 "_order_id"            int8,
                 "_chain_id"            int4,
-                "_db_create_time"      timestamptz,
-                "_last_mod_time"       timestamptz
+                "_db_create_time"      timestamptz
             )
     language plpgsql
 as
@@ -821,7 +821,9 @@ begin
     l_date_begin := coalesce(in_start_date_id, 19900101)::text::timestamp;
     l_date_end := coalesce(in_end_date_id::text::timestamp, l_date_begin + interval '1 day');
     l_last_mod_time := coalesce(in_last_mod_time, l_date_begin);
-raise notice '%, %, %', l_date_begin, l_date_end, l_last_mod_time;
+
+--     raise notice '%, %, %', l_date_begin, l_date_end, l_last_mod_time;
+
     return query
         SELECT NULL::text                                                                           AS id,
                NULL::text                                                                           AS systemid,
@@ -1448,8 +1450,7 @@ raise notice '%, %, %', l_date_begin, l_date_end, l_last_mod_time;
                   AND co2.chain_id = 0)                                                             AS tradedate,
                co.order_id                                                                          AS _order_id,
                co.chain_id                                                                          AS _chain_id,
-               co.db_create_time                                                                    AS _db_create_time,
-               staging.get_max_db_create_time(co.order_id, co.db_create_time::date, co.chain_id)    AS _last_mod_time
+               co.db_create_time                                                                    AS _db_create_time
         from (SELECT cl.order_id,
                      cl.chain_id,
                      cl.parent_order_id,
@@ -1471,9 +1472,14 @@ raise notice '%, %, %', l_date_begin, l_date_end, l_last_mod_time;
               WHERE cl.record_type = ANY (ARRAY ['0'::bpchar, '2'::bpchar])
                 and cl.db_create_time > :l_date_begin
                 and cl.db_create_time < :l_date_end
-                and staging.get_max_db_create_time(cl.order_id, cl.db_create_time::date, cl.chain_id) > :l_last_mod_time
               ) co
-        where co.rn = 1;
+        where co.rn = 1
+    and staging.get_max_db_create_time(co.order_id, co.db_create_time::date, co.chain_id) > :l_last_mod_time;
 end;
-$fx$
-2023-07-18 00:00:00, 2023-07-19 00:00:00, 2023-07-18 00:00:00
+$fx$;
+
+select *
+FROM blaze7.f_torder_edw(in_start_date_id := 20230718, in_last_mod_time := '"+context.max_processed_time_order+"'::timestamp at time zone 'US/Central' at time zone 'UTC' - interval '10 minute') as x
+where x._db_create_time >= '"+context.p_date_id+"'::date
+and x._db_create_time < '"+context.p_date_id+"'::date + interval '1 day'
+AND x._last_mod_time::timestamp >  '"+context.max_processed_time_order+"'::timestamp at time zone 'US/Central' at time zone 'UTC' - interval '10 minute';
