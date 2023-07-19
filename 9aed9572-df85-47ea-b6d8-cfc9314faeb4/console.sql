@@ -1483,3 +1483,12 @@ FROM blaze7.f_torder_edw(in_start_date_id := 20230718, in_last_mod_time := '"+co
 where x._db_create_time >= '"+context.p_date_id+"'::date
 and x._db_create_time < '"+context.p_date_id+"'::date + interval '1 day'
 AND x._last_mod_time::timestamp >  '"+context.max_processed_time_order+"'::timestamp at time zone 'US/Central' at time zone 'UTC' - interval '10 minute';
+
+select *
+from blaze7.f_torder_edw(20230718, null, '2023-07-18 17:00:00.877')
+
+select count(*)
+FROM blaze7.torder_edw as x
+where x._db_create_time::date = '20230718'::date
+and x._db_create_time < '20230718'::date + interval '1 day'
+AND x._db_create_time::timestamp >  '2023-07-18 17:00:00.877'::timestamp at time zone 'US/Central' at time zone 'UTC';
