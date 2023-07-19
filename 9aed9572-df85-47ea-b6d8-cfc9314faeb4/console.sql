@@ -1492,3 +1492,101 @@ FROM blaze7.torder_edw as x
 where x._db_create_time::date = '20230718'::date
 and x._db_create_time < '20230718'::date + interval '1 day'
 AND x._db_create_time::timestamp >  '2023-07-18 17:00:00.877'::timestamp at time zone 'US/Central' at time zone 'UTC';
+
+select count(*)
+FROM blaze7.f_torder_edw(20230718);
+
+
+
+SELECT id, -- no data
+       systemid, -- no data
+       systemorderid,
+       systemordertypeid,
+       clordid_to_guid(orderid) as orderid,
+       clordid_to_guid(parentorderid) as parentorderid,
+       clordid_to_guid(cancelorderid) as cancelorderid,
+       clordid_to_guid(contraorderid) as contraorderid,
+       clordid_to_guid(origorderid) as origorderid,
+       clordid_to_guid(replaceorderid) as replaceorderid,
+       status,
+       createdatetime::timestamp at time zone 'UTC' at time zone 'US/Central' as createdatetime,
+       approveddatetime::timestamp, -- no data
+       dtclearbookdatetime::timestamp, -- no data
+       firstfilldatetime::timestamp at time zone 'UTC' at time zone 'US/Central' as firstfilldatetime,
+       lastfilldatetime::timestamp at time zone 'UTC' at time zone 'US/Central' as lastfilldatetime,
+       updatedatetime::timestamp at time zone 'UTC' at time zone 'US/Central' as updatedatetime,
+       completeddatetime::timestamp at time zone 'UTC' at time zone 'US/Central' as completeddatetime,
+       writedatetime::timestamp, -- no data
+       userid::int,
+       ownerid::int,
+       previousownerid::int, -- no data
+       sendinguserid::int,
+       companyid, -- no data
+       destinationcompanyid, -- no data
+       exchangeconnectionid::bpchar,
+       contractdesc,
+       assetclass, -- no data
+       legcount::int,
+       round(price::bigint/10000.0, 4) as price,
+       quantity::int,
+       filled::int,
+       round(avgprice::bigint/100000000.0, 8) as avgprice,
+       stockquantity::bigint,
+       stockopenquantity::int,
+       stockfilled::int,
+       stockcancelled::bigint,
+       optionquantity::int,
+       optionopenquantity::int,
+       optionfilled::int,
+       optioncancelled::int,
+       invested::bigint,
+       accountalias,
+       account,
+       subaccount,
+       subaccount2,
+       subaccount3,
+       comment,
+       forwhom,
+       giveupfirm,
+       cmtafirm,
+       mpid,
+       sstkclid,
+       iscapstrategy, -- no data
+       iscrosslate, -- no data
+       isfbsamexoverrideprice, -- no data
+       isfbsamexratiospread, -- no data
+       isqcc,
+       islinked, -- no data
+       istargetedresplsmm, -- no data
+       istargetedresponse, -- no data
+       isauctionorder,
+       issolicited, -- no data
+       isallornone,
+       isnotheld,
+       istiedtostock,
+       pricequalifier,
+       timeinforcecode,
+       boothidoverride, -- no data
+       clordid_to_guid(linkorderid) as linkorderid, -- no data
+       ltargetresponseid, -- no data
+       satpid, -- no data
+       scrossbadgeids, -- no data
+       reasoncode::int,
+       parentorderidint, -- no data
+       cancelorderidint, -- no data
+       contraorderidint, -- no data
+       origorderidint, -- no data
+       generation::int,
+       childorders::int,
+       capacity,
+       portfolio,
+       exdestination, -- no data
+       prevfillquantity::int,
+       stockprevfillquantity::int,
+       optionprevfillquantity::int,
+       tradedate::text::date,
+       _order_id::bigint,
+       _chain_id::int,
+       _db_create_time::timestamp at time zone 'UTC' at time zone 'US/Central' as _db_create_time
+FROM blaze7.torder_edw2 as x
+where x._db_create_time::date = '20230718'
