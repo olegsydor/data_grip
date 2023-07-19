@@ -409,4 +409,103 @@ end;
 
 $fx$;
 
-select * from dash360.get_risk_limit_audit_trail('2023-01-07', '2023-07-12')
+select * from dash360.get_risk_limit_audit_trail('2023-01-07', '2023-07-12');
+
+select * from dash360.report_fintech_eod_mwizard_ecr_row(20230701, 20230717)
+create function dash360.report_fintech_eod_mwizard_ecr_row(in_start_date_id int4, in_end_date_id int4)
+    returns table
+            (
+                export_row text
+            )
+    language plpgsql
+as
+$fx$
+declare
+
+begin
+    return query
+        select 'Date,Time,Account,Client ID,Cl Ord ID,Sec Type,Sub Strategy,OSI Symbol,Symbol,Root Symbol,Expiration,Put/Call,Strike,Contract Multiplier,CFI Code,Side,Last Qty,Last Px,Principal Amount,Exchange Name,Execution Cost,Commission,Maker/Taker Fee,Transaction Fee,Trade Processing Fee,Royalty Fee';
+    return query
+        select coalesce("Date", '') || ',' ||
+               coalesce("Time", '') || ',' ||
+               coalesce("Account", '') || ',' ||
+               coalesce("Client ID", '') || ',' ||
+               coalesce("Cl Ord ID", '') || ',' ||
+               coalesce("Sec Type", '') || ',' ||
+               coalesce("Sub Strategy", '') || ',' ||
+               coalesce("OSI Symbol", '') || ',' ||
+               coalesce("Symbol", '') || ',' ||
+               coalesce("Root Symbol", '') || ',' ||
+               coalesce("Expiration", '') || ',' ||
+               coalesce("Put/Call", '') || ',' ||
+               coalesce("Strike"::text, '') || ',' ||
+               coalesce("Contract Multiplier"::text, '') || ',' ||
+               coalesce("CFI Code", '') || ',' ||
+               coalesce("Side", '') || ',' ||
+               coalesce("Last Qty"::text, '') || ',' ||
+               coalesce("Last Px"::text, '') || ',' ||
+               coalesce("Principal Amount"::text, '') || ',' ||
+               coalesce("Exchange Name", '') || ',' ||
+               "Execution Cost"::text || ',' ||
+               "Commission"::text || ',' ||
+               "Maker/Taker Fee"::text || ',' ||
+               "Transaction Fee"::text || ',' ||
+               "Trade Processing Fee"::text || ',' ||
+               "Royalty Fee"::text
+        from (select to_char(tr.trade_record_time, 'MM/DD/YYYY')              as "Date",
+                     to_char(tr.trade_record_time, 'HH24:MI:SS.US')           as "Time",
+                     da.account_name                                          as "Account",
+                     tr.client_id                                             as "Client ID",
+                     tr.client_order_id                                       as "Cl Ord ID",
+                     case
+                         when tr.instrument_type_id = 'E' then 'Equity'
+                         when tr.instrument_type_id = 'O' then 'Option'
+                         end                                                  as "Sec Type",
+                     tr.sub_strategy                                          as "Sub Strategy",
+                     hsd.opra_symbol                                          as "OSI Symbol",
+                     hsd.display_instrument_id                                as "Symbol",
+                     coalesce(hsd.underlying_symbol, hsd.symbol)              as "Root Symbol",
+                     to_char(hsd.maturity_date, 'MM/DD/YYYY')                 as "Expiration",
+                     case
+                         when hsd.put_call = '0' then 'Put'
+                         when hsd.put_call = '1' then 'Call'
+                         else ''
+                         end                                                  as "Put/Call",
+                     hsd.strike_px                                            as "Strike",
+                     hsd.contract_multiplier                                  as "Contract Multiplier",
+                     case
+                         when hsd.instrument_type_id = 'O'
+                             then concat(hsd.instrument_type_id, (case when hsd.put_call = '0' then 'P' else 'C' end),
+                                         hsd.exercise_style, 'SPS')
+                         end::varchar                                         as "CFI Code",
+                     case
+                         when tr.side = '1' then 'Buy'
+                         when tr.side = '2' then 'Sell'
+                         when tr.side in ('5', '6') then 'Sell Short'
+                         else ''
+                         end                                                  as "Side",
+                     tr.last_qty                                              as "Last Qty",
+                     tr.last_px                                               as "Last Px",
+                     tr.principal_amount                                      as "Principal Amount",
+                     ex.exchange_name                                         as "Exchange Name",
+                     coalesce(tr.tcce_account_execution_cost, 0.0000)         as "Execution Cost",
+                     coalesce(tr.tcce_account_dash_commission_amount, 0.0000) as "Commission",
+                     coalesce(tr.tcce_maker_taker_fee_amount, 0.0000)         as "Maker/Taker Fee",
+                     coalesce(tr.tcce_transaction_fee_amount, 0.0000)         as "Transaction Fee",
+                     coalesce(tr.tcce_trade_processing_fee_amount, 0.0000)    as "Trade Processing Fee",
+                     coalesce(tr.tcce_royalty_fee_amount, 0.0000)             as "Royalty Fee",
+                     tr.date_id,
+                     tr.trade_record_id
+              from dwh.flat_trade_record tr
+                       join dwh.d_account da on (da.account_id = tr.account_id)
+                       join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = da.trading_firm_unq_id)
+                       join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
+                       left join dwh.d_exchange ex on (ex.exchange_id = tr.exchange_id and ex.is_active)
+              where tr.date_id between in_start_date_id and in_end_date_id
+                and tr.is_busted <> 'Y'
+                and tr.trading_firm_id = 'mwizard'
+                and tr.instrument_type_id = 'O'
+                and tr.multileg_reporting_type in ('1', '2')) x
+        order by x.date_id, x.trade_record_id;
+end;
+$fx$
