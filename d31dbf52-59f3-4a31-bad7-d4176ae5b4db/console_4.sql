@@ -410,7 +410,7 @@ end;
 $fx$;
 
 select * from dash360.get_risk_limit_audit_trail('2023-01-07', '2023-07-12');
-
+select 1/0
 select * from dash360.report_fintech_eod_mwizard_ecr_row(20230701, 20230717)
 create function dash360.report_fintech_eod_mwizard_ecr_row(in_start_date_id int4, in_end_date_id int4)
     returns table
