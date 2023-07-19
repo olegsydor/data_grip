@@ -1589,4 +1589,4 @@ SELECT id, -- no data
        _chain_id::int,
        _db_create_time::timestamp at time zone 'UTC' at time zone 'US/Central' as _db_create_time
 FROM blaze7.torder_edw2 as x
-where x._db_create_time::date = '20230718'
+where x._db_create_time::date = '20230719'
