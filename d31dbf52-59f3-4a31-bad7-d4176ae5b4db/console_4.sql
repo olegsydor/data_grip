@@ -509,3 +509,4 @@ begin
         order by x.date_id, x.trade_record_id;
 end;
 $fx$
+

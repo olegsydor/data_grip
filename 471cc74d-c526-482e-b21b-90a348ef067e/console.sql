@@ -27,3 +27,7 @@ coalesce(max(pg_db_create_time), '2020-01-01 00:00:00') as [value]
 from [dbo].[tlegs_edw]
 where date_id = '"+context.p_date_id+"'
 and pg_entity = '"+context.pg_entity+"'
+
+
+use blaze7_dev;
+select * from [TEST_DT_EDW]
