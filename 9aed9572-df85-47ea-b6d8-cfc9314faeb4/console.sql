@@ -1603,7 +1603,15 @@ SELECT id,
 FROM blaze7.test_dt_edw as x
 where x.pg_db_create_time >  '2020-01-01 00:00:00.0'::timestamp --at time zone 'US/Central' at time zone 'UTC' - interval '0 minute'
 
+
+select 'max_processed_time_order' as [key],
+coalesce(max(pg_db_create_time::timestamptz at time zone 'US/Central'), '2020-01-01 00:00:00') as [value]
+from [dbo].[TEST_DT_EDW]
+
+delete from blaze7.test_dt_edw
+    where true
+
 insert into blaze7.test_dt_edw (order_id)
-select * from generate_series(1, 10) as x;
+select * from generate_series(201, 210) as x;
 
 select * from blaze7.test_dt_edw

@@ -30,4 +30,6 @@ and pg_entity = '"+context.pg_entity+"'
 
 
 use blaze7_dev;
+
+delete
 select * from [TEST_DT_EDW]
