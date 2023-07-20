@@ -1612,6 +1612,19 @@ delete from blaze7.test_dt_edw
     where true
 
 insert into blaze7.test_dt_edw (order_id)
-select * from generate_series(201, 210) as x;
+select * from generate_series(151, 160) as x;
 
-select * from blaze7.test_dt_edw
+select pg_db_create_time::timestamptz at time zone 'US/Central',
+       * from blaze7.test_dt_edw
+where pg_db_create_time::timestamptz at time zone 'US/Central' > '2023-07-20 08:59:59.2170000'
+
+
+SELECT id,
+       pg_db_create_time::timestamptz at time zone 'US/Central' as _db_create_time
+FROM blaze7.test_dt_edw as x
+where x.pg_db_create_time::timestamptz at time zone 'US/Central' >  '2023-07-20 08:59:53.2170000'
+
+
+SELECT id,
+       pg_db_create_time::timestamptz at time zone 'US/Central' as pg_db_create_time
+FROM blaze7.test_dt_edw as x
