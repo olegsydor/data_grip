@@ -1627,4 +1627,54 @@ where x.pg_db_create_time::timestamptz at time zone 'US/Central' >  '2023-07-20 
 
 SELECT id,
        pg_db_create_time::timestamptz at time zone 'US/Central' as pg_db_create_time
-FROM blaze7.test_dt_edw as x
+FROM blaze7.test_dt_edw as x;
+
+
+select *
+ FROM ( SELECT co_1.order_id,
+            co_1.chain_id,
+            co_1.parent_order_id,
+            co_1.orig_order_id,
+            co_1.record_type,
+            co_1.user_id,
+            co_1.entity_id,
+            co_1.payload,
+            co_1.db_create_time,
+            co_1.cross_order_id,
+            co_1.cl_ord_id,
+            co_1.orig_cl_ord_id,
+            co_1.crossing_side,
+            co_1.instrument_type,
+            co_1.order_class,
+            co_1.route_type,
+            leg.leg_ref_id,
+            regexp_replace(leg.payload::text, '\\u0000'::text, ''::text, 'g'::text)::json AS leg_payload,
+                CASE co_1.instrument_type
+                    WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                    ELSE co_1.payload ->> 'DashSecurityId'::text
+                END AS dashsecurityid
+           FROM ( SELECT row_number() OVER (PARTITION BY client_order.cl_ord_id ORDER BY client_order.chain_id DESC) AS rn,
+                    client_order.order_id,
+                    client_order.chain_id,
+                    client_order.parent_order_id,
+                    client_order.orig_order_id,
+                    client_order.record_type,
+                    client_order.user_id,
+                    client_order.entity_id,
+                    regexp_replace(client_order.payload::text, '\\u0000'::text, ''::text, 'g'::text)::json AS payload,
+                    client_order.db_create_time,
+                    client_order.cross_order_id,
+                    client_order.cl_ord_id,
+                    client_order.orig_cl_ord_id,
+                    client_order.crossing_side,
+                    client_order.instrument_type,
+                    client_order.order_class,
+                    client_order.route_type
+                   FROM blaze7.client_order
+                  WHERE client_order.record_type = ANY (ARRAY['0'::bpchar, '2'::bpchar])) co_1
+             LEFT JOIN blaze7.client_order_leg leg ON leg.order_id = co_1.order_id AND leg.chain_id = co_1.chain_id
+          WHERE co_1.rn = 1) co
+and co.db_create_time >= '20230721'::date
+  AND co.db_create_time::timestamptz at time zone 'US/Central' > '2023-07-21 08:18:58.3189170'
+  and mx.max_rep_time::timestamptz at time zone 'US/Central' > '2023-07-21 08:18:58.3189170';
+;
