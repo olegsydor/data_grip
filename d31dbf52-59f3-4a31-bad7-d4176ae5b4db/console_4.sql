@@ -509,4 +509,192 @@ begin
         order by x.date_id, x.trade_record_id;
 end;
 $fx$
+select *
+from dash360.report_ecr(start_date_id => 20230725, end_date_id => 20230725, account_ids => '{62199,54689,62543}',
+                        trading_firm_ids => '{"101360", "153006", "152923"}', instrument_type_id => 'E', client_id => text, p_demo_mode => text,
+                        p_row_limit => integer, p_commission_display_mode => text, in_only_sub_dollar => boolean)
+
+
+CREATE OR REPLACE FUNCTION dash360.report_ecr(start_date_id integer DEFAULT NULL::integer,
+                                              end_date_id integer DEFAULT NULL::integer,
+                                              trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                              account_ids bigint[] DEFAULT '{}'::bigint[],
+                                              instrument_type_id character varying DEFAULT NULL::character varying(1),
+                                              client_id character varying DEFAULT NULL::character varying,
+                                              p_demo_mode character varying DEFAULT NULL::character varying(1),
+                                              p_row_limit integer DEFAULT 1000000,
+                                              p_commission_display_mode character DEFAULT '0'::character(1),
+                                              p_group_by character DEFAULT 'N'::character(1),
+                                              sub_strategies character varying[] DEFAULT '{}'::character varying[],
+                                              in_only_sub_dollar boolean DEFAULT false)
+    RETURNS TABLE
+            (
+                "Date"                     date,
+                "Account"                  character varying,
+                "wbAccount"                character varying,
+                "ClOrdID"                  character varying,
+                "ClientID"                 character varying,
+                "SecurityType"             character,
+                "SubStrategy"              character varying,
+                "OSISymbol"                character varying,
+                "Symbol"                   character varying,
+                "Side"                     character,
+                "ExecQty"                  bigint,
+                "AvgPx"                    numeric,
+                "PrincipalAmount"          numeric,
+                "ExecCost"                 numeric,
+                "DashCommissionAmount"     numeric,
+                "MakerTakerFeeAmount"      numeric,
+                "TransactionFeeAmount"     numeric,
+                "TradeProcessingFeeAmount" numeric,
+                "RoyaltyFeeAmount"         numeric,
+                "MaturityYear"             smallint,
+                "MaturityMonth"            smallint,
+                "MaturityDay"              smallint
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    --  SY:  20220413  tcce_admin_fee  logice  has  been  reverted
+--  SO:  20220615  https://dashfinancial.atlassian.net/browse/DS-5134  added  sub_strategy  to  filters
+--  MB:  20220929  removed  join  to  data_marts.d_client  and  changed  client_src_id  with  client_id_text  field  from  dwh.client_order
+--  SY:  20230626  https://dashfinancial.atlassian.net/browse/DS-6931  in_only_sub_dollar  filter  has  been  added
+DECLARE
+    select_stmt text;
+    sql_params  text;
+
+begin
+    --          select  '  '
+--                                ||  case  when  trading_firm_ids  <>  '{}'  then  '  and    ft.trading_firm_id=any($3)'  else  ''  end
+--                                ||  case  when  account_ids  <>  '{}'  then  '  and  ft.account_id=any($4)'  else  ''  end
+--                                ||  case  when  instrument_type_id  is  not  null  then  '  and  i.instrument_type_id=$5  '  else  ''  end
+--                                ||  case  when  client_id  is  not  null  then  '  and  ft.client_id=$6  '  else  ''  end
+--                                ||  case
+--                                              when  sub_strategies  <>  '{}'  then  '  and  coalesce(ft.sub_strategy,  ''Unknown'')=any($10)'
+--  --                                              else  '  and  ft.sub_strategy  not  in  (''DESK'',  ''TDESK'',  ''DASH'',  ''DMA'')'  end
+--  else  ''  end
+--          into  sql_params;
+
+    select '    '
+               || case when trading_firm_ids <> '{}' then '    and        ft.trading_firm_id=any($3)' else '' end
+               || case when account_ids <> '{}' then '    and    ft.account_id=any($4)' else '' end
+               || case when instrument_type_id is not null then '    and    i.instrument_type_id=$5    ' else '' end
+               || case when client_id is not null then '    and    ft.client_id=$6    ' else '' end
+               || case
+                      when coalesce(sub_strategies, '{}') <> '{}'
+                          then '  and  coalesce(ft.sub_strategy,  ''Unknown'')=any($10)  '
+                      else '' end
+               ||
+           case when instrument_type_id = 'E' and in_only_sub_dollar = true then '  and  ft.last_px  <  1  ' else '' end
+    into sql_params;
+
+
+    select_stmt = 'SELECT  "Date"
+                              ,  case  when    $7  =  ''Y''  then    acc.ACCOUNT_DEMO_MNEMONIC  else  coalesce(ano.overriden_account_name,  acc.ACCOUNT_NAME)  end      as  "Account"
+                              ,  case  when  acc.trading_firm_id  in  (''wallach'',  ''wbetetf'')  and  left(acc.account_name,  2)  =  ''WB''  and  (substring(acc.account_name  from  3)  ~  ''^[0-9\.]+$'')  =  true
+                                            then  substring(acc.account_name  from  3)
+                                            else  acc.account_name
+                                    end  as  "wbAccount"
+                              ,  "ClOrdID"
+                              ,  case  when    $7  =  ''Y''  then  ''''  else  "ClientID"  end  as  "ClientID"
+                              ,  "SecurityType"
+                              --,  "SubStrategy"
+                              ,  COALESCE(replace(ed.EX_DESTINATION_CODE_NAME,  ''LiquidPoint'',  ''DASH''),  L1."SubStrategy")::varchar  as  "SubStrategy"
+                              ,    OC.OPRA_SYMBOL                                  AS  "OSISymbol"
+                              ,  "Symbol"
+                              ,  "Side"
+                              ,  "ExecQty"
+                              --,    (ROUND("PrincipalAmount"/NULLIF("ExecQty",0),4)  )::numeric  as  "AvgPx"
+                              ,  "AvgPx"
+                              ,  "PrincipalAmount"
+                              ,  case  $9
+                                      when  ''1''  then  coalesce("MakerTakerFeeAmount",  0.0)  +  coalesce("TransactionFeeAmount",  0.0)  +  coalesce("TradeProcessingFeeAmount",  0.0)  +  coalesce("RoyaltyFeeAmount",  0.0)
+                                      else  "ExecCost"
+                                  end  as  "ExecCost"
+                              ,  case  $9
+                                      when  ''1''  then  0.0
+                                      else  "DashCommissionAmount"
+                                  end  as  "DashCommissionAmount"
+                              ,  "MakerTakerFeeAmount"
+                              ,  "TransactionFeeAmount"
+                              ,  "TradeProcessingFeeAmount"
+                              ,  "RoyaltyFeeAmount"
+                              ,  OC.MATURITY_YEAR      as  "MaturityYear"
+                              ,  OC.MATURITY_MONTH    as  "MaturityMonth"
+                              ,  OC.MATURITY_DAY        as  "MaturityDay"
+                      FROM  (select  ft.order_id,  ft.client_order_id  as  "ClOrdID"
+                                ,  ft.SIDE                      as    "Side"
+                                ,  ft.INSTRUMENT_ID
+                                ,  ft.trade_record_time::date  as  "Date"
+                                ,  ft.ACCOUNT_ID
+                                ,  ft.TRADING_FIRM_ID
+                                ,  coalesce  (cno.overriden_client_name,  ft.CLIENT_ID)                as  "ClientID"
+                                ,  i.INSTRUMENT_TYPE_ID        as  "SecurityType"
+                                ,  I.DISPLAY_INSTRUMENT_ID      AS  "Symbol"
+                                --,  ft.sub_strategy              as  "SubStrategy"
+                                ,  upper(coalesce(bsn.bloomberg_strategy_name,  ft.sub_strategy))::character  varying                as  "SubStrategy"
+                                ,  ft.ex_destination
+                                ,  sum(last_qty)                                      as  "ExecQty"
+                                ,  ROUND(sum(last_qty  *  last_px)  /  NULLIF(sum(last_qty),0),4)::numeric  as  "AvgPx"
+                                ,  0                                          as  BUSTED_EXEC_QTY
+                                ,  sum(ft.principal_amount)                    as  "PrincipalAmount"
+                                ,  sum(ft.tcce_account_execution_cost  )            as  "ExecCost"
+                                ,  sum(ft.tcce_account_dash_commission_amount)  as  "DashCommissionAmount"
+                                ,  sum(ft.tcce_maker_taker_fee_amount)          AS    "MakerTakerFeeAmount"
+--                                ,case  when  ft.trading_firm_id  in(select  etrf.trading_firm_id  from  staging.edw_trading_firm_all_in  etrf)
+--                  then  sum(ft.tcce_admin_maker_taker_fee_amount)  else  sum(ft.tcce_maker_taker_fee_amount)
+--                  end  AS    "MakerTakerFeeAmount"
+                		,  sum(ft.tcce_transaction_fee_amount)          AS  "TransactionFeeAmount"
+--                                ,case  when  ft.trading_firm_id  in(select  etrf.trading_firm_id  from  staging.edw_trading_firm_all_in  etrf)
+--                  then  sum(ft.tcce_admin_transaction_fee_amount)  else  sum(ft.tcce_transaction_fee_amount)
+--                  end  AS  "TransactionFeeAmount"
+                		,  sum(ft.tcce_trade_processing_fee_amount)    AS  "TradeProcessingFeeAmount"
+                                ,  sum(ft.tcce_royalty_fee_amount)    AS  "RoyaltyFeeAmount"
+        from  flat_trade_record  ft
+        inner  join  d_instrument  i  on  (ft.instrument_id  =  i.instrument_id)
+                left  join  dwh.d_client_name_override  cno  on  (ft.trading_firm_id  =  cno.trading_firm_id  and  coalesce(ft.client_id,  ''-1'')  =  coalesce(cno.original_client_name,  ''-1''))
+                left  join  dwh.client_order  fm  on  (ft.order_id  =  fm.order_id  and  fm.create_date_id  between  $1  and  $2)
+                left  join  dwh.d_bloomberg_strategy_name  bsn  on  (ft.trading_firm_id  =  bsn.trading_firm_id  and  ft.sub_strategy  =  bsn.original_sub_strategy  and  coalesce(fm.aggression_level,  -1)  =  coalesce(bsn.aggression_level,  -1))
+        where  date_id  between  $1  and  $2  ' || sql_params || '
+        and  is_busted=''N''
+        --and  ft.order_id  is  not  null
+                            group  by  ft.order_id,
+                  ft.client_order_id,
+                                  ft.SIDE,
+                                  ft.INSTRUMENT_ID,
+                                  ft.trade_record_time::date  ,
+                                  ft.ACCOUNT_ID,
+                                  ft.TRADING_FIRM_ID,
+                                  coalesce  (cno.overriden_client_name,  ft.CLIENT_ID),
+                                  I.DISPLAY_INSTRUMENT_ID,
+                                  i.INSTRUMENT_TYPE_ID,
+                                  ft.sub_strategy,
+                                  ft.ex_destination,
+                                  bsn.bloomberg_strategy_name
+                )  L1
+        left  join  d_option_contract  oc  on  (L1.instrument_id  =  oc.instrument_id)
+        inner  join  d_account  acc  on  (L1.account_id  =  acc.account_id)
+        left  join  dwh.d_account_name_override  ano  on  (acc.account_id  =  ano.account_id)
+        left  join  d_ex_destination_code  ed  on  COALESCE(L1."SubStrategy",  ''DMA'')  =  ''DMA''  and  ed.is_acitive  =  true  AND  ed.ex_destination_code  =  L1.ex_destination
+                order  by  "Date",  "Symbol"
+        limit  $8';
+
+    IF p_group_by = 'S' THEN
+        select_stmt := 'select  ecr."Date"  as  "Date",  ecr."Account"  as  "Account",  ecr."wbAccount"  as  "wbAccount",  null::varchar  as  "ClOrdID",  ecr."ClientID"  as  "ClientID",  null::char  as  "SecurityType"
+                                        ,  ecr."SubStrategy"  as  "SubStrategy",  null::varchar  as  "OSISymbol",  null::varchar  as  "Symbol",  null::char  as  "Side"
+                    ,  sum(ecr."ExecQty")::bigint  as  "ExecQty",  sum(ecr."AvgPx")  as  "AvgPx",  sum(ecr."PrincipalAmount")  as  "PrincipalAmount",  sum(ecr."ExecCost")  as  "ExecCost"
+                    ,  sum(ecr."DashCommissionAmount")  as  "DashCommissionAmount",  sum(ecr."MakerTakerFeeAmount")  as  "MakerTakerFeeAmount"
+                    ,  sum(ecr."TransactionFeeAmount")  as  "TransactionFeeAmount",  sum(ecr."TradeProcessingFeeAmount")  as  "TradeProcessingFeeAmount"
+                    ,  sum(ecr."RoyaltyFeeAmount")  as  "RoyaltyFeeAmount",  null::smallint  as  "MaturityYear",  null::smallint  as  "MaturityMonth"
+                    ,  null::smallint  as  "MaturityDay"
+                      from  (' || select_stmt ||
+                       ')  ecr  group  by  ecr."Account",  ecr."wbAccount",  ecr."ClientID",  ecr."Date",  ecr."SubStrategy"';
+    END IF;
+--raise  notice  'query:  %',  select_stmt;
+    RETURN QUERY
+        execute select_stmt using start_date_id, end_date_id, trading_firm_ids, account_ids, instrument_type_id, client_id, p_demo_mode, p_row_limit, p_commission_display_mode, sub_strategies;
+
+end;
+$function$
 
