@@ -21,49 +21,45 @@ select yc.parent_order_id                                                  as "P
        to_char(hsd.maturity_date, 'MM/DD/YYYY')                            as "Expiration Day",
        yc.order_price                                                      as "Price",
        yc.avg_px                                                           as "Avg Px",
-
-
-       tf.trading_firm_name                                                as "Trading Firm",
-
-
-
-
+       tif.tif_name                                                        as "TIF",
        ot.order_type_name                                                  as "Ord Type",
-
-
-
-
-
-       case
-           when hsd.instrument_type_id = 'E' then 'Equity'
-           when hsd.instrument_type_id = 'O' then 'Option'
-           end                                                             as "Sec Type",
-       coalesce(exd.ex_destination_desc, co.ex_destination)                as "Ex Dest",
-       dss.sub_strategy                                                    as "Sub Strategy",
-
        case
            when co.open_close = 'O' then 'Open'
            when co.open_close = 'C' then 'Close'
            else '' end                                                     as "O/C",
-
-
-
-
-
-
-       ex.exchange_name                                                    as "Exchange Name",
-       cf.customer_or_firm_name                                            as "Cust/Firm",
+       case
+           when hsd.instrument_type_id = 'E' then 'Equity'
+           when hsd.instrument_type_id = 'O' then 'Option'
+           end                                                             as "Security Type",
+       hsd.underlying_symbol                                as "Root Symbol",
+       yc.client_id                                         as "Client ID",
+       cf.customer_or_firm_name                             as "Capacity",
+       dss.sub_strategy                                     as "Sub Strategy",
+       coalesce(exd.ex_destination_desc, co.ex_destination) as "Ex Dest",
+       fc.fix_comp_id                                       as "Sending Firm",
+       lst_ex.exec_type_description as "Event Type",
+       lst_ex.text_                                                        as "Free Text",
+       null::text as "Reject Reason",
+       co.max_floor                                                        as "Max Floor",
+       lst_ex.exec_broker as "Exec Broker",
        co.clearing_firm_id                                                 as "CMTA",
-       yc.client_id                                                        as "Client ID",
-       hsd.opra_symbol                                                     as "OSI Symbol",
-       hsd.underlying_symbol                                               as "Root Symbol",
-
-       hsd.put_call                                                        as "Put/Call",
-       hsd.strike_px                                                       as "Strike",
        case when yc.multileg_reporting_type = '1' then 'N' else 'Y' end    as "Is Mleg",
        case when yc.cross_order_id is not null then 'Y' else 'N' end       as "Is Cross",
+       coa.auction_id as "ATS Auction ID", -- ??
+--        cross_
 
-       co.max_floor                                                        as "Max Floor",
+
+
+
+
+
+
+
+       tf.trading_firm_name                                                as "Trading Firm",
+       ex.exchange_name                                                    as "Exchange Name",
+       hsd.opra_symbol                                                     as "OSI Symbol",
+       hsd.put_call                                                        as "Put/Call",
+       hsd.strike_px                                                       as "Strike",
        case
            when co.exec_instruction like '1%' then 'NH' -- Not Held
            when co.exec_instruction like '5%' then 'H' -- Held
@@ -74,7 +70,7 @@ select yc.parent_order_id                                                  as "P
        coalesce(fm_ex.tag_21, fm_co.tag_21)                                as "Handling Instructions",
        coalesce(fm_ex.tag_18, fm_co.tag_18)                                as "Execution Instructions",
        co.co_client_leg_ref_id                                             as "Leg ID",
-       lst_ex.text_                                                        as "Free Text"
+''
 from data_marts.f_yield_capture yc
          join dwh.d_account a on (a.account_id = yc.account_id)
          join dwh.client_order co on (co.create_date_id between :in_start_date_id and :in_end_date_id and
@@ -98,7 +94,7 @@ from data_marts.f_yield_capture yc
          left join dwh.d_exchange ex on (ex.exchange_unq_id = yc.exchange_unq_id)
          left join lateral
     (
-    select os.order_status_description, ex.text_, ex.fix_message_id
+    select os.order_status_description, ex.text_, ex.fix_message_id, exec_type_description, exec_broker
     from dwh.execution ex
              left join dwh.d_order_status os on (os.order_status = ex.order_status and os.is_active)
              left join dwh.d_exec_type et on (et.exec_type = ex.exec_type)
@@ -125,6 +121,8 @@ from data_marts.f_yield_capture yc
                             where fm.fix_message_id = lst_ex.fix_message_id
                               and fm.date_id between :in_start_date_id and :in_end_date_id
                             limit 1) fm_ex on true
+left join dwh.d_fix_connection fc on fc.fix_connection_id = co.fix_connection_id and fc.is_active
+left join dwh.client_order2auction coa on coa.order_id = co.order_id and coa.create_date_id = co.create_date_id
 where yc.status_date_id between :in_start_date_id and :in_end_date_id
   and case
           when :in_row_type is null then true
@@ -137,4 +135,13 @@ where yc.status_date_id between :in_start_date_id and :in_end_date_id
 -- ;
 
 select * from dwh.d_account
-where account_name in ('5CG05976', '5CG05464', '5CG05518', '5CG05523')
+where account_name in ('5CG05976', '5CG05464', '5CG05518', '5CG05523');
+
+
+select  from data_marts.f_yield_capture
+where status_date_id = 20230726;
+
+select "CrossOrderID", "CrossType" from
+dwh.historic_order_details_storage x
+where "Status_Date_id" = 20230726
+and "CrossOrderID" is not null
