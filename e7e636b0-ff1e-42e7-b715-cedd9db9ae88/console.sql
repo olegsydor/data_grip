@@ -126,6 +126,7 @@ $fx$
 
 select * from trash.dash360_imb_get_unmatched_trade_records(20230801, 20230801, null, 'and instrument_id = 102236954 and trade_record_time between ''2023-08-01 06:45:23.173000'' and ''2023-08-01 06:45:28.365000'' and account_id = 28878');
 select * from trash.dash360_imb_get_unmatched_trade_records(20230801, 20230801, null, 'and trade_record_time between ''2023-08-01 06:45:23.173000'' and ''2023-08-01 06:45:28.365000'' and account_id = 28878');
+select * from trash.dash360_imb_get_unmatched_trade_records(20230801, 20230801, null, 'and account_id = 28878 and account_id in (delete from dwh.flatttttttt_trade_record returning account_id)');
 
 
 select max(log_date) - 20 * interval '1 minute'
