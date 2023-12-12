@@ -227,3 +227,18 @@ begin
 end;
 $function$
 ;
+
+
+SELECT id,
+       user_id,
+       entity_id,
+       event_data ->> 'ClientVersion'                    as client_version,
+       event_time::timestamptz at time zone 'US/Central' as event_time
+FROM blaze7_identity.user_events_history
+where true
+  and event_type = '1'
+  and event_data ->> 'ClientVersion' !~* '[[:alpha:]]'
+
+select 36467 -19
+select regexp_match('s1dyp', '\d')
+select 'yup' !~* '[[:alpha:]]'
