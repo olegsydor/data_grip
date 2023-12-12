@@ -1,4 +1,6 @@
-    create temp table report_tmp on commit drop as
+select * from report_tmp
+
+create temp table report_tmp as
     select 'DET' as REC_TYPE,
            2     as out_ord_flag,
            'DET' || '|' || --[1]
@@ -19,11 +21,7 @@
            case cl.open_close when 'O' then 'Open' when 'C' then 'Close' else '' end || '|' || --[10]
            coalesce(ot.order_type_short_name, '') || '|' ||--Order Type --[11]
            --cl.ORDER_QTY||'|'||
---            (cl.order_qty - coalesce((select sum(EX.LAST_QTY)
---                                      from dwh.execution ex
---                                      where ex.order_id = cl.order_id
---                                        and ex.exec_type = 'F'
---                                        and ex.exec_time >= cl.create_time), 0)) || '|' || --[12]
+           (cl.order_qty - cum_qty)::text || '|' || --[12]
            coalesce(to_char(cl.price, 'FM99990D0000'), '') || '|' ||
            coalesce(to_char(oc.strike_price, 'FM99990D0000'), '') || '|' ||
            coalesce(to_char(cl.stop_price, 'FM99990D0000'), '') || '|' ||
@@ -48,38 +46,38 @@
            '' || '|' ||
            '' || '|' ||
            '' || '|' || --Record type
-           case fc.fix_comp_id when 'ETRADEOFP1' then 'ETRS' when 'ETRADEDEANOFP' then 'DEAN' else '' end
+           AC.BROKER_DEALER_MPID --MPID
                  as REC
 -- select gtc.*
-    from dwh.gtc_order_status gtc
-             inner join lateral (select multileg_reporting_type,
-                                        co_client_leg_ref_id,
-                                        side,
-                                        open_close,
-                                        order_qty,
-                                        price,
-                                        instrument_id,
-                                        order_type_id,
-                                        account_id,
-                                        stop_price,
-                                        order_id,
-                                        create_time,
-                                        client_order_id,
-                                        fix_connection_id
-                                 from client_order cl
-                                 where order_id = gtc.order_id
-                                   and create_date_id = gtc.create_date_id
-                                   and parent_order_id is null
-                                   and multileg_reporting_type <> '3'
---                                         and case when p_report_date = current_date then true else gtc.create_date_id <= p_report_date end
-                                 limit 1) cl on true
-             inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
-        ---------------------------------------------------------------------------------------------------------
-             left join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id)
-             left join d_option_series os on (oc.option_series_id = os.option_series_id)
-             inner join dwh.d_order_type ot on (cl.order_type_id = ot.order_type_id)
-             inner join dwh.d_account ac on ac.account_id = cl.account_id and ac.trading_firm_id = 'OFP0016'
-             left join dwh.d_fix_connection fc on cl.fix_connection_id = fc.fix_connection_id and fc.is_active
-    where gtc.exec_time is null
-      and gtc.time_in_force_id = '1'
-      and coalesce(gtc.last_trade_date::date, :p_report_date::date + interval '1 day') > :p_report_date::date;
+   		from dwh.gtc_order_status gtc
+   		    join dwh.CLIENT_ORDER CL using (create_date_id, order_id)
+        inner join dwh.d_INSTRUMENT I on I.INSTRUMENT_ID = CL.INSTRUMENT_ID
+		---------------------------------------------------------------------------------------------------------
+                   inner join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id)
+                   inner join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+		inner join dwh.d_ORDER_TYPE OT on (CL.ORDER_TYPE_id = OT.ORDER_TYPE_ID)
+		inner join dwh.mv_ACTIVE_ACCOUNT_SNAPSHOT AC on (CL.ACCOUNT_ID = AC.ACCOUNT_ID )
+
+   		left join lateral
+            (
+              select
+                sum(case when exc.exec_type = 'F' then exc.last_qty else 0 end) as cum_qty
+              from dwh.execution exc
+              where exc.exec_date_id >= gtc.create_date_id
+                and exc.order_id = gtc.order_id
+                and exc.is_busted = 'N'
+              group by exc.order_id
+              limit 1
+            ) ex on true
+
+
+		where true
+		and AC.TRADING_FIRM_ID in ('OFP0016')
+	    --and trunc(CL.CREATE_TIME) = trunc(sysdate-1)
+		and CL.PARENT_ORDER_ID is NULL
+		and CL.TRANS_TYPE <> 'F'
+        and coalesce(gtc.LAST_TRADE_DATE, '2023-12-12'::date + '1 day'::interval) > '2023-12-12'::date
+        and CL.TIME_IN_FORCE_id = '1'
+        and CL.MULTILEG_REPORTING_TYPE <> '3'
+        and not exists (select null from dwh.EXECUTION exc where exc.order_id = gtc.order_id and exc.exec_date_id >= gtc.create_date_id and exc.ORDER_STATUS in ('2','4','8'))
+		and gtc.close_date_id is null
