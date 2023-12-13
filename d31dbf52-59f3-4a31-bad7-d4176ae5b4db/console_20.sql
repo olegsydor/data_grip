@@ -152,7 +152,7 @@ select * from trash.stats_collecting3(in_date_id := 20231213);
 select * from trash.stats_collecting(in_date_id := 20231204);
 
 
-create or replace function trash.stats_collecting3(in_date_id int4)
+create or replace function trash.stats_by_strategy_instrument_type(in_date_id int4)
     returns table
             (
                 create_date_id     int4,
@@ -171,10 +171,20 @@ create or replace function trash.stats_collecting3(in_date_id int4)
     language plpgsql
 as
 $fx$
-    declare
-        row_cnt int4;
+declare
+    l_load_id int;
+    l_row_cnt int;
+    l_step_id int;
 begin
-    raise notice '%: start', clock_timestamp();
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'stats_by_strategy_instrument_type for ' || in_date_id::text || ' STARTED===',
+                           0, 'O')
+    into l_step_id;
+
     create temp table t_fix_capture on commit drop as
     select fmj.fix_message_id,
            min(fix_message ->> '9000') as tgt_strategy
@@ -184,8 +194,12 @@ begin
       and fix_message ->> '9000' is not null --= 'VOLHEDGE'
       and fix_message ->> '10057' is not null
     group by fmj.fix_message_id;
-    get diagnostics row_cnt = row_count;
-    raise notice '%: t_fix_capture - %', clock_timestamp(), row_cnt;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'stats_by_strategy_instrument_type fix_message temp table was created',
+                           l_row_cnt, 'O')
+    into l_step_id;
 
     create temp table temp_stats_collecting on commit drop as
     select par.create_date_id,
@@ -206,8 +220,8 @@ begin
                                             then 1
                                         else extract(epoch from str.max_create_time - str.min_create_time) end
                else 1 end as street_order_eps
-    from t_fix_capture tfc
-             join dwh.client_order par on tfc.fix_message_id = par.fix_message_id --and par.create_date_id = in_date_id
+    from dwh.client_order par
+             join t_fix_capture tfc on tfc.fix_message_id = par.fix_message_id --and par.create_date_id = in_date_id
              join dwh.d_instrument di on di.instrument_id = par.instrument_id
              join lateral (select count(1)             street_cnt,
                                   min(str.create_time) min_create_time,
@@ -221,9 +235,18 @@ begin
       and par.create_date_id = in_date_id
       and par.parent_order_id is null
       and tfc.tgt_strategy is not null;
-    raise notice '%: temp table', clock_timestamp();
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'stats_by_strategy_instrument_type main temp table was created',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
     return query
         select * from temp_stats_collecting;
-    raise notice '%: finish', clock_timestamp();
+
+    select public.load_log(l_load_id, l_step_id, 'stats_by_strategy_instrument_type finished',
+                           l_row_cnt, 'O')
+    into l_step_id;
 end;
 $fx$
