@@ -148,11 +148,11 @@ from t_so_fmj
 where "?column?" = 'orig'
 ----------------------------------------------
 
-select * from trash.stats_collecting(in_date_id := 20231212);
+select * from trash.stats_collecting3(in_date_id := 20231213);
 select * from trash.stats_collecting(in_date_id := 20231204);
 
 
-create or replace function trash.stats_collecting(in_date_id int4)
+create or replace function trash.stats_collecting3(in_date_id int4)
     returns table
             (
                 create_date_id     int4,
@@ -172,13 +172,20 @@ create or replace function trash.stats_collecting(in_date_id int4)
 as
 $fx$
     declare
-        l_msg_type_lst varchar(10)[];
+        row_cnt int4;
 begin
-        select array_agg(distinct message_type)
-        into l_msg_type_lst
-        from fix_capture.fix_message_json
-        where date_id = in_date_id
-        and message_type not in ('8', '9');
+    raise notice '%: start', clock_timestamp();
+    create temp table t_fix_capture on commit drop as
+    select fmj.fix_message_id,
+           min(fix_message ->> '9000') as tgt_strategy
+    from fix_capture.fix_message_json fmj
+    where date_id = in_date_id
+      and fmj.message_type not in ('8', '9')
+      and fix_message ->> '9000' is not null --= 'VOLHEDGE'
+      and fix_message ->> '10057' is not null
+    group by fmj.fix_message_id;
+    get diagnostics row_cnt = row_count;
+    raise notice '%: t_fix_capture - %', clock_timestamp(), row_cnt;
 
     create temp table temp_stats_collecting on commit drop as
     select par.create_date_id,
@@ -188,7 +195,7 @@ begin
            par.client_order_id,
            par.fix_connection_id,
            di.instrument_type_id,
-           fmj.tgt_strategy,
+           tfc.tgt_strategy,
            str.street_cnt,
            str.min_create_time,
            str.max_create_time,
@@ -199,7 +206,8 @@ begin
                                             then 1
                                         else extract(epoch from str.max_create_time - str.min_create_time) end
                else 1 end as street_order_eps
-    from dwh.client_order par
+    from t_fix_capture tfc
+             join dwh.client_order par on tfc.fix_message_id = par.fix_message_id --and par.create_date_id = in_date_id
              join dwh.d_instrument di on di.instrument_id = par.instrument_id
              join lateral (select count(1)             street_cnt,
                                   min(str.create_time) min_create_time,
@@ -209,19 +217,13 @@ begin
                              and str.parent_order_id = par.order_id
                            group by str.parent_order_id
                            limit 1) str on true
-             join lateral (select fix_message ->> '9000'  as tgt_strategy,
-                                  fix_message ->> '10057' as t10057
-                           from fix_capture.fix_message_json fmj
-                           where date_id = in_date_id
-                             and fmj.fix_message_id = par.fix_message_id
-                             and fmj.message_type = any(l_msg_type_lst)
-                           limit 1) fmj on true
-    where par.create_date_id = in_date_id
+    where true
+      and par.create_date_id = in_date_id
       and par.parent_order_id is null
-      and fmj.t10057 is not null
-      and fmj.tgt_strategy is not null;
-
+      and tfc.tgt_strategy is not null;
+    raise notice '%: temp table', clock_timestamp();
     return query
         select * from temp_stats_collecting;
+    raise notice '%: finish', clock_timestamp();
 end;
 $fx$
