@@ -70,7 +70,7 @@ select * from t_so_fmj;
 delete from t_so_fmj
     where "?column?" = 'opt';
 
-insert into t_so_fmj
+create temp table t_so_fmj as
 select par.create_date_id,
        par.order_id,
        par.orig_order_id,
@@ -88,6 +88,7 @@ select par.create_date_id,
                                     when extract(epoch from str.max_create_time - str.min_create_time) < 0.01 then 1
                                     else extract(epoch from str.max_create_time - str.min_create_time) end
            else 1 end as street_order_eps
+-- into trash.so_to_delete_stats_collecting
 from dwh.client_order par
          join dwh.d_instrument di on di.instrument_id = par.instrument_id
          join lateral (select count(1)             street_cnt
@@ -111,6 +112,7 @@ where par.create_date_id = 20231211
   and par.parent_order_id is null
   and fmj.t10057 is not null
   and fmj.tgt_strategy is not null
+    limit 0
 
 2,776,812 rows affected in 2 m 12 s 824 ms
 2,776,812 rows affected in 1 m 39 s 806 ms
@@ -144,3 +146,82 @@ select create_date_id,
        street_order_eps
 from t_so_fmj
 where "?column?" = 'orig'
+----------------------------------------------
+
+select * from trash.stats_collecting(in_date_id := 20231212);
+select * from trash.stats_collecting(in_date_id := 20231204);
+
+
+create or replace function trash.stats_collecting(in_date_id int4)
+    returns table
+            (
+                create_date_id     int4,
+                order_id           int8,
+                orig_order_id      int8,
+                account_id         int4,
+                client_order_id    varchar(256),
+                fix_connection_id  int4,
+                instrument_type_id bpchar(1),
+                tgt_strategy       text,
+                street_cnt         int8,
+                min_create_time    timestamp,
+                max_create_time    timestamp,
+                street_order_eps   numeric
+            )
+    language plpgsql
+as
+$fx$
+    declare
+        l_msg_type_lst varchar(10)[];
+begin
+        select array_agg(distinct message_type)
+        into l_msg_type_lst
+        from fix_capture.fix_message_json
+        where date_id = in_date_id
+        and message_type not in ('8', '9');
+
+    create temp table temp_stats_collecting on commit drop as
+    select par.create_date_id,
+           par.order_id,
+           par.orig_order_id,
+           par.account_id,
+           par.client_order_id,
+           par.fix_connection_id,
+           di.instrument_type_id,
+           fmj.tgt_strategy,
+           str.street_cnt,
+           str.min_create_time,
+           str.max_create_time,
+           case
+               when str.street_cnt > 100 then
+                   str.street_cnt / case
+                                        when extract(epoch from str.max_create_time - str.min_create_time) < 0.01
+                                            then 1
+                                        else extract(epoch from str.max_create_time - str.min_create_time) end
+               else 1 end as street_order_eps
+    from dwh.client_order par
+             join dwh.d_instrument di on di.instrument_id = par.instrument_id
+             join lateral (select count(1)             street_cnt,
+                                  min(str.create_time) min_create_time,
+                                  max(str.create_time) max_create_time
+                           from dwh.client_order str
+                           where str.create_date_id = in_date_id
+                             and str.parent_order_id = par.order_id
+                           group by str.parent_order_id
+                           limit 1) str on true
+             join lateral (select fix_message ->> '9000'  as tgt_strategy,
+                                  fix_message ->> '10057' as t10057
+                           from fix_capture.fix_message_json fmj
+                           where date_id = in_date_id
+                             and fmj.fix_message_id = par.fix_message_id
+                             and fmj.message_type = any(l_msg_type_lst)
+                           limit 1) fmj on true
+    where par.create_date_id = in_date_id
+      and par.parent_order_id is null
+      and fmj.t10057 is not null
+      and fmj.tgt_strategy is not null;
+
+    return query
+        select * from temp_stats_collecting;
+end;
+$fx$
