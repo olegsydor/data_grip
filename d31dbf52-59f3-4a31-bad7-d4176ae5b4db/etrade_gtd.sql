@@ -177,7 +177,7 @@ begin
              inner join dwh.d_order_type ot on (cl.order_type_id = ot.order_type_id)
              inner join dwh.mv_active_account_snapshot ac on (cl.account_id = ac.account_id)
              left join lateral (
-        select sum(case when exc.exec_type = 'f' then exc.last_qty else 0 end) as cum_qty
+        select sum(case when exc.exec_type = 'F' then exc.last_qty else 0 end) as cum_qty
         from dwh.execution exc
         where exc.exec_date_id >= gtc.create_date_id
           and exc.order_id = gtc.order_id
