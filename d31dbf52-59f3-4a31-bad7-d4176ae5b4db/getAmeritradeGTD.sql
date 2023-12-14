@@ -9,7 +9,7 @@ create function dash360.report_rps_ofp0011_gtd()
 
     create temp table tmp_ameri /*on commit drop*/ as
 
-    select CL.ORDER_ID || '|' ||--Order Number
+    select CL.ORDER_ID, -- || '|' ||--Order Number
            CL.MULTILEG_REPORTING_TYPE,
            cl.no_legs,            --||'|'|| --Order Leg ID
            CL.CREATE_TIME,        --||'|'|| --Order Entry Date
@@ -33,8 +33,7 @@ create function dash360.report_rps_ofp0011_gtd()
            fmj.t432,
            cl.exec_instruction
     from dwh.gtc_order_status gtc
-             join dwh.client_order cl
-                  on cl.order_id = gtc.order_id and cl.create_date_id = gtc.create_date_id
+             join dwh.client_order cl on cl.order_id = gtc.order_id and cl.create_date_id = gtc.create_date_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id
              join lateral (select ex.exec_id as exec_id,
                                   ex.avg_px,
@@ -56,15 +55,13 @@ create function dash360.report_rps_ofp0011_gtd()
              left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
              left join d_option_series os on (oc.option_series_id = os.option_series_id)
     where true
-		  and AC.TRADING_FIRM_ID in ('OFP0011')
+		  and gtc.account_id in (select account_id from dwh.mv_active_account_snapshot ac where ac.is_active and AC.TRADING_FIRM_ID in ('OFP0011'))
 		  and CL.PARENT_ORDER_ID is NULL
-		  and CL.TIME_IN_FORCE = '6'
+		  and gtc.TIME_IN_FORCE_id = '6'
 		  and CL.TRANS_TYPE <> 'F'
 		  and CL.MULTILEG_REPORTING_TYPE <> '3'
-		  and CL.ORDER_ID not in (select ORDER_ID from EXECUTION where ORDER_STATUS in ('2','4','8'))
-		  and EX.EXEC_ID = (select max(EXEC_ID) from EXECUTION where ORDER_ID = CL.ORDER_ID and ORDER_STATUS <> '3')
-		  and to_char(NVL(CL.EXPIRE_TIME, to_date((select FIELD_VALUE from FIX_MESSAGE_FIELD where FIX_MESSAGE_ID = CL.FIX_MESSAGE_ID and TAG_NUM = 432),'YYYYMMDD')),'YYYYMMDD') > to_char(p_date, 'YYYYMMDD');
-
+       and not exists (select null from dwh.execution ex where ex.order_id = gtc.order_id and ex.exec_date_id >= gtc.create_date_id and ex.order_status in ('2','4','8'))
+and gtc.close_date_id is null;
 
 
 

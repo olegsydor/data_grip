@@ -152,25 +152,27 @@ select * from trash.stats_collecting3(in_date_id := 20231213);
 select * from trash.stats_collecting(in_date_id := 20231204);
 
 
-create or replace function trash.stats_by_strategy_instrument_type(in_date_id int4)
+-- DROP FUNCTION trash.stats_by_strategy_instrument_type(int4);
+
+create or replace function trash.stats_by_strategy_instrument_type(in_date_id integer)
     returns table
             (
-                create_date_id     int4,
-                order_id           int8,
-                orig_order_id      int8,
-                account_id         int4,
-                client_order_id    varchar(256),
-                fix_connection_id  int4,
-                instrument_type_id bpchar(1),
+                create_date_id     integer,
+                order_id           bigint,
+                orig_order_id      bigint,
+                account_id         integer,
+                client_order_id    character varying,
+                fix_connection_id  integer,
+                instrument_type_id character,
                 tgt_strategy       text,
-                street_cnt         int8,
-                min_create_time    timestamp,
-                max_create_time    timestamp,
+                street_cnt         bigint,
+                min_create_time    timestamp without time zone,
+                max_create_time    timestamp without time zone,
                 street_order_eps   numeric
             )
     language plpgsql
-as
-$fx$
+AS
+$function$
 declare
     l_load_id int;
     l_row_cnt int;
@@ -186,7 +188,8 @@ begin
     into l_step_id;
 
     create temp table t_fix_capture on commit drop as
-    select fmj.fix_message_id,
+    select in_date_id                  as date_id,
+           fmj.fix_message_id,
            min(fix_message ->> '9000') as tgt_strategy
     from fix_capture.fix_message_json fmj
     where date_id = in_date_id
@@ -208,7 +211,7 @@ begin
            par.account_id,
            par.client_order_id,
            par.fix_connection_id,
-           di.instrument_type_id,
+           par.instrument_type_id,
            tfc.tgt_strategy,
            str.street_cnt,
            str.min_create_time,
@@ -220,9 +223,23 @@ begin
                                             then 1
                                         else extract(epoch from str.max_create_time - str.min_create_time) end
                else 1 end as street_order_eps
-    from dwh.client_order par
-             join t_fix_capture tfc on tfc.fix_message_id = par.fix_message_id --and par.create_date_id = in_date_id
-             join dwh.d_instrument di on di.instrument_id = par.instrument_id
+    from t_fix_capture tfc
+             join lateral (
+        select par.parent_order_id,
+               par.create_date_id,
+               par.order_id,
+               par.orig_order_id,
+               par.account_id,
+               par.client_order_id,
+               par.fix_connection_id,
+               di.instrument_type_id
+        from dwh.client_order par
+                 join dwh.d_instrument di on di.instrument_id = par.instrument_id
+        where tfc.fix_message_id = par.fix_message_id
+          and par.create_date_id = tfc.DATE_ID--20231214
+          and par.create_date_id = in_date_id
+          and par.parent_order_id is null
+        limit 1) par on true
              join lateral (select count(1)             street_cnt,
                                   min(str.create_time) min_create_time,
                                   max(str.create_time) max_create_time
@@ -232,9 +249,7 @@ begin
                            group by str.parent_order_id
                            limit 1) str on true
     where true
-      and par.create_date_id = in_date_id
-      and par.parent_order_id is null
-      and tfc.tgt_strategy is not null;
+      and tfc.date_id = in_date_id;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -249,4 +264,5 @@ begin
                            l_row_cnt, 'O')
     into l_step_id;
 end;
-$fx$
+$function$
+;
