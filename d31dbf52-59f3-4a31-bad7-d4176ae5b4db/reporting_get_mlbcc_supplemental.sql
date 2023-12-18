@@ -1,9 +1,17 @@
--- DROP FUNCTION dash_reporting.reporting_get_mlbcc_supplemental(date);
-select trim(regexp_replace('sto    probiliv        mozna           zabraty    ', '( ){2,}', ' ', 'g'))
-sto probiliv mozna zabraty
-select * from dash360.reporting_get_mlbcc_supplemental(in_date_id := 20231215);
+create temp drop table t_os_suppl as
+select *, '1' as orig
+from dash360.reporting_get_mlbcc_supplemental(in_date_id := 20231215)
+except
+insert into t_os_suppl
+select * from dash360.report_rps_ml_supplemental(in_start_date_id := 20231214, in_end_date_id := 20231215)
 
-create or replace function dash360.reporting_get_mlbcc_supplemental(in_date_id int4)
+select ret_row from t_os_suppl
+where orig = '2'
+except
+select ret_row from t_os_suppl
+where orig = '1'
+
+create function dash360.report_rps_ml_supplemental(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
                 ret_row text
@@ -11,7 +19,8 @@ create or replace function dash360.reporting_get_mlbcc_supplemental(in_date_id i
     language plpgsql
 as
 $function$
-declare
+-- 2023-12-18 OS https://dashfinancial.atlassian.net/browse/DEVREQ-3823
+    declare
     l_row_cnt int4;
     l_load_id int4;
     l_step_id int4;
@@ -21,7 +30,8 @@ begin
     l_step_id := 1;
 
     select public.load_log(l_load_id, l_step_id,
-                           'dash360.reporting_get_mlbcc_supplemental for ' || in_date_id::text || ' STARTED===',
+                           'dash360.reporting_get_mlbcc_supplemental for interval ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED===',
                            0, 'O')
     into l_step_id;
 
@@ -123,7 +133,7 @@ begin
              left join fix_capture.fix_message_json as fm
                        on (tr.street_order_fix_message_id = fm.fix_message_id and fm.date_id = tr.date_id)
              left join dwh.d_exchange as exc on exc.exchange_id = tr.exchange_id and exc.is_active = True
-    where tr.date_id = in_date_id --to_char(in_date,'YYYYMMDD')::int
+    where tr.date_id between in_start_date_id and in_end_date_id--to_char(in_date,'YYYYMMDD')::int
       and (acc.opt_report_to_mpid = 'MLCB' or (acc.opt_report_to_mpid = 'EXCH' and tr.exec_broker = '792'))
       and (acc.trading_firm_id <> 'nomura' or tr.exchange_id <> 'CBOE')
       and acc.trading_firm_id <> 'baml'
@@ -132,7 +142,7 @@ begin
     get diagnostics l_row_cnt = row_count;
 
     return query
-        select to_char(in_date_id::text::date, 'MM/DD/YY') || lpad(l_row_cnt::varchar, 10, ' ');
+        select to_char(in_start_date_id::text::date, 'MM/DD/YY') || lpad(l_row_cnt::varchar, 10, ' ');
 
     return query
         select 'trade date|exchange|side|open/close|quantity|order quantity|executed price|OSI option symbol|underlying symbol|order time|execution time|account type|parent order ID|Message #|Client ID|Account Name|OCC cust acct|OCC client order ID|CMTA|mnemonic|market maker ID|preferenced LP|account origin|liquidity|strategy code|routed|exchange access fee|away market|spread indicator|BD flag|professional customer flag|order type|TIF|record type';
@@ -141,7 +151,8 @@ begin
         select rec from tmp_suppl;
 
     select public.load_log(l_load_id, l_step_id,
-                           'dash360.reporting_get_mlbcc_supplemental for ' || in_date_id::text || ' FINISHED===',
+                           'dash360.reporting_get_mlbcc_supplemental for interval ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' FINISHED===',
                            l_row_cnt, 'O')
     into l_step_id;
 end;
