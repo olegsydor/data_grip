@@ -11,7 +11,7 @@ except
 select ret_row from t_os_suppl
 where orig = '1'
 
-create function dash360.report_rps_ml_supplemental(in_start_date_id int4, in_end_date_id int4)
+create or replace function dash360.report_rps_ml_supplemental(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
                 ret_row text
@@ -142,7 +142,7 @@ begin
     get diagnostics l_row_cnt = row_count;
 
     return query
-        select to_char(in_start_date_id::text::date, 'MM/DD/YY') || lpad(l_row_cnt::varchar, 10, ' ');
+        select to_char(in_end_date_id::text::date, 'MM/DD/YY') || lpad(l_row_cnt::varchar, 10, ' ');
 
     return query
         select 'trade date|exchange|side|open/close|quantity|order quantity|executed price|OSI option symbol|underlying symbol|order time|execution time|account type|parent order ID|Message #|Client ID|Account Name|OCC cust acct|OCC client order ID|CMTA|mnemonic|market maker ID|preferenced LP|account origin|liquidity|strategy code|routed|exchange access fee|away market|spread indicator|BD flag|professional customer flag|order type|TIF|record type';
