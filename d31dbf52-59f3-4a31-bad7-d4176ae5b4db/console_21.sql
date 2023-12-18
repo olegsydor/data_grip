@@ -1,5 +1,6 @@
 -- DROP FUNCTION dash_reporting.reporting_get_mlbcc_supplemental(date);
-
+select trim(regexp_replace('sto    probiliv        mozna           zabraty    ', '( ){2,}', ' ', 'g'))
+sto probiliv mozna zabraty
 select * from dash360.reporting_get_mlbcc_supplemental(in_date_id := 20231215);
 
 create or replace function dash360.reporting_get_mlbcc_supplemental(in_date_id int4)
