@@ -104,7 +104,7 @@ where cl.create_date_id >= :in_date_id
   and cl.sub_strategy_desc = 'DMA'
   and cl.create_date_id >= :in_date_id
 --   and ex.exec_date_id >= :in_date_id
---   and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
+  and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
   and cl.exchange_id in ('ARCAML',
                          'BATSML',
                          'BATYML',
@@ -122,7 +122,7 @@ where cl.create_date_id >= :in_date_id
                          'XCHIML',
                          'XPSXML')
 --   and di.instrument_type_id = 'E'
-    limit 1
+limit 1
 
 
 case when str.Order_Type_id = '1' then 'Y'
@@ -131,7 +131,7 @@ case when str.Order_Type_id = '1' then 'Y'
         else 'N'
       end as Is_Marketable,
 
-ac.trading_firm_id in ('baml')
+
 select * from d_target_strategy
 where d_target_strategy.target_strategy_desc ilike 'SENSOR%'
 
@@ -154,4 +154,19 @@ where exchange_id in ('ARCAML',
 'XPSXML')
 and instrument_type_id = 'E'
 
-select * from d_routing_table
+select * from d_routing_table;
+
+
+select *
+from dwh.client_order cl
+where cl.create_date_id >= :in_date_id
+  and cl.sub_strategy_desc = 'SENSOR'
+  and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
+  and cl.exchange_id in
+      ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
+       'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
+limit 1
+
+
+
+-- Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled as well as the associated parent order ID and routing table name.
