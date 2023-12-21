@@ -160,8 +160,8 @@ select * from d_routing_table;
 select *
 from dwh.client_order cl
 where cl.create_date_id >= :in_date_id
-  and cl.sub_strategy_desc = 'SENSOR'
-  and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
+  and cl.sub_strategy_desc = any(array['SENSOR', 'DMA'])
+--   and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
   and cl.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
        'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
