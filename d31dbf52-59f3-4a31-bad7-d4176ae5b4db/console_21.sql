@@ -59,7 +59,7 @@ group by exchange_name;
 select *
 from dwh.client_order par
          join dwh.client_order str on str.parent_order_id = par.order_id and str.create_date_id >= par.create_date_id
---          left join dwh.execution ex on ex.order_id = str.order_id and ex.exec_date_id >= str.create_date_id and ex.order_status in ('1', '2')
+         left join dwh.execution ex on ex.order_id = str.order_id and ex.exec_date_id >= str.create_date_id and ex.order_status in ('1', '2')
 --          left join lateral (select *
 --                             from dwh.l1_snapshot ls
 --                             where ls.transaction_id = str.transaction_id
@@ -73,7 +73,63 @@ and str.create_date_id >= 20231219
 
 
 
+select *
+from dwh.client_order par
+where par.create_date_id = 20231219
+  and exists (select null
+              from dwh.client_order str
+                       join dwh.execution ex on ex.order_id = str.order_id and ex.exec_date_id >= str.create_date_id and
+                                                ex.order_status in ('1', '2')
+              where str.parent_order_id = par.order_id
+                and str.create_date_id >= par.create_date_id
+                and str.sub_strategy_desc = 'DMA'
+                and str.create_date_id >= 20231219
+                and ex.exec_date_id >= 20231219
+                and str.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml'))
+    and par.parent_order_id is null
+--          left join lateral (select *
+--                             from dwh.l1_snapshot ls
+--                             where ls.transaction_id = str.transaction_id
+--                               and ls.exchange_id = 'NBBO'
+--                               and start_date_id = str.create_date_id
+--                             limit 1) l1 on true
 
+
+select *
+from dwh.client_order cl
+--          join dwh.d_instrument di on di.instrument_id = cl.instrument_id
+--          join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id >= cl.create_date_id and
+--                                   ex.order_status in ('1', '2')
+where cl.create_date_id >= :in_date_id
+  and cl.sub_strategy_desc = 'DMA'
+  and cl.create_date_id >= :in_date_id
+--   and ex.exec_date_id >= :in_date_id
+--   and cl.account_id in (select account_id from dwh.d_account where trading_firm_id = 'baml')
+  and cl.exchange_id in ('ARCAML',
+                         'BATSML',
+                         'BATYML',
+                         'EDGAML',
+                         'EDGXML',
+                         'EPRLML',
+                         'IEXML',
+                         'LTSEML',
+                         'MEMXML',
+                         'NQBXML',
+                         'NSDQML',
+                         'NSXML',
+                         'NYSEML',
+                         'XASEML',
+                         'XCHIML',
+                         'XPSXML')
+--   and di.instrument_type_id = 'E'
+    limit 1
+
+
+case when str.Order_Type_id = '1' then 'Y'
+        when str.Side  = '1' and str.Price >= exch_md.ask_price then 'Y'
+        when str.Side <> '1' and str.Price <= exch_md.bid_price then 'Y'
+        else 'N'
+      end as Is_Marketable,
 
 ac.trading_firm_id in ('baml')
 select * from d_target_strategy
