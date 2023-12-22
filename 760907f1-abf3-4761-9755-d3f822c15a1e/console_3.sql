@@ -1,66 +1,55 @@
-CREATE TABLE db_management.table_retention (
-	schema_name varchar(255) NULL,
-	table_name varchar(255) NULL,
-	retention_period int4 NULL,
-	cleanup_schedule varchar(20) NULL,
-	key_field varchar(30) NULL,
-	is_active bool NULL,
-	retention_type bpchar NULL, -- 'M' - move to tail, 'D' - delete
-	roll_off_order int4 NULL
-);
+alter table db_management.table_retention add column if not exists roll_off_order int4 null;
+
+do
+$$
+    begin
+        alter table db_management.table_retention
+            add constraint table_retention_pk primary key (schema_name, table_name, is_active);
+    exception
+        when others then raise notice 'primary key already exists';
+    end;
+$$;
+
+do
+$$
+    begin
+        alter table db_management.table_retention
+            add constraint table_retention_check check (cleanup_schedule in ('DAY', 'MONTH', 'YEAR'));
+    exception
+        when others then raise notice 'constraint already exists';
+    end;
+$$;
 
 
-CREATE OR REPLACE FUNCTION db_management.db_cleanup_data_rolloff()
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
--- SY: 20231128 https://dashfinancial.atlassian.net/browse/DS-7534 perform has been replaced with l_step_id :=
-declare
-	is_trigger_part bool;
-	is_native_part 	bool;
-	tbl 			record;
-	l_load_id 		int;
-	l_step_id 		int;
+do
+$$
+    begin
+        alter table db_management.table_retention
+            alter column schema_name set not null;
+        alter table db_management.table_retention
+            alter column table_name set not null;
+        alter table db_management.table_retention
+            alter column retention_period set not null;
+        alter table db_management.table_retention
+            alter column is_active set not null;
+    exception
+        when others then raise notice 'constraint already exists';
+    end;
+$$;
 
-begin
-	l_step_id:=0;
-	select nextval('load_timing_seq') into l_load_id;
-	select public.load_log(l_load_id, l_step_id, 'DB_CLEANUP_DATA_ROLLOFF STARTED===', 0, 'O')
-	into l_step_id;
 
-	for tbl in (select schema_name, table_name from db_management.table_retention where is_active and retention_type = 'D' order by roll_off_order nulls last)
-		loop
+alter function db_management.db_cleanup_table_trigger_part(varchar, varchar, int4) set schema trash;
+alter function trash.db_cleanup_table_trigger_part(varchar, varchar, int4) rename to db_cleanup_table_trigger_part_old;
 
-			select public.load_log(l_load_id, l_step_id, 'Procesing '||tbl.schema_name||'.'||tbl.table_name||'...', 0, 'O')
-			into l_step_id;
+alter function db_management.db_cleanup_table_native_part(varchar, varchar, int4) set schema trash;
+alter function trash.db_cleanup_table_native_part(varchar, varchar, int4) rename to db_cleanup_table_native_part_old;
 
-			select (count(1) - sum(child.relispartition::int))::int::bool as is_trigger_part, sum(child.relispartition::int)::int::bool as is_native_part
-			into is_trigger_part, is_native_part
-			from pg_inherits
-			join pg_class as child on (inhrelid=child.oid)
-			join pg_class as parent on (inhparent=parent.oid)
-			join pg_namespace pn on pn.oid = parent.relnamespace
-			where parent.relname = tbl.table_name and pn.nspname = tbl.schema_name;
+alter function db_management.db_cleanup_table (varchar, varchar, int4) set schema trash;
+alter function trash.db_cleanup_table (varchar, varchar, int4) rename to db_cleanup_table_old;
 
-			if (is_trigger_part) then
-				l_step_id:= db_management.db_cleanup_table_trigger_part(tbl.schema_name, tbl.table_name, l_load_id);
-			elseif (is_native_part) then
-				l_step_id:= db_management.db_cleanup_table_native_part(tbl.schema_name, tbl.table_name, l_load_id);
-			  --null;
-			else
-				l_step_id:= db_management.db_cleanup_table(tbl.schema_name, tbl.table_name, l_load_id);
-			end if;
+alter function db_management.db_cleanup_data_rolloff() set schema trash;
+alter function trash.db_cleanup_data_rolloff() rename to db_cleanup_data_rolloff_old;
 
-	end loop;
-
-	select public.load_log(l_load_id, l_step_id, 'DB_CLEANUP_DATA_ROLLOFF COMPLETED===', 0, 'O')
-	into l_step_id;
-
-	return 1;
-
-end
-$function$
-;
 
 CREATE OR REPLACE FUNCTION db_management.db_cleanup_table_trigger_part(in_schema_name character varying,
                                                                        in_table_name character varying,
@@ -183,6 +172,7 @@ exception
 end
 $function$
 ;
+
 
 CREATE OR REPLACE FUNCTION db_management.db_cleanup_table_native_part(in_schema_name character varying,
                                                                       in_table_name character varying,
@@ -312,6 +302,7 @@ end
 $function$
 ;
 
+
 CREATE OR REPLACE FUNCTION db_management.db_cleanup_table(in_schema_name character varying,
                                                           in_table_name character varying,
                                                           in_load_timing_id integer DEFAULT nextval('load_timing_seq'::regclass))
@@ -430,6 +421,59 @@ exception
         perform load_error_log('DB_CLEANUP_TABLE FOR ' || l_schema_name || '.' || l_table_name, 'I', sqlerrm,
                                l_load_id);
         raise;
+end
+$function$
+;
+
+
+CREATE OR REPLACE FUNCTION db_management.db_cleanup_data_rolloff()
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+-- SY: 20231128 https://dashfinancial.atlassian.net/browse/DS-7534 perform has been replaced with l_step_id :=
+declare
+	is_trigger_part bool;
+	is_native_part 	bool;
+	tbl 			record;
+	l_load_id 		int;
+	l_step_id 		int;
+
+begin
+	l_step_id:=0;
+	select nextval('load_timing_seq') into l_load_id;
+	select public.load_log(l_load_id, l_step_id, 'DB_CLEANUP_DATA_ROLLOFF STARTED===', 0, 'O')
+	into l_step_id;
+
+	for tbl in (select schema_name, table_name from db_management.table_retention where is_active and retention_type = 'D' order by roll_off_order nulls last)
+		loop
+
+			select public.load_log(l_load_id, l_step_id, 'Procesing '||tbl.schema_name||'.'||tbl.table_name||'...', 0, 'O')
+			into l_step_id;
+
+			select (count(1) - sum(child.relispartition::int))::int::bool as is_trigger_part, sum(child.relispartition::int)::int::bool as is_native_part
+			into is_trigger_part, is_native_part
+			from pg_inherits
+			join pg_class as child on (inhrelid=child.oid)
+			join pg_class as parent on (inhparent=parent.oid)
+			join pg_namespace pn on pn.oid = parent.relnamespace
+			where parent.relname = tbl.table_name and pn.nspname = tbl.schema_name;
+
+			if (is_trigger_part) then
+				l_step_id:= db_management.db_cleanup_table_trigger_part(tbl.schema_name, tbl.table_name, l_load_id);
+			elseif (is_native_part) then
+				l_step_id:= db_management.db_cleanup_table_native_part(tbl.schema_name, tbl.table_name, l_load_id);
+			  --null;
+			else
+				l_step_id:= db_management.db_cleanup_table(tbl.schema_name, tbl.table_name, l_load_id);
+			end if;
+
+	end loop;
+
+	select public.load_log(l_load_id, l_step_id, 'DB_CLEANUP_DATA_ROLLOFF COMPLETED===', 0, 'O')
+	into l_step_id;
+
+	return 1;
+
 end
 $function$
 ;
