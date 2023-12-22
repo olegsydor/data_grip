@@ -186,6 +186,7 @@ end
 $function$
 ;
 
+
 CREATE OR REPLACE FUNCTION db_management.db_cleanup_table_native_part(in_schema_name character varying,
                                                                       in_table_name character varying,
                                                                       in_load_timing_id integer DEFAULT nextval('load_timing_seq'::regclass))
@@ -208,8 +209,7 @@ begin
     --l_row_cnt:=0;
     partition_cnt := 0;
 
-    if in_load_timing_id is null
-    then
+    if in_load_timing_id is null then
         select nextval('load_timing_seq') into l_load_id;
         l_step_id := 1;
         select public.load_log(l_load_id, l_step_id,

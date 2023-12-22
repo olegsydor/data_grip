@@ -1,5 +1,5 @@
 alter table db_management.table_retention add column if not exists roll_off_order int4 null;
-
+-- clean_order
 do
 $$
     begin
