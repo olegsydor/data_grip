@@ -1,3 +1,14 @@
+create table if not exists db_management.table_retention
+(
+    schema_name      varchar(255) not null,
+    table_name       varchar(255) not null,
+    retention_period int4         not null,
+    cleanup_schedule varchar(20)  null,
+    key_field        varchar(30)  null,
+    is_active        bool         not null,
+    retention_type   bpchar       null
+);
+
 alter table db_management.table_retention add column if not exists roll_off_order int4 null;
 -- clean_order
 do
@@ -315,12 +326,12 @@ $function$
 ;
 
 
-CREATE OR REPLACE FUNCTION db_management.db_cleanup_table(in_schema_name character varying,
+create or replace function db_management.db_cleanup_table(in_schema_name character varying,
                                                           in_table_name character varying,
-                                                          in_load_timing_id integer DEFAULT nextval('load_timing_seq'::regclass))
-    RETURNS integer
-    LANGUAGE plpgsql
-AS
+                                                          in_load_timing_id integer default nextval('load_timing_seq'::regclass))
+    returns integer
+    language plpgsql
+as
 $function$
 declare
     l_load_id       int;
