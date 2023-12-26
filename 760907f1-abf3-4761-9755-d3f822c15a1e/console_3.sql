@@ -24,6 +24,18 @@ $$;
 do
 $$
     begin
+        update db_management.table_retention
+        set roll_off_order = clean_order
+        where clean_order is not null;
+    exception
+        when others then raise notice 'clean_order was not implemented in this table';
+    end;
+$$;
+
+
+do
+$$
+    begin
         alter table db_management.table_retention
             alter column schema_name set not null;
         alter table db_management.table_retention
@@ -51,12 +63,12 @@ alter function db_management.db_cleanup_data_rolloff() set schema trash;
 alter function trash.db_cleanup_data_rolloff() rename to db_cleanup_data_rolloff_old;
 
 
-CREATE OR REPLACE FUNCTION db_management.db_cleanup_table_trigger_part(in_schema_name character varying,
+create or replace function db_management.db_cleanup_table_trigger_part(in_schema_name character varying,
                                                                        in_table_name character varying,
-                                                                       in_load_timing_id integer DEFAULT nextval('load_timing_seq'::regclass))
-    RETURNS integer
-    LANGUAGE plpgsql
-AS
+                                                                       in_load_timing_id integer default nextval('load_timing_seq'::regclass))
+    returns integer
+    language plpgsql
+as
 $function$
 declare
     partition_cnt   int;
@@ -174,12 +186,12 @@ $function$
 ;
 
 
-CREATE OR REPLACE FUNCTION db_management.db_cleanup_table_native_part(in_schema_name character varying,
+create or replace function db_management.db_cleanup_table_native_part(in_schema_name character varying,
                                                                       in_table_name character varying,
-                                                                      in_load_timing_id integer DEFAULT nextval('load_timing_seq'::regclass))
-    RETURNS integer
-    LANGUAGE plpgsql
-AS
+                                                                      in_load_timing_id integer default nextval('load_timing_seq'::regclass))
+    returns integer
+    language plpgsql
+as
 $function$
 declare
     partition_cnt   int;
