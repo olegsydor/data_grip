@@ -432,3 +432,10 @@ exception
 end
 $function$
 ;
+
+
+
+
+select * from dash360.dash360_report_gtc_reconciliation_orders(from_date_id := 20231226, to_date_id := 20231226
+--     , p_client_ids character varying[] DEFAULT '{}'::character varying[]
+    )
