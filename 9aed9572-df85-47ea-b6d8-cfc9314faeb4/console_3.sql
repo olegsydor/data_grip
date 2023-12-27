@@ -294,7 +294,8 @@ SELECT NULL::text AS id,
     co.chain_id AS _chain_id,
     co.db_create_time AS _db_create_time,
     max_rep._last_mod_time
-   FROM ( SELECT co_1.order_id,
+   from (
+   select co_1.order_id,
             co_1.chain_id,
             co_1.parent_order_id,
             co_1.orig_order_id,
@@ -311,33 +312,35 @@ SELECT NULL::text AS id,
             co_1.order_class,
             co_1.route_type,
             leg.leg_ref_id,
-            regexp_replace(leg.payload::text, '\\u0000'::text, ''::text, 'g'::text)::json AS leg_payload,
-                CASE co_1.instrument_type
-                    WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
-                    ELSE co_1.payload ->> 'DashSecurityId'::text
-                END AS dashsecurityid
-           FROM ( SELECT row_number() OVER (PARTITION BY cl.cl_ord_id ORDER BY cl.chain_id DESC) AS rn,
-                    cl.order_id,
-                    cl.chain_id,
-                    cl.parent_order_id,
-                    cl.orig_order_id,
-                    cl.record_type,
-                    cl.user_id,
-                    cl.entity_id,
-                    regexp_replace(cl.payload::text, '\\u0000'::text, ''::text, 'g'::text)::json AS payload,
-                    cl.db_create_time,
-                    cl.cross_order_id,
-                    cl.cl_ord_id,
-                    cl.orig_cl_ord_id,
-                    cl.crossing_side,
-                    cl.instrument_type,
-                    cl.order_class,
-                    cl.route_type
-                   FROM blaze7.client_order cl
-                  WHERE cl.record_type in ('0', '2')) co_1
-             LEFT JOIN blaze7.client_order_leg leg ON leg.order_id = co_1.order_id AND leg.chain_id = co_1.chain_id
-          WHERE co_1.rn = 1) co
-     LEFT JOIN LATERAL ( SELECT max(rep.db_create_time) AS _last_mod_time
-           FROM blaze7.order_report rep
-          WHERE rep.order_id = co.order_id AND rep.chain_id = co.chain_id
-         LIMIT 1) max_rep ON true;
+            regexp_replace(leg.payload::text, '\\u0000', '', 'g')::json AS leg_payload,
+                case co_1.instrument_type
+                    when 'M'::bpchar then leg.payload ->> 'DashSecurityId'::text
+                    else co_1.payload ->> 'DashSecurityId'::text
+                end as dashsecurityid
+           from (select row_number() over (partition by cl.cl_ord_id order by cl.chain_id desc) as rn,
+                        cl.order_id,
+                        cl.chain_id,
+                        cl.parent_order_id,
+                        cl.orig_order_id,
+                        cl.record_type,
+                        cl.user_id,
+                        cl.entity_id,
+                        regexp_replace(cl.payload::text, '\\u0000', '', 'g')::json              AS payload,
+                        cl.db_create_time,
+                        cl.cross_order_id,
+                        cl.cl_ord_id,
+                        cl.orig_cl_ord_id,
+                        cl.crossing_side,
+                        cl.instrument_type,
+                        cl.order_class,
+                        cl.route_type
+                 from blaze7.client_order cl
+                 where cl.record_type in ('0', '2')
+                  ) co_1
+             left join blaze7.client_order_leg leg on leg.order_id = co_1.order_id and leg.chain_id = co_1.chain_id
+          where co_1.rn = 1) co
+
+     left join lateral ( select max(rep.db_create_time) as _last_mod_time
+           from blaze7.order_report rep
+          where rep.order_id = co.order_id and rep.chain_id = co.chain_id
+         limit 1) max_rep on true;
