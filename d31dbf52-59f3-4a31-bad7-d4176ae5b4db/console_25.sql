@@ -1,40 +1,57 @@
 select * from public.get_last_workdate('2023-12-27')
 
 
+select * from trash.fix_upload_exec(in_date_id := 20231227);
 
-create function trash.fix_upload_exec(in_date_id int4)
+create or replace function trash.fix_upload_exec(in_date_id int4)
     returns int4
     language plpgsql
 as
 $fx$
 
 declare
-    l_date_ids int4[];
-    row_cnt    int4;
-
+    l_date_id_min int4 := to_char(public.get_business_date(in_date_id::text::date, -1), 'YYYYMMDD')::int4;
+    l_date_ids    int4[];
+    row_cnt       int4;
+    l_load_id     int;
+    l_step_id     int;
 begin
-    l_date_ids := array [to_char(public.get_business_date(in_date_id::text::date, -1), 'YYYYMMDD')::int4,
-                               in_date_id,
-                               to_char(public.get_business_date(in_date_id::text::date, 1), 'YYYYMMDD')::int4];
 
-    drop table if exists staging.fix_upload_exec_order;
+    l_date_ids := array [l_date_id_min,
+        in_date_id,
+        to_char(public.get_business_date(in_date_id::text::date, 1), 'YYYYMMDD')::int4];
 
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec for ' || l_date_ids::text || ' started====', 0, 'O')
+    into l_step_id;
+
+    truncate staging.fix_upload_exec_order;
+
+    insert into staging.fix_upload_exec_order
     select co.order_id, fx.*
-    into staging.fix_upload_exec_order
     from trash.fix_upload_exec as fx
              join dwh.client_order co
                   on co.client_order_id = fx.client_order_id
-    where co.create_date_id = any (:l_date_ids)
-      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (:l_date_ids);
+    where co.create_date_id = any (l_date_ids)
+      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (l_date_ids);
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     insert into staging.fix_upload_exec_order
     select co.order_id, fx.*
     from trash.fix_upload_exec as fx
              join dwh.client_order co on co.client_order_id = fx.cl_order_id_orig
-    where co.create_date_id = any (:l_date_ids)
-      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (:l_date_ids);
+    where co.create_date_id = any (l_date_ids)
+      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (l_date_ids);
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     insert into staging.fix_upload_exec_order
     select co.order_id, fx.*
@@ -42,9 +59,12 @@ begin
              join dwh.client_order co on co.client_order_id = fx.client_order_id
              join dwh.gtc_order_status gos on gos.create_date_id = co.create_date_id and gos.order_id = co.order_id
     where true
-      and co.create_date_id < :l_date_id_min
-      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (:l_date_ids);
+      and co.create_date_id < l_date_id_min
+      and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (l_date_ids);
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     insert into staging.fix_upload_exec_order
     select co.order_id, fx.*
@@ -52,8 +72,12 @@ begin
              join dwh.client_order co on co.client_order_id = fx.cl_order_id_orig
              join dwh.gtc_order_status gos on gos.create_date_id = co.create_date_id and gos.order_id = co.order_id
     where true
-      and co.create_date_id < l_date_ids[1]
+      and co.create_date_id < l_date_id_min
       and to_char(fx.create_or_exec_ts, 'YYYYMMDD')::int4 = any (l_date_ids);
+
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
 
     create temp table ex_tmp on commit drop as
@@ -73,6 +97,9 @@ begin
         and ex.exec_date_id = any (l_date_ids)
         and to_char(fixex.create_or_exec_ts, 'YYYYMMDD')::int4 = any (l_date_ids);
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     create temp table ex_null_exchexecid_tmp on commit drop as
     select fixex.*,
@@ -92,6 +119,9 @@ begin
                       and ex.exec_time - fixex.create_or_exec_ts between -interval '1 second' and interval '1 second'
                       and ex.exec_date_id = any (l_date_ids);
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     create temp table cex_tmp on commit drop as
     select fixex.*,
@@ -108,6 +138,9 @@ begin
                       and fixex.order_id = ex.order_id
                       and abs(extract(epoch from (fixex.create_or_exec_ts - ex.exec_time))) < 120;
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     create temp table cex_null_exchexecid_tmp on commit drop as
     select fixex.*,
@@ -122,10 +155,13 @@ begin
                       and fixex.order_id = ex.order_id
                       and ex.exch_exec_id is null;
 
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec' || l_step_id::text, 0, 'O')
+    into l_step_id;
 
     drop table if exists staging.fix_upload_exec;
 
-    create temp table staging.fix_upload_exec as
+    create table staging.fix_upload_exec as
     with ex as (select *
                 from (select *
                       from ex_tmp
@@ -170,7 +206,14 @@ begin
     from cex;
 
     get diagnostics row_cnt = row_count;
-    return row_cnt;
-    end;
 
-$fx$
+    select public.load_log(l_load_id, l_step_id,
+                           'fix_upload_exec for ' || l_date_ids::text || ' finished====', row_cnt, 'O')
+    into l_step_id;
+
+    return row_cnt;
+end;
+
+$fx$;
+
+select * from staging.fix_upload_exec;
