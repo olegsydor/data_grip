@@ -3,6 +3,13 @@ ClOrdID: Ajklvtdrnt1x
 200475 - 20230601
 54560 - 2023128
 
+           case when str.Order_Type_id = '1' then 'Y'
+        when str.Side  = '1' and str.Price >= exch_md.ask_price then 'Y'
+        when str.Side <> '1' and str.Price <= exch_md.bid_price then 'Y'
+        else 'N'
+      end as Is_Marketable,
+
+
 select cl.*
 from dwh.client_order cl
 where cl.create_date_id = 20231228
