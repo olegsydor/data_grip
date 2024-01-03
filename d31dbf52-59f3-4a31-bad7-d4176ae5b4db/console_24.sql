@@ -28,13 +28,15 @@ and exists (select sub_strategy_desc
         when str.side  = '1' and str.Price >= exch_md.ask_price then 'Y'
         when str.Side <> '1' and str.Price <= exch_md.bid_price then 'Y'
         else 'N'
-      end as Is_Marketable,;
+      end as Is_Marketable;
 
 /*
 Marketable equity DMA orders routed to BAML Softbot routes list below -I would like parent orders that were filled/partially filled.
+
 Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled
 as well as the associated parent order ID and routing table name.
 */
+
 select par.order_id, par.transaction_id, str.order_id, str.transaction_id
 from dwh.client_order par
          join dwh.client_order str on str.parent_order_id = par.order_id and str.create_date_id >= par.create_date_id
@@ -47,11 +49,10 @@ from dwh.client_order par
     ) md on true
          join lateral (select null
                        from dwh.flat_trade_record ftr
-                       where ftr.order_id = par.order_id
+                       where ftr.order_id = str.order_id
                          and ftr.date_id >= par.create_date_id
                          and ftr.is_busted = 'N'
                        limit 1) ftr on true
-
 where str.create_date_id = 20231228
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
@@ -62,6 +63,10 @@ where str.create_date_id = 20231228
           when par.side = '1' and par.price >= md.ask_price then true
           when par.side <> '1' and par.price <= md.bid_price then true
           else false end;
+
+select * from dwh.d_time_in_force;
+
+select * from d_target_strategy;
 
 
 select dt.target_strategy_desc, fyc.is_marketable, fyc.exchange_id, fyc.* from data_marts.f_yield_capture fyc
