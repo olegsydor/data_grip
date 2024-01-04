@@ -36,8 +36,9 @@ Marketable equity DMA orders routed to BAML Softbot routes list below -I would l
 Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled
 as well as the associated parent order ID and routing table name.
 */
+--select * from t_dma
 
-select par.order_id, par.transaction_id, str.order_id, str.transaction_id
+select par.order_id as parent_order_id, par.transaction_id as par_transaction_id, str.order_id, str.transaction_id
 from dwh.client_order par
          join dwh.client_order str on str.parent_order_id = par.order_id and str.create_date_id >= par.create_date_id
          left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
@@ -49,11 +50,11 @@ from dwh.client_order par
     ) md on true
          join lateral (select null
                        from dwh.flat_trade_record ftr
-                       where ftr.order_id = str.order_id
+                       where ftr.order_id = par.order_id
                          and ftr.date_id >= par.create_date_id
                          and ftr.is_busted = 'N'
                        limit 1) ftr on true
-where str.create_date_id = 20231228
+where str.create_date_id between 20231228 and 20231231
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
        'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
@@ -63,6 +64,14 @@ where str.create_date_id = 20231228
           when par.side = '1' and par.price >= md.ask_price then true
           when par.side <> '1' and par.price <= md.bid_price then true
           else false end;
+
+
+
+
+select * from d_strategy_decision_reason_code
+where strategy_user_data ilike '%BEST IOC%';
+
+
 
 select * from dwh.d_time_in_force;
 
