@@ -42,13 +42,13 @@ select ftr.date_id,                                                             
        str.process_time,                                                                                    -- execution_Time
        par.order_id,                                                                                        -- parent_order_id
        str.order_id,                                                                                        -- order_id
-       ftr.trade_record_time,                                                                               -- route_time
+       ftr.order_process_time,                                                                              -- route_time
        str.exchange_id,                                                                                     -- exchange_id
        tf.trading_firm_name,                                                                                -- firm Name
        ftr.side,                                                                                            -- side
        di.symbol,                                                                                           -- symbol
-       case ftr.side when '1' then ftr.routing_time_ask_qty else ftr.routing_time_bid_qty end as route_qty, -- route_qty
-       case ftr.side when '1' then ftr.ask_price else ftr.bid_price end                       as price,     -- price
+       str.order_qty, -- route_qty
+       str.price                       as price,     -- price
        ftr.last_px,                                                                                         -- fill_px
        ftr.last_qty                                                                                         -- fill_qty
 from dwh.client_order par
@@ -67,8 +67,8 @@ from dwh.client_order par
                          and ftr.is_busted = 'N'
                        limit 1) ftr on true
          join dwh.d_account ac on ac.account_id = par.account_id
-         join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-         join dwh.d_instrument di on di.instrument_id = str.instrument_id
+         join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_unq_id
+    join dwh.d_instrument di on di.instrument_id = str.instrument_id
 where str.create_date_id between 20231228 and 20231231
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
