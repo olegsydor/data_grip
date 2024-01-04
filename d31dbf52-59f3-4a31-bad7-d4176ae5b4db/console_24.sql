@@ -133,7 +133,7 @@ where str.create_date_id between 20230601 and 20231231
           else false end;
 
 
-
+select * from trash.so_dma_orders
 
 
 
@@ -178,8 +178,24 @@ where order_id in (14104242610,
 14101711298
 );
 
-select client_order_id, order_id, * from dwh.client_order cl
+select client_order_id, order_id, from dwh.client_order cl
 where cl.client_order_id in (
 '10Z2286802212271',
 '10Z2286802211136',
-'10Z2286802211151')
+'10Z2286802211151');
+
+
+select * from
+--         dwh.execution
+         gtc_order_status
+where order_id in (13797684039,
+13797684040,
+13797684038,
+13797684084,
+13797684085,
+13797684083,
+13797684178,
+13797684179,
+13797684177
+)
+
