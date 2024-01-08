@@ -1,6 +1,12 @@
 alter function dash360.report_rps_ml_supplemental rename to report_rps_ml_supplemental_old;
 
-CREATE OR REPLACE FUNCTION dash360.report_rps_ml_supplemental(in_start_date_id integer, in_end_date_id integer)
+select * from dash360.report_rps_ml_supplemental(20240103, 20240103)
+select * from tmp_suppl
+         where rec = '01/03/24|XMIO|2|O|2|7|1.22|ARM   240126C00075000|ARM|10:03:25|10:03:25|A|14136498863|46960792725|DASH|DASH|M30|BJAA4126-20240103|010||||N|R||XMIO|||Y|Y|N|LMT|IOC||733'
+
+CREATE
+     OR REPLACE
+    FUNCTION dash360.report_rps_ml_supplemental(in_start_date_id integer, in_end_date_id integer)
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
 AS $function$
@@ -23,8 +29,9 @@ begin
                                0, 'O')
         into l_step_id;
 
-        create temp table tmp_suppl on commit drop as
-select 'TRADE' as REC_TYPE,
+        create temp table tmp_suppl on commit drop
+            as
+        select 'TRADE' as REC_TYPE,
                3       as OUT_ORD_FLAG, --tr.*,
                to_char(tr.trade_record_time, 'MM/DD/YY') || '|' ||
                coalesce(exc.mic_code, '') || '|' ||
@@ -42,28 +49,16 @@ select 'TRADE' as REC_TYPE,
                coalesce(tr.exec_id::varchar, '') || '|' || -- column 14
                'DASH' || '|' ||
                'DASH' || '|' ||
-                   --coalesce(tr.sub_account,'')||'|'|| -- OCC cust Account (440)
                case tr.subsystem_id
                    when 'HFTDMA' then 'BEBS949C'
-                   --else coalesce(fm.fix_message ->> '440', fm.fix_message ->> '1', '')
--- 	  else coalesce(fm.t440, fm.t1, '')
-                   else coalesce(trash.get_message_tag_string(in_fix_message_id=>tr.street_order_fix_message_id,
-                                                              in_tag_number=>440,
-                                                              in_date_id=>to_char(tr.order_process_time, 'YYYYMMDD')::int),
-                                 tr.street_account_name
-                       , '')
-                   end || '|' || -- OCC cust Account Column 17
+               else coalesce(fm.fix_message ->> '440', fm.fix_message ->> '1', '')
+               end || '|' || -- OCC cust Account
+
                coalesce(tr.street_client_order_id, tr.secondary_order_id, tr.client_order_id) || '|' ||
                coalesce(tr.cmta, case acc.is_option_auto_allocate when 'Y' then ca.cmta end, '') || '|' || -- Column 19
                '' || '|' || --mnemonic
                '' || '|' || --MM ID
-               coalesce(trash.get_message_tag_string(in_fix_message_id=>tr.street_order_fix_message_id,
-                                                     in_tag_number=>7901,
-                                                     in_date_id=>to_char(tr.order_process_time, 'YYYYMMDD')::int),
-                        trash.get_message_tag_string(in_fix_message_id=>tr.street_order_fix_message_id,
-                                                     in_tag_number=>9324,
-                                                     in_date_id=>to_char(tr.order_process_time, 'YYYYMMDD')::int),
-                        '') || '|' ||--preferenced LP
+               coalesce(fm.fix_message ->> '7901', fm.fix_message ->> '9324', '') || '|' ||--preferenced LP
                case
                    when acc.trading_firm_id = 'marathon' and tr.exchange_id = 'CBOE' then 'M'
                    when acc.trading_firm_id = 'walleye' and tr.exchange_id = 'PHLX' then 'M'
@@ -109,36 +104,39 @@ select 'TRADE' as REC_TYPE,
                    when '6' then 'WOW'
                    else '' -- coalesce(tr.street_order_type,'')
                    end || '|' ||--Order Type
-case
-               when par.time_in_force_id = '0' then 'DAY'
-               when par.time_in_force_id = '1' then 'GTC'
-               when par.time_in_force_id = '2' then 'OPG'
-               when par.time_in_force_id = '3' then 'IOC'
-               when par.time_in_force_id = '4' then 'FOK'
-               when par.time_in_force_id = '5' then 'GTX'
-               when par.time_in_force_id = '6' then 'GTD'
-               when par.time_in_force_id = '7' then 'At the Close'
-               else ''-- as time_in_force
+               case
+                   when par.time_in_force_id = '0' then 'DAY'
+                   when par.time_in_force_id = '1' then 'GTC'
+                   when par.time_in_force_id = '2' then 'OPG'
+                   when par.time_in_force_id = '3' then 'IOC'
+                   when par.time_in_force_id = '4' then 'FOK'
+                   when par.time_in_force_id = '5' then 'GTX'
+                   when par.time_in_force_id = '6' then 'GTD'
+                   when par.time_in_force_id = '7' then 'At the Close'
+                   else ''-- as time_in_force
                    end || '|' ||
                '' || '|' --Record type
                    || coalesce(tr.exec_broker, '') || '' --exec_firm
                        as REC
-from dwh.flat_trade_record as tr
-inner join dwh.d_option_contract as oc on tr.instrument_id = oc.instrument_id
-inner join dwh.d_option_series as os on os.option_series_id = oc.option_series_id
-inner join dwh.d_instrument as ui on (os.underlying_instrument_id = ui.instrument_id)
-inner join dwh.d_account as acc on acc.account_id = tr.account_id
-    inner join dwh.client_order as par on par.order_id = tr.order_id
-left join dwh.d_exchange as exc on exc.exchange_id = tr.exchange_id and exc.is_active
-left join dwh.d_clearing_account ca on ca.account_id =tr.account_id and CA.IS_active  and CA.MARKET_TYPE = 'O' and CA.IS_DEFAULT = 'Y'
-where tr.date_id between :in_start_date_id and :in_end_date_id --to_char(in_date,'YYYYMMDD')::int
-and (acc.opt_report_to_mpid = 'MLCB' or acc.opt_report_to_mpid = 'EXCH')
-and tr.exec_broker in ('792', '733')
---and (acc.opt_report_to_mpid = 'MLCB' or (acc.opt_report_to_mpid = 'EXCH' and tr.exec_broker in ('792', '733')))
---and (acc.opt_report_to_mpid = 'MLCB' or (acc.opt_report_to_mpid = 'EXCH' and tr.exec_broker = '792'))
-and ( tr.subsystem_id ='HFTDMA' or (acc.trading_firm_id <> 'nomura' or tr.exchange_id <> 'CBOE') and acc.trading_firm_id <> 'baml')
-and tr.is_busted = 'N'
-and tr.order_id>0;
+        from dwh.flat_trade_record as tr
+                 inner join dwh.d_option_contract as oc on tr.instrument_id = oc.instrument_id
+                 inner join dwh.d_option_series as os on os.option_series_id = oc.option_series_id
+                 inner join dwh.d_instrument as ui on (os.underlying_instrument_id = ui.instrument_id)
+                 inner join dwh.d_account as acc on acc.account_id = tr.account_id
+                 inner join dwh.client_order as par on par.order_id = tr.order_id
+             left join fix_capture.fix_message_json as fm
+                       on (tr.street_order_fix_message_id = fm.fix_message_id and fm.date_id = tr.date_id)
+                 left join dwh.d_exchange as exc on exc.exchange_id = tr.exchange_id and exc.is_active
+                 left join dwh.d_clearing_account ca
+                           on ca.account_id = tr.account_id and CA.IS_active and CA.MARKET_TYPE = 'O' and
+                              CA.IS_DEFAULT = 'Y'
+        where tr.date_id between in_start_date_id and in_end_date_id
+          and (acc.opt_report_to_mpid = 'MLCB' or acc.opt_report_to_mpid = 'EXCH')
+          and tr.exec_broker in ('792', '733')
+          and (tr.subsystem_id = 'HFTDMA' or
+               (acc.trading_firm_id <> 'nomura' or tr.exchange_id <> 'CBOE') and acc.trading_firm_id <> 'baml')
+          and tr.is_busted = 'N'
+          and tr.order_id > 0;
 
    get diagnostics l_row_cnt = row_count;
 
