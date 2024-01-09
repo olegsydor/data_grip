@@ -1,3 +1,6 @@
+select * from dwh.d_account
+where d_account.account_id in (25711, 30650)
+
 with tmp_gtc_fidelity_retail_ord_open as (
 select di.instrument_type_id,
     gtc.account_id,
@@ -98,8 +101,7 @@ select * from dwh.d_instrument
     where d_instrument.instrument_id = 396918
 
 
-
--- DROP FUNCTION dash360.get_active_child_gtc_orders(_int4);
+select * from trash.get_active_parent_gtc_orders(in_account_ids := '{28512,17287}', in_date_id := 20240108)
 
 CREATE or replace FUNCTION trash.get_active_child_gtc_orders(in_account_ids integer[] DEFAULT NULL::integer[], in_date_id int4 default null)
  RETURNS TABLE(account_name character varying, creation_date timestamp without time zone, ord_status character varying, sec_type character, side character, symbol character varying, exchange_id character varying, ex_dest character varying, is_bdma text, ord_qty integer, ex_qty numeric, ord_type character, price numeric, avg_px numeric, lvs_qty bigint, is_mleg text, leg_id character varying, open_close character, dash_id character varying, cl_ord_id character varying, orig_cl_ord_id character varying, parent_cl_ord_id character varying, occ_data text, osi_symbol character varying, client_id character varying, subsystem character varying, strike_px numeric, put_call character, exp_year smallint, exp_month smallint, exp_day smallint, order_id bigint, sender_comp_id character varying)
@@ -204,8 +206,7 @@ begin
                  left join dwh.d_client dcl on dcl.client_unq_id = cl.client_id
         where true
           and cl.parent_order_id is not null
-          and gtc.close_date_id is null
-          or gtc.close_date_id > in_date_id
+          and ((gtc.close_date_id is null) or (gtc.close_date_id is not null and gtc.close_date_id > in_date_id))
           and cl.trans_type in ('D', 'G')
           and cl.time_in_force_id in ('1', '6')
           and cl.multileg_reporting_type in ('1', '2')
@@ -220,3 +221,7 @@ begin
 end;
 $function$
 ;
+
+
+25711
+30650
