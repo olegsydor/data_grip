@@ -133,14 +133,64 @@ where str.create_date_id between 20230106 and 20231231
           else false end;
 
 
-select * from trash.so_dma_orders
+select * from trash.so_dma_orders;
+---------------------------------------------------
+-- SENSOR
+select str.create_date_id   as date_id,         -- date_id
+       str.process_time     as execution_time,  -- execution_Time
+       par.order_id         as parent_order_id, -- parent_order_id
+       str.order_id         as order_id,        -- order_id
+       str.process_time     as route_time,      -- route_time
+       str.exchange_id      as exchange_id,     -- exchange_id
+       tf.trading_firm_name as firm_name,       -- firm Name
+       str.side             as side,            -- side
+       di.symbol            as symbol,          -- symbol
+       str.order_qty        as route_qty,       -- route_qty
+       str.price            as price,           -- price
+       ftr.last_px          as fill_px,         -- fill_px
+       ftr.last_qty         as fill_qty,        -- fill_qty,
+       md.*
+-- into trash.so_dma_orders
+from dwh.client_order str
+         join lateral (select *
+                       from dwh.client_order par
+                       where str.parent_order_id = par.order_id
+                         and str.create_date_id >= par.create_date_id
+                         and par.sub_strategy_desc = 'SENSOR'
+                       limit 1) par on true
+         left join lateral (select *
+                            from dwh.get_routing_market_data(in_transaction_id := par.transaction_id,
+                                                             in_exchange_id := 'NBBO',
+                                                             in_multileg_reporting_type := par.multileg_reporting_type,
+                                                             in_instrument_id := par.instrument_id,
+                                                             in_date_id := par.create_date_id)
+                            limit 1) md on true
+         join lateral (select *
+                       from dwh.execution ex
+                       where ex.order_id = str.order_id
+                         and ex.exec_date_id >= str.create_date_id
+                         and ex.exec_type not in ('a', 'A', 'S', '0')
+    ) ftr on true
+         join dwh.d_account ac on ac.account_id = par.account_id
+         join dwh.d_trading_firm tf on tf.trading_firm_unq_id = ac.trading_firm_unq_id
+         join dwh.d_instrument di on di.instrument_id = str.instrument_id
+join dwh.d_strategy_decision_reason_code src on src.strategy_decision_reason_code = str.strtg_decision_reason_code
+where str.create_date_id between 20230101 and 20231231
+  and str.exchange_id in
+      ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
+       'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
+  and str.parent_order_id is not null
+  and src.strategy_user_data ilike '%BEST IOC%'
+  and case
+          when par.order_type_id = '1' then true
+          when par.side = '1' and par.price >= md.ask_price then true
+          when par.side <> '1' and par.price <= md.bid_price then true
+          else false end;
 
 
 
 
-
-
-
+-------------------------------------------------
 select * from d_strategy_decision_reason_code
 where strategy_user_data ilike '%BEST IOC%';
 
