@@ -121,7 +121,7 @@ from dwh.client_order str
          join dwh.d_account ac on ac.account_id = par.account_id
          join dwh.d_trading_firm tf on tf.trading_firm_unq_id = ac.trading_firm_unq_id
          join dwh.d_instrument di on di.instrument_id = str.instrument_id
-where str.create_date_id between 20230601 and 20231231
+where str.create_date_id between 20230106 and 20231231
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
        'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
