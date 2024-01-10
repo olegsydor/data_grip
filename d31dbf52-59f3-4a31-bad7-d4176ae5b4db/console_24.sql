@@ -136,6 +136,12 @@ where str.create_date_id between 20230106 and 20231231
 select * from trash.so_dma_orders;
 ---------------------------------------------------
 -- SENSOR
+/*
+Marketable equity DMA orders routed to BAML Softbot routes list below -I would like parent orders that were filled/partially filled.
+
+Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled
+as well as the associated parent order ID and routing table name.
+*/
 select str.create_date_id   as date_id,         -- date_id
        str.process_time     as execution_time,  -- execution_Time
        par.order_id         as parent_order_id, -- parent_order_id
@@ -147,45 +153,47 @@ select str.create_date_id   as date_id,         -- date_id
        di.symbol            as symbol,          -- symbol
        str.order_qty        as route_qty,       -- route_qty
        str.price            as price,           -- price
-       ftr.last_px          as fill_px,         -- fill_px
-       ftr.last_qty         as fill_qty,        -- fill_qty,
+       ex.last_px           as fill_px,         -- fill_px
+       ex.last_qty          as fill_qty,        -- fill_qty,
        md.*
--- into trash.so_dma_orders
+into trash.so_sensor_orders
 from dwh.client_order str
          join lateral (select *
                        from dwh.client_order par
                        where str.parent_order_id = par.order_id
                          and str.create_date_id >= par.create_date_id
                          and par.sub_strategy_desc = 'SENSOR'
+                         and par.create_date_id >= 20220101
                        limit 1) par on true
          left join lateral (select *
-                            from dwh.get_routing_market_data(in_transaction_id := par.transaction_id,
+                            from dwh.get_routing_market_data(in_transaction_id := str.transaction_id,
                                                              in_exchange_id := 'NBBO',
-                                                             in_multileg_reporting_type := par.multileg_reporting_type,
-                                                             in_instrument_id := par.instrument_id,
-                                                             in_date_id := par.create_date_id)
+                                                             in_multileg_reporting_type := str.multileg_reporting_type,
+                                                             in_instrument_id := str.instrument_id,
+                                                             in_date_id := str.create_date_id)
                             limit 1) md on true
-         join lateral (select *
-                       from dwh.execution ex
-                       where ex.order_id = str.order_id
-                         and ex.exec_date_id >= str.create_date_id
-                         and ex.exec_type not in ('a', 'A', 'S', '0')
-    ) ftr on true
+         join dwh.execution ex on ex.order_id = str.order_id
+    and exec_date_id >= str.create_date_id
+    and ex.exec_type in ('F', '1', '2') -- not in ('a', 'A', 'S', '0')
+    and ex.exec_date_id >= 20230101
+    and ex.exec_date_id < 20240101
          join dwh.d_account ac on ac.account_id = par.account_id
          join dwh.d_trading_firm tf on tf.trading_firm_unq_id = ac.trading_firm_unq_id
          join dwh.d_instrument di on di.instrument_id = str.instrument_id
-join dwh.d_strategy_decision_reason_code src on src.strategy_decision_reason_code = str.strtg_decision_reason_code
+         join dwh.d_strategy_decision_reason_code src
+              on src.strategy_decision_reason_code = str.strtg_decision_reason_code and
+                 src.strategy_user_data ilike '%BEST IOC%'
 where str.create_date_id between 20230101 and 20231231
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
        'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
   and str.parent_order_id is not null
-  and src.strategy_user_data ilike '%BEST IOC%'
   and case
-          when par.order_type_id = '1' then true
-          when par.side = '1' and par.price >= md.ask_price then true
-          when par.side <> '1' and par.price <= md.bid_price then true
+          when str.order_type_id = '1' then true
+          when str.side = '1' and str.price >= md.ask_price then true
+          when str.side <> '1' and str.price <= md.bid_price then true
           else false end;
+
 
 
 
