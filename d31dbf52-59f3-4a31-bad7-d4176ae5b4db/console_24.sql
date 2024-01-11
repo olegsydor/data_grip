@@ -142,6 +142,8 @@ Marketable equity DMA orders routed to BAML Softbot routes list below -I would l
 Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled
 as well as the associated parent order ID and routing table name.
 */
+
+select * from trash.so_sensor_orders
 select str.create_date_id   as date_id,         -- date_id
        str.process_time     as execution_time,  -- execution_Time
        par.order_id         as parent_order_id, -- parent_order_id
