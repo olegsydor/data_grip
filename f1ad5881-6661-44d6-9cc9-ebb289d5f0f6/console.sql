@@ -223,37 +223,18 @@ END IF;
 
 
 --------------------------------------------------------------------------------
-l_curr_table_name := 'EXECUTION'::varchar;
-IF l_in_table_name = l_curr_table_name OR l_in_table_name = 'ALL'
-then
--- > dwh.execution
--- get max ID via index on last partitions
- select COALESCE(max(exec_id),0) into l_max_exec_id
- from dwh.execution t
- where t.exec_date_id >= l_curr_date_id;
+    l_curr_table_name := 'GTC_ORDER_STATUS'::varchar;
+    IF l_in_table_name = l_curr_table_name-- OR l_in_table_name = 'ALL'
+    then
+        -- > dwh.gtc_order_status
+        insert into dwh.fact_last_load_time(table_name, latest_load_time, pg_db_updated_time)
+        select l_curr_table_name as table_name
+             , now()             as latest_load_time
+             , clock_timestamp() as pg_db_updated_time
+        on conflict (table_name) do update set latest_load_time   = excluded.latest_load_time,
+                                               pg_db_updated_time = excluded.pg_db_updated_time;
 
-
-select max(exec_time) into l_max_exec_time
-from dwh.execution t
-where t.exec_date_id >= l_curr_date_id
-and t.exec_id >= l_max_exec_id;
-
-  --RAISE NOTICE 'execution ID %', l_max_exec_id;
-  RAISE NOTICE 'Time %', l_max_exec_time;
-  --RETURN l_max_process_time;
-
-  l_max_time_stamp := l_max_exec_time;
-
-  insert into dwh.fact_last_load_time(table_name, latest_load_time, pg_db_updated_time)
-  select l_curr_table_name as table_name
-         , l_max_time_stamp as latest_load_time
-         , clock_timestamp() as pg_db_updated_time
-  on conflict (table_name) do
-  update set
-    latest_load_time = greatest(fact_last_load_time.latest_load_time, excluded.latest_load_time),
-    pg_db_updated_time = excluded.pg_db_updated_time;
-
-END IF;
+    END IF;
 
 
 END;
