@@ -1,3 +1,5 @@
+create database cat_hft;
+
 create schema staging;
 select * from dwh.fact_last_load_time;
 
