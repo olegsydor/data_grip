@@ -216,7 +216,7 @@ begin
 end;
 
 $fn$;
-comment on function inc_hft.unfinished_hft_inc is 'Counts actiev process near to EOD. Calls from inc_hft_late.sh';
+comment on function inc_hft.unfinished_hft_inc is 'Counts active process near to EOD. Called from inc_hft_late.sh';
 
 
 create or replace function inc_hft.hft_check_if_loaded()
@@ -267,7 +267,8 @@ comment on function inc_hft.hft_check_if_loaded is 'Checking if all files\batche
 create or replace function inc_hft.is_unfinished_other_node(in_node text, in_date_id integer, in_only_show boolean default true)
     returns integer[]
     language plpgsql
-AS $fn$
+as
+$fn$
 declare
     l_load_id                     int;
     l_list_of_unfinished_batch_id int4[]; -- list of unfinished load_batch_id that have been started during the other node was active
@@ -280,8 +281,7 @@ begin
                                        and is_processed is distinct from 'Y'
                                        and start_processing is not null
                                        and is_active = 'Y'
-                                       and 1=2
-                                       );
+                                       and 1 = 2);
 
     if array_length(l_list_of_unfinished_batch_id, 1) > 0 and not in_only_show then
         update inc_hft.hft_incremental_files
@@ -299,7 +299,6 @@ begin
 end;
 $fn$
 ;
-
 comment on function inc_hft.is_unfinished_other_node is 'the function checks if load_batch_ids exist that were created
 on different in_node node and depending on in_only_show marks them as BAD. Later those batch_ids will be deleted and
 reloaded by hft_cures script, that will change is_active into ''F''
@@ -356,6 +355,7 @@ begin
 
 end;
 $fn$;
+comment on function inc_hft.add_files_to_process_node is 'Selects the next file to save in inc_hft.hft_incremental_files. Called from a Python script';
 
 
 create or replace function inc_hft.choose_next_file_node(in_date_id integer, in_node character varying,
@@ -435,3 +435,4 @@ begin
 
 end ;
 $fn$;
+comment on function inc_hft.choose_next_file_node is 'Selects the next file to process. Called from a Python script'
