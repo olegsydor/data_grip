@@ -444,15 +444,15 @@ comment on function inc_hft.choose_next_file_node is 'Selects the next file to p
 create or replace function inc_hft.hft_loading_monitoring(in_date_id integer default to_char(clock_timestamp(), 'yyyymmdd'::text)::integer)
     returns table
             (
-                status         character varying,
-                hft_filename   character varying,
-                from_to        character varying,
-                time_st        character varying,
-                time_end       character varying,
-                duration       character varying,
-                all_rows       character varying,
-                processed_rows character varying,
-                remarks        character varying,
+                status         text,
+                hft_filename   text,
+                from_to        text,
+                time_st        text,
+                time_end       text,
+                duration       text,
+                all_rows       text,
+                processed_rows text,
+                remarks        text,
                 batch          integer,
                 node           text
             )
@@ -465,10 +465,9 @@ begin
     return query
         SELECT '~ REAL count'                        AS status,
                ' ' || nspname || '.' || relname      AS hft_filename,
-               --reltuples::bigint::varchar AS "Interval",
                to_char(reltuples, 'FM9,999,999,999') AS "Interval",
                'BAD count:',
-               (select count(distinct filename)::varchar
+               (select count(distinct filename)::text
                 from inc_hft.hft_incremental_files
                 where date_id = in_date_id
                   and is_active = 'Y'
@@ -479,29 +478,29 @@ begin
                '',
                0,
                ''
-        FROM pg_class C
-                 LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-        WHERE relname = 'hft_fix_message_event_inc'
-          AND nspname = 'partitions';
+        from pg_class c
+                 left join pg_namespace n on (n.oid = c.relnamespace)
+        where relname = 'so_hft_fix_message_event_' || in_date_id::text
+          and nspname = 'partitions';
     return query
-        WITH f_next AS
-                 (SELECT hif.filename,
-                         max(COALESCE(hif.start_processing,
-                                      to_date(in_date_id::TEXT, 'YYYYMMDD') + INTERVAL '1 minute'))            AS m_time,
-                         ROW_NUMBER()
-                         over (ORDER BY max(COALESCE(hif.start_processing, to_date(in_date_id::TEXT, 'YYYYMMDD') +
-                                                                           INTERVAL '1 minute')), hif.filename) AS rn
-                  FROM inc_hft.hft_incremental_files hif
-                  WHERE hif.date_id = in_date_id
+        with f_next as
+                 (select hif.filename,
+                         max(coalesce(hif.start_processing,
+                                      to_date(in_date_id::text, 'yyyymmdd') + interval '1 minute'))             as m_time,
+                         row_number()
+                         over (order by max(coalesce(hif.start_processing, to_date(in_date_id::text, 'YYYYMMDD') +
+                                                                           interval '1 minute')), hif.filename) AS rn
+                  from inc_hft.hft_incremental_files hif
+                  where hif.date_id = in_date_id
                     AND hif.is_active = 'Y'
-                    AND NOT EXISTS (SELECT 1
-                                    FROM inc_hft.hft_incremental_files hif2
-                                    WHERE hif2.filename = hif.filename
-                                      AND hif2.start_processing >=
+                    and not exists (select 1
+                                    from inc_hft.hft_incremental_files hif2
+                                    where hif2.filename = hif.filename
+                                      and hif2.start_processing >=
                                           to_date(in_date_id::TEXT, 'YYYYMMDD') + INTERVAL '16 hour' +
-                                          INTERVAL '30 minute')
-                  GROUP BY hif.filename)
-        SELECT COALESCE(CASE hif.is_processed WHEN 'N' THEN 'running' ELSE f_next.rn::TEXT || ' next' END,
+                                          interval '30 minute')
+                  group by hif.filename)
+        select coalesce(case hif.is_processed when 'N' then 'running' else f_next.rn::text || ' next' end,
                         '')                                                        AS status,
                RIGHT(hif.filename, POSITION('/' in REVERSE(hif.filename)) - 1)     AS hft_filename,
                to_char(hif.start_position, 'FM999,999,999') || ' - ' ||
@@ -512,16 +511,16 @@ begin
                        'HH24:MI:SS')                                               AS duration,
                to_char(hif.end_position - hif.start_position + 1, 'FM999,999,999') AS all_rows,
                to_char(hif.processed_rows, 'FM999,999,999')                        AS processed_rows,
-               hif.hft_comment                                                     AS remarks
+               hif.hft_comment                                                     as remarks
 --,hif.last_row_hash
                 ,
                load_batch_id                                                       as load_batch,
                node_name                                                           as node
         from inc_hft.hft_incremental_files hif
-                 LEFT JOIN f_next ON hif.filename = f_next.filename AND hif.load_batch_id IS NULL
-        WHERE hif.date_id = in_date_id
-          AND hif.is_active = 'Y'
-        ORDER BY hft_filename, time_st;
+                 left join f_next on hif.filename = f_next.filename and hif.load_batch_id is null
+        where hif.date_id = in_date_id
+          and hif.is_active = 'Y'
+        order by hft_filename, time_st;
 end;
 $fn$
 ;
