@@ -526,3 +526,19 @@ $fn$
 ;
 
 select * from inc_hft.hft_loading_monitoring();
+
+
+update inc_hft.hft_incremental_files
+set end_position = 1,
+    file_size = ,
+    last_row_hash = %s,
+    is_processed = 'N',
+    node_name = %s
+where load_batch_id = %s;
+
+update inc_hft.hft_incremental_files
+set end_processing = clock_timestamp(),
+        is_processed = 'Y',
+        processed_rows = 1,
+        comment = '1.'
+where load_batch_id = 39866
