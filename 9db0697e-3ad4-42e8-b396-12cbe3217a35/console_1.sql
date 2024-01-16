@@ -436,3 +436,94 @@ begin
 end ;
 $fn$;
 comment on function inc_hft.choose_next_file_node is 'Selects the next file to process. Called from a Python script'
+
+
+
+-- DROP FUNCTION staging.hft_loading_monitoring(int4);
+
+create or replace function inc_hft.hft_loading_monitoring(in_date_id integer default to_char(clock_timestamp(), 'yyyymmdd'::text)::integer)
+    returns table
+            (
+                status         character varying,
+                hft_filename   character varying,
+                from_to        character varying,
+                time_st        character varying,
+                time_end       character varying,
+                duration       character varying,
+                all_rows       character varying,
+                processed_rows character varying,
+                remarks        character varying,
+                batch          integer,
+                node           text
+            )
+    LANGUAGE plpgsql
+AS
+$fn$
+declare
+
+begin
+    return query
+        SELECT '~ REAL count'                        AS status,
+               ' ' || nspname || '.' || relname      AS hft_filename,
+               --reltuples::bigint::varchar AS "Interval",
+               to_char(reltuples, 'FM9,999,999,999') AS "Interval",
+               'BAD count:',
+               (select count(distinct filename)::varchar
+                from inc_hft.hft_incremental_files
+                where date_id = in_date_id
+                  and is_active = 'Y'
+                  and hft_comment like '%BAD%'),
+               'Rows in prog:',
+               (select to_char(sum_in_progress, 'FM999,999,999') from inc_hft.sum_in_progress()),
+               '',
+               '',
+               0,
+               ''
+        FROM pg_class C
+                 LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+        WHERE relname = 'hft_fix_message_event_inc'
+          AND nspname = 'partitions';
+    return query
+        WITH f_next AS
+                 (SELECT hif.filename,
+                         max(COALESCE(hif.start_processing,
+                                      to_date(in_date_id::TEXT, 'YYYYMMDD') + INTERVAL '1 minute'))            AS m_time,
+                         ROW_NUMBER()
+                         over (ORDER BY max(COALESCE(hif.start_processing, to_date(in_date_id::TEXT, 'YYYYMMDD') +
+                                                                           INTERVAL '1 minute')), hif.filename) AS rn
+                  FROM inc_hft.hft_incremental_files hif
+                  WHERE hif.date_id = in_date_id
+                    AND hif.is_active = 'Y'
+                    AND NOT EXISTS (SELECT 1
+                                    FROM inc_hft.hft_incremental_files hif2
+                                    WHERE hif2.filename = hif.filename
+                                      AND hif2.start_processing >=
+                                          to_date(in_date_id::TEXT, 'YYYYMMDD') + INTERVAL '16 hour' +
+                                          INTERVAL '30 minute')
+                  GROUP BY hif.filename)
+        SELECT COALESCE(CASE hif.is_processed WHEN 'N' THEN 'running' ELSE f_next.rn::TEXT || ' next' END,
+                        '')                                                        AS status,
+               RIGHT(hif.filename, POSITION('/' in REVERSE(hif.filename)) - 1)     AS hft_filename,
+               to_char(hif.start_position, 'FM999,999,999') || ' - ' ||
+               to_char(hif.end_position, 'FM999,999,999')                          AS from_to,
+               to_char(start_processing, 'HH24:MI')                                AS time_st,
+               to_char(end_processing, 'HH24:MI')                                  AS time_end,
+               to_char((CASE WHEN is_processed = 'N' THEN LOCALTIMESTAMP ELSE end_processing END) - start_processing,
+                       'HH24:MI:SS')                                               AS duration,
+               to_char(hif.end_position - hif.start_position + 1, 'FM999,999,999') AS all_rows,
+               to_char(hif.processed_rows, 'FM999,999,999')                        AS processed_rows,
+               hif.hft_comment                                                     AS remarks
+--,hif.last_row_hash
+                ,
+               load_batch_id                                                       as load_batch,
+               node_name                                                           as node
+        from inc_hft.hft_incremental_files hif
+                 LEFT JOIN f_next ON hif.filename = f_next.filename AND hif.load_batch_id IS NULL
+        WHERE hif.date_id = in_date_id
+          AND hif.is_active = 'Y'
+        ORDER BY hft_filename, time_st;
+end;
+$fn$
+;
+
+select * from inc_hft.hft_loading_monitoring();
