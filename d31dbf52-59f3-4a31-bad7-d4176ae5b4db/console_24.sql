@@ -143,7 +143,9 @@ Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would
 as well as the associated parent order ID and routing table name.
 */
 
-select * from trash.so_sensor_orders;
+select count(*) from trash.so_sensor_orders
+union all
+select count(*) from trash.so_algo_orders;
 
 select --par.sub_strategy_desc,
        str.create_date_id   as date_id,         -- date_id
