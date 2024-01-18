@@ -326,3 +326,7 @@ $function$
 
 select * from dash360.report_rps_ofp0011_gtd(20231201, 20231210);
 select * from dash360.report_rps_ofp0011_gtd();
+
+
+select * from dwh.d_account
+where account_name = '5CG05455'
