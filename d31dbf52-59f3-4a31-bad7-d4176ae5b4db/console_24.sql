@@ -143,8 +143,10 @@ Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would
 as well as the associated parent order ID and routing table name.
 */
 
-select * from trash.so_sensor_orders
-select str.create_date_id   as date_id,         -- date_id
+select * from trash.so_sensor_orders;
+
+select --par.sub_strategy_desc,
+       str.create_date_id   as date_id,         -- date_id
        str.process_time     as execution_time,  -- execution_Time
        par.order_id         as parent_order_id, -- parent_order_id
        str.order_id         as order_id,        -- order_id
@@ -158,14 +160,16 @@ select str.create_date_id   as date_id,         -- date_id
        ex.last_px           as fill_px,         -- fill_px
        ex.last_qty          as fill_qty,        -- fill_qty,
        md.*
-into trash.so_sensor_orders
+into trash.so_algo_orders
+-- select count(1)
 from dwh.client_order str
          join lateral (select *
                        from dwh.client_order par
                        where str.parent_order_id = par.order_id
                          and str.create_date_id >= par.create_date_id
-                         and par.sub_strategy_desc = 'SENSOR'
+--                          and par.sub_strategy_desc = 'SENSOR'
                          and par.create_date_id >= 20220101
+                         and par.ex_destination = 'ALGO'
                        limit 1) par on true
          left join lateral (select *
                             from dwh.get_routing_market_data(in_transaction_id := str.transaction_id,
@@ -194,9 +198,17 @@ where str.create_date_id between 20230101 and 20231231
           when str.order_type_id = '1' then true
           when str.side = '1' and str.price >= md.ask_price then true
           when str.side <> '1' and str.price <= md.bid_price then true
-          else false end;
+          else false end
+limit 100
 
-
+select sub_strategy, co.sub_strategy_desc, co.ex_destination, *
+from tca.order_tca tca
+join dwh.client_order co on co.order_id = tca.parent_order_id
+where
+  tca.date_id=:in_date_id
+  and tca.parent_order_id > 0
+  --and tca.percentage_of_volume <= 100
+  and tca.sub_strategy in ('CLOSE', 'DARK', 'PHANTOM', 'RAPID', 'VWAP', 'TWAP', 'VWAP+', 'SYNTPEG', 'RAPIDDRK', 'VOLPART', 'IMPSHORT', 'FLEXPART', 'AUCTION', 'DQUOTE', 'MINSWEEPX')
 
 
 
