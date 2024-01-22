@@ -520,3 +520,12 @@ create table inc_hft.load_finish
     db_create_time timestamp not null default clock_timestamp()
 );
 comment on table inc_hft.load_finish is 'The signal table. date_id is filling as soon as daily loading has been finished';
+alter table inc_hft.load_finish add constraint load_finish_pk primary key (date_id)
+
+--catprod.dashops.net
+
+insert into inc_hft.load_finish(date_id, node_name)
+values (20240101, 'node1')
+on conflict (date_id) do nothing;
+
+select * from inc_hft.load_finish
