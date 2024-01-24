@@ -123,36 +123,39 @@ select clo.create_date_id
 from preagg
          join clo on clo.order_id = preagg.order_id;
 
+drop table if exists t_os;
 create temp table t_os as
-select clo.create_date_id
-     , clo.order_id
-     , clo.orig_order_id
-     , clo.account_id
-     , clo.client_order_id
-     , clo.fix_connection_id
-     , di.instrument_type_id
-     , vhfm.tgt_strategy,
+select clo.create_date_id,
+       clo.order_id,
+       clo.orig_order_id,
+       clo.account_id,
+       clo.client_order_id,
+       clo.fix_connection_id,
+       di.instrument_type_id,
+--      , vhfm.tgt_strategy,
+       dss.target_strategy_name,
+       str.street_cnt,
        str.min_create_time,
        str.max_create_time,
-       str.street_cnt
+       case
+           when str.street_cnt > 100 then
+               str.street_cnt / case
+                                    when extract(epoch from str.max_create_time - str.min_create_time) < 0.01
+                                        then 1
+                                    else extract(epoch from str.max_create_time - str.min_create_time) end
+           else 1 end as street_order_eps
 from dwh.client_order clo
-join dwh.d_instrument di on di.instrument_id = clo.instrument_id
-join lateral (select fix_message_id, fix_message ->> '9000' tgt_strategy, fix_message ->> '10057' as t_10057
-                       from fix_capture.fix_message_json fmj
-                       where fmj.date_id = clo.create_date_id
-                         and fmj.fix_message_id = clo.fix_message_id
---                          and fix_message ->> '9000' is not null --= 'VOLHEDGE'
---                          and fix_message ->> '10057' is not null
-                         and fmj.message_type not in ('8', '9')
-                         and fmj.date_id = :date_id
-                       limit 1) vhfm on true
-join lateral (select so.parent_order_id as order_id
-                     , count(1)              street_cnt
-                     , min(so.create_time)   min_create_time
-                     , max(so.create_time)   max_create_time
-                from dwh.client_order so
-                where so.parent_order_id = clo.order_id
-                and so.create_date_id >= :date_id
-                group by 1) str on true
+         join dwh.d_instrument di on di.instrument_id = clo.instrument_id
+         left join dwh.d_target_strategy dss on dss.target_strategy_id = clo.sub_strategy_id
+         join lateral (select --so.parent_order_id as order_id
+                            count(1)              street_cnt,
+                            min(so.create_time)   min_create_time,
+                            max(so.create_time)   max_create_time
+                       from dwh.client_order so
+                       where so.parent_order_id = clo.order_id
+                         and so.create_date_id = :date_id
+                       and so.parent_order_id is not null
+                       group by so.parent_order_id) str on true
 where create_date_id = :date_id
-               and parent_order_id is null
+  and parent_order_id is null
+limit 1000000
