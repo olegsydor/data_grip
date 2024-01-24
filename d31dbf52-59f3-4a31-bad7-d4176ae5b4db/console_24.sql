@@ -81,7 +81,7 @@ where str.create_date_id between 20231228 and 20231231
           when par.side <> '1' and par.price <= md.bid_price then true
           else false end;
 
-
+select 'date_id,execution_Time,parent_order_id,order_id,route_time,exchange_id,firm Name,side,symbol,route_qty,price,fill_px,fill_qty'
 select ftr.date_id          as date_id,         -- date_id
        str.process_time     as execution_time,  -- execution_Time
        par.order_id         as parent_order_id, -- parent_order_id
@@ -121,7 +121,7 @@ from dwh.client_order str
          join dwh.d_account ac on ac.account_id = par.account_id
          join dwh.d_trading_firm tf on tf.trading_firm_unq_id = ac.trading_firm_unq_id
          join dwh.d_instrument di on di.instrument_id = str.instrument_id
-where str.create_date_id between 20230106 and 20231231
+where str.create_date_id between 20230101 and 20231231
   and str.exchange_id in
       ('ARCAML', 'BATSML', 'BATYML', 'EDGAML', 'EDGXML', 'EPRLML', 'IEXML', 'LTSEML', 'MEMXML', 'NQBXML', 'NSDQML',
        'NSXML', 'NYSEML', 'XASEML', 'XCHIML', 'XPSXML')
@@ -142,10 +142,11 @@ Marketable equity DMA orders routed to BAML Softbot routes list below -I would l
 Equity SENSOR BEST IOC orders routed to BAML Softbot routes list below - I would like any street orders that were filled/partially filled
 as well as the associated parent order ID and routing table name.
 */
-
-select count(*) from trash.so_sensor_orders
+select 'date_id,execution_Time,parent_order_id,order_id,route_time,exchange_id,firm Name,side,symbol,route_qty,price,fill_px,fill_qty,bid_qty,bid_price,ask_qty,ask_price'
+select * from trash.so_sensor_orders
 union all
-select count(*) from trash.so_algo_orders;
+select * from trash.so_algo_orders;
+select * from trash.so_dma_orders;
 
 select --par.sub_strategy_desc,
        str.create_date_id   as date_id,         -- date_id
