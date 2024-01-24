@@ -132,7 +132,6 @@ select clo.create_date_id,
        clo.client_order_id,
        clo.fix_connection_id,
        di.instrument_type_id,
---      , vhfm.tgt_strategy,
        dss.target_strategy_name,
        str.street_cnt,
        str.min_create_time,
@@ -146,16 +145,14 @@ select clo.create_date_id,
            else 1 end as street_order_eps
 from dwh.client_order clo
          join dwh.d_instrument di on di.instrument_id = clo.instrument_id
-         left join dwh.d_target_strategy dss on dss.target_strategy_id = clo.sub_strategy_id
-         join lateral (select --so.parent_order_id as order_id
-                            count(1)              street_cnt,
-                            min(so.create_time)   min_create_time,
-                            max(so.create_time)   max_create_time
+         join lateral (select count(1)            street_cnt,
+                              min(so.create_time) min_create_time,
+                              max(so.create_time) max_create_time
                        from dwh.client_order so
                        where so.parent_order_id = clo.order_id
                          and so.create_date_id = :date_id
-                       and so.parent_order_id is not null
+                         and so.parent_order_id is not null
                        group by so.parent_order_id) str on true
+         left join dwh.d_target_strategy dss on dss.target_strategy_id = clo.sub_strategy_id
 where create_date_id = :date_id
-  and parent_order_id is null
-limit 1000000
+  and parent_order_id is null;
