@@ -142,17 +142,42 @@ select clo.create_date_id,
                                     when extract(epoch from str.max_create_time - str.min_create_time) < 0.01
                                         then 1
                                     else extract(epoch from str.max_create_time - str.min_create_time) end
-           else 1 end as street_order_eps
+           else 1 end as street_order_eps,
+    par_nbbo.ask_price as par_ask_price,
+    par_nbbo.bid_price as par_bid_price,
+    par_nbbo.ask_quantity as par_ask_quantity,
+    par_nbbo.bid_quantity as par_bid_quantity,
+    nbbo.*
 from dwh.client_order clo
          join dwh.d_instrument di on di.instrument_id = clo.instrument_id
          join lateral (select count(1)            street_cnt,
                               min(so.create_time) min_create_time,
-                              max(so.create_time) max_create_time
+                              max(so.create_time) max_create_time,
+                              min(so.transaction_id) as min_transaction_id
                        from dwh.client_order so
                        where so.parent_order_id = clo.order_id
                          and so.create_date_id = :date_id
                          and so.parent_order_id is not null
                        group by so.parent_order_id) str on true
-         left join dwh.d_target_strategy dss on dss.target_strategy_id = clo.sub_strategy_id
+         join dwh.d_target_strategy dss on dss.target_strategy_id = clo.sub_strategy_id
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = clo.transaction_id
+                                  and ls.exchange_id = 'NBBO'
+                                  and ls.start_date_id = :date_id--to_char(clo.create_time, 'YYYYMMDD')::int4
+--                                    and ls.start_date_id = str.create_date_id
+                                limit 1
+        ) par_nbbo on true
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = str.min_transaction_id
+                                  and ls.exchange_id = 'NBBO'
+                                  and ls.start_date_id = :date_id--to_char(str.min_create_time, 'YYYYMMDD')::int4
+--                                    and ls.start_date_id = str.create_date_id
+                                limit 1
+        ) nbbo on true
 where create_date_id = :date_id
   and parent_order_id is null;
+
+
+select * from t_os
