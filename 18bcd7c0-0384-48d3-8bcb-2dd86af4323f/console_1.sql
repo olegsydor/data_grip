@@ -563,10 +563,26 @@ select date_id,
 from trash.df_20240124_ext;
 
 
-SELECT
-*
+	SELECT
+		'CAT_HFT'::TEXT						AS table_name,
+		count(ne.cl_ord_id) 				AS cn,
+		count(ne.cl_ord_id) 				AS count_cl_ord_id,
+		count(ne.parent_cl_ord_id) 			AS count_parent_cl_ord,
+		count(ne.exec_type) 				AS count_exec_type
 	FROM partitions.hft_fix_message_event_20240124 AS ne
 		where msg_type not in('1', '5')
-and fix_date::timestamp::time > '16:40'
 and load_batch_id = -1
+          and case
+                  when (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::time at time zone 'UTC' at time zone
+                        'US/Eastern')::time > '16:40'::time then
+                      msg_type not in ('9', 'F')
+                  else true end;
 
+
+
+select to_timestamp('20240124-21:47:18.988', 'YYYYMMDD-H24:MI:SS.MS')::timestamptz at time zone 'UTC' at time zone 'US/Eastern'
+
+
+select to_timestamp('20240124-21:47:18.988'::text, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone 'US/Eastern';
+
+select (to_timestamp('20240124-21:47:18.988'::text, 'YYYYMMDD-HH24:MI:SS')::time at time zone 'UTC' at time zone 'US/Eastern')::time, '16:47'::time
