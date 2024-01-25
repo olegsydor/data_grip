@@ -529,4 +529,44 @@ insert into inc_hft.load_finish(date_id, node_name)
 values (20240101, 'node1')
 on conflict (date_id) do nothing;
 
-select * from inc_hft.load_finish
+select * from inc_hft.load_finish;
+
+
+insert into partitions.hft_fix_message_event_20240124 (date_id, fix_date, msg_type, sub_system_id, sender_comp_id,
+                                                       target_comp_id, account_name, cl_ord_id, parent_cl_ord_id,
+                                                       secondary_ord_id, exch_exec_id, sec_exch_exec_id, exch_ord_id,
+                                                       session_id, orig_cl_ord_id, security_type, leg_cfi_code,
+                                                       fix_msg_json, load_batch_id, exec_type, leg_ref_id,
+                                                       alternative_cl_ord_id)
+select date_id,
+       fix_date,
+       msg_type,
+       sub_system_id,
+       sender_comp_id,
+       target_comp_id,
+       account_name,
+       cl_ord_id,
+       parent_cl_ord_id,
+       secondary_ord_id,
+       exch_exec_id,
+       sec_exch_exec_id,
+       exch_ord_id,
+       session_id,
+       orig_cl_ord_id,
+       security_type,
+       leg_cfi_code,
+       fix_msg_json,
+       -1,
+       exec_type,
+       leg_ref_id,
+       alternative_cl_ord_id
+from trash.df_20240124_ext;
+
+
+SELECT
+*
+	FROM partitions.hft_fix_message_event_20240124 AS ne
+		where msg_type not in('1', '5')
+and fix_date::timestamp::time > '16:40'
+and load_batch_id = -1
+
