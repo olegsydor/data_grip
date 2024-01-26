@@ -86,18 +86,44 @@ select po.exec_time,
                36681, 52065, 58770, 70279, 19681, 19634);
 
 
+select *
+-- into trash.so_fyc_perf
+from t_old
+where wave_no > 5;
 
 
+select first_value(fyc.wave_no) over w                 as wave_no_first,
+                   last_value(fyc.wave_no) over w                  as wave_no_last,
+
+                   first_value(fyc.multileg_reporting_type) over w as multileg_reporting_type_first,
+                   last_value(fyc.multileg_reporting_type) over w  as multileg_reporting_type_last,
+
+                   first_value(fyc.transaction_id) over w          as transaction_id_first,
+                   last_value(fyc.transaction_id) over w           as transaction_id_last,
+
+                   first_value(fyc.status_date_id) over w          as status_date_id_first,
+                   last_value(fyc.status_date_id) over w           as status_date_id_last,
+
+                   first_value(fyc.instrument_id) over w          as instrument_id_first,
+                   last_value(fyc.instrument_id) over w           as instrument_id_last
+
+            from data_marts.f_yield_capture fyc
+            where fyc.parent_order_id = 13275412562
+              and fyc.parent_order_id is not null
+              and fyc.status_date_id >= :start_status_date_id
+            window w as (partition by parent_order_id order by wave_no)
+order by wave_no desc limit 1
 
 
+/*
+select *
+         into trash.so_fyc_perf_new
+         from t_report
+where order_id = 13272669099
+*/
 
-
-
-
-
-
-
-
+select * from trash.so_fyc_perf
+where order_id = 13272669099;
 
         create temp table t_report as
         select po.exec_time,
@@ -168,7 +194,7 @@ select po.exec_time,
               and fyc.parent_order_id is not null
               and fyc.status_date_id >= :start_status_date_id
             window w as (partition by parent_order_id order by wave_no)
-            limit 1
+            order by wave_no desc limit 1
             ) mx on true
              left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity as ask_qty, ls.bid_quantity as bid_qty
                                 from dwh.l1_snapshot ls
