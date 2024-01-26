@@ -879,8 +879,8 @@ from trash.so_dash360_report_parent_order_metrics(start_status_date_id=>20240125
 
 
 select *
-into trash.so_fyc_report_old1
-from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20240125,
+-- into trash.so_fyc_report_old1
+from trash.so_dash360_report_parent_order_metrics_3(start_status_date_id=>20240125,
                                                   end_status_date_id=>20240125,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
@@ -890,4 +890,137 @@ select * from drop table trash.so_fyc_report_new1
 except
 select * from drop table trash.so_fyc_report_old1
 except
-select * from trash.so_fyc_report_new1
+select * from trash.so_fyc_report_new1;
+
+
+CREATE or replace  FUNCTION trash.so_dash360_report_parent_order_metrics_3(account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                               instrument_type_id character varying DEFAULT NULL::character varying(1),
+                                                               start_status_date_id integer DEFAULT NULL::integer,
+                                                               end_status_date_id integer DEFAULT NULL::integer,
+                                                               is_demo character DEFAULT 'N'::bpchar)
+    RETURNS TABLE
+            (
+                exec_time               timestamp without time zone,
+                routed_time             timestamp without time zone,
+                status_date_id          integer,
+                transaction_id          bigint,
+                order_id                bigint,
+                client_order_id         character varying,
+                multileg_reporting_type character,
+                tif_name                character varying,
+                order_type_name         character varying,
+                order_price             numeric,
+                day_order_qty           integer,
+                day_cum_qty             integer,
+                day_avg_px              numeric,
+                side                    character,
+                client_id               character varying,
+                account_name            character varying,
+                is_marketable           character,
+                cross_order_id          integer,
+                sec_type_id             character,
+                display_instrument_id   character varying,
+                last_trade_date         timestamp without time zone,
+                sub_strategy            character varying,
+                num_exch                smallint,
+                nbbo_bid_price          numeric,
+                nbbo_bid_quantity       integer,
+                nbbo_ask_price          numeric,
+                nbbo_ask_quantity       integer,
+                parent_order_id         bigint,
+                wave_no                 smallint,
+                first_wave_nbbo_bid_px  numeric,
+                last_wave_nbbo_bid_px   numeric,
+                first_wave_nbbo_ask_px  numeric,
+                last_wave_nbbo_ask_px   numeric,
+                first_wave_nbbo_bid_qty integer,
+                last_wave_nbbo_bid_qty  integer,
+                first_wave_nbbo_ask_qty integer,
+                last_wave_nbbo_ask_qty  integer,
+                rn                      bigint
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS  $function$
+
+begin
+return query
+    create temp table t_os as
+select
+            po.exec_time,
+            po.routed_time,
+            po.status_date_id,
+            po.transaction_id,
+            po.order_id,
+            po.client_order_id,
+            po.multileg_reporting_type,
+            tif.tif_name,
+            ot.order_type_name,
+            po.order_price,
+            po.day_order_qty,
+            po.day_cum_qty,
+            po.day_avg_px,
+            po.side,
+po.client_id,
+            acc.account_name,
+            po.is_marketable,
+            po.cross_order_id,
+            po.instrument_type_id  as  sec_type_id,
+            i.display_instrument_id,
+            i.last_trade_date,
+            dss.target_strategy_name  as  sub_strategy,
+--            dss.target_strategy_desc  as  sub_strategy,
+            po.num_exch,
+            po.nbbo_bid_price,
+            po.nbbo_bid_quantity,
+            po.nbbo_ask_price,
+            po.nbbo_ask_quantity,
+            parent_waves.parent_order_id,
+            parent_waves.wave_no,
+            parent_waves.first_wave_nbbo_bid_px,
+            parent_waves.last_wave_nbbo_bid_px,
+            parent_waves.first_wave_nbbo_ask_px,
+            parent_waves.last_wave_nbbo_ask_px,
+            parent_waves.first_wave_nbbo_bid_qty,
+            parent_waves.last_wave_nbbo_bid_qty,
+            parent_waves.first_wave_nbbo_ask_qty,
+            parent_waves.last_wave_nbbo_ask_qty,
+            1
+        from  data_marts.f_yield_capture  po
+inner join dwh.d_time_in_force tif on tif.is_active and tif.tif_id = po.time_in_force_id
+        inner  join  dwh.d_order_type  ot  on  ot.order_type_id=po.order_type_id
+        inner  join  dwh.d_instrument  i  on  i.instrument_id=po.instrument_id
+        left  join  dwh.d_target_strategy  dss  on  po.sub_strategy_id=dss.target_strategy_id
+        inner  join  dwh.d_account  acc  on  (acc.account_id  =  po.account_id)
+        inner join lateral (select str.parent_order_id,
+                                         last_value(str.wave_no) over w            as wave_no,
+                                         first_value(str.nbbo_bid_price) over w    as first_wave_nbbo_bid_px,
+                                         last_value(str.nbbo_bid_price) over w     as last_wave_nbbo_bid_px,
+                                         first_value(str.nbbo_ask_price) over w    as first_wave_nbbo_ask_px,
+                                         last_value(str.nbbo_ask_price) over w     as last_wave_nbbo_ask_px,
+                                         first_value(str.nbbo_bid_quantity) over w as first_wave_nbbo_bid_qty,
+                                         last_value(str.nbbo_bid_quantity) over w  as last_wave_nbbo_bid_qty,
+                                         first_value(str.nbbo_ask_quantity) over w as first_wave_nbbo_ask_qty,
+                                         last_value(str.nbbo_ask_quantity) over w  as last_wave_nbbo_ask_qty
+                                  from data_marts.f_yield_capture str
+                                  where str.parent_order_id = po.order_id
+                                     and str.status_date_id >= :start_status_date_id
+                                    and str.status_date_id <= :end_status_date_id
+                                    and str.parent_order_id is not null
+                                    and str.status_date_id = po.status_date_id
+                                  window w as (partition by str.parent_order_id order by str.wave_no)
+order by str.wave_no desc limit 1
+                          ) parent_waves on true
+    where po.parent_order_id is null
+      and po.status_date_id >= :start_status_date_id
+      and po.status_date_id <= :end_status_date_id
+      and po.multileg_reporting_type in ('1', '2')
+      and po.instrument_type_id = 'O'
+      and po.TIME_IN_FORCE_id IN ('0', '2', '3', '4')
+--       and po.account_id = any (:account_ids);
+          and po.account_id in
+              (24993, 19676, 52064, 36679, 52101, 51465, 51464, 63695, 52061, 52062, 52066, 52067, 52063, 36680, 36675,
+               36681, 52065, 58770, 70279, 19681, 19634);
+
+end;
+$function$
