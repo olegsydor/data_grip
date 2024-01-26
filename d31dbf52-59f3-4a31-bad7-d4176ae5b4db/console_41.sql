@@ -884,3 +884,8 @@ from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20231002,
                                                   end_status_date_id=>20231006,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
+
+
+select * from trash.so_fyc_report_new
+except
+select * from trash.so_fyc_report_old
