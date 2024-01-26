@@ -815,7 +815,7 @@ begin
                    else max_wave_2.ask_qty end,                                      -- last_wave_nbbo_ask_qty,
                1
         from t_report po
-                 left join lateral (select ls.ask_price,
+                 join lateral (select ls.ask_price,
                                            ls.bid_price,
                                            ls.ask_quantity as ask_qty,
                                            ls.bid_quantity as bid_qty
@@ -827,7 +827,7 @@ begin
                                       and po.multileg_reporting_type_first = '1'
                                     limit 1
             ) min_wave on true
-                 left join lateral (select ls.ask_price,
+                 join lateral (select ls.ask_price,
                                            ls.bid_price,
                                            ls.ask_quantity as ask_qty,
                                            ls.bid_quantity as bid_qty
@@ -871,21 +871,23 @@ $fn$;
 
 
 select *
-into trash.so_fyc_report_new
-from trash.so_dash360_report_parent_order_metrics(start_status_date_id=>20231002,
-                                                  end_status_date_id=>20231006,
+into trash.so_fyc_report_new1
+from trash.so_dash360_report_parent_order_metrics(start_status_date_id=>20240125,
+                                                  end_status_date_id=>20240125,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
 
 
 select *
-into trash.so_fyc_report_old
-from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20231002,
-                                                  end_status_date_id=>20231006,
+into trash.so_fyc_report_old1
+from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20240125,
+                                                  end_status_date_id=>20240125,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
 
 
-select * from trash.so_fyc_report_new
+select * from trash.so_fyc_report_new1
 except
-select * from trash.so_fyc_report_old
+select * from trash.so_fyc_report_old1
+except
+select * from trash.so_fyc_report_new1
