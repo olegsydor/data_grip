@@ -125,6 +125,17 @@ where order_id = 13272669099
 select * from trash.so_fyc_perf
 where order_id = 13272669099;
 
+SELECT exec_time, routed_time, status_date_id, transaction_id, order_id, client_order_id, multileg_reporting_type, tif_name, order_type_name, order_price, day_order_qty, day_cum_qty, day_avg_px, side, client_id, account_name, is_marketable, cross_order_id, sec_type_id, display_instrument_id, last_trade_date, sub_strategy, num_exch, nbbo_bid_price, nbbo_bid_quantity, nbbo_ask_price, nbbo_ask_quantity, parent_order_id, wave_no, first_wave_nbbo_bid_px, last_wave_nbbo_bid_px, first_wave_nbbo_ask_px, last_wave_nbbo_ask_px, first_wave_nbbo_bid_qty, last_wave_nbbo_bid_qty, first_wave_nbbo_ask_qty, last_wave_nbbo_ask_qty, "?column?"
+FROM trash.so_fyc_perf_new
+except
+SELECT exec_time, routed_time, status_date_id, transaction_id, order_id, client_order_id, multileg_reporting_type, tif_name, order_type_name, order_price, day_order_qty, day_cum_qty, day_avg_px, side, client_id, account_name, is_marketable, cross_order_id, sec_type_id, display_instrument_id, last_trade_date, sub_strategy, num_exch, nbbo_bid_price, nbbo_bid_quantity, nbbo_ask_price, nbbo_ask_quantity, parent_order_id, wave_no, first_wave_nbbo_bid_px, last_wave_nbbo_bid_px, first_wave_nbbo_ask_px, last_wave_nbbo_ask_px, first_wave_nbbo_bid_qty, last_wave_nbbo_bid_qty, first_wave_nbbo_ask_qty, last_wave_nbbo_ask_qty, "?column?"
+FROM trash.so_fyc_perf
+except
+SELECT exec_time, routed_time, status_date_id, transaction_id, order_id, client_order_id, multileg_reporting_type, tif_name, order_type_name, order_price, day_order_qty, day_cum_qty, day_avg_px, side, client_id, account_name, is_marketable, cross_order_id, sec_type_id, display_instrument_id, last_trade_date, sub_strategy, num_exch, nbbo_bid_price, nbbo_bid_quantity, nbbo_ask_price, nbbo_ask_quantity, parent_order_id, wave_no, first_wave_nbbo_bid_px, last_wave_nbbo_bid_px, first_wave_nbbo_ask_px, last_wave_nbbo_ask_px, first_wave_nbbo_bid_qty, last_wave_nbbo_bid_qty, first_wave_nbbo_ask_qty, last_wave_nbbo_ask_qty, "?column?"
+FROM trash.so_fyc_perf_new
+
+
+
         create temp table t_report as
         select po.exec_time,
                po.routed_time,
@@ -173,7 +184,7 @@ where order_id = 13272669099;
                  inner join dwh.d_instrument i on i.instrument_id = po.instrument_id
                  left join dwh.d_target_strategy dss on po.sub_strategy_id = dss.target_strategy_id
                  inner join data_marts.d_account acc on (acc.account_id = po.account_id)
-                 left join lateral (
+                 join lateral (
             select first_value(fyc.wave_no) over w                 as wave_no_first,
                    last_value(fyc.wave_no) over w                  as wave_no_last,
 
@@ -224,7 +235,7 @@ where order_id = 13272669099;
         and po.order_id = 13317023312
         order by po.exec_time;
 end;
-$function$
+
 ;
 
 
@@ -325,3 +336,15 @@ where order_id = 13317023312
 
 
 ----------------------------------------------
+select *,
+       (dwh.get_routing_market_data(in_transaction_id := fyc.transaction_id,
+                                                                         in_exchange_id := 'NBBO',
+                                                                         in_multileg_reporting_type := fyc.multileg_reporting_type,
+                                                                         in_instrument_id := dwh.get_multileg_head_instrument_id(
+                                                                                 in_order_id := fyc.parent_order_id,
+                                                                                 in_multileg_reporting_type := fyc.multileg_reporting_type),
+                                                                         in_date_id := fyc.status_date_id)).*
+from trash.so_fyc_perf_new fyc
+where multileg_reporting_type <> '1';
+
+select
