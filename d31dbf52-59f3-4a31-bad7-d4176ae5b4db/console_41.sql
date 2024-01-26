@@ -739,7 +739,7 @@ begin
                               and fyc.parent_order_id is not null
                               and fyc.status_date_id >= start_status_date_id
                               and fyc.status_date_id <= end_status_date_id
-                            window w as (partition by fyc.parent_order_id order by fyc.wave_no)
+                            window w as (partition by fyc.parent_order_id order by fyc.wave_no rows between unbounded preceding and unbounded following)
                             order by fyc.wave_no desc
                             limit 1
         ) mx on true
@@ -886,8 +886,8 @@ from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20240125,
                                                   instrument_type_id=>'O');
 
 
-select * from trash.so_fyc_report_new1
+select * from drop table trash.so_fyc_report_new1
 except
-select * from trash.so_fyc_report_old1
+select * from drop table trash.so_fyc_report_old1
 except
 select * from trash.so_fyc_report_new1
