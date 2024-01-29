@@ -1101,8 +1101,8 @@ select
 and po.order_id = 14380549543
 
 
-drop function if exists trash.so_dash360_report_parent_order_metrics_2;
-create function trash.so_dash360_report_parent_order_metrics_2(account_ids bigint[] default '{}'::bigint[],
+drop function if exists trash.so_dash360_report_parent_order_metrics_4;
+create function trash.so_dash360_report_parent_order_metrics_4(account_ids bigint[] default '{}'::bigint[],
                                                                instrument_type_id character varying default null::character varying(1),
                                                                start_status_date_id integer default null::integer,
                                                                end_status_date_id integer default null::integer,
@@ -1180,20 +1180,20 @@ begin
                dss.target_strategy_name as sub_strategy,
 --            dss.target_strategy_desc  as  sub_strategy,
                po.num_exch,
-               coalesce(po.nbbo_bid_price, parent_waves.first_wave_nbbo_bid_px),
-               coalesce(po.nbbo_bid_quantity, parent_waves.first_wave_nbbo_bid_qty),
-               coalesce(po.nbbo_ask_price, parent_waves.first_wave_nbbo_ask_px),
-               coalesce(po.nbbo_ask_quantity, parent_waves.first_wave_nbbo_ask_qty),
+               coalesce(po.nbbo_bid_price, parent_waves.first_wave_nbbo_bid_px, head_md.bid_price),
+               coalesce(po.nbbo_bid_quantity, parent_waves.first_wave_nbbo_bid_qty, head_md.bid_qty::int4),
+               coalesce(po.nbbo_ask_price, parent_waves.first_wave_nbbo_ask_px, head_md.ask_price),
+               coalesce(po.nbbo_ask_quantity, parent_waves.first_wave_nbbo_ask_qty, head_md.ask_qty::int4),
                parent_waves.parent_order_id,
                parent_waves.wave_no,
-               parent_waves.first_wave_nbbo_bid_px,
-               parent_waves.last_wave_nbbo_bid_px,
-               parent_waves.first_wave_nbbo_ask_px,
-               parent_waves.last_wave_nbbo_ask_px,
-               parent_waves.first_wave_nbbo_bid_qty::int8,
-               parent_waves.last_wave_nbbo_bid_qty::int8,
-               parent_waves.first_wave_nbbo_ask_qty::int8,
-               parent_waves.last_wave_nbbo_ask_qty::int8,
+               coalesce(parent_waves.first_wave_nbbo_bid_px, head_md.bid_price),
+               coalesce(parent_waves.last_wave_nbbo_bid_px, head_md.bid_price),
+               coalesce(parent_waves.first_wave_nbbo_ask_px, head_md.ask_price),
+               coalesce(parent_waves.last_wave_nbbo_ask_px, head_md.ask_price),
+               coalesce(parent_waves.first_wave_nbbo_bid_qty::int8, head_md.bid_qty),
+               coalesce(parent_waves.last_wave_nbbo_bid_qty::int8, head_md.bid_qty),
+               coalesce(parent_waves.first_wave_nbbo_ask_qty::int8, head_md.ask_qty),
+               coalesce(parent_waves.last_wave_nbbo_ask_qty::int8, head_md.ask_qty),
                1
         from data_marts.f_yield_capture po
                  inner join dwh.d_time_in_force tif on tif.is_active and tif.tif_id = po.time_in_force_id
@@ -1221,6 +1221,16 @@ begin
                                      order by str.wave_no desc
                                      limit 1
             ) parent_waves on true
+        left join lateral (select *
+from dwh.get_routing_market_data(in_transaction_id := po.transaction_id,
+                                in_exchange_id := 'NBBO',
+                                in_multileg_reporting_type := '3',
+                                in_instrument_id := 3,
+                                in_date_id := po.status_date_id)
+            where po.multileg_reporting_type = '2'
+            and num_nonnulls(parent_waves.first_wave_nbbo_bid_px, parent_waves.first_wave_nbbo_ask_px, parent_waves.first_wave_nbbo_bid_qty, parent_waves.first_wave_nbbo_ask_qty) = 0
+            limit 1
+            ) head_md on true
         where po.parent_order_id is null
           and po.status_date_id >= start_status_date_id
           and po.status_date_id <= end_status_date_id
@@ -1231,10 +1241,10 @@ begin
 end;
 $fn$;
 
-drop table if exists trash.so_fyc_report;
+drop table if exists trash.so_fyc_report4;
 select *
-into trash.so_fyc_report
-from trash.so_dash360_report_parent_order_metrics_2(start_status_date_id=>20240125,
+into trash.so_fyc_report4
+from trash.so_dash360_report_parent_order_metrics_4(start_status_date_id=>20240125,
                                                   end_status_date_id=>20240125,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
@@ -1247,7 +1257,7 @@ from dash360.dash360_report_parent_order_metrics(start_status_date_id=>20240125,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
 
-select * from trash.so_fyc_report
+select * from trash.so_fyc_report4
 except
 select * from trash.so_fyc_report_old
 
@@ -1296,6 +1306,6 @@ select str.parent_order_id,
 select *
 from dwh.get_routing_market_data(in_transaction_id := 270000734462,
                                 in_exchange_id := 'NBBO',
-                                in_multileg_reporting_type := '2',
+                                in_multileg_reporting_type := '3',
                                 in_instrument_id := 3,
                                 in_date_id := 20240125)
