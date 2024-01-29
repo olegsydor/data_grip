@@ -1259,3 +1259,43 @@ except
 select * from trash.so_fyc_report_old
 where transaction_id in (2238803972967,2238803973308,2238803972771,2238803973283)
 order by 1, transaction_id, order_id
+
+
+select * from dwh.l1_snapshot l1
+    where transaction_id = 270000734462
+
+        select transaction_id, instrument_id, instrument_type_id, * from data_marts.f_yield_capture
+where f_yield_capture.order_id = 14383841823
+
+select * from dwh.d_instrument
+        where d_instrument.instrument_id in (113230954, 115380041)
+
+
+
+select str.parent_order_id,
+                                            last_value(str.wave_no) over w            as wave_no,
+                                            first_value(str.nbbo_bid_price) over w    as first_wave_nbbo_bid_px,
+                                            last_value(str.nbbo_bid_price) over w     as last_wave_nbbo_bid_px,
+                                            first_value(str.nbbo_ask_price) over w    as first_wave_nbbo_ask_px,
+                                            last_value(str.nbbo_ask_price) over w     as last_wave_nbbo_ask_px,
+                                            first_value(str.nbbo_bid_quantity) over w as first_wave_nbbo_bid_qty,
+                                            last_value(str.nbbo_bid_quantity) over w  as last_wave_nbbo_bid_qty,
+                                            first_value(str.nbbo_ask_quantity) over w as first_wave_nbbo_ask_qty,
+                                            last_value(str.nbbo_ask_quantity) over w  as last_wave_nbbo_ask_qty
+                                     from data_marts.f_yield_capture str
+                                     where str.parent_order_id = 14383841823
+--                                        and str.status_date_id >= start_status_date_id
+--                                        and str.status_date_id <= end_status_date_id
+                                       and str.parent_order_id is not null
+--                                        and str.status_date_id = po.status_date_id
+                                     window w as (partition by str.parent_order_id order by str.wave_no)
+                                     order by str.wave_no desc
+                                     limit 1
+
+
+select *
+from dwh.get_routing_market_data(in_transaction_id := 270000734462,
+                                in_exchange_id := 'NBBO',
+                                in_multileg_reporting_type := '2',
+                                in_instrument_id := 3,
+                                in_date_id := 20240125)
