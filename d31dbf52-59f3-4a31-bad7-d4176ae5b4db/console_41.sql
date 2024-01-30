@@ -1241,11 +1241,11 @@ from dwh.get_routing_market_data(in_transaction_id := po.transaction_id,
 end;
 $fn$;
 
-drop table if exists trash.so_fyc_report4;
+drop table if exists trash.so_fyc_report41;
 select *
-into trash.so_fyc_report4
-from trash.so_dash360_report_parent_order_metrics_4(start_status_date_id=>20240125,
-                                                  end_status_date_id=>20240125,
+into trash.so_fyc_report41
+from trash.so_dash360_report_parent_order_metrics_4(start_status_date_id=>20231101,
+                                                  end_status_date_id=>20231108,
                                                   account_ids=>array [24993,19676,52064,36679,52101,51465,51464,63695,52061,52062,52066,52067,52063,36680,36675,36681,52065,58770,70279,19681,19634],
                                                   instrument_type_id=>'O');
 
