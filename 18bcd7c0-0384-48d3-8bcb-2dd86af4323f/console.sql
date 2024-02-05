@@ -263,8 +263,8 @@ begin
     for part in (select schema_name, table_name from obsolete_partitions)
         loop
             l_sql := 'drop table ' || part.schema_name || '.' || part.table_name || ';';
---             execute l_sql;
-            raise notice 'This statement will be executed: %', l_sql;
+            execute l_sql;
+--             raise notice 'This statement will be executed: %', l_sql;
             select load_log(l_load_id, l_step_id,
                             'Partition ' || part.schema_name || '.' || part.table_name || ' has been dropped', 0, 'D')
             into l_step_id;
@@ -447,3 +447,63 @@ insert into db_management.table_retention(schema_name, table_name, retention_per
 select schema_name, table_name, retention_period, cleanup_schedule, key_field, is_active from staging.table_retention;
 
 alter table staging.table_retention set schema trash;
+
+select * from db_management.table_retention
+select * from db_management.db_cleanup_data_rolloff()
+
+
+
+-- DROP PROCEDURE db_management.delete_incremental_partition(int4);
+
+create or replace procedure db_management.delete_eod_partition(in_day_back integer)
+    language plpgsql
+as
+$procedure$
+    -- 20220521: https://dashfinancial.atlassian.net/browse/DS-5060 SO. In order to drop old partitions of incremental loading one block has been implemented after the main one
+    -- 20240205: within the migration of the eod flow into incremental loading delete of incremental unattached partitions should have been changed to deleting eod ones
+declare
+    l_load_id      int;
+    l_step_id      int;
+    err_message    text;
+    scr            record;
+    date_id        varchar;
+    procedure_name text;
+
+begin
+    procedure_name = 'DB_MANAGEMENT.DELETE_EOD_PARTITION ';
+
+    select nextval('load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select load_log(l_load_id, l_step_id, procedure_name || date_id || ' STARTED===', 0, 'O')
+    into l_step_id;
+
+    for scr in (select table_schema,
+                       table_name
+                from information_schema.tables
+                where table_schema = 'partitions'
+                  and table_name like 'hft_fix_message_event__________eod'
+                  and (regexp_match(table_name, '\d+'))[1]::int <
+                      to_char(public.get_business_date_back(current_date, in_day_back), 'YYYYMMDD')::int)
+        loop
+            execute 'drop table ' || scr.table_schema || '.' || scr.table_name || ';';
+            select public.load_log(l_load_id, l_step_id,
+                                   'table has been deleted ' || scr.table_schema || '.' || scr.table_name || '', 0,
+                                   'O')
+            into l_step_id;
+        end loop;
+
+    select load_log(l_load_id, l_step_id, procedure_name || date_id || ' COMPLETED===', 0, 'O')
+    into l_step_id;
+
+exception
+    when others then
+        GET STACKED DIAGNOSTICS
+            err_message = MESSAGE_TEXT;
+        RAISE NOTICE E'--- Error message ---\n%', err_message;
+        select load_log(l_load_id, l_step_id, procedure_name || date_id || ' COMPLETED WITH ERROR ' || err_message, 0,
+                        'E')
+        into l_step_id;
+end;
+$procedure$
+;
