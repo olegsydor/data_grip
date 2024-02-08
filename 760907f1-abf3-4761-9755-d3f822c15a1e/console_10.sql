@@ -122,5 +122,7 @@ select "PermissionId(441)"::int4,
        "OpenCondition(37)",
        "Symbol(456)",
        -1::int4
-from billing.activ;
+select *
+from billing.activ
+where "Symbol(456)" ilike '%AA/MKz8K.O%';
 
