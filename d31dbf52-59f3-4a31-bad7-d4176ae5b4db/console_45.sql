@@ -13,9 +13,9 @@ select co.sub_strategy_desc,
     compliance.get_sor_handl_inst_sy(in_order_id := co.order_id, in_instrument_type_id := instrument_type_id, in_date_id := create_date_id, in_fix_msg := fmj.fix_message)
 from dwh.client_order co
 join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id
-join dwh.d_instrument di on di.instrument_id = co.instrument_id
-join dwh.d_account da on da.account_id = co.account_id
-where co.client_order_id = 'A243809WAM'
+join dwh.d_instrument di on di.instrument_id = co.instrument_id and di.is_active
+join dwh.d_account da on da.account_id = co.account_id and da.is_active
+where co.client_order_id = 'ACTACCREATIVE02070000016'
 
 ------------------------------------------------------------------
 
@@ -82,6 +82,7 @@ begin
       and cl.create_date_id between l_start_date_id and l_end_date_id -- 20220101 and 20220531 --
       and cl.multileg_reporting_type in ('1', '2')
       and cl.trans_type <> 'F'
+    and cl.client_order_id  = 'ACTACCREATIVE02070000016'
       -- all streets + parents in case when we have any exec types except Acc. So, here we take everything - parent + street level orders
 --     limit 5
       ;
@@ -338,7 +339,7 @@ begin
             else coalesce(lpad(ca.cmta, 3), cl.clearing_firm_id, '')
           end||','|| --CMTAFirm
           ''||','||  --AccountAlias
-          ''||','||  --Account
+          cl.account_name||','||  --Account
           ''||','||  --SubAccount
           ''||','||  --SubAccount2
           ''||','||  --SubAccount3
@@ -469,7 +470,8 @@ begin
       left join dwh.d_opt_exec_broker opx on (opx.account_id = cl.account_id and opx.is_default = 'Y' and opx.is_active)
       left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
       left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-    where cl.handl_inst <> ''
+    where true
+        and cl.handl_inst <> ''
     ;
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
     execute 'analyze report_tmp';
@@ -526,7 +528,7 @@ $function$
 
 select *
 from trash.report_lpeod_aos_compliance(
-	p_start_date_id => 20230712,
-	p_end_date_id => 20230712,
+	p_start_date_id => 20240207,
+	p_end_date_id => 20240208,
 	p_account_ids => '{68415,29549,66296}'
 );
