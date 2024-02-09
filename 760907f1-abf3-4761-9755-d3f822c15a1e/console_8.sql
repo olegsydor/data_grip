@@ -518,5 +518,7 @@ select "PermissionId(441)", "State(361)", "BidCondition(2)", "RecordStatus(447)"
        "TradeIdCorrected(1130)", "PreviousCumulativeVolume(658)", "PreviousBid(652)", "TradeHighExchange(21)", "OpenInterestDate(135)", "LocalCode(301)", "TradeLowExchange(25)",
        "PreviousOpenInterestDate(122)", "Context(394)", "CloseExchange(66)", "PreviousCumulativeValue(657)", "OpenTime(38)", "LifetimeHighDate(157)", "OpenInterest(134)",
        "ClosingAskExchange(59)", "PreviousCumulativeVolumeDate(659)", "PreviousPercentChange(120)", "TradeHighCondition(19)", "LifetimeLowDate(159)", "PreviousOpenInterest(121)",
-       "CloseCondition(62)", "PreviousCloseDate(655)", "PreviousCumulativePrice(516)", "TradeLowCondition(23)", "ExpirationDate(280)", "OpenCondition(37)", "Symbol(456)", -1
+       "CloseCondition(62)", "PreviousCloseDate(655)", "PreviousCumulativePrice(516)", "TradeLowCondition(23)", "ExpirationDate(280)", ope
+
+
 from billing.activ;

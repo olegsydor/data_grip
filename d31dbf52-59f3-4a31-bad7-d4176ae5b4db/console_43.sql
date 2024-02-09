@@ -1,7 +1,6 @@
 -- DROP FUNCTION dash_reporting.get_jefferies(timestamp);
 
-select * from dash360.report_rps_trade_details(20240131, 20240201, '{62238,68234,68406}', 'O');
-select * from dash360.report_rps_trade_details(20240131, 20240201, '{62238,68234,68406}');
+se
 select * from dash360.report_rps_trade_details(20240131, 20240201);
 select * from dash360.report_rps_trade_details(in_start_date_id := 20240131, in_end_date_id := 20240201, in_instrument_type_id := 'E');
 
