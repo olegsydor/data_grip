@@ -434,7 +434,15 @@ create temp table t_accounts as
     drop table if exists trash.cutler_extended;
 
     create table trash.cutler_extended with (parallel_workers = 4) as
-    select cl.*, rfr.rfr_id as rfr_rfr_id,
+    select
+         cl.imc_black_list,
+cl.trading_firm_id,
+rfr.rfr_id,
+cl.parent_order_id,
+rfr.rfr_id,
+t10162,
+cl.parent_order_id,
+        cl.*, rfr.rfr_id as rfr_rfr_id,
     cro.cross_type as cro_cross_type,
     exc.mic_code as exc_mic_code,
     ui.symbol as ui_symbol,
