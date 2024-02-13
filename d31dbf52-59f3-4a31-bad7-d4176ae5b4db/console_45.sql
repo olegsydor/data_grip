@@ -82,7 +82,7 @@ begin
       and cl.create_date_id between l_start_date_id and l_end_date_id -- 20220101 and 20220531 --
       and cl.multileg_reporting_type in ('1', '2')
       and cl.trans_type <> 'F'
-    and cl.client_order_id  = 'ACTACCREATIVE02070000016'
+--     and cl.client_order_id  = 'ACTACCREATIVE02070000016'
       -- all streets + parents in case when we have any exec types except Acc. So, here we take everything - parent + street level orders
 --     limit 5
       ;
@@ -295,6 +295,7 @@ begin
                                                              else case cl.EX_EXEC_TYPE
                                                                       when '4' then 'Canceled'
                                                                       when 'W' then 'Replaced'
+                                                                      when 'F' then 'Trade'
                                                                       else cl.EX_EXEC_TYPE end
                         end
                     else case cl.EX_ORDER_STATUS
@@ -471,7 +472,7 @@ begin
       left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
       left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
     where true
-        and cl.handl_inst <> ''
+--         and cl.handl_inst <> ''
     ;
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
     execute 'analyze report_tmp';
@@ -526,9 +527,9 @@ $function$
 ;
 
 
-select *
-from trash.report_lpeod_aos_compliance(
-	p_start_date_id => 20240207,
-	p_end_date_id => 20240208,
-	p_account_ids => '{68415,29549,66296}'
-);
+select * from trash.report_lpeod_aos_compliance(p_start_date_id => 20240207, p_end_date_id => 20240208, p_account_ids => '{68415}');
+
+
+select * from dwh.d_order_status
+
+select * from dwh.d_exec_type
