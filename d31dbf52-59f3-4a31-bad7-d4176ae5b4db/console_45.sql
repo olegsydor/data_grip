@@ -22,10 +22,17 @@ where co.client_order_id = 'ACTACCREATIVE02070000016'
 
 -- DROP FUNCTION dash360.report_lpeod_aos_compliance(int4, int4, _varchar, _int8);
 
-CREATE or replace FUNCTION trash.report_lpeod_aos_compliance(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer, p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], p_account_ids bigint[] DEFAULT '{}'::bigint[])
- RETURNS TABLE(export_row text)
- LANGUAGE plpgsql
-AS $function$
+create or replace function trash.report_lpeod_aos_compliance(p_start_date_id integer default null::integer,
+                                                             p_end_date_id integer default null::integer,
+                                                             p_trading_firm_ids character varying[] default '{}'::character varying[],
+                                                             p_account_ids bigint[] default '{}'::bigint[])
+    returns table
+            (
+                export_row text
+            )
+    language plpgsql
+as
+$function$
 declare
     l_load_id       int;
     l_row_cnt       int;
