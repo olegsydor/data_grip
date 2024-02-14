@@ -598,3 +598,5 @@ where cl.client_order_id = 'ACTACCREATIVE02070000016'
   and cl.create_date_id between 20240207 and 20240207 -- 20220101 and 20220531 --
   and cl.multileg_reporting_type in ('1', '2')
   and cl.trans_type <> 'F';
+
+select min(create_date_id) from dwh.gtc_order_status
