@@ -540,3 +540,8 @@ select * from trash.report_lpeod_aos_compliance(p_start_date_id => 20240207, p_e
 select * from dwh.d_order_status
 
 select * from dwh.d_exec_type
+
+select count(*) from dwh.gtc_order_status
+where close_date_id is not null
+
+select 160565383 / 1066902.0 * 17 / 60
