@@ -1,7 +1,7 @@
 -- DROP FUNCTION trash.obo_sor2(int4, int4, _int4, _int8);
 select * from t_sor
 select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20240208, in_date_end_id := 20240208, in_account_ids := '{63614,68077,54131}')
-
+select * from trash.report_lpeod_aos_compliance(p_start_date_id => 20240207, p_end_date_id => 20240208, p_account_ids => '{68415}');
 drop function if exists trash.obo_sor22;
 
 create or replace function dash360.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
@@ -473,3 +473,5 @@ begin
 end;
 $function$
 ;
+alter function dash360.report_lpeod_aos_compliance rename to report_lpeod_aos_compliance_old;
+alter function trash.report_lpeod_aos_compliance set schema dash360;
