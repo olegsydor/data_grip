@@ -541,7 +541,60 @@ select * from dwh.d_order_status
 
 select * from dwh.d_exec_type
 
-select count(*) from dwh.gtc_order_status
+select * from dwh.gtc_order_status
 where close_date_id is not null
+and create_date_id > 20240101
 
 select 160565383 / 1066902.0 * 17 / 60
+
+
+
+select cl.order_id as rec_type,
+       ex.*,
+       exec_type_description,
+       case
+           when CL.PARENT_ORDER_ID is null then case EX.ORDER_STATUS
+                                                    when 'A' then 'Pnd Open'
+                                                    when 'b' then 'Pnd Cxl'
+                                                    when 'S' then 'Pnd Rep'
+                                                    when '1' then 'Partial'
+                                                    when '2' then 'Filled'
+                                                    else case EX.EXEC_TYPE
+                                                             when '4' then 'Canceled'
+                                                             when 'W' then 'Replaced'
+--                                                                      when 'F' then 'Trade'
+                                                             else EX.EXEC_TYPE end
+               end
+           else case EX.ORDER_STATUS
+                    when 'A' then 'Ex Pnd Open'
+                    when '0' then 'Ex Open'
+                    when '8' then 'Ex Rej'
+                    when 'b' then 'Ex Pnd Cxl'
+                    when '1' then 'Ex Partial'
+                    when '2' then 'Ex Rpt Fill'
+                    when '4' then 'Ex Rpt Out'
+                    else EX.ORDER_STATUS
+               end
+           end
+from dwh.client_order cl
+         left join lateral
+    (
+    select ex.exec_id
+         , ex.exch_exec_id
+         , ex.exec_type
+         , ex.order_status
+         , ex.leaves_qty
+         , ex.last_px
+         , ex.exec_time
+    from dwh.execution ex
+    where cl.order_id = ex.order_id
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('3', 'a', '5', 'E', 'D') -- exclude also D - Restate
+      and ((cl.parent_order_id is null and ex.exec_type <> '0') or
+           cl.parent_order_id is not null) -- Remove Ack entries for parent orders
+    ) ex on true
+         join dwh.d_exec_type det on det.exec_type = ex.exec_type
+where cl.client_order_id = 'ACTACCREATIVE02070000016'
+  and cl.create_date_id between 20240207 and 20240207 -- 20220101 and 20220531 --
+  and cl.multileg_reporting_type in ('1', '2')
+  and cl.trans_type <> 'F';
