@@ -82,14 +82,13 @@ $function$
 sql
 
 
-create view inc_hft.v_partitions as
+create or replace view inc_hft.v_partitions as
 select partition_name,
        (array_agg(partition_interval))[1]::int as date_from,
        (array_agg(partition_interval))[2]::int as date_to
 from (select i.inhrelid::regclass                                                          as partition_name,
              (regexp_matches(pg_get_expr(pt.relpartbound, pt.oid, true), '\d{8}', 'g'))[1] as partition_interval
       from pg_catalog.pg_inherits i
-               join pg_class pc on pc.oid = i.inhparent
                join pg_class pt on pt.oid = i.inhrelid
       where i.inhparent = 'hft.hft_fix_message_event'::regclass) x
 group by partition_name;
