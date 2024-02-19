@@ -109,3 +109,5 @@ select array_agg(i)
 from (
    select (regexp_matches('FOR VALUES FROM (20240118) TO (20240119)', '\d{8}', 'g'))[1] i
 )  t
+
+select 1/0
