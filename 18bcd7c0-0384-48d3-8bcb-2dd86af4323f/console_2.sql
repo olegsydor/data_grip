@@ -77,3 +77,46 @@ begin
 end;
 $function$
 ;
+
+
+sql
+
+
+with x as (
+    select i.inhrelid,
+         i.inhrelid::regclass                       as child,
+            pg_get_expr(pt.relpartbound, pt.oid, true) as partition_expression
+, ls.*
+
+    from pg_catalog.pg_inherits i
+             join pg_class pc on pc.oid = i.inhparent
+             join pg_class pt on pt.oid = i.inhrelid
+    left join lateral (select regexp_matches(pg_get_expr(pt.relpartbound, pt.oid, true), '([0-9]+)', 'g')) ls on true
+    where i.inhparent = 'hft.hft_fix_message_event'::regclass
+--     group by i.inhrelid
+
+)
+select 'alter table dwh.flat_trade_record detach partition ' || x.child || ';'                               as detach,
+       'alter table ' || x.child || ' alter column trade_record_id type int8;
+alter table ' || x.child || ' alter column orig_trade_record_id type int8;'                                  as alter_column,
+       'alter table dwh.flat_trade_record attach partition ' || x.child || ' ' || partition_expression ||';' as attach
+from x
+where right(x.child::text, 6)::int < 20210701;
+
+
+sql
+
+
+SELECT
+    (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g')),
+  (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g'))[1] as start_date,
+  (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g'))[2] as end_date;
+
+
+from and to are the exact words in the text
+(\d+) matches one or more digits. The plus sign means 'one or more'. The parentheses are for grouping
+The 'g' flag at the end means 'global'▍
+Full responsibility for code correctness, security and licensing lies solely with the user, not with DIAL platform or LLM vendor.
+
+
+
