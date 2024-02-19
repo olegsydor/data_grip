@@ -6,6 +6,7 @@ create or replace function inc_hft.zabbix_monitor_check_loading()
 as
 $function$
     -- 20240215 SO https://dashfinancial.atlassian.net/browse/DS-7883
+    -- 20240219 SO view with interval of dates was used to check if partition has been created
 /*
 the script checks:
 before 11 - the presence of the daily partition
@@ -18,14 +19,13 @@ declare
     l_last_time   timestamp;
     l_date_id     int4 := to_char(current_date, 'YYYYMMDD')::int4;
     l_err_message text;
-    l_ret_value   int4;
 
 begin
     case
         when current_time < '11:00'::time then if exists (select null
-                                                          from information_schema.tables
-                                                          where table_schema = 'partitions'
-                                                            and table_name = 'hft_fix_message_event_' || l_date_id::text) then
+                                                          from inc_hft.v_partitions
+                                                          where date_from <= l_date_id
+                                                            and date_to > l_date_id) then
             raise notice '%: < 11:00 ok', clock_timestamp();
             return 1;
         else
@@ -82,41 +82,31 @@ $function$
 sql
 
 
-with x as (
-    select i.inhrelid,
-         i.inhrelid::regclass                       as child,
-            pg_get_expr(pt.relpartbound, pt.oid, true) as partition_expression
-, ls.*
+create view inc_hft.v_partitions as
+select partition_name,
+       (array_agg(partition_interval))[1]::int as date_from,
+       (array_agg(partition_interval))[2]::int as date_to
+from (select i.inhrelid::regclass                                                          as partition_name,
+             (regexp_matches(pg_get_expr(pt.relpartbound, pt.oid, true), '\d{8}', 'g'))[1] as partition_interval
+      from pg_catalog.pg_inherits i
+               join pg_class pc on pc.oid = i.inhparent
+               join pg_class pt on pt.oid = i.inhrelid
+      where i.inhparent = 'hft.hft_fix_message_event'::regclass) x
+group by partition_name;
 
-    from pg_catalog.pg_inherits i
-             join pg_class pc on pc.oid = i.inhparent
-             join pg_class pt on pt.oid = i.inhrelid
-    left join lateral (select regexp_matches(pg_get_expr(pt.relpartbound, pt.oid, true), '([0-9]+)', 'g')) ls on true
-    where i.inhparent = 'hft.hft_fix_message_event'::regclass
---     group by i.inhrelid
+select * from inc_hft.v_partitions
+where date_from <= :l_date_id and date_to > :l_date_id
 
-)
-select 'alter table dwh.flat_trade_record detach partition ' || x.child || ';'                               as detach,
-       'alter table ' || x.child || ' alter column trade_record_id type int8;
-alter table ' || x.child || ' alter column orig_trade_record_id type int8;'                                  as alter_column,
-       'alter table dwh.flat_trade_record attach partition ' || x.child || ' ' || partition_expression ||';' as attach
-from x
-where right(x.child::text, 6)::int < 20210701;
+select null
+                                                          from information_schema.tables
+                                                          where table_schema = 'partitions'
+                                                            and table_name = 'hft_fix_message_event_' || l_date_id::text
 
-
-sql
-
-
-SELECT
-    (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g')),
-  (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g'))[1] as start_date,
-  (regexp_matches('for all from 20240101 to 20240202 and so', 'from (\d+) to (\d+)', 'g'))[2] as end_date;
+select regexp_matches('FOR VALUES FROM (20240118) TO (20240119)', '^.*(\d{8})*.(\d{8})', 'g')
+SELECT REGEXP_MATCHES('FOR VALUES FROM (20240118) TO (20240119)', '(and [^(and)]+)', 'g');
 
 
-from and to are the exact words in the text
-(\d+) matches one or more digits. The plus sign means 'one or more'. The parentheses are for grouping
-The 'g' flag at the end means 'global'▍
-Full responsibility for code correctness, security and licensing lies solely with the user, not with DIAL platform or LLM vendor.
-
-
-
+select array_agg(i)
+from (
+   select (regexp_matches('FOR VALUES FROM (20240118) TO (20240119)', '\d{8}', 'g'))[1] i
+)  t
