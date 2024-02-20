@@ -1,3 +1,4 @@
+/*
 select distinct routines.routine_schema || '.' || routines.routine_name--, parameters.data_type, parameters.ordinal_position, *
 from information_schema.routines
          left join information_schema.parameters on routines.specific_name = parameters.specific_name
@@ -8,13 +9,11 @@ and routines.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
 --and routines.routine_schema in ('trash', 'dash360', 'dash_reporting')
 and routine_definition ilike '%text\_%'
 and routine_definition ilike '%CONDITIONAL_EXECUTION%'
-
+*/
 ------------------
 
 ALTER TABLE dwh.conditional_execution RENAME COLUMN text_ TO exec_text;
 
-
--- DROP FUNCTION dwh.reload_historic_order_cond(int4, _int8);
 
 CREATE OR REPLACE FUNCTION dwh.reload_historic_order_cond(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[])
  RETURNS integer
