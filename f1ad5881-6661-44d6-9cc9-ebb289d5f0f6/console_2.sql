@@ -578,4 +578,7 @@ $procedure$
 ;
 
 
-
+select *
+from pg_views
+where definition ilike '%text\_%'
+  and definition ilike '%execution%'

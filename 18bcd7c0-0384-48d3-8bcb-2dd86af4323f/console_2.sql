@@ -93,6 +93,13 @@ from (select i.inhrelid::regclass                                               
       where i.inhparent = 'hft.hft_fix_message_event'::regclass) x
 group by partition_name;
 
+select *--relname                      as partition_name,
+--              (regexp_matches(pg_get_expr(pt.relpartbound, pt.oid, true), '\d{8}', 'g'))[1] as partition_interval
+      from pg_class pt
+      where pt.relname ilike 'hft_fix_message_event_________'
+
+
+
 select * from inc_hft.v_partitions
 where date_from <= :l_date_id and date_to > :l_date_id
 
