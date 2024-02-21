@@ -26,7 +26,7 @@ begin
     select distinct round(random() * 150000000) as id,
                     round(random() * 10000)     as num,
                     md5(random()::text)         as txt
-    from generate_series(1, 10000) s(i);
+    from generate_series(1, 100000) s(i);
 
     insert into training.check_big_operation (big_operation_id, operation_number, operation_text)
     select distinct on (id) id,
