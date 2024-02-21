@@ -55,4 +55,143 @@ $fn$;
 select count(*) from training.check_big_operation;
 
 select * from training.check_big_operation
-where db_update_time is not null
+where db_update_time is not null;
+vacuum full training.check_big_operation;
+analyze training.check_big_operation;
+
+SELECT current_database()                                                          AS current_database,
+       s3.schemaname,
+       s3.tblname,
+       s3.bs * s3.tblpages::numeric                                                AS real_size,
+       (s3.tblpages::double precision - s3.est_tblpages) * s3.bs::double precision AS extra_size,
+       CASE
+           WHEN s3.tblpages > 0 AND (s3.tblpages::double precision - s3.est_tblpages) > 0::double precision THEN
+               100::double precision * (s3.tblpages::double precision - s3.est_tblpages) / s3.tblpages::double precision
+           ELSE 0::double precision
+           END                                                                     AS extra_pct,
+       s3.fillfactor,
+       CASE
+           WHEN (s3.tblpages::double precision - s3.est_tblpages_ff) > 0::double precision THEN
+               (s3.tblpages::double precision - s3.est_tblpages_ff) * s3.bs::double precision
+           ELSE 0::double precision
+           END                                                                     AS bloat_size,
+       CASE
+           WHEN s3.tblpages > 0 AND (s3.tblpages::double precision - s3.est_tblpages_ff) > 0::double precision THEN
+               100::double precision * (s3.tblpages::double precision - s3.est_tblpages_ff) /
+               s3.tblpages::double precision
+           ELSE 0::double precision
+           END                                                                     AS bloat_pct,
+       s3.is_na,
+       s3.tblpages
+FROM (SELECT ceil(s2.reltuples / ((s2.bs - s2.page_hdr::numeric)::double precision / s2.tpl_size)) +
+             ceil(s2.toasttuples / 4::double precision) AS est_tblpages,
+             ceil(s2.reltuples / (((s2.bs - s2.page_hdr::numeric) * s2.fillfactor::numeric)::double precision /
+                                  (s2.tpl_size * 100::double precision))) +
+             ceil(s2.toasttuples / 4::double precision) AS est_tblpages_ff,
+             s2.tblpages,
+             s2.fillfactor,
+             s2.bs,
+             s2.tblid,
+             s2.schemaname,
+             s2.tblname,
+             s2.heappages,
+             s2.toastpages,
+             s2.is_na
+      FROM (SELECT (4 + s.tpl_hdr_size)::double precision + s.tpl_data_size + (2 * s.ma)::double precision -
+                   CASE
+                       WHEN (s.tpl_hdr_size % s.ma::bigint) = 0 THEN s.ma::bigint
+                       ELSE s.tpl_hdr_size % s.ma::bigint
+                       END::double precision -
+                   CASE
+                       WHEN (ceil(s.tpl_data_size)::integer % s.ma) = 0 THEN s.ma
+                       ELSE ceil(s.tpl_data_size)::integer % s.ma
+                       END::double precision  AS tpl_size,
+                   s.bs - s.page_hdr::numeric AS size_per_block,
+                   s.heappages + s.toastpages AS tblpages,
+                   s.heappages,
+                   s.toastpages,
+                   s.reltuples,
+                   s.toasttuples,
+                   s.bs,
+                   s.page_hdr,
+                   s.tblid,
+                   s.schemaname,
+                   s.tblname,
+                   s.fillfactor,
+                   s.is_na
+            FROM (SELECT tbl.oid                                                                                AS tblid,
+                         ns.nspname                                                                             AS schemaname,
+                         tbl.relname                                                                            AS tblname,
+                         tbl.reltuples,
+                         tbl.relpages                                                                           AS heappages,
+                         COALESCE(toast.relpages, 0)                                                            AS toastpages,
+                         COALESCE(toast.reltuples, 0::real)                                                     AS toasttuples,
+                         COALESCE("substring"(array_to_string(tbl.reloptions, ' '::text),
+                                              'fillfactor=([0-9]+)'::text)::smallint::integer,
+                                  100)                                                                          AS fillfactor,
+                         current_setting('block_size'::text)::numeric                                           AS bs,
+                         CASE
+                             WHEN version() ~ 'mingw32'::text OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64'::text
+                                 THEN 8
+                             ELSE 4
+                             END                                                                                AS ma,
+                         24                                                                                     AS page_hdr,
+                         23 +
+                         CASE
+                             WHEN max(COALESCE(s_1.null_frac, 0::real)) > 0::double precision
+                                 THEN (7 + count(s_1.attname)) / 8
+                             ELSE 0::bigint
+                             END +
+                         CASE
+                             WHEN bool_or(att.attname = 'oid'::name AND att.attnum < 0) THEN 4
+                             ELSE 0
+                             END                                                                                AS tpl_hdr_size,
+                         sum((1::double precision - COALESCE(s_1.null_frac, 0::real)) *
+                             COALESCE(s_1.avg_width, 0)::double precision)                                      AS tpl_data_size,
+                         bool_or(att.atttypid = 'name'::regtype::oid) OR sum(
+                                                                                 CASE
+                                                                                     WHEN att.attnum > 0 THEN 1
+                                                                                     ELSE 0
+                                                                                     END) <> count(s_1.attname) AS is_na
+                  FROM pg_attribute att
+                           JOIN pg_class tbl ON att.attrelid = tbl.oid
+                           JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+                           LEFT JOIN pg_stats s_1 ON s_1.schemaname = ns.nspname AND s_1.tablename = tbl.relname AND
+                                                     s_1.inherited = false AND s_1.attname = att.attname
+                           LEFT JOIN pg_class toast ON tbl.reltoastrelid = toast.oid
+                  WHERE NOT att.attisdropped
+                    AND (tbl.relkind = ANY (ARRAY ['r'::"char", 'm'::"char"]))
+                  GROUP BY tbl.oid, ns.nspname, tbl.relname, tbl.reltuples, tbl.relpages, (COALESCE(toast.relpages, 0)),
+                           (COALESCE(toast.reltuples, 0::real)),
+                           (COALESCE("substring"(array_to_string(tbl.reloptions, ' '::text),
+                                                 'fillfactor=([0-9]+)'::text)::smallint::integer, 100)),
+                           (current_setting('block_size'::text)::numeric),
+                           (
+                               CASE
+                                   WHEN version() ~ 'mingw32'::text OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64'::text
+                                       THEN 8
+                                   ELSE 4
+                                   END)
+                  ORDER BY ns.nspname, tbl.relname) s) s2) s3
+WHERE NOT s3.is_na
+  AND s3.tblpages > 100
+ORDER BY ((s3.tblpages::double precision - s3.est_tblpages) * s3.bs::double precision) DESC,
+         (
+             CASE
+                 WHEN s3.tblpages > 0 AND (s3.tblpages::double precision - s3.est_tblpages_ff) > 0::double precision
+                     THEN 100::double precision * (s3.tblpages::double precision - s3.est_tblpages_ff) /
+                          s3.tblpages::double precision
+                 ELSE 0::double precision
+                 END) DESC,
+         (
+             CASE
+                 WHEN (s3.tblpages::double precision - s3.est_tblpages_ff) > 0::double precision THEN
+                     (s3.tblpages::double precision - s3.est_tblpages_ff) * s3.bs::double precision
+                 ELSE 0::double precision
+                 END) DESC;
+
+
+
+select *--relname, n_live_tup, n_dead_tup, last_vacuum, last_autovacuum, last_analyze, last_autoanalyze
+from pg_stat_user_tables
+order by n_dead_tup desc;
