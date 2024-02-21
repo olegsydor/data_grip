@@ -52,4 +52,7 @@ begin
 end;
 $fn$;
 
-select count(*) from training.check_big_operation
+select count(*) from training.check_big_operation;
+
+select * from training.check_big_operation
+where db_update_time is not null
