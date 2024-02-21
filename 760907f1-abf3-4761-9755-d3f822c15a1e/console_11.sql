@@ -8,8 +8,10 @@ create table training.check_big_operation
     db_create_time   timestamp not null default clock_timestamp(),
     db_update_time   timestamp
 );
+
 select * from training.f_big_operation_processing()
-create function training.f_big_operation_processing()
+
+create or replace function training.f_big_operation_processing()
     returns int4
     language plpgsql
 as
@@ -19,11 +21,18 @@ declare
     l_row_del int4 := 0;
 begin
     -- insert/update part
+
+    create temp table t_ins on commit drop as
+    select distinct round(random() * 150000000) as id,
+                    round(random() * 10000)     as num,
+                    md5(random()::text)         as txt
+    from generate_series(1, 10000) s(i);
+
     insert into training.check_big_operation (big_operation_id, operation_number, operation_text)
-    select round(random() * 150000000),
-           round(random() * 10000),
-           md5(random()::text)
-    from generate_series(1, 10000) s(i)
+    select distinct on (id) id,
+                            num,
+                            txt
+    from t_ins
     on conflict (big_operation_id) do update
         set operation_number = excluded.operation_number,
             operation_text   = excluded.operation_text,
