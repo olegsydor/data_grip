@@ -8,7 +8,7 @@ create table training.check_big_operation
     db_create_time   timestamp not null default clock_timestamp(),
     db_update_time   timestamp
 );
-
+select * from training.check_big_operation
 select * from training.f_big_operation_processing()
 
 create or replace function training.f_big_operation_processing()
