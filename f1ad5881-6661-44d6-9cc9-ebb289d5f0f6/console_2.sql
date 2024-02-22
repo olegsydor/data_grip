@@ -514,7 +514,7 @@ begin
 	l_sql:='insert into dwh.conditional_execution
 			(exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,exec_text,is_busted,exchange_id,date_id,
 			 last_qty,cum_qty,last_px,ref_exec_id)
-		 	select exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,exec_text,is_busted,exchange_id,date_id,
+		 	select exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,text_,is_busted,exchange_id,date_id,
 				last_qty,cum_qty,last_px,ref_exec_id
 				from staging.tlnd_conditional_execution_'||in_l_seq::varchar||'
 					where rtrim(operation)=''I'' and date_id = $1
@@ -551,7 +551,7 @@ begin
 					exec_time 	   = EXCLUDED.exec_time,
 					leaves_qty 	   = EXCLUDED.leaves_qty,
 					last_mkt 	   = EXCLUDED.last_mkt,
-					exec_text 	   = EXCLUDED.exec_text,
+					exec_text 	   = EXCLUDED.text_,
 					is_busted 	   = EXCLUDED.is_busted,
 					exchange_id    = EXCLUDED.exchange_id,
 					date_id 	   = EXCLUDED.date_id,
@@ -578,7 +578,3 @@ $procedure$
 ;
 
 
-select *
-from pg_views
-where definition ilike '%text\_%'
-  and definition ilike '%execution%'
