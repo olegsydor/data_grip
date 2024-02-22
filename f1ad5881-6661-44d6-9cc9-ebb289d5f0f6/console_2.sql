@@ -20,7 +20,7 @@ CREATE OR REPLACE FUNCTION dwh.reload_historic_order_cond(in_date_id integer, in
  LANGUAGE plpgsql
 AS $function$
 -- PD: 20240118 https://dashfinancial.atlassian.net/browse/DS-7780 added new Optwap columns
-
+-- SO: 20240222 https://dashfinancial.atlassian.net/browse/DS-7737 text_ renamed to exec_text
 
 declare
  l_row_cnt int;
@@ -462,17 +462,21 @@ $function$
 ;
 
 
-CREATE OR REPLACE PROCEDURE staging.tlnd_load_conditional_execution_sp(IN in_l_seq integer, IN in_l_step integer, IN in_l_table_name character varying)
- LANGUAGE plpgsql
-AS $procedure$ declare
-	date_id_curs refcursor;--cursor for execute format('select distinct date_id from staging.tlnd_conditional_execution_%s where rtrim(operation )= ''I'';',in_l_seq::varchar);
-	l_sql text;
-	l_date_id int;
-	l_in_l_seq int;
-	l_in_l_step int;
-	l_in_table_name text;
-	l_row_count int;
-	l_run_condition int;
+CREATE OR REPLACE PROCEDURE staging.tlnd_load_conditional_execution_sp(IN in_l_seq integer, IN in_l_step integer,
+                                                                       IN in_l_table_name character varying)
+    LANGUAGE plpgsql
+AS
+$procedure$
+    -- SO: 20240222 https://dashfinancial.atlassian.net/browse/DS-7737 text_ renamed to exec_text
+declare
+    date_id_curs    refcursor;--cursor for execute format('select distinct date_id from staging.tlnd_conditional_execution_%s where rtrim(operation )= ''I'';',in_l_seq::varchar);
+    l_sql           text;
+    l_date_id       int;
+    l_in_l_seq      int;
+    l_in_l_step     int;
+    l_in_table_name text;
+    l_row_count     int;
+    l_run_condition int;
 
 begin
 
