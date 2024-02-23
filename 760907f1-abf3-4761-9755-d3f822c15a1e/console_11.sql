@@ -56,9 +56,10 @@ select count(*) from training.check_big_operation;
 
 select * from training.check_big_operation
 where db_update_time is not null;
-vacuum full training.check_big_operation;
+vacuum full verbose analyze training.check_big_operation;
 analyze training.check_big_operation;
 
+create view staging.v_tables_info as
 SELECT current_database()                                                          AS current_database,
        s3.schemaname,
        s3.tblname,
@@ -297,3 +298,6 @@ CREATE EXTENSION pg_stat_statements;
 
 SELECT *
 FROM pg_stat_statements;
+
+
+select pg_size_pretty(real_size), * from staging.v_tables_info
