@@ -2,6 +2,7 @@ select *--relname, n_live_tup, n_dead_tup, last_vacuum, last_autovacuum, last_an
 from pg_stat_user_tables;
 
 vacuum full verbose analyse news.f_feeds;
+
 SELECT current_database()                                                          AS current_database,
        s3.schemaname,
        s3.tblname,
