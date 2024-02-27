@@ -300,4 +300,7 @@ SELECT *
 FROM pg_stat_statements;
 
 
-select pg_size_pretty(real_size), * from staging.v_tables_info
+select pg_size_pretty(real_size), * from staging.v_tables_info;
+
+
+select :json::jsonb #>> '{BBOSnapshot,SPHR,BidPrice}'
