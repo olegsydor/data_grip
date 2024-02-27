@@ -304,3 +304,11 @@ select pg_size_pretty(real_size), * from staging.v_tables_info;
 
 
 select :json::jsonb #>> '{BBOSnapshot,SPHR,BidPrice}'
+
+select * from training.check_big_operation;
+
+update training.check_big_operation
+set operation_number = operation_number + 1
+where big_operation_id between 1000000 and 2000000;
+
+training.check_big_operation; 3538151, 4278310, 4999469
