@@ -1,25 +1,3 @@
-/*
-DROP TABLE dwh.gtc_order_status;
-CREATE TABLE dwh.gtc_order_status (
-	order_id int8 NOT NULL,
-	create_date_id int4 NOT NULL,
-	order_status bpchar(1) NULL,
-	exec_time timestamp(6) NULL,
-	last_trade_date timestamp(0) NULL,
-	last_mod_date_id int4 NULL,
-	is_parent bool NULL,
-	close_date_id int4 NULL,
-	account_id int4 NULL,
-	time_in_force_id bpchar(1) DEFAULT '1'::bpchar NULL,
-	db_create_time timestamp DEFAULT clock_timestamp() NULL,
-	db_update_time timestamp NULL,
-	closing_reason bpchar(1) NULL,
-	client_order_id varchar(256) NULL
-)
-PARTITION BY RANGE (close_date_id);
-CREATE INDEX gtc_order_status_order_id_idx ON ONLY dwh.gtc_order_status USING btree (order_id);
-*/
-
 alter table dwh.gtc_order_status add column if not exists instrument_id int8;
 alter table dwh.gtc_order_status add column if not exists multileg_reporting_type bpchar(1);
 
@@ -105,19 +83,12 @@ $function$
 ;
 
 
----------
-drop table if exists base_modif
-select * from trash.so_gtc_update_daily();
-
-select * from base_modif;
-
-
 CREATE OR REPLACE FUNCTION trash.so_gtc_update_daily(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer)
  RETURNS integer
  LANGUAGE plpgsql
  SET application_name TO 'ETL: GTC update process'
 AS $function$
-    -- 2022-09-02 https://dashfinancial.atlassian.net/browse/DS-5561 add logic to close gtc by parent executions
+-- 2022-09-02 https://dashfinancial.atlassian.net/browse/DS-5561 add logic to close gtc by parent executions
 -- 2023-05-01 https://dashfinancial.atlassian.net/browse/DS-3581 closing heads after closing all legs
 -- 2023-05-16 https://dashfinancial.atlassian.net/browse/DS-6745 closing head after at least one of legs was closed and then closing all other legs if the head was closed
 -- 2023-08-17 https://dashfinancial.atlassian.net/browse/DS-7183 PD added multileg_order_id condition
@@ -141,6 +112,7 @@ begin
                            'dwh.gtc_update_daily for ' || l_start_date_id::text || ' - ' || l_end_date_id::text ||
                            ' STARTED===', 0, 'O')
     into l_step_id;
+
     if l_end_date_id > to_char(current_date, 'YYYYMMDD')::int then
         select public.load_log(l_load_id, l_step_id,
                                'dwh.gtc_update_daily for ' || l_start_date_id::text || ' - ' || l_end_date_id::text ||
@@ -150,7 +122,7 @@ begin
     end if;
 
     -- Aggregating data
-    -- street flow
+    -- street/execution flow
     create temp table base_modif /*on commit drop*/ as
     select co.order_id,
            iex.close_date_id as close_date_id,
@@ -303,6 +275,7 @@ begin
 --       and gos.create_date_id = base.create_date_id
 --       and gos.close_date_id is null;
 
+
     get diagnostics l_row_cnt = row_count;
     l_row_cnt_total = l_row_cnt_total + l_row_cnt;
     select public.load_log(l_load_id, l_step_id,
@@ -310,10 +283,21 @@ begin
                            ' Legs after the heads was closed', l_row_cnt, 'U')
     into l_step_id;
     -- Logging into the table dwh.fact_last_load_time
---  !!! return back  perform dwh.p_upd_fact_last_load_time('GTC_ORDER_STATUS');
+
+    update dwh.gtc_order_status gtc
+    set close_date_id = base.close_date_id,
+        db_update_time = clock_timestamp(),
+        closing_reason = base.closing_reason,
+        order_status = base.order_status
+    from base_modif base
+    where gtc.order_id = base.order_id
+    and gtc.close_date_id is null;
+    get diagnostics l_row_cnt = row_count;
+
+   perform dwh.p_upd_fact_last_load_time('GTC_ORDER_STATUS');
    select public.load_log(l_load_id, l_step_id,
                            'dwh.gtc_update_daily for ' || l_start_date_id::text || ' - ' || l_end_date_id::text ||
-                           ' Logging into GTC_ORDER_STATUS', 1, 'U')
+                           ' Logging into GTC_ORDER_STATUS total', l_row_cnt, 'U')
     into l_step_id;
     -- End of logging into the table dwh.fact_last_load_time
  select public.load_log(l_load_id, l_step_id,
@@ -328,3 +312,8 @@ $function$
 ;
 
 
+---------
+drop table if exists base_modif;
+select * from trash.so_gtc_update_daily();
+
+select * from base_modif;
