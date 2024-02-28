@@ -1,6 +1,13 @@
-select co.order_id, co.create_date_id, co.instrument_id, co.multileg_reporting_type  from dwh.gtc_order_status gos
-join dwh.client_order co
-using (create_date_id, order_id)
+create table trash.so_gtc_to_upd as
+select co.order_id, co.create_date_id, co.instrument_id, co.multileg_reporting_type
+from dwh.gtc_order_status gos
+         join lateral (select co.order_id, co.create_date_id, co.instrument_id, co.multileg_reporting_type
+                       from dwh.client_order co
+                       where co.create_date_id = gos.create_date_id
+                         and co.order_id = gos.order_id
+                       limit 1) co on true
 where gos.instrument_id is null
-and gos.create_date_id between 20210201 and 20210701
-and co.create_date_id between 20210201 and 20210701
+  and gos.create_date_id between 20220101 and 20230101
+  and co.create_date_id between 20220701 and 20230101;
+
+create index on trash.so_gtc_to_upd (create_date_id, order_id);
