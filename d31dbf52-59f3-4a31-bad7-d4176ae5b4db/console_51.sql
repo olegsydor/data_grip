@@ -1,3 +1,4 @@
+drop table trash.so_gtc_to_upd;
 create table trash.so_gtc_to_upd as
 select co.order_id, co.create_date_id, co.instrument_id, co.multileg_reporting_type
 from dwh.gtc_order_status gos
@@ -7,7 +8,7 @@ from dwh.gtc_order_status gos
                          and co.order_id = gos.order_id
                        limit 1) co on true
 where gos.instrument_id is null
-  and gos.create_date_id between 20220101 and 20230101
-  and co.create_date_id between 20220701 and 20230101;
+  and gos.create_date_id between 20240101 and 20240301
+  and co.create_date_id between 20240101 and 20240301;
 
 create index on trash.so_gtc_to_upd (create_date_id, order_id);
