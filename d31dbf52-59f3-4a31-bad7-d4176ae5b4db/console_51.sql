@@ -8,7 +8,12 @@ from dwh.gtc_order_status gos
                          and co.order_id = gos.order_id
                        limit 1) co on true
 where gos.instrument_id is null
-  and gos.create_date_id between 20240101 and 20240301
-  and co.create_date_id between 20240101 and 20240301;
+  and gos.create_date_id between 20220101 and 20220630
+  and co.create_date_id between 20220101 and 20220630;
 
 create index on trash.so_gtc_to_upd (create_date_id, order_id);
+
+
+select create_date_id, count(*) from dwh.gtc_order_status
+where instrument_id is null
+group by create_date_id
