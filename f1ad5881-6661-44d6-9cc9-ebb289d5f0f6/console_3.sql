@@ -296,3 +296,7 @@ select * from trash.so_gtc_update_daily();
 
 select * from staging.gtc_base_modif;
 select * from trash.so_gtc_update_daily2()
+
+
+select * from staging.find_in_load_timing('dwh.gtc_%_daily', 60*24*5)
+order by 1 desc, 2 desc;

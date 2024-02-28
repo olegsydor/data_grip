@@ -312,3 +312,28 @@ set operation_number = operation_number + 1
 where big_operation_id between 1000000 and 2000000;
 
 training.check_big_operation; 3538151, 4278310, 4999469
+
+
+select *
+into training.merge_2
+from training.check_big_operation
+where big_operation_id between 50 and 100;
+
+select * from training.merge_1;
+
+merge into training.merge_1 as m1
+using training.merge_2 as m2
+on m1.big_operation_id = m2.big_operation_id
+when not matched then
+    insert
+    values (m2.big_operation_id, m2.operation_number, m2.operation_text)
+when matched and m2.operation_number < 100 then
+    update
+    set db_update_time = clock_timestamp()
+when matched then
+    delete;
+
+
+create publication p_merge
+for table training.merge_1
+where (big_operation_id > 10)
