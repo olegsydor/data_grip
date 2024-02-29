@@ -338,36 +338,4 @@ create publication p_merge
 for table training.merge_1
 where (big_operation_id > 10)
 
-CREATE TABLE training.Planet
-(
-    id   INT,
-    name VARCHAR(128)
-);
-CREATE TABLE training.Spacecraft
-(
-    id   INT,
-    name VARCHAR(128)
-);
-CREATE TABLE training.Flight
-(
-    planet_id        INT,
-    spacecraft_id    INT,
-    flight_date      DATE,
-    passengers_count INT
-);
-INSERT INTO training.Planet(id, name)
-VALUES (1, 'Leetisa');
-INSERT INTO training.Planet(id, name)
-VALUES (2, 'Onusorle');
-
-INSERT INTO training.Spacecraft(id, name)
-VALUES (10, 'Синяя Чайка');
-INSERT INTO training.Spacecraft(id, name)
-VALUES (11, 'Пегас');
-
-INSERT INTO training.Flight(planet_id, spacecraft_id, flight_date, passengers_count)
-VALUES (1, 10, '2180-09-04', 10);
-INSERT INTO training.Flight(planet_id, spacecraft_id, flight_date, passengers_count)
-VALUES (1, 11, '2180-09-04', 8);
-INSERT INTO training.Flight(planet_id, spacecraft_id, flight_date, passengers_count)
-VALUES (2, 11, '2181-06-12', 5);
+set search_path to 'stepik'
