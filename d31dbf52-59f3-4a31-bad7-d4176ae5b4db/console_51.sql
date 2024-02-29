@@ -231,11 +231,11 @@ select * from trash.so_gtc_update_daily();
 
 
 select *
-into trash.so_gtc_20240228_1620
+--into trash.so_gtc_20240228_1620
 from staging.gtc_base_modif;
 
 select *
-into trash.so_gtc_20240228_1620_orig
+--into trash.so_gtc_20240228_1620_orig
 from dwh.gtc_order_status
 where close_date_id is not null
-  and db_update_time >= '2024-02-28 02:00'
+  and db_update_time >= '2024-02-29 00:00'
