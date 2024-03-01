@@ -145,22 +145,19 @@ begin
     -- head of multileg
     insert into staging.gtc_base_modif(order_id, close_date_id, order_status, closing_reason, client_order_id, multileg_reporting_type)
     select gtc.order_id,
---            t.close_date_id,
+           t.close_date_id,
            gtc.order_status,
            'L',
            gtc.client_order_id,
-           gtc.multileg_reporting_type,
-           t.*
+           gtc.multileg_reporting_type
     from dwh.gtc_order_status gtc
 --              join lateral (select gos.close_date_id
 --                            from staging.gtc_base_modif gos
 --                            where gos.client_order_id = gtc.client_order_id
 --                              and gos.multileg_reporting_type = '2'
 --                            limit 1) t on true
-                 join lateral (select *
+                 join lateral (select gtc.close_date_id
                                          from dwh.gtc_order_status g
---                                                   join dwh.client_order c
---                                                        on c.order_id = g.order_id and c.create_date_id = g.create_date_id
                                          where true
                                            and g.client_order_id = gtc.client_order_id
 --                                            and c.multileg_order_id = gtc.order_id
@@ -168,9 +165,9 @@ begin
                                            and g.close_date_id is not null
                                          limit 1) t on true
     where true
---       and gtc.close_date_id is null
+      and gtc.close_date_id is null
       and gtc.multileg_reporting_type = '3'
---       and not exists (select null from staging.gtc_base_modif bm where bm.order_id = gtc.order_id)
+      and not exists (select null from staging.gtc_base_modif bm where bm.order_id = gtc.order_id)
     and gtc.order_id = 14750322399;
 
     get diagnostics l_row_cnt = row_count;

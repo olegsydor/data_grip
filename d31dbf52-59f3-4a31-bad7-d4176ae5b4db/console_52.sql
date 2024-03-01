@@ -1,5 +1,5 @@
---ALTER TABLE dwh.conditional_execution RENAME COLUMN text_ TO exec_text;
-
+ALTER TABLE dwh.conditional_execution RENAME COLUMN text TO exec_text;
+/*
 -- Then fix function
 select a.nspname, *
 from pg_catalog.pg_proc p
@@ -24,7 +24,7 @@ and routines.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
 --and routines.routine_schema in ('trash', 'dash360', 'dash_reporting')
 and routine_definition ilike '%text%'
 and routine_definition ilike '%CONDITIONAL_EXECUTION%';
-
+*/
 
 -- 'dash360.order_blotter_waves_with_conditionals' -- NO
 -- 'dash360.order_chain_for_order_id' -- YES
@@ -429,7 +429,7 @@ FROM dwh.EXECUTION EX
     EX.EXEC_TYPE "ExecType",
     EX.ORDER_STATUS "OrderStatus", --45
     -- reject reason should be selected for rejects and Cancels only
-    case when EX.EXEC_TYPE = '8' then EX.text else null end "RejectReason", --46
+    case when EX.EXEC_TYPE = '8' then EX.exec_text else null end "RejectReason", --46
     EX.LEAVES_QTY "LeavesQty", --47
     --EX.CUM_QTY "CumQty",
     (
@@ -495,7 +495,7 @@ SELECT ROUND(coalesce(SUM(EQ.LAST_QTY*EQ.LAST_PX)/(case when SUM(EQ.LAST_QTY) = 
     null "MultilegOrderID", --60
     FC.FIX_COMP_ID "FixCompID", --sending firm
     CO.CLIENT_ID_TEXT "ClientID", --62
-    EX.TEXT "Text", --63
+    EX.exec_text "Text", --63
     CASE
       WHEN CO.EX_DESTINATION IN ('SMART', 'ALGO')
       THEN 'Y'
@@ -653,7 +653,7 @@ begin
 	   EX.ORDER_STATUS::char(1) as "OrderStatus",
 	   case
 	   	 when EX.EXEC_TYPE = '8'
-	   	 then EX.text
+	   	 then EX.exec_text
 	   	 else null
 	   end as "RejectReason",
 	   EX.LEAVES_QTY as "LeavesQty",
@@ -682,7 +682,7 @@ begin
 	   CO.ACCOUNT_ID as "AccountID",
 	   FC.FIX_COMP_ID as "FixCompID", --sending firm
 	   CO.client_id_text as "ClientID",
-	   EX.TEXT as "Text",
+	   EX.exec_text as "Text",
 	    (CASE
 	      WHEN CO.EX_DESTINATION IN ('SMART', 'ALGO')
 	      THEN 'Y'
@@ -1093,100 +1093,11 @@ join lateral (select order_id
 				limit 1
 			) coe on true
 where to_char(exec_time, 'YYYYMMDD')::int =in_date_id
-and (e."text" not like 'SYNTH%' or e."text" like 'SYNTHETIC CANCEL%' or e."text" like 'SYNTHETIC REPLACE%')
+and (e.exec_text not like 'SYNTH%' or e.exec_text like 'SYNTHETIC CANCEL%' or e.exec_text like 'SYNTHETIC REPLACE%')
 and e.fix_message_id is null;
 end;
 $function$
 ;
-
-
-
-CREATE OR REPLACE FUNCTION staging.load_temp_conditional_execution(in_l_seq integer, in_l_step integer, in_l_table_name character varying)
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$ declare
-            date_id_curs cursor for select distinct date_id from staging.temp_conditional_execution where rtrim(operation )= 'I';
-            l_sql text;
-            l_date_id int;
-            l_in_l_seq int;
-            l_in_l_step int;
-            l_in_table_name text;
---            e1_step int;
---            e2_step int;
-begin
---e1_step:=0;
---e2_step:=0;
-l_in_l_seq:= in_l_seq;
-l_in_l_step:=in_l_step;
-l_in_table_name:=in_l_table_name;
-
-
-l_sql:= 'insert into dwh.conditional_execution
-				(exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,"text",is_busted,exchange_id,date_id,
-				last_qty,cum_qty,last_px,ref_exec_id )
-
- 	select  exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,"text",is_busted,exchange_id,date_id,
-			last_qty,cum_qty,last_px,ref_exec_id
-    from ( select
-			exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,"text",is_busted,exchange_id,date_id,
-			last_qty,cum_qty,last_px,ref_exec_id , row_number() over (partition by exec_id order by null) rn
-		from staging.temp_conditional_execution
-		where operation = ''I'' and date_id = $1 ) l
-     where rn=1
-   on conflict (exec_id) do update
-   set date_id = coalesce(public.f_insert_etl_reject(''load_temp_conditional_execution''::varchar,''exec_id_pkey'',''(date_id= ''||EXCLUDED.date_id||'',exec_id= ''||EXCLUDED.exec_id||'',exec_time = ''||EXCLUDED.exec_time||'')''::varchar),
-   EXCLUDED.date_id);';
-open date_id_curs;
-loop
-fetch  date_id_curs into l_date_id;
-exit when not found;
-   -- l_sql:= replace(l_sql,'&p_date_id',l_date_id::text);
-execute l_sql
-	using l_date_id;
-
-    select public.load_log (l_in_l_seq,
-                            l_in_l_step,
-                            l_in_table_name,
-                            coalesce ( (select count(1) from staging.temp_conditional_execution where operation = 'I' and date_id = l_date_id),0)::int,
-                            'I'::text
-                            )
-                            into l_in_l_step;
-end loop;
-close date_id_curs;
-update dwh.conditional_execution a
-	set exec_id 	   = EXCLUDED.exec_id,
-		exch_exec_id   = EXCLUDED.exch_exec_id,
-		order_id 	   = EXCLUDED.order_id,
-		fix_message_id = EXCLUDED.fix_message_id,
-		exec_type 	   = EXCLUDED.exec_type,
-		order_status   = EXCLUDED.order_status,
-		exec_time 	   = EXCLUDED.exec_time,
-		leaves_qty 	   = EXCLUDED.leaves_qty,
-		last_mkt 	   = EXCLUDED.last_mkt,
-		text 		   = EXCLUDED.text,
-		is_busted 	   = EXCLUDED.is_busted,
-		exchange_id    = EXCLUDED.exchange_id,
-		date_id 	   = EXCLUDED.date_id,
-		last_qty	   = EXCLUDED.last_qty,
-		cum_qty 	   = EXCLUDED.cum_qty,
-		last_px 	   = EXCLUDED.last_px,
-		ref_exec_id    = EXCLUDED.ref_exec_id
-	from staging.temp_conditional_execution  EXCLUDED
-	where a.exec_id = EXCLUDED.exec_id
-	and operation in('U','UN');
-        select public.load_log(
-                            l_in_l_seq,
-                            l_in_l_step,
-                            l_in_table_name,
-                            coalesce ( (select count(1) from staging.temp_conditional_execution where rtrim(operation)='U' ),0)::int,
-                            'U'::text
-                            )
-                            into l_in_l_step;
-return l_in_l_step;
-end;
-$function$
-;
-
 
 -- DROP PROCEDURE staging.tlnd_load_conditional_execution_sp(int4, int4, varchar);
 
@@ -1240,7 +1151,7 @@ begin
 			into l_in_l_step;
 
 	l_sql:='insert into dwh.conditional_execution
-			(exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,text,is_busted,exchange_id,date_id,
+			(exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,exec_text,is_busted,exchange_id,date_id,
 			 last_qty,cum_qty,last_px,ref_exec_id)
 		 	select exec_id,exch_exec_id,order_id,fix_message_id,exec_type,order_status,exec_time,leaves_qty,last_mkt,text_,is_busted,exchange_id,date_id,
 				last_qty,cum_qty,last_px,ref_exec_id
@@ -1279,7 +1190,7 @@ begin
 					exec_time 	   = EXCLUDED.exec_time,
 					leaves_qty 	   = EXCLUDED.leaves_qty,
 					last_mkt 	   = EXCLUDED.last_mkt,
-					text 		   = EXCLUDED.text_,
+					exec_text 	   = EXCLUDED.text_,
 					is_busted 	   = EXCLUDED.is_busted,
 					exchange_id    = EXCLUDED.exchange_id,
 					date_id 	   = EXCLUDED.date_id,
