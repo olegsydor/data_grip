@@ -145,21 +145,33 @@ begin
     -- head of multileg
     insert into staging.gtc_base_modif(order_id, close_date_id, order_status, closing_reason, client_order_id, multileg_reporting_type)
     select gtc.order_id,
-           t.close_date_id,
+--            t.close_date_id,
            gtc.order_status,
            'L',
            gtc.client_order_id,
-           gtc.multileg_reporting_type
+           gtc.multileg_reporting_type,
+           t.*
     from dwh.gtc_order_status gtc
-             join lateral (select gos.close_date_id
-                           from staging.gtc_base_modif gos
-                           where gos.client_order_id = gtc.client_order_id
-                             and gos.multileg_reporting_type = '2'
-                           limit 1) t on true
+--              join lateral (select gos.close_date_id
+--                            from staging.gtc_base_modif gos
+--                            where gos.client_order_id = gtc.client_order_id
+--                              and gos.multileg_reporting_type = '2'
+--                            limit 1) t on true
+                 join lateral (select *
+                                         from dwh.gtc_order_status g
+--                                                   join dwh.client_order c
+--                                                        on c.order_id = g.order_id and c.create_date_id = g.create_date_id
+                                         where true
+                                           and g.client_order_id = gtc.client_order_id
+--                                            and c.multileg_order_id = gtc.order_id
+                                           and g.multileg_reporting_type <> '3'
+                                           and g.close_date_id is not null
+                                         limit 1) t on true
     where true
-      and gtc.close_date_id is null
+--       and gtc.close_date_id is null
       and gtc.multileg_reporting_type = '3'
-      and not exists (select null from staging.gtc_base_modif bm where bm.order_id = gtc.order_id);
+--       and not exists (select null from staging.gtc_base_modif bm where bm.order_id = gtc.order_id)
+    and gtc.order_id = 14750322399;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
@@ -231,11 +243,56 @@ select * from trash.so_gtc_update_daily();
 
 
 select *
---into trash.so_gtc_20240228_1620
+into trash.so_gtc_20240229_1620
 from staging.gtc_base_modif;
 
 select *
---into trash.so_gtc_20240228_1620_orig
+into trash.so_gtc_20240229_1620_orig
 from dwh.gtc_order_status
 where close_date_id is not null
-  and db_update_time >= '2024-02-29 00:00'
+  and db_update_time >= '2024-02-29 05:00'
+
+
+select order_id, closing_reason, multileg_reporting_type from trash.so_gtc_20240229_1620_orig
+except
+select order_id, closing_reason, multileg_reporting_type from trash.so_gtc_20240229_1620;
+
+select *
+from dwh.gtc_order_status
+where order_id = 14750322419;
+
+select gos.close_date_id
+from staging.gtc_base_modif gos
+where gos.client_order_id = 'DAAA6397-20240229'
+  and gos.multileg_reporting_type = '2';
+
+
+select co.order_id,
+	           co.create_date_id,
+	           ex.order_status,
+	           ex.exec_time,
+	           case when co.time_in_force_id = '1' then di.last_trade_date else co.expire_time end as last_trade_date, -- last_trade_date from instrument for GTC or expire_time from client_order for GTD
+	           to_char(current_date, 'YYYYMMDD')::int4 as last_mod_date_id,
+	           case when exec_time is null and (last_trade_date::date < current_date) then public.get_dateid(public.get_gth_business_date(last_trade_date))
+	               when exec_time is not null then public.get_dateid(public.get_gth_business_date(exec_time)) end as close_date_id,
+	           co.account_id,
+	           co.time_in_force_id,
+	           co.client_order_id,
+	           co.instrument_id,
+	           co.multileg_reporting_type
+	    from dwh.client_order co
+	             join dwh.d_instrument di on di.instrument_id = co.instrument_id
+	             left join lateral (select iex.exec_time,
+	                                       iex.order_status
+	                                from dwh.execution iex
+	                                where true
+	                                  and iex.order_id = co.order_id
+	                                  and iex.order_status in ('2', '4', '8')
+	                                  and exec_date_id >= :l_start_date_id
+	                                order by exec_id desc
+	                                limit 1) ex on true
+	    where co.create_date_id between :l_start_date_id and :l_end_date_id
+	      and co.time_in_force_id in ('1', '6')
+	      and co.trans_type <> 'F'
+and co.order_id = 14750322419
+-- 	      and not exists (select null from dwh.gtc_order_status os where os.order_id = co.order_id);
