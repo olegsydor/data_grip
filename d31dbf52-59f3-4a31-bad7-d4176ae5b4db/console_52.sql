@@ -40,7 +40,7 @@ and routine_definition ilike '%CONDITIONAL_EXECUTION%';
 
 -- DROP FUNCTION dash360.order_chain_for_order_id(int8, bpchar);
 
-CREATE OR REPLACE FUNCTION dash360.order_chain_for_order_id(in_order_id bigint, in_is_start_from_current character)
+create or replace function dash360.order_chain_for_order_id(in_order_id bigint, in_is_start_from_current character)
  RETURNS TABLE(exec_id bigint, orderid bigint, clordid character varying, origclordid character varying, orderclass character, customerorderid bigint, execid bigint, refexecid bigint, instrumentid bigint, symbol character varying, instrumenttype character, maturityyear smallint, maturitymonth smallint, maturityday smallint, putcall character, strikepx numeric, oprasymbol character varying, displayinstrumentid character varying, underlyingdisplayinstrid character varying, ordercreationtime timestamp without time zone, transacttime timestamp without time zone, logtime timestamp without time zone, routedtime timestamp without time zone, ordertype character, side character, orderqty integer, price numeric, stoppx numeric, timeinforce character, expiretime timestamp without time zone, openclose character, exdestination character varying, handlinst character, execinst character varying, maxshowqty integer, maxfloorqty bigint, clearingfirmid character varying, execbroker integer, customerorfirm character, ordercapacity character, marketparticipantid character varying, islocaterequired character, locatebroker character varying, exectype character, orderstatus character, rejectreason character varying, leavesqty bigint, cumqty bigint, avgpx numeric, lastqty integer, lastpx numeric, lastmkt character varying, dayorderqty bigint, daycumqty bigint, dayavgpx numeric, accountid integer, tradeliquidityindicator character varying, multilegreportingtype character, legrefid character varying, multilegorderid bigint, fixcompid character varying, clientid character varying, text character varying, isosrorder character varying, osrorderid bigint, substrategy character varying, algostoppx numeric, algoclordid character varying, transtype character, dashclordid character varying, crossorderid bigint, occoptionaldata character varying, subsystemid character varying, transactionid bigint, totnoordersintransaction bigint, exchangeid character varying, feesensitivity smallint, onbehalfofsubid character varying, strategydecisionreasoncode smallint, internalorderid bigint, algostarttime timestamp without time zone, algoendtime timestamp without time zone, mintargetqty integer, extendedordtype character, primlistingexchange character varying, postingexchange character varying, preopenbehavior character, maxwaveqtypct bigint, sweepstyle character, discretionoffset numeric, crosstype character, aggressionlevel smallint, hiddenflag character, quoteid character varying, stepuppricetype character, stepupprice numeric, crossaccountid integer, clearingaccount character varying, subaccount character varying, requestnumber integer, liquidityproviderid character varying, internalcomponenttype character, complianceid character varying, alternativecomplianceid character varying, conditionalclientorderid character varying, isconditionalorder character varying, exch_exec_id character varying)
  LANGUAGE plpgsql
  COST 1
@@ -586,7 +586,7 @@ $function$
 
 
 
-CREATE OR REPLACE FUNCTION dwh.reload_historic_order_cond(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[])
+create or replace function dwh.reload_historic_order_cond(in_date_id integer, in_order_ids_arr bigint[] default null::bigint[])
  RETURNS integer
  LANGUAGE plpgsql
 AS $function$
@@ -1033,7 +1033,7 @@ $function$
 ;
 
 
-CREATE OR REPLACE FUNCTION staging.get_missed_fix_messages_by_event(in_date_id integer DEFAULT public.get_dateid(get_business_date()))
+create or replace function staging.get_missed_fix_messages_by_event(in_date_id integer default public.get_dateid(get_business_date()))
  RETURNS TABLE(table_name text, order_id bigint, exec_id bigint)
  LANGUAGE plpgsql
  STABLE
@@ -1101,7 +1101,7 @@ $function$
 
 -- DROP PROCEDURE staging.tlnd_load_conditional_execution_sp(int4, int4, varchar);
 
-CREATE OR REPLACE PROCEDURE staging.tlnd_load_conditional_execution_sp(IN in_l_seq integer, IN in_l_step integer, IN in_l_table_name character varying)
+create or replace procedure staging.tlnd_load_conditional_execution_sp(in in_l_seq integer, in in_l_step integer, in in_l_table_name character varying)
  LANGUAGE plpgsql
 AS $procedure$ declare
 	date_id_curs refcursor;--cursor for execute format('select distinct date_id from staging.tlnd_conditional_execution_%s where rtrim(operation )= ''I'';',in_l_seq::varchar);

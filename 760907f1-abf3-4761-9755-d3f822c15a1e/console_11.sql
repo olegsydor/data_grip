@@ -339,3 +339,5 @@ for table training.merge_1
 where (big_operation_id > 10)
 
 set search_path to 'stepik'
+
+
