@@ -590,4 +590,5 @@ COMMENT ON FUNCTION dwh.gtc_insert_daily(int4, int4) IS 'Inserts all gtc orders 
 select * from trash.so_gtc_update_daily();
 
 select *
+into trash.so_gtc_20240301
 from staging.gtc_base_modif;
