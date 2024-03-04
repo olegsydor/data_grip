@@ -139,7 +139,7 @@ begin
                       inner join min_hist_o
                                  on min_hist_o.orig_order_id = co_rec.order_id
                                      and co_rec.create_date_id <= min_hist_o.create_date_id)
---            select * from min_hist_o
+            select * from min_hist_o
            , min_hist_co (order_id, /*create_date_id, */orig_order_id) -- min order for conditional_order
             as
             (select order_id::bigint, /*create_date_id, */orig_order_id
