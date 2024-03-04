@@ -139,7 +139,7 @@ begin
                       inner join min_hist_o
                                  on min_hist_o.orig_order_id = co_rec.order_id
                                      and co_rec.create_date_id <= min_hist_o.create_date_id)
-            select * from min_hist_o
+--             select * from min_hist_o
            , min_hist_co (order_id, /*create_date_id, */orig_order_id) -- min order for conditional_order
             as
             (select order_id::bigint, /*create_date_id, */orig_order_id
@@ -150,41 +150,45 @@ begin
              from dwh.conditional_order co_rec
                       inner join min_hist_co
                                  on min_hist_co.orig_order_id = co_rec.order_id)
---         select min(order_id)
---         into l_start_order_id
---         from (
-        select order_id
+        select min(order_id)
+        into l_start_order_id
+        from (select order_id
               from min_hist_o
               union all
               select order_id
-              from min_hist_co
---             ) x;
+              from min_hist_co) x;
     end if;
 
 RETURN QUERY
-    with recursive
-        all_hist_o (order_id, create_date_id, orig_order_id) --for client_order
-            as
-            (select order_id::bigint, create_date_id, orig_order_id, 1 as lev
-             from dwh.client_order
-             where order_id = :l_start_order_id
-             union all
-             select co_rec.order_id, co_rec.create_date_id, co_rec.orig_order_id, all_hist_o.lev + 1 as lev
-             from dwh.client_order co_rec
-                      inner join all_hist_o
-                                 on co_rec.orig_order_id = all_hist_o.order_id)
-            ,
-        all_hist_co (order_id, /*create_date_id, */orig_order_id) -- for conditional_order
-            as
-            (select order_id::bigint, /*create_date_id, */orig_order_id, 1 as lev
-             from dwh.conditional_order
-             where order_id = :l_start_order_id
-             union all
-             select co_rec.order_id, /*co_rec.create_date_id, */co_rec.orig_order_id, all_hist_co.lev + 1 as lev
-             from dwh.conditional_order co_rec
-                      inner join all_hist_co
-                                 on co_rec.orig_order_id = all_hist_co.order_id)
-            ,
+    create temp table t_all_hist_o as
+    with recursive all_hist_o (order_id, create_date_id, orig_order_id) --for client_order
+                       as
+                       (select order_id::bigint, create_date_id, orig_order_id, 1 as lev
+                        from dwh.client_order
+                        where order_id = l_start_order_id
+                        union all
+                        select co_rec.order_id, co_rec.create_date_id, co_rec.orig_order_id, all_hist_o.lev + 1 as lev
+                        from dwh.client_order co_rec
+                                 inner join all_hist_o
+                                            on co_rec.orig_order_id = all_hist_o.order_id)
+    select *
+    from all_hist_o;
+
+    create temp table t_all_hist_co as
+    with recursive all_hist_co (order_id, /*create_date_id, */orig_order_id) -- for conditional_order
+                       as
+                       (select order_id::bigint, /*create_date_id, */orig_order_id, 1 as lev
+                        from dwh.conditional_order
+                        where order_id = l_start_order_id
+                        union all
+                        select co_rec.order_id, /*co_rec.create_date_id, */co_rec.orig_order_id,
+                               all_hist_co.lev + 1 as lev
+                        from dwh.conditional_order co_rec
+                                 inner join all_hist_co
+                                            on co_rec.orig_order_id = all_hist_co.order_id)
+    select *
+    from all_hist_co;
+
         cte_cross_order as
             (select *
              from dwh.cross_order cor
@@ -205,7 +209,9 @@ RETURN QUERY
 --where order_id in (select order_id from all_hist_o)
              where order_id = any
                    (string_to_array((select string_agg(order_id::text, ',') from all_hist_o), ',')::bigint[]))
+    create temp table t_orig
     select *
+
     from all_hist_o
 
 
