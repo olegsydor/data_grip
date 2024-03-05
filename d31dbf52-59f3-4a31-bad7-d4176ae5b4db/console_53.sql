@@ -9,10 +9,10 @@ AS $function$
 declare
 l_date_id int;
 l_start_order_id bigint;
-    :l_min_create_date_id int4;
+    l_min_create_date_id int4;
 
 begin
-    raise notice 'start - %', clock_timestamp();
+    -- raise notice 'start - %', clock_timestamp();
 	if in_is_start_from_current <> 'Y' then
 	-- Looking for min order from client_order and conditional_order
 	with recursive min_hist_o (order_id, create_date_id, orig_order_id) --min order_id for client_order
@@ -50,10 +50,10 @@ begin
 	else
 		l_start_order_id := in_order_id;
 	end if;
-raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
+-- raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
 
 
-    create temp table t_all_hist_o as
+    create temp table t_all_hist_o on commit drop as
     with recursive all_hist_o (order_id, create_date_id, orig_order_id) --for client_order
                        as
                        (select order_id::bigint, create_date_id, orig_order_id, 1 as lev
@@ -66,9 +66,9 @@ raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
                                             on co_rec.orig_order_id = all_hist_o.order_id)
     select *
     from all_hist_o;
-    raise notice 't_all_hist_o - %', clock_timestamp();
+    -- raise notice 't_all_hist_o - %', clock_timestamp();
 
-    create temp table t_all_hist_co as
+    create temp table t_all_hist_co on commit drop as
     with recursive all_hist_co (order_id, /*create_date_id, */orig_order_id) -- for conditional_order
                        as
                        (select order_id::bigint, /*create_date_id, */orig_order_id, 1 as lev
@@ -82,32 +82,32 @@ raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
                                             on co_rec.orig_order_id = all_hist_co.order_id)
     select *
     from all_hist_co;
-    raise notice 't_all_hist_co - %', clock_timestamp();
+    -- raise notice 't_all_hist_co - %', clock_timestamp();
 
-    create temp table t_cte_cross_order as
+    create temp table t_cte_cross_order on commit drop as
     select *
     from dwh.cross_order cor
 --where cor.cross_order_id in (select order_id from all_hist_o)
     where cor.cross_order_id = any
           (string_to_array((select string_agg(order_id::text, ',') from t_all_hist_o), ',')::bigint[]);
-    raise notice 't_cte_cross_order - %', clock_timestamp();
+    -- raise notice 't_cte_cross_order - %', clock_timestamp();
 
-    create temp table t_cte_algo_order_tca as
+    create temp table t_cte_algo_order_tca on commit drop as
     select *
     from eq_tca.algo_order_tca
 --where order_id in (select order_id from all_hist_o)
     where order_id = any (string_to_array((select string_agg(order_id::text, ',') from t_all_hist_o), ',')::bigint[]);
-    raise notice 't_cte_algo_order_tca - %', clock_timestamp();
+    -- raise notice 't_cte_algo_order_tca - %', clock_timestamp();
 
-    create temp table t_cte_client_order as
+    create temp table t_cte_client_order on commit drop as
     select *
     from dwh.client_order
 --where order_id in (select order_id from all_hist_o)
     where order_id = any (string_to_array((select string_agg(order_id::text, ',') from t_all_hist_o), ',')::bigint[]);
-    raise notice 't_cte_client_order - %', clock_timestamp();
+    -- raise notice 't_cte_client_order - %', clock_timestamp();
 
     select min(create_date_id)
-    into :l_min_create_date_id
+    into l_min_create_date_id
     from t_cte_client_order;
 
     return query
@@ -183,10 +183,12 @@ SELECT EX.EXEC_ID,
        case when EX.EXEC_TYPE = '8' then EX.text_ else null end                                                  "RejectReason",
        EX.LEAVES_QTY                                                                                             "LeavesQty",                  --47
        (ex_less.sum_last_qty)::bigint                                                                         as "CumQty",                     --48
-       ex_less.sum_last_qty_last_px / case
-                                          when ex_less.sum_last_qty = 0 then 1
-                                          else ex_less.sum_last_qty end                                       as "AvgPx",                      --49
-       EX.LAST_QTY::int                                                                                          "LastQty",                    --50
+       case
+           when ex_less.sum_last_qty != 0 then
+               ex_less.sum_last_qty_last_px / case
+                                                  when ex_less.sum_last_qty = 0 then 1
+                                                  else ex_less.sum_last_qty end end as "AvgPx", --49
+       EX.LAST_QTY::int                                                                "LastQty", --50
        EX.LAST_PX                                                                                                "LastPx",                     --51
        --in order to provide correct displaying of Arca ortions
        CASE
@@ -198,9 +200,9 @@ SELECT EX.EXEC_ID,
            END                                                                                                   "LastMkt",                    --52
        (CO.ORDER_QTY - EX.CUM_QTY + coalesce(eq.sum_last_qty, 0))::bigint                                     as "DayOrderQty",                --53
        coalesce(eq.sum_last_qty, 0)::bigint                                                                   as "DayCumQty",                  --54
-       eq.sum_last_qty_last_px / case
+       round(coalesce(eq.sum_last_qty_last_px / case
                                      when eq.sum_last_qty = 0 then 1
-                                     else eq.sum_last_qty end                                                 as "DayAvgPx",
+                                     else eq.sum_last_qty end, 0), 4)                                         as "DayAvgPx",
        CO.ACCOUNT_ID::int                                                                                        "AccountID",                  --56
        EX.TRADE_LIQUIDITY_INDICATOR                                                                              "TradeLiquidityIndicator",    --57
        CO.MULTILEG_REPORTING_TYPE                                                                                "MultilegReportingType",      --58
@@ -261,7 +263,7 @@ SELECT EX.EXEC_ID,
        EX.exch_exec_id                                                                                        as "ExchExecID"
 FROM t_cte_client_order CO
          JOIN dwh.EXECUTION EX ON (EX.ORDER_ID = CO.ORDER_ID and ex.exec_date_id >= co.create_date_id and
-                                   ex.exec_date_id >= :l_min_create_date_id) -- remove this hardcode!!!
+                                   ex.exec_date_id >= l_min_create_date_id) -- remove this hardcode!!!
 
          join lateral (SELECT I.INSTRUMENT_ID         InstrumentID,
                               I.SYMBOL                Symbol,
@@ -289,8 +291,9 @@ FROM t_cte_client_order CO
     ) HSD ON true
          JOIN dwh.d_FIX_CONNECTION FC ON (FC.FIX_CONNECTION_ID = CO.FIX_CONNECTION_ID)
          JOIN dwh.d_ACCOUNT ACC ON (CO.ACCOUNT_ID = ACC.ACCOUNT_ID)
-         LEFT JOIN lateral(select OPT_EXEC_BROKER_ID from d_OPT_EXEC_BROKER OPX where OPX.ACCOUNT_ID = ACC.ACCOUNT_ID AND OPX.is_active AND OPX.IS_DEFAULT = 'Y' limit 1) opx on true
+--          LEFT JOIN lateral(select OPT_EXEC_BROKER_ID from d_OPT_EXEC_BROKER OPX where OPX.ACCOUNT_ID = ACC.ACCOUNT_ID AND OPX.is_active AND OPX.IS_DEFAULT = 'Y' limit 1) opx on true
          LEFT JOIN t_cte_client_order COORIG ON (CO.ORIG_ORDER_ID = COORIG.ORDER_ID)
+    left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = co.opt_exec_broker_id and opx.is_active
          LEFT JOIN dwh.CLIENT_ORDER_LEG COL ON (CO.ORDER_ID = COL.ORDER_ID)
          LEFT JOIN t_cte_cross_order CRO ON CO.CROSS_ORDER_ID = CRO.CROSS_ORDER_ID
          left join t_cte_algo_order_tca al on al.order_id = co.order_id
@@ -300,7 +303,7 @@ FROM t_cte_client_order CO
                             FROM fix_capture.fix_message_json FM
                             WHERE EX.FIX_MESSAGE_ID = FM.FIX_MESSAGE_ID
                             and fm.date_id = ex.exec_date_id
-                            and fm.date_id >= :l_min_create_date_id
+                            and fm.date_id >= l_min_create_date_id
                             limit 1) fmj on true
          left join lateral (SELECT SUM(EQ.LAST_QTY)              as sum_last_qty,
                                    SUM(EQ.LAST_QTY * EQ.LAST_PX) as sum_last_qty_last_px
@@ -309,7 +312,7 @@ FROM t_cte_client_order CO
                               AND EQ.IS_BUSTED <> 'Y'
                               AND EQ.ORDER_ID = CO.ORDER_ID
                               AND to_char(EX.EXEC_TIME, 'YYYYMMDD') = to_char(EQ.EXEC_TIME, 'YYYYMMDD')
-                            and EQ.exec_date_id >= :l_min_create_date_id
+                            and EQ.exec_date_id >= l_min_create_date_id
                             group by eq.order_id
                             limit 1) eq on true
 
@@ -320,7 +323,7 @@ FROM t_cte_client_order CO
                               AND EQ.IS_BUSTED <> 'Y'
                               AND EQ.ORDER_ID = CO.ORDER_ID
                               AND EQ.EXEC_ID <= EX.EXEC_ID
-                            and eq.exec_date_id >= :l_min_create_date_id
+                            and eq.exec_date_id >= l_min_create_date_id
                             group by eq.order_id
                             limit 1) ex_less on true
 
@@ -329,8 +332,8 @@ WHERE 1 = 1
   --AND CO.MULTILEG_REPORTING_TYPE IN ('1','2')
   AND co.order_id in (select order_id from t_all_hist_o)
   AND co.create_date_id in (select create_date_id from t_all_hist_o)
-raise notice 'client_order_out - %', clock_timestamp();
-/*
+-- raise notice 'client_order_out - %', clock_timestamp()
+
   union all
 
   SELECT
@@ -545,10 +548,10 @@ SELECT ROUND(coalesce(SUM(EQ.LAST_QTY*EQ.LAST_PX)/(case when SUM(EQ.LAST_QTY) = 
   LEFT JOIN dwh.CLIENT_ORDER COORIG ON CO.ORIG_ORDER_ID = COORIG.ORDER_ID
   WHERE 1=1
   --and EX.ORDER_STATUS <> '3'
-AND co.order_id = any(string_to_array((select string_agg(order_id::text, ',') from all_hist_co), ',')::bigint[])
+AND co.order_id in (select order_id from t_all_hist_co)
 order by exec_id;
-*/;
-raise notice 'finish - %', clock_timestamp();
+
+-- raise notice 'finish - %', clock_timestamp();
 end;
 $function$
 ;
