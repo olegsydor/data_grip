@@ -28,18 +28,20 @@ begin
 		on min_hist_o.orig_order_id = co_rec.order_id
 	)
 	,
+	with recursive
 	min_hist_co (order_id, /*create_date_id, */orig_order_id) -- min order for conditional_order
 	as
 	(
 		select order_id::bigint, /*create_date_id, */orig_order_id
 		from dwh.conditional_order
-		where order_id = in_order_id
+		where order_id = :in_order_id
 		union all
 		select co_rec.order_id, /*co_rec.create_date_id, */co_rec.orig_order_id
 		from dwh.conditional_order co_rec
 		inner join min_hist_co
-		on min_hist_co.orig_order_id = co_rec.order_id
+		on co_rec.order_id = min_hist_co.orig_order_id
 	)
+	select * from min_hist_co
 	select min(order_id)
 	into l_start_order_id
 	from
@@ -74,7 +76,7 @@ raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
                        as
                        (select order_id::bigint, /*create_date_id, */orig_order_id, 1 as lev
                         from dwh.conditional_order
-                        where order_id = l_start_order_id
+                        where order_id = 1802610969--l_start_order_id
                         union all
                         select co_rec.order_id, /*co_rec.create_date_id, */co_rec.orig_order_id,
                                all_hist_co.lev + 1 as lev
