@@ -58,7 +58,7 @@ begin
                        as
                        (select order_id::bigint, create_date_id, orig_order_id, 1 as lev
                         from dwh.client_order
-                        where order_id = 14748879631--l_start_order_id
+                        where order_id = l_start_order_id
                         union all
                         select co_rec.order_id, co_rec.create_date_id, co_rec.orig_order_id, all_hist_o.lev + 1 as lev
                         from dwh.client_order co_rec
@@ -73,7 +73,7 @@ begin
                        as
                        (select order_id::bigint, /*create_date_id, */orig_order_id, 1 as lev
                         from dwh.conditional_order
-                        where order_id = 14748879631--l_start_order_id
+                        where order_id = l_start_order_id
                         union all
                         select co_rec.order_id, /*co_rec.create_date_id, */co_rec.orig_order_id,
                                all_hist_co.lev + 1 as lev
