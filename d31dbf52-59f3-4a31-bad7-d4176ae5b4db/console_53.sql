@@ -9,6 +9,7 @@ AS $function$
 declare
 l_date_id int;
 l_start_order_id bigint;
+    :l_min_create_date_id int4;
 
 begin
     raise notice 'start - %', clock_timestamp();
@@ -105,6 +106,9 @@ raise notice 'l_start_order_id - %, %', l_start_order_id, clock_timestamp();
     where order_id = any (string_to_array((select string_agg(order_id::text, ',') from t_all_hist_o), ',')::bigint[]);
     raise notice 't_cte_client_order - %', clock_timestamp();
 
+    select min(create_date_id)
+    into :l_min_create_date_id
+    from t_cte_client_order;
 
     return query
 SELECT EX.EXEC_ID,
@@ -257,7 +261,7 @@ SELECT EX.EXEC_ID,
        EX.exch_exec_id                                                                                        as "ExchExecID"
 FROM t_cte_client_order CO
          JOIN dwh.EXECUTION EX ON (EX.ORDER_ID = CO.ORDER_ID and ex.exec_date_id >= co.create_date_id and
-                                   ex.exec_date_id > 20240201) -- remove this hardcode!!!
+                                   ex.exec_date_id >= :l_min_create_date_id) -- remove this hardcode!!!
 
          join lateral (SELECT I.INSTRUMENT_ID         InstrumentID,
                               I.SYMBOL                Symbol,
@@ -285,7 +289,7 @@ FROM t_cte_client_order CO
     ) HSD ON true
          JOIN dwh.d_FIX_CONNECTION FC ON (FC.FIX_CONNECTION_ID = CO.FIX_CONNECTION_ID)
          JOIN dwh.d_ACCOUNT ACC ON (CO.ACCOUNT_ID = ACC.ACCOUNT_ID)
-         LEFT JOIN d_OPT_EXEC_BROKER OPX ON (OPX.ACCOUNT_ID = ACC.ACCOUNT_ID AND OPX.is_active AND OPX.IS_DEFAULT = 'Y')
+         LEFT JOIN lateral(select OPT_EXEC_BROKER_ID from d_OPT_EXEC_BROKER OPX where OPX.ACCOUNT_ID = ACC.ACCOUNT_ID AND OPX.is_active AND OPX.IS_DEFAULT = 'Y' limit 1) opx on true
          LEFT JOIN t_cte_client_order COORIG ON (CO.ORIG_ORDER_ID = COORIG.ORDER_ID)
          LEFT JOIN dwh.CLIENT_ORDER_LEG COL ON (CO.ORDER_ID = COL.ORDER_ID)
          LEFT JOIN t_cte_cross_order CRO ON CO.CROSS_ORDER_ID = CRO.CROSS_ORDER_ID
@@ -295,6 +299,8 @@ FROM t_cte_client_order CO
                                    FM.pg_db_create_time
                             FROM fix_capture.fix_message_json FM
                             WHERE EX.FIX_MESSAGE_ID = FM.FIX_MESSAGE_ID
+                            and fm.date_id = ex.exec_date_id
+                            and fm.date_id >= :l_min_create_date_id
                             limit 1) fmj on true
          left join lateral (SELECT SUM(EQ.LAST_QTY)              as sum_last_qty,
                                    SUM(EQ.LAST_QTY * EQ.LAST_PX) as sum_last_qty_last_px
@@ -303,6 +309,7 @@ FROM t_cte_client_order CO
                               AND EQ.IS_BUSTED <> 'Y'
                               AND EQ.ORDER_ID = CO.ORDER_ID
                               AND to_char(EX.EXEC_TIME, 'YYYYMMDD') = to_char(EQ.EXEC_TIME, 'YYYYMMDD')
+                            and EQ.exec_date_id >= :l_min_create_date_id
                             group by eq.order_id
                             limit 1) eq on true
 
@@ -313,6 +320,7 @@ FROM t_cte_client_order CO
                               AND EQ.IS_BUSTED <> 'Y'
                               AND EQ.ORDER_ID = CO.ORDER_ID
                               AND EQ.EXEC_ID <= EX.EXEC_ID
+                            and eq.exec_date_id >= :l_min_create_date_id
                             group by eq.order_id
                             limit 1) ex_less on true
 
@@ -321,7 +329,7 @@ WHERE 1 = 1
   --AND CO.MULTILEG_REPORTING_TYPE IN ('1','2')
   AND co.order_id in (select order_id from t_all_hist_o)
   AND co.create_date_id in (select create_date_id from t_all_hist_o)
-
+raise notice 'client_order_out - %', clock_timestamp();
 /*
   union all
 
