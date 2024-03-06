@@ -592,3 +592,6 @@ select * from trash.so_gtc_update_daily();
 select *
 into trash.so_gtc_20240301
 from staging.gtc_base_modif;
+
+
+create index conditional_order_orig_order_id_idx on dwh.conditional_order using btree (orig_order_id)
