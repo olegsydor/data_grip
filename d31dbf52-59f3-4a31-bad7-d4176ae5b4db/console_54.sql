@@ -72,7 +72,7 @@ declare
     v_offset      int;
 begin
 
---Securities and Settlement Periods
+    --Securities and Settlement Periods
 --Security type Settlement Date (Prior to 09/05/17) Settlement Date (Beginning on 09/05/17)
 --Stocks 3 Market days after trade date 2 Market days after trade date
 --Exchange Traded Funds (ETFs) 3 Market days after trade date 2 Market days after trade date
@@ -80,7 +80,7 @@ begin
 --Options 1 Market days after trade date 1 Market days after trade date
 -- 2024-03-06
     v_offset := case
-                    when instrument_type = 'E' and trade_date between '2017-05-09'::date and '2024-05-27'::date then 1
+                    when instrument_type = 'E' and trade_date <= '2024-05-27'::date then 1
                     else 0 end;
 
     select date_range.period
@@ -99,8 +99,8 @@ $function$
 select * from trash.get_settle_date_by_instrument_type('2024-05-27', 'E');
 
 with base as (
-select d::date, extract(dow from d), trash.get_settle_date_by_instrument_type(d::date, 'E') as new_return,
-       public.get_settle_date_by_instrument_type(d::date, 'E') as old_return
+select d::date, extract(dow from d), trash.get_settle_date_by_instrument_type(d::date, 'O') as new_return,
+       public.get_settle_date_by_instrument_type(d::date, 'O') as old_return
 from generate_series(current_date, current_date + interval '100 days', '1 day') as x(d)
 )
          select * from base
