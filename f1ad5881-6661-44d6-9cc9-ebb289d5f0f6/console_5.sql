@@ -2,6 +2,7 @@ create table data_marts.f_parent_order
 (
     parent_order_id     int8      not null
         constraint f_parent_order_parent_order_id primary key,
+    last_exec_id        int8,
     create_date_id      int4      not null,
     status_date_id      int4,
     time_in_force_id    bpchar(1),
@@ -25,6 +26,7 @@ create table data_marts.f_parent_order
 comment on table data_marts.f_parent_order is 'data mart for parent_orders incrementally updating during the market day';
 comment on column data_marts.f_parent_order.parent_order_id is 'parent_order from dwh.client_order';
 comment on column data_marts.f_parent_order.create_date_id is 'create_date_id for parent_order';
+comment on column data_marts.f_parent_order.last_exec_id is 'last processed exec_id to info';
 comment on column data_marts.f_parent_order.status_date_id is 'date_id of the day where parent_order was processed into the table. As sama as create_date_id for non GTC orders';
 comment on column data_marts.f_parent_order.time_in_force_id is 'time_in_force_id of parent_order';
 comment on column data_marts.f_parent_order.account_id is 'account_id of parent_order related to d_account';
@@ -64,4 +66,13 @@ as $fn$
 
     end;
 
-    $fn$
+    $fn$;
+
+
+select case when extract(epoch from pg_db_create_time - exec_time) > 50 then 'upd' else 'no' end, count(*)
+from dwh.execution
+where exec_date_id = 20240307
+group by case when extract(epoch from pg_db_create_time - exec_time) > 50 then 'upd' else 'no' end
+
+
+select * from fix_capture.fix_message_json where fix_message_id = 686046122
