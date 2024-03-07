@@ -46,67 +46,99 @@ comment on column data_marts.f_parent_order.pg_db_update_time is '';
 create function data_marts.load_parent_order_inc(in_parent_order_ids bigint[] default null::bigint[],
                                                  in_date_id integer default null::integer,
                                                  in_load_id bigint default null::bigint)
-returns int4
-language plpgsql
-as $fn$
+    returns int4
+    language plpgsql
+as
+$fn$
     -- SO: 20240307 https://dashfinancial.atlassian.net/browse/DS-8065
-    declare
-        l_row_cnt int4;
-        l_load_id int8;
-        l_step_id int4;
-        l_date_id int4 := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::int4);
+declare
+    l_row_cnt int4;
+    l_load_id int8;
+    l_step_id int4;
+    l_date_id int4 := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::int4);
 
-    begin
+begin
 
-        select nextval('public.load_timing_seq') into l_load_id;
-        l_step_id := 1;
-        select public.load_log(l_load_id, l_step_id,
-                               'load_parent_order_inc for ' || l_date_id::text || ' STARTED ===', 0, 'O')
-        into l_step_id;
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'load_parent_order_inc for ' || l_date_id::text || ' STARTED ===', 0, 'O')
+    into l_step_id;
 
-        -- the list of orders
-        create temp table t_base as
-        select order_id, min(exec_id) as min_exec_id, max(exec_id) as max_exec_id, count(*) as cnt
-        from dwh.execution
-        where exec_date_id = 20240307--l_date_id
-          and true -- it is a condition for subscriptions
-        group by order_id;
+    -- the list of orders
+    drop table if exists t_base;
+    create temp table t_base as
+    select order_id, min(exec_id) as min_exec_id, max(exec_id) as max_exec_id, count(*) as cnt
+    from dwh.execution
+    where exec_date_id = 20240307--l_date_id
+      and true                   -- it is a condition for subscriptions
+    group by order_id;
 
 
-        -- non gtc
-        create temp table t_orders as
-        select bs.*, cl.parent_order_id
-        from t_base bs
-                 join lateral (select parent_order_id
-                               from dwh.client_order cl
-                               where cl.order_id = bs.order_id
-                                 and cl.create_date_id = 20240307--l_date_id
-                                 and cl.parent_order_id is not null
-                               limit 1) cl on true;
-create index on t_orders (parent_order_id, order_id);
-        
-        insert into t_orders (order_id, min_exec_id, max_exec_id, cnt, parent_order_id)
-        select bs.*, cl.parent_order_id
-        from t_base bs
-                 join dwh.gtc_order_status gos using (order_id)
-                 join lateral (select parent_order_id
-                               from dwh.client_order cl
-                               where cl.order_id = bs.order_id
-                                 and cl.create_date_id = gos.create_date_id
-                                 and cl.parent_order_id is not null
-                               limit 1 ) cl on true
-        where not exists (select null from t_orders tor where tor.order_id = bs.order_id);
+    -- non gtc
+    drop table if exists t_orders;
+    create temp table t_orders as
+    select bs.*, cl.parent_order_id, cl.create_date_id
+    from t_base bs
+             join lateral (select parent_order_id, create_date_id
+                           from dwh.client_order cl
+                           where cl.order_id = bs.order_id
+                             and cl.create_date_id = 20240307--l_date_id
+                             and cl.parent_order_id is not null
+                           limit 1) cl on true;
+    create index on t_orders (parent_order_id, order_id);
 
+    insert into t_orders (order_id, min_exec_id, max_exec_id, cnt, parent_order_id, create_date_id)
+    select bs.*, cl.parent_order_id, cl.create_date_id
+    from t_base bs
+             join dwh.gtc_order_status gos using (order_id)
+             join lateral (select parent_order_id, cl.create_date_id
+                           from dwh.client_order cl
+                           where cl.order_id = bs.order_id
+                             and cl.create_date_id = gos.create_date_id
+                             and cl.parent_order_id is not null
+                           limit 1 ) cl on true
+    where not exists (select null from t_orders tor where tor.order_id = bs.order_id);
+
+
+    select parent_order_id, min(create_date_id), min(min_exec_id), max(max_exec_id), sum(cnt)
+    from t_orders
+    group by parent_order_id;
+
+
+    insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
+                                           time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
+                                           instrument_type_id, street_qty, trade_qty, order_qty, street_order_qty,
+                                           last_qty, vwap)
+    select parent_order_id,
+           max(max_exec_id),    -- last_exec_id
+           min(create_date_id), -- create_date_id
+           l_date_id,           -- status_date_id
+           null,                -- time_in_force_id
+           null,                -- account_id
+           null,                -- trading_firm_unq_id
+           null,                -- instrument_id
+           null,                -- instrument_type_id
+           sum(cnt),            -- street_qty
+           null,                -- trade_qty
+           null,                -- order_qty
+           null,                -- street_order_qty
+           null,                -- last_qty
+           null                 -- vwap
+    from t_orders
+    group by parent_order_id
+    on conflict (parent_order_id) do update
+    set last_exec_id;
 --         select * from t_orders;
 
-                select nextval('public.load_timing_seq') into l_load_id;
-        l_step_id := 1;
-        select public.load_log(l_load_id, l_step_id,
-                               'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', 0, 'O')
-        into l_step_id;
-    end;
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', 0, 'O')
+    into l_step_id;
+end;
 
-    $fn$;
+$fn$;
 
 
 select case when extract(epoch from pg_db_create_time - exec_time) > 50 then 'upd' else 'no' end, count(*)
