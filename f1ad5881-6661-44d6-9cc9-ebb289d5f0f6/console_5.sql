@@ -61,9 +61,49 @@ as $fn$
         select nextval('public.load_timing_seq') into l_load_id;
         l_step_id := 1;
         select public.load_log(l_load_id, l_step_id,
-                               'load_parent_order_inc for ' || l_date_id::text || ' STARTED===', 0, 'O')
+                               'load_parent_order_inc for ' || l_date_id::text || ' STARTED ===', 0, 'O')
         into l_step_id;
 
+        -- the list of orders
+        create temp table t_base as
+        select order_id, min(exec_id) as min_exec_id, max(exec_id) as max_exec_id, count(*) as cnt
+        from dwh.execution
+        where exec_date_id = 20240307--l_date_id
+          and true -- it is a condition for subscriptions
+        group by order_id;
+
+
+        -- non gtc
+        create temp table t_orders as
+        select bs.*, cl.parent_order_id
+        from t_base bs
+                 join lateral (select parent_order_id
+                               from dwh.client_order cl
+                               where cl.order_id = bs.order_id
+                                 and cl.create_date_id = 20240307--l_date_id
+                                 and cl.parent_order_id is not null
+                               limit 1) cl on true;
+create index on t_orders (parent_order_id, order_id);
+        
+        insert into t_orders (order_id, min_exec_id, max_exec_id, cnt, parent_order_id)
+        select bs.*, cl.parent_order_id
+        from t_base bs
+                 join dwh.gtc_order_status gos using (order_id)
+                 join lateral (select parent_order_id
+                               from dwh.client_order cl
+                               where cl.order_id = bs.order_id
+                                 and cl.create_date_id = gos.create_date_id
+                                 and cl.parent_order_id is not null
+                               limit 1 ) cl on true
+        where not exists (select null from t_orders tor where tor.order_id = bs.order_id);
+
+--         select * from t_orders;
+
+                select nextval('public.load_timing_seq') into l_load_id;
+        l_step_id := 1;
+        select public.load_log(l_load_id, l_step_id,
+                               'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', 0, 'O')
+        into l_step_id;
     end;
 
     $fn$;
