@@ -76,3 +76,23 @@ group by case when extract(epoch from pg_db_create_time - exec_time) > 50 then '
 
 
 select * from fix_capture.fix_message_json where fix_message_id = 686046122
+
+
+create temp table t_parent_order as
+select
+min(ex.exec_id) as min_exec_id,
+max(ex.exec_id) as max_exec_id,
+ex.order_id,
+min(cl.parent_order_id) as parent_order_id,
+count(*) as cnt
+from dwh.execution ex
+         join lateral (select parent_order_id
+                       from dwh.client_order cl
+                       where cl.order_id = ex.order_id
+                         and cl.create_date_id <= ex.exec_date_id
+                         and cl.parent_order_id is not null
+                       limit 1 ) cl on true
+where exec_date_id = 20240307
+group by ex.order_id;
+
+select * from t_parent_order
