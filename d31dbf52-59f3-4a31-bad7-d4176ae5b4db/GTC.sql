@@ -232,27 +232,27 @@ select * from trash.so_gtc_update_daily();
 
 
 select *
-into trash.so_gtc_20240306_1620
+into trash.so_gtc_20240307_1620
 from staging.gtc_base_modif;
 
 select *
-into trash.so_gtc_20240306_1620_orig
+into trash.so_gtc_20240307_1620_orig
 from dwh.gtc_order_status
 where close_date_id is not null
-  and db_update_time >= '2024-03-06 05:00'
+  and db_update_time >= '2024-03-07 05:00'
 
 
 select order_id, closing_reason, multileg_reporting_type
-from trash.so_gtc_20240301_1620_orig
-where order_id = 14750400581
+from trash.so_gtc_20240307_1620_orig
+-- where order_id = 14750400581
 except
 select order_id, closing_reason, multileg_reporting_type
-from trash.so_gtc_20240301_1620
-where order_id = 14750400581;
+from trash.so_gtc_20240307_1620
+-- where order_id = 14750400581;
 
 select *
 from dwh.gtc_order_status
-where order_id = 14750400581;
+where order_id in (14685839844,14685839872, 14085431873, 14085431949)
 
 select gos.close_date_id
 from staging.gtc_base_modif gos
