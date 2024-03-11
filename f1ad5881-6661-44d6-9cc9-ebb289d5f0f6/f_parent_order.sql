@@ -1,8 +1,7 @@
+drop table if exists data_marts.f_parent_order;
 create table data_marts.f_parent_order
 (
-    parent_order_id     int8      not null
---         constraint f_parent_order_parent_order_id primary key
-,
+    parent_order_id     int8      not null,
     last_exec_id        int8,
     create_date_id      int4      not null,
     status_date_id      int4,
@@ -25,6 +24,7 @@ create table data_marts.f_parent_order
 --     process_time
 );
 alter table data_marts.f_parent_order set (fillfactor = 70);
+alter table data_marts.f_parent_order add constraint f_parent_order_pk primary key (status_date_id, parent_order_id);
 
 comment on table data_marts.f_parent_order is 'data mart for parent_orders incrementally updating during the market day';
 comment on column data_marts.f_parent_order.parent_order_id is 'parent_order from dwh.client_order';
@@ -36,12 +36,6 @@ comment on column data_marts.f_parent_order.account_id is 'account_id of parent_
 comment on column data_marts.f_parent_order.trading_firm_unq_id is 'trading_firm_unq_id of parent_order related to d_trading_firm';
 comment on column data_marts.f_parent_order.instrument_id is 'instrument_id of parent_order related to d_instrument';
 comment on column data_marts.f_parent_order.instrument_type_id is 'instrument_type_id of parent_order';
-comment on column data_marts.f_parent_order.street_qty is 'total anount of streets';
-comment on column data_marts.f_parent_order.trade_qty is 'total anount of trades';
-comment on column data_marts.f_parent_order.order_qty is '';
-comment on column data_marts.f_parent_order.street_order_qty is '';
-comment on column data_marts.f_parent_order.last_qty is '';
-comment on column data_marts.f_parent_order.vwap is '';
 comment on column data_marts.f_parent_order.pg_db_create_time is '';
 comment on column data_marts.f_parent_order.pg_db_update_time is '';
 
@@ -91,7 +85,7 @@ begin
                            limit 1) cl on true;
     create index on t_orders (parent_order_id, order_id);
 
-    insert into t_orders (order_id, min_exec_id, max_exec_id, cnt, parent_order_id, create_date_id)
+    insert into t_orders (order_id, min_exec_id, max_exec_id, cnt, sum, parent_order_id, create_date_id)
     select bs.*, cl.parent_order_id, cl.create_date_id
     from t_base bs
              join dwh.gtc_order_status gos using (order_id)
@@ -100,17 +94,15 @@ begin
                            where cl.order_id = bs.order_id
                              and cl.create_date_id = gos.create_date_id
                              and cl.parent_order_id is not null
-                           limit 1 ) cl on true
-    --where not exists (select null from t_orders tor where tor.order_id = bs.order_id)
-    ;
+                           limit 1 ) cl on true;
+
 
     drop table if exists t_parent;
     create temp table t_parent as
     select parent_order_id,
            min(create_date_id) as create_date_id,
            min(min_exec_id)    as min_exec_id,
-           max(max_exec_id)    as max_exec_id,
-           sum(cnt)            as cnt
+           max(max_exec_id)    as max_exec_id
     from t_orders tor
     group by parent_order_id;
 
