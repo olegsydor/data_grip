@@ -65,7 +65,13 @@ begin
     -- the list of orders
     drop table if exists t_base;
     create temp table t_base as
-    select order_id, min(exec_id) as min_exec_id, max(exec_id) as max_exec_id, count(*) as cnt, sum(last_qty)--, sum (case when tr)
+    select order_id,
+           min(exec_id) as min_exec_id,
+           max(exec_id) as max_exec_id,
+           count(*) as street_count,
+           sum(case when exec_type = 'F' then 1 else 0 end) as trade_count,
+           sum(last_qty) as last_qty,
+           sum(last_qty * last_px)--, sum (case when tr)
     from dwh.execution
     where exec_date_id = 20240308--l_date_id
       and true                   -- it is a condition for subscriptions
