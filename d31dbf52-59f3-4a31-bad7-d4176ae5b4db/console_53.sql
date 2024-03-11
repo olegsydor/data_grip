@@ -546,3 +546,5 @@ raise notice 'finish - %', clock_timestamp();
 end;
 $function$
 ;
+
+select 1/0 -- it's just a test
