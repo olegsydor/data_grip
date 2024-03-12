@@ -117,9 +117,13 @@ begin
     group by parent_order_id;
 
 --     select * from data_marts.f_parent_order;
-
+    insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
+                                           street_count, trade_count,
+                                           last_qty, amount, pg_db_create_time)
     select pn.parent_order_id,
            pn.max_exec_id,
+           pn.create_date_id,
+           l_date_id,
            case
                when coalesce(pn.min_exec_id > pb.last_exec_id, true) then pn.street_count + coalesce(pb.street_count, 0)
                else full_ord.street_count end as street_count,
@@ -131,13 +135,21 @@ begin
                else full_ord.last_qty end     as last_qty,
            case
                when coalesce(pn.min_exec_id > pb.last_exec_id, true) then pn.amount + coalesce(pb.amount, 0)
-               else full_ord.amount end       as amount
+               else full_ord.amount end       as amount,
+           clock_timestamp()
     from t_parent as pn -- parents new
              left join data_marts.f_parent_order pb -- parents base
                        on pb.parent_order_id = pn.parent_order_id and pb.status_date_id = 20240308 --l_date_id
              left join lateral (select *
                                 from data_marts.get_data_for_parent_order(pn.parent_order_id, 20240308)
-                                where pb.last_exec_id <= pn.min_exec_id) full_ord on true;
+                                where pb.last_exec_id > pn.min_exec_id) full_ord on true
+    on conflict (status_date_id, parent_order_id) do update
+        set last_exec_id      = excluded.last_exec_id,
+            street_count      = excluded.street_count,
+            trade_count       = excluded.trade_count,
+            last_qty          = excluded.last_qty,
+            amount            = excluded.amount,
+            pg_db_update_time = clock_timestamp();
 
 
 
