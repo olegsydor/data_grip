@@ -96,8 +96,9 @@ $function$
 ;
 
 
-select * from dash360.report_gtc_recon_ofp0038(in_instrument_type_id := 'O',
-              in_account_ids := '{58091}',
-              in_start_date_id := 20240310,
-              in_end_date_id := 20240312
-              )
+select *
+from dash360.report_gtc_recon_ofp0038(in_instrument_type_id := 'O',
+                                      in_account_ids := '{58091,19250, 61889, 52465,30150,11881,64998,20805}',
+                                      in_start_date_id := 20240310,
+                                      in_end_date_id := 20240312
+     )
