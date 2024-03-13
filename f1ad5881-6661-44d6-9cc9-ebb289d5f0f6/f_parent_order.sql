@@ -1,3 +1,12 @@
+select array_agg(id)
+from (select distinct dataset_id as id
+      from dwh.execution
+      where exec_date_id = 20240308
+      order by 1
+      limit 20 offset 70) x
+
+select * from data_marts.f_parent_order;
+
 drop table if exists data_marts.f_parent_order;
 create table data_marts.f_parent_order
 (
@@ -40,9 +49,9 @@ comment on column data_marts.f_parent_order.pg_db_create_time is '';
 comment on column data_marts.f_parent_order.pg_db_update_time is '';
 
 
-create function data_marts.load_parent_order_inc(in_parent_order_ids bigint[] default null::bigint[],
-                                                 in_date_id integer default null::integer,
-                                                 in_load_id bigint default null::bigint)
+create or replace function data_marts.load_parent_order_inc(in_parent_order_ids bigint[] default null::bigint[],
+                                                            in_date_id integer default null::integer,
+                                                            in_dataset_ids bigint[] default null::bigint[])
     returns int4
     language plpgsql
 as
@@ -73,9 +82,11 @@ begin
            sum(last_qty)                                    as last_qty,
            sum(last_qty * last_px)                          as amount
     from dwh.execution
-    where exec_date_id = 20240308--l_date_id
-      and true                   -- it is a condition for subscriptions
+    where exec_date_id = l_date_id
+      and case when in_dataset_ids is null then true else dataset_id = any (in_dataset_ids) end
     group by order_id;
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_base - %', l_row_cnt;
 
 
     -- non gtc
@@ -86,13 +97,16 @@ begin
              join lateral (select parent_order_id, create_date_id
                            from dwh.client_order cl
                            where cl.order_id = bs.order_id
-                             and cl.create_date_id = 20240308--l_date_id
+                             and cl.create_date_id = l_date_id
                              and cl.parent_order_id is not null
                            limit 1) cl on true;
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_orders create - %', l_row_cnt;
     create index on t_orders (parent_order_id, order_id);
 
     -- gtc
-    insert into t_orders (order_id, min_exec_id, max_exec_id, street_count, trade_count, last_qty, amount, parent_order_id, create_date_id)
+    insert into t_orders (order_id, min_exec_id, max_exec_id, street_count, trade_count, last_qty, amount,
+                          parent_order_id, create_date_id)
     select bs.*, cl.parent_order_id, cl.create_date_id
     from t_base bs
              join dwh.gtc_order_status gos using (order_id)
@@ -102,6 +116,8 @@ begin
                              and cl.create_date_id = gos.create_date_id
                              and cl.parent_order_id is not null
                            limit 1 ) cl on true;
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_orders insert - %', l_row_cnt;
 
 
     drop table if exists t_parent;
@@ -116,7 +132,8 @@ begin
            sum(amount)         as amount
     from t_orders tor
     group by parent_order_id;
-
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_parent insert - %', l_row_cnt;
 --     select * from data_marts.f_parent_order;
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count,
@@ -140,9 +157,9 @@ begin
            clock_timestamp()
     from t_parent as pn -- parents new
              left join data_marts.f_parent_order pb -- parents base
-                       on pb.parent_order_id = pn.parent_order_id and pb.status_date_id = 20240308 --l_date_id
+                       on pb.parent_order_id = pn.parent_order_id and pb.status_date_id = l_date_id --l_date_id
              left join lateral (select *
-                                from data_marts.get_data_for_parent_order(pn.parent_order_id, 20240308)
+                                from data_marts.get_data_for_parent_order(pn.parent_order_id, l_date_id)
                                 where pb.last_exec_id > pn.min_exec_id) full_ord on true
     on conflict (status_date_id, parent_order_id) do update
         set last_exec_id      = excluded.last_exec_id,
@@ -152,15 +169,16 @@ begin
             amount            = excluded.amount,
             pg_db_update_time = clock_timestamp();
 
-
+    get diagnostics l_row_cnt = row_count;
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
     select public.load_log(l_load_id, l_step_id,
-                           'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', 0, 'O')
+                           'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', l_row_cnt, 'E')
     into l_step_id;
-end;
 
+    return l_row_cnt;
+end;
 $fn$;
 
 
@@ -195,8 +213,11 @@ begin
         from dwh.client_order cl
                  join dwh.execution ex on ex.order_id = cl.order_id
         where ex.exec_date_id = in_date_id
-          and cl.parent_order_id = in_parent_order_id;
+          and cl.parent_order_id = in_parent_order_id
+        group by cl.parent_order_id;
 end;
 $fx$;
 
-select * from t_parent
+select * from data_marts.load_parent_order_inc(in_date_id := 20240308, in_dataset_ids := '{35842793,35842825,35842834,35842843,35842866,35842889,35842898,35842907,35842921,35842954,35842972,35843018,35843036,35843050,35843173,35843186,35843299,35843313,35843322,35843331}');
+select * from data_marts.f_parent_order
+where parent_order_id = 284701287;
