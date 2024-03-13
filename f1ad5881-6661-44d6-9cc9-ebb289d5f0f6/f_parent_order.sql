@@ -91,6 +91,7 @@ begin
                            limit 1) cl on true;
     create index on t_orders (parent_order_id, order_id);
 
+    -- gtc
     insert into t_orders (order_id, min_exec_id, max_exec_id, street_count, trade_count, last_qty, amount, parent_order_id, create_date_id)
     select bs.*, cl.parent_order_id, cl.create_date_id
     from t_base bs
