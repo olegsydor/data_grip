@@ -49,7 +49,7 @@ comment on column data_marts.f_parent_order.pg_db_create_time is '';
 comment on column data_marts.f_parent_order.pg_db_update_time is '';
 
 
-create or replace function data_marts.load_parent_order_inc(in_parent_order_ids bigint[] default null::bigint[],
+create or replace function data_marts.load_parent_order_inc2(in_parent_order_ids bigint[] default null::bigint[],
                                                             in_date_id integer default null::integer,
                                                             in_dataset_ids bigint[] default null::bigint[])
     returns int4
@@ -74,67 +74,49 @@ begin
     -- the list of orders
     drop table if exists t_base;
     create temp table t_base as
-    select order_id,
+    select cl.parent_order_id,
            min(exec_id)                                     as min_exec_id,
-           max(exec_id)                                     as max_exec_id,
-           count(*)                                         as street_count,
-           sum(case when exec_type = 'F' then 1 else 0 end) as trade_count,
-           sum(last_qty)                                    as last_qty,
-           sum(last_qty * last_px)                          as amount
-    from dwh.execution
+           max(exec_id)                                     as max_exec_id
+    from dwh.execution ex
+    join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
     where exec_date_id = l_date_id
-      and case when in_dataset_ids is null then true else dataset_id = any (in_dataset_ids) end
-    group by order_id;
+      and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
+    and not is_parent_level
+    and cl.parent_order_id is null
+    group by cl.parent_order_id;
     get diagnostics l_row_cnt = row_count;
     raise notice 't_base - %', l_row_cnt;
 
-
-    -- non gtc
-    drop table if exists t_orders;
-    create temp table t_orders as
-    select bs.*, cl.parent_order_id, cl.create_date_id
+    -- new groupped by parent_order
+    drop table if exists t_parent_orders;
+    create temp table t_parent_orders as
+    select bs.*,
+           val.*,
+           nup.need_update
     from t_base bs
-             join lateral (select parent_order_id, create_date_id
-                           from dwh.client_order cl
-                           where cl.order_id = bs.order_id
-                             and cl.create_date_id = l_date_id
-                             and cl.parent_order_id is not null
-                           limit 1) cl on true;
+             join lateral ( select case
+                                       when exists (select null
+                                                    from data_marts.f_parent_order fp
+                                                    where fp.status_date_id = l_date_id
+                                                      and fp.parent_order_id = bs.parent_order_id
+                                                      and fp.last_exec_id >= bs.min_exec_id)
+                                           then true
+                                       else false end as need_update
+        ) nup on true
+             join lateral (select street_count, trade_count, last_qty, amount
+                           from data_marts.get_exec_for_parent_order(in_parent_order_id := bs.parent_order_id,
+                                                                     in_date_id := l_date_id,
+                                                                     in_min_exec_id := case when nup.need_update then 0 else bs.min_exec_id end
+                                )
+                           limit 1) val on true;
     get diagnostics l_row_cnt = row_count;
-    raise notice 't_orders create - %', l_row_cnt;
-    create index on t_orders (parent_order_id, order_id);
+    raise notice 't_street_orders create - %', l_row_cnt;
+    create index on t_parent_orders (parent_order_id);
 
-    -- gtc
-    insert into t_orders (order_id, min_exec_id, max_exec_id, street_count, trade_count, last_qty, amount,
-                          parent_order_id, create_date_id)
-    select bs.*, cl.parent_order_id, cl.create_date_id
-    from t_base bs
-             join dwh.gtc_order_status gos using (order_id)
-             join lateral (select parent_order_id, cl.create_date_id
-                           from dwh.client_order cl
-                           where cl.order_id = bs.order_id
-                             and cl.create_date_id = gos.create_date_id
-                             and cl.parent_order_id is not null
-                           limit 1 ) cl on true;
     get diagnostics l_row_cnt = row_count;
-    raise notice 't_orders insert - %', l_row_cnt;
+    raise notice 't_parent_orders insert - %', l_row_cnt;
 
 
-    drop table if exists t_parent;
-    create temp table t_parent as
-    select parent_order_id,
-           min(create_date_id) as create_date_id,
-           min(min_exec_id)    as min_exec_id,
-           max(max_exec_id)    as max_exec_id,
-           sum(street_count)   as street_count,
-           sum(trade_count)    as trade_count,
-           sum(last_qty)       as last_qty,
-           sum(amount)         as amount
-    from t_orders tor
-    group by parent_order_id;
-    get diagnostics l_row_cnt = row_count;
-    raise notice 't_parent insert - %', l_row_cnt;
---     select * from data_marts.f_parent_order;
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count,
                                            last_qty, amount, pg_db_create_time)
@@ -155,7 +137,7 @@ begin
                when coalesce(pn.min_exec_id > pb.last_exec_id, true) then pn.amount + coalesce(pb.amount, 0)
                else full_ord.amount end       as amount,
            clock_timestamp()
-    from t_parent as pn -- parents new
+    from t_parent_orders as pn -- parents new
              left join data_marts.f_parent_order pb -- parents base
                        on pb.parent_order_id = pn.parent_order_id and pb.status_date_id = l_date_id --l_date_id
              left join lateral (select *
@@ -182,16 +164,15 @@ end;
 $fn$;
 
 
-select case when extract(epoch from pg_db_create_time - exec_time) > 50 then 'upd' else 'no' end, count(*)
-from dwh.execution
-where exec_date_id = 20240307
-group by case when extract(epoch from pg_db_create_time - exec_time) > 50 then 'upd' else 'no' end
 
 
 select * from fix_capture.fix_message_json where fix_message_id = 686046122
 
-create or replace function data_marts.get_data_for_parent_order(in_parent_order_id int8,
-                                                                in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int)
+
+
+create or replace function data_marts.get_exec_for_parent_order(in_parent_order_id int8,
+                                                                in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int,
+                                                                in_min_exec_id int8 default null)
     returns table
             (
                 street_count int8,
@@ -206,14 +187,20 @@ declare
 
 begin
     return query
-        select count(*)                                            as street_count,
-               sum(case when ex.exec_type = 'F' then 1 else 0 end) as trade_count,
-               sum(ex.last_qty)                                    as last_qty,
-               sum(ex.last_qty * ex.last_px)                       as amount
-        from dwh.client_order cl
-                 join dwh.execution ex on ex.order_id = cl.order_id
+        select --cl.parent_order_id,
+               count(distinct ex.order_id)   as street_count,
+               count(*)                      as trade_count,
+               sum(ex.last_qty)              as last_qty,
+               sum(ex.last_qty * ex.last_px) as amount
+        --        ,min(ex.exec_id)               as min_exec_id,
+--        max(ex.exec_id)               as max_exec_id
+        from dwh.execution ex
+                 join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
         where ex.exec_date_id = in_date_id
           and cl.parent_order_id = in_parent_order_id
+          and ex.exec_id >= in_min_exec_id
+          and ex.exec_type = 'F'
+          and ex.is_busted = 'N'
         group by cl.parent_order_id;
 end;
 $fx$;
@@ -221,3 +208,18 @@ $fx$;
 select * from data_marts.load_parent_order_inc(in_date_id := 20240307), in_dataset_ids := '{35848774,35848831,35848848,35848908,35848917,35848926,35848986,35848995,35849005,35849065,35849074,35849083,35849144,35849153,35849162,35849222,35849231,35849240,35849298,35849309}');
 select * from data_marts.f_parent_order
 where parent_order_id = 284701287;
+
+-----
+select count(distinct ex.order_id)   as street_count,
+       count(*)                      as trade_count,
+       sum(ex.last_qty)              as last_qty,
+       sum(ex.last_qty * ex.last_px) as amount,
+       min(ex.exec_id)               as min_exec_id,
+       max(ex.exec_id)               as max_exec_id
+from dwh.execution ex
+         join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+where ex.exec_date_id = :in_date_id
+--   and ex.exec_id >= :in_min_exec_id
+  and ex.exec_type = 'F'
+  and ex.is_busted = 'N'
+group by cl.parent_order_id;

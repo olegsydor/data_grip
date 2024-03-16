@@ -477,5 +477,3 @@ alter function dash360.report_lpeod_aos_compliance rename to report_lpeod_aos_co
 alter function trash.report_lpeod_aos_compliance set schema dash360;
 
 
-VACUUM (verbose, freeze/*, skip_locked*/)  partitions.historic_order_details_storage_202305;
-VACUUM (verbose, freeze/*, skip_locked*/)  partitions.historic_order_details_storage_202309;
