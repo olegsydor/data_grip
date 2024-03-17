@@ -82,6 +82,7 @@ begin
              join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
     where exec_date_id = l_date_id
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
+      and case when in_parent_order_ids is null then true else cl.parent_order_id = in_parent_order_ids end
       and not is_parent_level
       and cl.parent_order_id is not null
     group by cl.parent_order_id;
