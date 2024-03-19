@@ -86,12 +86,18 @@ begin
            min(di.instrument_type_id)  as instrument_type_id,
            min(cl.trading_firm_unq_id) as trading_firm_unq_id
     from dwh.execution ex
-             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
-             left join lateral (select *
+             join lateral (
+                 select * from dwh.client_order str
+                     join dwh.client_order par on par.order_id = str.parent_order_id and 
+                 join dwh.d_instrument di on
+        ) par on true
+        dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
+             join lateral (select *
                                 from dwh.d_instrument di
                                 where di.instrument_id = cl.instrument_id
                                   and di.is_active
                                 limit 1) di on true
+   join lateral (select * from dwh.client_order par where par.order_id = cl)
     where exec_date_id = l_date_id
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
       and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
@@ -165,7 +171,9 @@ begin
             last_qty          = excluded.last_qty,
             amount            = excluded.amount,
             street_order_qty  = excluded.street_order_qty,
-            pg_db_update_time = clock_timestamp();
+            pg_db_update_time = clock_timestamp()
+--     and hash ???
+    ;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -219,17 +227,17 @@ declare
 begin
     return query
         select --cl.parent_order_id,
-               count(distinct ex.order_id)   as street_count,
-               count(*)                      as trade_count,
-               sum(ex.last_qty)              as last_qty,
-               sum(ex.last_qty * ex.last_px) as amount,
+               count(distinct case when ex.exec_type = '0' then ex.order_id end)   as street_count, -- 0
+               count(case when ex.exec_type = 'F' then 1 end)                      as trade_count,      -- and ex.exec_type = 'F'
+               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)              as last_qty,       -- and ex.exec_type = 'F'
+               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end) as amount,       -- and ex.exec_type = 'F'
                sum(cl.order_qty)::int4       as street_order_qty
         from dwh.execution ex
                  join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
         where ex.exec_date_id = in_date_id
           and cl.parent_order_id = in_parent_order_id
           and ex.exec_id between in_min_exec_id and in_max_exec_id
-          and ex.exec_type = 'F'
+          and ex.exec_type in ('F', '0')
           and ex.is_busted = 'N'
         group by cl.parent_order_id;
 end;
@@ -306,3 +314,34 @@ from data_marts.load_parent_order_inc2(in_date_id := 20240308, in_parent_order_i
 select *
 from data_marts.load_parent_order_inc2(in_date_id := 20240308, in_parent_order_ids := '{284721580}',
                                        in_dataset_ids := '{35872674,35872684,35872693,35872708,35872718,35872728,35872742,35872751,35872761,35872776,35872786,35872795,35872811,35872820,35872830,35872845,35872854,35872864,35872878,35872888,35872898,35872914,35872923,35872933,35872948,35872957,35872966,35872981,35872991,35873000,35873015,35873025,35873034,35873049,35873059,35873068,35873083,35873092,35873102,35873117,35873136,35873150,35873161,35873170,35873184,35873195,35873211,35873221,35873233,35873248,35873258,35873267,35873284,35873294,35873319,35873329,35873338,35873353,35873363,35873373,35873388,35873397,35873406,35873421,35873431,35873440,35873455,35873465,35873475,35873489,35873499,35873508,35873523,35873533,35873542,35873557,35873567,35873583,35873592,35873602,35873617,35873626,35873636,35873652,35873662,35873671,35873687,35873696,35873705,35873721,35873731,35873741,35873756,35873766,35873775,35873790,35873800,35873810,35873826,35873836,35873850,35873862,35873872,35873886,35873895,35873904,35873918,35873929,35873938,35873954,35873962,35873972,35873988,35873996,35874006,35874022,35874031,35874041,35874054,35874066,35874074,35874083,35874097,35874107,35874116,35874132,35874141,35874150,35874165,35874174,35874183,35874197,35874207,35874216,35874231,35874240,35874250,35874265,35874274,35874283,35874299,35874308,35874317,35874332,35874342,35874351,35874367,35874377,35874386,35874401,35874410,35874435,35874445,35874455,35874470,35874479,35874489,35874503,35874513,35874522,35874537,35874546,35874555,35874571,35874580,35874590,35874605,35874614,35874624,35874639,35874648,35874657,35874673,35874683,35874693,35874707,35874716,35874726,35874742,35874751,35874762,35874777,35874786,35874796,35874812,35874822,35874838,35874848,35874858,35874873,35874883,35874893,35874907,35874917,35874926,35874941,35874951,35874961,35874975,35874984,35874993,35875008,35875017,35875027,35875042,35875051,35875061,35875123,35875133,35875143,35875203,35875213,35875223,35875285,35875294,35875365,35875376,35875388,35875447,35875457,35875518,35875528,35875538,35875600,35875610,35875619,35875681,35875692,35875701,35875762,35875772,35875782,35875843,35875852,35875862,35875923,35875933,35875943,35876004,35876014,35876036,35876084,35876094,35876116,35876164,35876174,35876189,35876245,35876254,35876276,35876325,35876335,35876395,35876405,35876415,35876476,35876485,35876495,35876556,35876565,35876574,35876636,35876646,35876655,35876717,35876728,35876738,35876800,35876810,35876819,35876880,35876891,35876925,35876963,35876973,35877034,35877044,35877053,35877115,35877124,35877133,35877195,35877204,35877214,35877275,35877285,35877294,35877355,35877365,35877374,35877436,35877446,35877456,35877517,35877526,35877535,35877595,35877604,35877614,35877676,35877685,35877694,35877755,35877765,35877774,35877835,35877845,35877854,35877915,35877925,35877934,35877995,35878004,35878013,35878074,35878084,35878093,35878155,35878165,35878175,35878236,35878246,35878260,35878317,35878328,35878363,35878400,35878410,35878471,35878480,35878491,35878551,35878562,35878571,35878632,35878642,35878652,35878713,35878725,35878788,35878798,35878808,35878868,35878888,35879505,35879515,35879747,35879756,35879827,35879896,35880115,35880131,35880184,35880205,35880218,35880228,35880242,35880608,35880634,35880658,35880683,35880692,35880702,35880754,35880773,35880860,35880877,35880935,35880944,35880952,35880967,35880976,35880986,35881015,35881027,35881039,35881048,35881058,35881074,35881084,35881094,35881109,35881118,35881144,35881153,35881165,35881176,35881198,35881231,35881248,35881258,35881383,35881404,35881607,35881632,35881644,35881660}');
+
+
+select fmj.message_type, count(*) from dwh.client_order ex
+join fix_capture.fix_message_json fmj on fmj.fix_message_id = ex.fix_message_id and create_date_id = fmj.date_id
+where ex.create_date_id = 20240315
+and ex.parent_order_id is not null
+group by fmj.message_type
+
+select * from dwh.d_exec_type
+
+select cl.order_id, sum(case when ex.exec_type = '0' then 1 else 0 end) as cnt_0
+from dwh.client_order cl
+         left join dwh.execution ex on ex.order_id = cl.order_id and cl.create_date_id = ex.exec_date_id and
+                                       cl.time_in_force_id not in ('1', '6')
+where cl.parent_order_id is not null
+and cl.create_date_id = 20240318
+group by cl.order_id
+having sum(case when ex.exec_type = '0' then 1 else 0 end) > 1
+
+
+285121851 - 0
+285074874 - 2
+
+
+select * from dwh.execution
+where order_id = 285074874
+
+select * from dwh.flat_trade_record
+where order_id = 285074874
+
+select * from dwh.d_order_status
