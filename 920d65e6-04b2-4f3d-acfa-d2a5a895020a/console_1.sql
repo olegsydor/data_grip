@@ -519,7 +519,7 @@ select null::text as id,
     co.db_create_time AS _db_create_time,
     orig.db_create_time AS orig_db_create_time,
     rep_last_exec.db_create_time AS rep_db_create_time,
-    co.order_trade_date
+    co.order_trade_date as order_trade_date_id
    FROM blaze7.client_order co
      JOIN LATERAL ( SELECT cl.order_id,
             cl.chain_id
