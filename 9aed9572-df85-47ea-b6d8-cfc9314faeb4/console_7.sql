@@ -1,5 +1,7 @@
 -- create index if not exists client_order_order_trade_date_idx on blaze7.client_order using btree (order_trade_date);
-
+drop view if exists blaze7.torder_edw;
+create or replace view blaze7.torder_edw
+as
 select null::text as id,
     NULL::text AS systemid,
     co.cl_ord_id AS systemorderid,
@@ -549,3 +551,6 @@ select null::text as id,
           ORDER BY rep.exec_id DESC
          LIMIT 1) rep_last_exec ON true
   WHERE co.record_type = ANY (ARRAY['0'::bpchar, '2'::bpchar]);
+
+select * from blaze7.torder_edw
+where order_trade_date_id = 20240319

@@ -96,6 +96,7 @@ begin
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
       and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
       and not is_parent_level
+      and ex.exec_type in ('F', '0')
       and cl.parent_order_id is not null
     group by cl.parent_order_id;
 
@@ -188,9 +189,6 @@ delete
 from data_marts.f_parent_order
 where status_date_id = 20240308
 
-select * from t_04
-except
-select * from t_01;
 
 
 delete from data_marts.f_parent_order
