@@ -77,27 +77,28 @@ begin
     drop table if exists t_base;
     create temp table t_base as
     select cl.parent_order_id,
-           min(create_date_id)         as create_date_id, --??
-           min(exec_id)                as min_exec_id,
-           max(exec_id)                as max_exec_id,
-           min(cl.time_in_force_id)    as time_in_force_id,
-           min(cl.account_id)          as account_id,
-           min(cl.instrument_id)       as instrument_id,
-           min(di.instrument_type_id)  as instrument_type_id,
-           min(cl.trading_firm_unq_id) as trading_firm_unq_id
+           min(par.create_date_id)      as create_date_id,
+           min(exec_id)                 as min_exec_id,
+           max(exec_id)                 as max_exec_id,
+           min(par.time_in_force_id)    as time_in_force_id,
+           min(par.account_id)          as account_id,
+           min(par.instrument_id)       as instrument_id,
+           min(par.instrument_type_id)  as instrument_type_id,
+           min(par.trading_firm_unq_id) as trading_firm_unq_id,
+           min(par.order_qty)
     from dwh.execution ex
-             join lateral (
-                 select * from dwh.client_order str
-                     join dwh.client_order par on par.order_id = str.parent_order_id and 
-                 join dwh.d_instrument di on
-        ) par on true
-        dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
-             join lateral (select *
-                                from dwh.d_instrument di
-                                where di.instrument_id = cl.instrument_id
-                                  and di.is_active
-                                limit 1) di on true
-   join lateral (select * from dwh.client_order par where par.order_id = cl)
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
+             join lateral (select par.create_date_id,
+                                  par.time_in_force_id,
+                                  par.account_id,
+                                  par.instrument_id,
+                                  di.instrument_type_id,
+                                  par.trading_firm_unq_id,
+                                  par.order_qty
+                           from dwh.client_order par
+                                    join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+                           where par.order_id = cl.parent_order_id
+                           limit 1) par on true
     where exec_date_id = l_date_id
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
       and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
@@ -188,25 +189,6 @@ end;
 $fn$;
 
 
-select *
-from data_marts.load_parent_order_inc2(in_date_id := 20240315, in_dataset_ids := '{36247850,36247951,36247960,36247970,36248211,36248284,36248371,36248380,36248518,36248536,36248595,36248613,36248673,36248693,36248772,36248841,36248859,36248927,36248971,36248986,36249005,36249039,36249054,36249108,36249123,36249318,36249330,36249351,36249442,36249460,36249497,36249513,36249565,36249590,36249692,36249701,36249750,36249768,36249929,36249957,36249965,36249982,36250032,36250050,36250168,36250188,36250460,36250476,36250658,36250668,36250684,36250756,36250766,36250781,36250823,36250841,36250901,36250925,36256028,36256042}');
-
-create temp t_01 as
-select *--parent_order_id, last_exec_id, street_count, trade_count, last_qty, amount
-delete
-from data_marts.f_parent_order
-where status_date_id = 20240308
-
-
-
-delete from data_marts.f_parent_order
-where status_date_id = 20240315;
-
-select array_agg(dataset_id) from (select distinct dataset_id
-                                    from dwh.execution
-                                    where exec_date_id = 20240315
-                                    limit 200 offset 0) x;
-
 create or replace function data_marts.get_exec_for_parent_order(in_parent_order_id int8,
                                                                 in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int,
                                                                 in_min_exec_id int8 default null,
@@ -227,11 +209,11 @@ declare
 begin
     return query
         select --cl.parent_order_id,
-               count(distinct case when ex.exec_type = '0' then ex.order_id end)   as street_count, -- 0
-               count(case when ex.exec_type = 'F' then 1 end)                      as trade_count,      -- and ex.exec_type = 'F'
-               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)              as last_qty,       -- and ex.exec_type = 'F'
-               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end) as amount,       -- and ex.exec_type = 'F'
-               sum(cl.order_qty)::int4       as street_order_qty
+               count(distinct case when ex.exec_type = '0' then ex.order_id end)          as street_count,
+               count(case when ex.exec_type = 'F' then 1 end)                             as trade_count,
+               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)              as last_qty,
+               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end) as amount,
+               sum(cl.order_qty)::int4                                                    as street_order_qty
         from dwh.execution ex
                  join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
         where ex.exec_date_id = in_date_id
