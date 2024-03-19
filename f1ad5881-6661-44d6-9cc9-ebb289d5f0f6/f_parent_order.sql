@@ -210,7 +210,7 @@ declare
 begin
     return query
         select --cl.parent_order_id,
-               count(distinct case when ex.exec_type = '0' then ex.order_id end)          as street_count,
+               count(distinct case when ex.exec_type in ('0', 'W') then ex.order_id end)  as street_count,
                count(case when ex.exec_type = 'F' then 1 end)                             as trade_count,
                sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)              as last_qty,
                sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end) as amount,
@@ -220,7 +220,7 @@ begin
         where ex.exec_date_id = in_date_id
           and cl.parent_order_id = in_parent_order_id
           and ex.exec_id between in_min_exec_id and in_max_exec_id
-          and ex.exec_type in ('F', '0')
+          and ex.exec_type in ('F', '0', 'W')
           and cl.trans_type <> 'F'
           and ex.is_busted = 'N'
         group by cl.parent_order_id;
@@ -334,8 +334,6 @@ select * from fix_capture.fix_message_json
 where fix_message_id in (687033442, 687033456)
 
 
-select '{"8":"FIX.4.2","9":"449","35":"8","49":"GOSR66","56":"RCS","34":"871","52":"20240318-08:11:35.895","37":"624155611331837956","198":"f_3_5s240318","11":"BWAA0172-20240318","109":"autobr11","76":"001","17":"habi78g40g02","20":"0","150":"0","39":"0","1":"B7DEV","55":"K","167":"OPT","200":"202404","205":"19","201":"0","202":"35","54":"2","38":"10","40":"2","44":"17.9","59":"0","32":"0","31":"0","151":"10","14":"0","6":"0","60":"20240318-08:11:35.424","442":"2","204":"5","654":"1","5049":"EXCHLBEN","5050":"20240318-08:11:35.894104","5056":"GOSR66","10006":"SEG6_OSR6","10012":"BLAZE","10100":"BLAZE","10001":"B7DEV","10099":"435","10582":"autobr21","10":"140"}'::jsonb
-select '{"8":"FIX.4.2","9":"560","35":"8","49":"GOSR66","56":"RCS","34":"873","52":"20240318-08:11:35.902","37":"624155611331837956","198":"f_3_5s240318","11":"BWAA0172-20240318","109":"autobr11","76":"001","17":"habi78g80g02","20":"0","150":"0","39":"0","1":"B7DEV","167":"MLEG","54":"2","38":"10","40":"2","44":"17.9","59":"0","32":"0","31":"0","151":"10","14":"0","6":"0","60":"20240318-08:11:35.426","442":"3","204":"5","555":"2","654":"1","564":"O","566":"9.8","600":"K","608":"OP","611":"20240419","612":"35","623":"1","624":"2","9564":"O","654":"2","564":"O","566":"8.1","600":"K","608":"OP","611":"20240419","612":"37.5","623":"1","624":"2","9564":"O","5049":"EXCHLBEN","5050":"20240318-08:11:35.897125","5056":"GOSR66","10006":"SEG6_OSR6","10012":"BLAZE","10100":"BLAZE","10001":"B7DEV","10099":"435","10582":"autobr21","10":"162"}'::jsonb
 
 
     select public.load_log(:l_load_id, :l_step_id,
