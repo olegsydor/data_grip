@@ -49,7 +49,10 @@ comment on column data_marts.f_parent_order.instrument_type_id is 'instrument_ty
 comment on column data_marts.f_parent_order.pg_db_create_time is '';
 comment on column data_marts.f_parent_order.pg_db_update_time is '';
 
+select * from data_marts.f_parent_order
+where status_date_id = 20240320
 
+select * from staging.f_parent_order_last_subscription
 create table staging.f_parent_order_last_subscription
 (
     date_id       int4,
@@ -57,26 +60,40 @@ create table staging.f_parent_order_last_subscription
 );
 comment on table staging.f_parent_order_last_subscription is 'Auxillary table for counting the last processed subscription until the permanent process of running has invented';
 
+select * from data_marts.run_f_parent_order_process();
 
-create function data_marts.run_f_parent_order_process()
-returns int4
-language plpgsql
-as $$
+create or replace function data_marts.run_f_parent_order_process()
+    returns int4
+    language plpgsql
+as
+$$
 declare
     l_load_batch_ids int8[];
+    l_length         int4;
+    l_date_id        int4 := to_char(current_date, 'YYYYMMDD')::int4;
 begin
     select array_agg(load_batch_id order by load_batch_id)
     into l_load_batch_ids
     from public.etl_subscriptions
-    where load_batch_id > (select coalesce(load_batch_id, 0)
+    where load_batch_id > coalesce((select load_batch_id
                            from staging.f_parent_order_last_subscription
-                           where date_id = to_char(current_date, 'YYYYMMDD')::int4
-                           limit 1)
+                           where date_id = l_date_id
+                           limit 1), 0)
       and source_table_name = 'execution'
       and subscription_name = 'main_job';
 
+    select array_length(l_load_batch_ids, 1) into l_length;
+
+    perform data_marts.load_parent_order_inc3(
+            in_date_id := l_date_id,
+            in_dataset_ids := l_load_batch_ids);
+
     update staging.f_parent_order_last_subscription
-    return array_length(l_load_batch_ids, 1);
+    set date_id       = l_date_id,
+        load_batch_id = l_load_batch_ids[l_length]
+    where true;
+
+    return l_length;
 end;
 $$;
 
@@ -179,9 +196,6 @@ begin
     raise notice 't_street_orders create - %', l_row_cnt;
     create index on t_parent_orders (parent_order_id);
 
-    get diagnostics l_row_cnt = row_count;
-    raise notice 't_parent_orders insert - %', l_row_cnt;
-
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count, last_qty, amount, street_order_qty,
                                            pg_db_create_time,
@@ -218,6 +232,7 @@ begin
     ;
 
     get diagnostics l_row_cnt = row_count;
+    raise notice 't_parent_orders insert - %', l_row_cnt;
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
