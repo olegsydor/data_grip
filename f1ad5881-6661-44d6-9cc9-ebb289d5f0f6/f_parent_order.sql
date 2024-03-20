@@ -50,6 +50,46 @@ comment on column data_marts.f_parent_order.pg_db_create_time is '';
 comment on column data_marts.f_parent_order.pg_db_update_time is '';
 
 
+create table staging.f_parent_order_last_subscription
+(
+    date_id       int4,
+    load_batch_id int8
+);
+comment on table staging.f_parent_order_last_subscription is 'Auxillary table for counting the last processed subscription until the permanent process of running has invented';
+
+
+create function data_marts.run_f_parent_order_process()
+returns int4
+language plpgsql
+as $$
+declare
+    l_load_batch_ids int8[];
+begin
+    select array_agg(load_batch_id order by load_batch_id)
+    into l_load_batch_ids
+    from public.etl_subscriptions
+    where load_batch_id > (select coalesce(load_batch_id, 0)
+                           from staging.f_parent_order_last_subscription
+                           where date_id = to_char(current_date, 'YYYYMMDD')::int4
+                           limit 1)
+      and source_table_name = 'execution'
+      and subscription_name = 'main_job';
+
+    update staging.f_parent_order_last_subscription
+    return array_length(l_load_batch_ids, 1);
+end;
+$$;
+
+
+select (array_agg(load_batch_id order by load_batch_id))[1190] --- 36479240
+from public.etl_subscriptions
+where true
+and source_table_name = 'execution'
+and subscription_name = 'main_job'
+and to_char(subscribe_time, 'YYYYMMDD')::int4 = 20240320
+
+
+select *
 create or replace function data_marts.load_parent_order_inc3(in_parent_order_ids bigint[] default null::bigint[],
                                                              in_date_id integer default null::integer,
                                                              in_dataset_ids bigint[] default null::bigint[])
@@ -348,3 +388,11 @@ where fix_message_id in (687033442, 687033456)
     -- find in load_timing
 select * from staging.find_in_load_timing('gtc_%_daily', 60*24*2)
 order by 1 desc, 2 desc;
+
+
+select array_agg(load_batch_id order by load_batch_id)
+from public.etl_subscriptions
+where true
+and source_table_name = 'execution'
+and subscription_name = 'main_job'
+and to_char(subscribe_time, 'YYYYMMDD')::int4 = 20240320
