@@ -370,12 +370,12 @@ select * from data_marts.f_parent_order
 where status_date_id = 20240320
 and parent_order_id = 285160277;
 
-select ex.exec_type, ex.dataset_id, ex.exec_id, *
+select ex.exec_type, ex.dataset_id, ex.exec_id, ex.last_qty, ex.last_px, *
 from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id = cl.create_date_id
 and cl.create_date_id = 20240320
 and cl.parent_order_id is not null
-and cl.parent_order_id = 285160277
+and cl.parent_order_id = 285227315
 order by ex.dataset_id, ex.exec_id;
 
 
