@@ -369,14 +369,15 @@ select *
 -- delete
 from data_marts.f_parent_order
 where status_date_id = 20240320
-and parent_order_id = 285227584;
+and parent_order_id = 285227634;
 
-select ex.exec_type, ex.dataset_id, ex.exec_id, ex.last_qty, ex.last_px, *
+select ex.exec_type, ex.dataset_id, ex.order_id, ex.exec_id, ex.last_qty, ex.last_px, ex.last_qty * ex.last_px, order_qty, *
 from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id = cl.create_date_id
 and cl.create_date_id = 20240320
 and cl.parent_order_id is not null
-and cl.parent_order_id = 285227584
+and cl.parent_order_id = 285227634
+and ex.exec_type in ('0', 'F', 'W')
 order by ex.dataset_id, ex.exec_id;
 
 
@@ -385,3 +386,10 @@ from data_marts.get_exec_for_parent_order(in_parent_order_id := 285227584,
                                           in_date_id := 20240320,
                                           in_min_exec_id := 846796570,
                                           in_max_exec_id := 846796591)
+
+
+select * from data_marts.f_yield_capture
+where parent_order_id = 285227634
+and status_date_id = 20240320
+
+
