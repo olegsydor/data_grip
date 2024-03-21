@@ -104,7 +104,6 @@ and subscription_name = 'main_job'
 and to_char(subscribe_time, 'YYYYMMDD')::int4 = 20240320
 
 
-select *
 create or replace function data_marts.load_parent_order_inc3(in_parent_order_ids bigint[] default null::bigint[],
                                                              in_date_id integer default null::integer,
                                                              in_dataset_ids bigint[] default null::bigint[])
@@ -159,7 +158,7 @@ begin
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
       and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
       and not is_parent_level
-      and ex.exec_type in ('F', '0')
+      and ex.exec_type in ('F', '0', 'W')
       and cl.parent_order_id is not null
     group by cl.parent_order_id;
 
@@ -363,24 +362,26 @@ select * from dwh.d_exec_type
 
 
 select *
-from data_marts.load_parent_order_inc3(in_date_id := 20240320, in_parent_order_ids := '{285222916}')
+from data_marts.load_parent_order_inc3(in_date_id := 20240320, in_parent_order_ids := '{285227584}', in_dataset_ids := '{36479955}')
 
 
-select * from data_marts.f_parent_order
+select *
+-- delete
+from data_marts.f_parent_order
 where status_date_id = 20240320
-and parent_order_id = 285160277;
+and parent_order_id = 285227584;
 
 select ex.exec_type, ex.dataset_id, ex.exec_id, ex.last_qty, ex.last_px, *
 from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id = cl.create_date_id
 and cl.create_date_id = 20240320
 and cl.parent_order_id is not null
-and cl.parent_order_id = 285227315
+and cl.parent_order_id = 285227584
 order by ex.dataset_id, ex.exec_id;
 
 
 select *
-from data_marts.get_exec_for_parent_order(in_parent_order_id := 285160277,
+from data_marts.get_exec_for_parent_order(in_parent_order_id := 285227584,
                                           in_date_id := 20240320,
-                                          in_min_exec_id := 0,
-                                          in_max_exec_id := 847099550)
+                                          in_min_exec_id := 846796570,
+                                          in_max_exec_id := 846796591)
