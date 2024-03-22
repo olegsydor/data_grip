@@ -96,11 +96,11 @@ end;
 $$;
 
 
-select (array_agg(load_batch_id order by load_batch_id))[1190] --- 36479240
+select *--(array_agg(load_batch_id order by load_batch_id))[1190] --- 36479240
 from public.etl_subscriptions
 where true
 and source_table_name = 'execution'
-and subscription_name = 'main_job'
+-- and subscription_name = 'main_job'
 and to_char(subscribe_time, 'YYYYMMDD')::int4 = 20240320
 
 
@@ -382,8 +382,8 @@ from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id = cl.create_date_id
 and cl.create_date_id = 20240322
 and cl.parent_order_id is not null
-and cl.parent_order_id = 285412228
-and ex.exec_type in ('0')--, 'F', 'W')
+and cl.parent_order_id = 285415168
+and ex.exec_type in ('0', 'F', 'W')
 order by ex.dataset_id, ex.exec_id;
 
 
