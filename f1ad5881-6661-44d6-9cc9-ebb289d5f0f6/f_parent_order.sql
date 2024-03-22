@@ -126,7 +126,7 @@ begin
                            'load_parent_order_inc for ' || l_date_id::text || ' STARTED ===', 0, 'O')
     into l_step_id;
 
---     raise notice '%, %, %', in_parent_order_ids, in_dataset_ids, in_date_id;
+    --     raise notice '%, %, %', in_parent_order_ids, in_dataset_ids, in_date_id;
 
     -- the list of orders with permanent attributes
     drop table if exists t_base;
@@ -140,7 +140,7 @@ begin
            min(par.instrument_id)       as instrument_id,
            min(par.instrument_type_id)  as instrument_type_id,
            min(par.trading_firm_unq_id) as trading_firm_unq_id,
-           min(par.order_qty)
+           min(par.order_qty)           as parent_order_qty
     from dwh.execution ex
              join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
              join lateral (select par.create_date_id,
@@ -172,15 +172,16 @@ begin
            val.*,
            nup.need_update
     from t_base bs
-             join lateral ( select case
-                                       when exists (select null
-                                                    from data_marts.f_parent_order fp
-                                                    where fp.status_date_id = l_date_id
-                                                      and fp.parent_order_id = bs.parent_order_id
-                                                      and fp.last_exec_id > bs.min_exec_id)
-                                           then true
-                                       else false end as need_update
-        ) nup on true
+             --              join lateral ( select case
+--                                        when exists (select null
+--                                                     from data_marts.f_parent_order fp
+--                                                     where fp.status_date_id = l_date_id
+--                                                       and fp.parent_order_id = bs.parent_order_id
+--                                                       and fp.last_exec_id > bs.min_exec_id)
+--                                            then true
+--                                        else false end as need_update
+--         ) nup on true
+             join lateral (select true as need_update) nup on true
              join lateral (select street_count, trade_count, last_qty, amount, street_order_qty
                            from data_marts.get_exec_for_parent_order(in_parent_order_id := bs.parent_order_id,
                                                                      in_date_id := l_date_id,
@@ -196,6 +197,7 @@ begin
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count, last_qty, amount, street_order_qty,
                                            pg_db_create_time,
+                                           order_qty,
                                            time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
                                            instrument_type_id)
     select tp.parent_order_id,
@@ -209,6 +211,7 @@ begin
            case when tp.need_update then tp.street_order_qty else tp.amount + coalesce(fp.street_order_qty, 0) end,
            clock_timestamp(),
            --
+           tp.parent_order_qty,
            tp.time_in_force_id,
            tp.account_id,
            tp.trading_firm_unq_id,
@@ -261,21 +264,24 @@ declare
 
 begin
     return query
-        select --cl.parent_order_id,
-               count(distinct case when ex.exec_type in ('0', 'W') then ex.order_id end)  as street_count,
-               count(case when ex.exec_type = 'F' then 1 end)                             as trade_count,
-               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)              as last_qty,
-               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end) as amount,
-               sum(distinct cl.order_qty)::int4                                           as street_order_qty
-        from dwh.execution ex
-                 join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
-        where ex.exec_date_id = in_date_id
-          and cl.parent_order_id = in_parent_order_id
-          and ex.exec_id between in_min_exec_id and in_max_exec_id
-          and ex.exec_type in ('F', '0', 'W')
-          and cl.trans_type <> 'F'
-          and ex.is_busted = 'N'
-        group by cl.parent_order_id;
+        select count(distinct case when ex.exec_type in ('0', 'W') then ex.order_id end)    as street_count,
+               count(case when ex.exec_type = 'F' then 1 end)                               as trade_count,
+               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)                as last_qty,
+               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end)   as amount,
+               sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty
+        from (select distinct on (ex.order_id, ex.exec_type) cl.order_id,
+                                                             cl.order_qty,
+                                                             ex.exec_type,
+                                                             ex.last_qty,
+                                                             ex.last_px
+              from dwh.execution ex
+                       join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
+              where ex.exec_date_id = in_date_id
+                and cl.parent_order_id = in_parent_order_id
+                and ex.exec_id between in_min_exec_id and in_max_exec_id
+                and ex.exec_type in ('F', '0', 'W')
+                and cl.trans_type <> 'F'
+                and ex.is_busted = 'N') ex;
 end;
 $fx$;
 
@@ -368,17 +374,39 @@ from data_marts.load_parent_order_inc3(in_date_id := 20240320, in_parent_order_i
 select *
 -- delete
 from data_marts.f_parent_order
-where status_date_id = 20240320
+where status_date_id = 20240322
 and parent_order_id = 285227634;
 
 select ex.exec_type, ex.dataset_id, ex.order_id, ex.exec_id, ex.last_qty, ex.last_px, ex.last_qty * ex.last_px, order_qty, *
 from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id = cl.create_date_id
-and cl.create_date_id = 20240320
+and cl.create_date_id = 20240322
 and cl.parent_order_id is not null
-and cl.parent_order_id = 285227634
-and ex.exec_type in ('0', 'F', 'W')
+and cl.parent_order_id = 285412228
+and ex.exec_type in ('0')--, 'F', 'W')
 order by ex.dataset_id, ex.exec_id;
+
+
+
+select count(distinct case when ex.exec_type in ('0', 'W') then ex.order_id end)    as street_count,
+       count(case when ex.exec_type = 'F' then 1 end)                               as trade_count,
+       sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)                as last_qty,
+       sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end)   as amount,
+       sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty
+from (select distinct on (ex.order_id, ex.exec_type) cl.order_id,
+                                                     cl.order_qty,
+                                                     ex.exec_type,
+                                                     ex.last_qty,
+                                                     ex.last_px
+      from dwh.execution ex
+               join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+      where ex.exec_date_id = :in_date_id
+        and cl.parent_order_id = :in_parent_order_id
+        and ex.exec_id between :in_min_exec_id and :in_max_exec_id
+        and ex.exec_type in ('F', '0', 'W')
+        and cl.trans_type <> 'F'
+        and ex.is_busted = 'N') ex
+
 
 
 select *
