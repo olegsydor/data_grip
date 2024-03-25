@@ -374,7 +374,7 @@ from data_marts.load_parent_order_inc3(in_date_id := 20240320, in_parent_order_i
 select *
 -- delete
 from data_marts.f_parent_order
-where status_date_id = 20240322
+where status_date_id = 20240325
 and parent_order_id = 285227634;
 
 select ex.exec_type, ex.dataset_id, ex.order_id, ex.exec_id, ex.last_qty, ex.last_px, ex.last_qty * ex.last_px, order_qty, *
