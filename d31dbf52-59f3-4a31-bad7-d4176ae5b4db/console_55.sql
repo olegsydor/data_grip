@@ -141,3 +141,19 @@ select first_trade_date, * from
 
                                dwh.d_account
 where first_trade_date is not null
+;
+
+
+select a.first_trade_date, td.*, *
+from dwh.d_account a
+         join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+         left join lateral (select current_date as first_trade_date
+                            from dwh.flat_trade_record ftr
+                            where ftr.date_id = :in_start_date_id
+                              and ftr.account_id = a.account_id
+                              and a.is_active
+                              and is_busted = 'N'
+                              and a.first_trade_date is null
+                            limit 1) td on true
+where coalesce(a.first_trade_date, td.first_trade_date) = :in_start_date
+order by tf.trading_firm_id, a.account_name;
