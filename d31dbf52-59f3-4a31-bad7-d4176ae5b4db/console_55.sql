@@ -1,4 +1,4 @@
-select * from dash360.report_surveillance_first_trade_date_accounts(20240322, 20240327);
+select * from dash360.report_surveillance_first_trade_date_accounts(20240327, 20240327);
 create or replace function dash360.report_surveillance_first_trade_date_accounts(in_start_date_id int4,
                                                                                  in_end_date_id int4
 )
@@ -9,16 +9,14 @@ create or replace function dash360.report_surveillance_first_trade_date_accounts
     language plpgsql
 AS
 $fx$
-    -- If in_end_date_id = today, we need to calculate first trade date by ourselves.
-    -- You can take a look at this dwh.upd_account_first_last_trade_date function for reference.
-    -- We may need to change tables to something like dwh.flat_trade_record or dwh.execution instead of using the historic tables.
-    -- else, we can use the first_trade_date field
+
 declare
-    l_row_cnt    int4;
-    l_load_id    int4;
-    l_step_id    int4;
-    l_start_date date := in_start_date_id::text::date;
-    l_end_date   date := in_end_date_id::text::date;
+    l_row_cnt         int4;
+    l_load_id         int4;
+    l_step_id         int4;
+    l_start_date      date := in_start_date_id::text::date;
+    l_end_date        date := in_end_date_id::text::date;
+    l_current_date_id int4 := to_char(current_date, 'YYYYMMDD')::int4;
 
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -56,9 +54,7 @@ begin
                                           current_date
         from dwh.d_account a
                  join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-                 join dwh.flat_trade_record ftr
-                      on (ftr.date_id = to_char(current_date, 'YYYYMMDD')::int4 and ftr.account_id = a.account_id and
-                          ftr.is_busted = 'N')
+                 join dwh.client_order cl on (cl.create_date_id = l_current_date_id and cl.account_id = a.account_id)
         where a.first_trade_date is null
           and a.is_active
           and not exists (select null from t_account ta where ta.account_id = a.account_id);
