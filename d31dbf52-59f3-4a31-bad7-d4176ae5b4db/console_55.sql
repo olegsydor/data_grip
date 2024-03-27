@@ -1,4 +1,4 @@
-select * from dash360.report_surveillance_first_trade_date_accounts(20240322, 20240322);
+select * from dash360.report_surveillance_first_trade_date_accounts(20240327, 20240327);
 create or replace function dash360.report_surveillance_first_trade_date_accounts(in_start_date_id int4,
                                                                                  in_end_date_id int4
 )
@@ -41,11 +41,20 @@ begin
                                    a.account_name, -- as "Account Name",
                                    a.broker_dealer_mpid, -- as "Broker/Dealer",
                                    a.account_holder_type, -- as "Account Holder Type",
-                                   to_char(a.first_trade_date, 'MM/dd/yyyy') -- as "First Trade Date"
+                                   to_char(coalesce(a.first_trade_date, current_date), 'MM/dd/yyyy') -- as "First Trade Date"
                                    ], ',', '')
         from dwh.d_account a
                  join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-        where a.first_trade_date between in_start_date_id::text::date and in_end_date_id::text::date
+        where (a.first_trade_date between in_start_date_id::text::date and in_end_date_id::text::date
+            or (case
+                    when in_start_date_id = to_char(current_date, 'YYYYMMDD')::int4 then a.first_trade_date is null and
+                                                                                         exists (select null
+                                                                                                 from dwh.flat_trade_record ftr
+                                                                                                 where ftr.date_id = in_start_date_id
+                                                                                                   and ftr.account_id = a.account_id
+                                                                                                   and a.is_active)
+                    else false end)
+            )
         order by tf.trading_firm_id, a.account_name;
 
     get diagnostics l_row_cnt = row_count;
@@ -56,8 +65,6 @@ begin
 end;
 $fx$;
 
-select first_trade_date, * from dwh.d_account
-where first_trade_date is not null
 -------------------------------------------------------------
 
 select * from dash360.report_fintech_eod_olmission_7u(20240322, 20240322);
@@ -128,3 +135,9 @@ begin
     into l_step_id;
 end;
 $fx$;
+
+
+select first_trade_date, * from
+
+                               dwh.d_account
+where first_trade_date is not null
