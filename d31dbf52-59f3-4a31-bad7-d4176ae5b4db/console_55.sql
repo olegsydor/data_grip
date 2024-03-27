@@ -9,6 +9,10 @@ create or replace function dash360.report_surveillance_first_trade_date_accounts
     language plpgsql
 AS
 $fx$
+    -- If in_end_date_id = today, we need to calculate first trade date by ourselves.
+    -- You can take a look at this dwh.upd_account_first_last_trade_date function for reference.
+    -- We may need to change tables to something like dwh.flat_trade_record or dwh.execution instead of using the historic tables.
+    -- else, we can use the first_trade_date field
 DECLARE
     l_row_cnt int4;
     l_load_id int4;
@@ -52,7 +56,8 @@ begin
 end;
 $fx$;
 
-
+select first_trade_date, * from dwh.d_account
+where first_trade_date is not null
 -------------------------------------------------------------
 
 select * from dash360.report_fintech_eod_olmission_7u(20240322, 20240322);
