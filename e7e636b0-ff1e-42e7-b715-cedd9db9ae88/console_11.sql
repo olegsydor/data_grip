@@ -140,7 +140,7 @@ select public.load_log(l_load_id, l_step_id, 'l_load_batch_id: '||l_load_batch_i
  select public.load_log(l_load_id, l_step_id, 'in_instrument_type_id='||in_instrument_type_id||' in_allocation_type='||in_allocation_type||' date_id='||l_date_id, 1 , 'O')
 	into l_step_id;
 
-execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' and date_id = '||l_date_id
+select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id = l_date_id
   into l_max_trade_id ;
 
  select public.load_log(l_load_id, l_step_id, 'l_max_trade_id='||l_max_trade_id, 1 , 'S')
