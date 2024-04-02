@@ -410,6 +410,7 @@ select TR.ACCOUNT_ID,
     TR.LAST_PX,
     TR.LAST_QTY,
     tr.trade_record_id
+,acc.opt_is_fix_custfirm_processed, tr.market_participant_id, tr.compliance_id, tr.alternative_compliance_id
 --        round(sum(TR.LAST_PX * TR.LAST_QTY) / sum(TR.LAST_QTY), 6)                                                 as AVG_PX,
 --        sum(TR.LAST_QTY)                                                                                           as TOTAL_QTY,
 --        array_agg(tr.trade_record_id)                                                                              as trade_ids --, nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
@@ -476,13 +477,24 @@ where TR.DATE_ID = :l_date_id
 --          case acc.opt_is_fix_custfirm_processed when 'Y' then tr.market_participant_id end,
 --          case :in_allocation_type when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id) end;
 
-create temp table so_t as
-select *
+select * from so_t
 
+create temp table so_t as
+select TR.ACCOUNT_ID,
+       TR.INSTRUMENT_ID,
+       TR.SIDE,
+       TR.OPEN_CLOSE,
+       tr.cmta,
+       case tr.opt_is_fix_custfirm_processed when 'Y' then tr.market_participant_id end as mpid,
+       case :in_allocation_type
+           when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id) end      as eq_grp
+       , round(sum(TR.LAST_PX * TR.LAST_QTY) / sum(TR.LAST_QTY), 6)                        as AVG_PX,
+       sum(TR.LAST_QTY)                                                                  as TOTAL_QTY,
+       array_agg(tr.trade_record_id)                                                     as trade_ids,
 
 nextval('trash.so_allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
 from pre_trade_for_allocations tr
-    left join genesis2.clearing_instruction_entry g2c on coalesce(g2c.new_trade_record_id, g2c.trade_record_id) = tr.trade_record_id and g2c.date_id = :l_date_id
+--     left join genesis2.clearing_instruction_entry g2c on coalesce(g2c.new_trade_record_id, g2c.trade_record_id) = tr.trade_record_id and g2c.date_id = :l_date_id
 left join lateral (select count(1) as cnt --coalesce(cie.new_trade_record_id, cie.trade_record_id) as trade_RECORD_ID /*, cie.clearing_instr_entry_id */
                             from genesis2.clearing_instruction_entry cie
                                      inner join clearing_instruction ci
@@ -500,13 +512,16 @@ left join lateral (select count(1) as cnt --coalesce(cie.new_trade_record_id, ci
                             where cie.date_id = :l_date_id
                               and nullif(cie.clearing_account_number, '') is not null
                               and nullif(cie.cmta, '') is not null
-                              and coalesce(cie.new_trade_record_id, cie.trade_record_id) = coalesce(g2c.new_trade_record_id, g2c.trade_record_id)
+--                               and coalesce(cie.new_trade_record_id, cie.trade_record_id) = coalesce(g2c.new_trade_record_id, g2c.trade_record_id)
+                            and coalesce(cie.new_trade_record_id, cie.trade_record_id) = tr.trade_record_id
                             group by coalesce(cie.new_trade_record_id, cie.trade_record_id)--TR.TRADE_RECORD_ID
 --                             having count(1) = 1 /*We just need to be sure we have one clearing account for that manual allocation */
     limit 1
              ) man on true
-where man.cnt = 1
-
+-- where man.cnt = 1
+group by TR.ACCOUNT_ID, TR.INSTRUMENT_ID, TR.SIDE, TR.OPEN_CLOSE, tr.cmta,
+         case opt_is_fix_custfirm_processed when 'Y' then market_participant_id end,
+         case :in_allocation_type when 3 then coalesce(compliance_id, alternative_compliance_id) end
 
 
 CREATE SEQUENCE trash.so_allocation_instruction_alloc_instr_id_seq
@@ -514,3 +529,10 @@ CREATE SEQUENCE trash.so_allocation_instruction_alloc_instr_id_seq
 	MAXVALUE 9223372036854775807
 	CACHE 1
 	NO CYCLE;
+
+
+-------------------------------------
+
+
+-- DROP FUNCTION trash.so_auto_allocate_unallocated_trade(bpchar, int4, int4);
+
