@@ -471,13 +471,17 @@ where TR.DATE_ID = :l_date_id
           when 1 then ACC.IS_SPECIFIC_ALLOCATED = 'N'
           when 2 then ACC.IS_SPECIFIC_ALLOCATED = 'Y'
           when 3 then ACC.IS_SPECIFIC_ALLOCATED = 'T'
-    end
+    end;
 -- group by TR.ACCOUNT_ID, TR.INSTRUMENT_ID, TR.SIDE, TR.OPEN_CLOSE, tr.cmta,
 --          case acc.opt_is_fix_custfirm_processed when 'Y' then tr.market_participant_id end,
 --          case :in_allocation_type when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id) end;
 
 create temp table so_t as
-select * from pre_trade_for_allocations tr
+select *
+
+
+nextval('trash.so_allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
+from pre_trade_for_allocations tr
     left join genesis2.clearing_instruction_entry g2c on coalesce(g2c.new_trade_record_id, g2c.trade_record_id) = tr.trade_record_id and g2c.date_id = :l_date_id
 left join lateral (select count(1) as cnt --coalesce(cie.new_trade_record_id, cie.trade_record_id) as trade_RECORD_ID /*, cie.clearing_instr_entry_id */
                             from genesis2.clearing_instruction_entry cie
