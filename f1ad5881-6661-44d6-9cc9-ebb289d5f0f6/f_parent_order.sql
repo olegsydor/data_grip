@@ -370,7 +370,7 @@ select * from dwh.d_exec_type
 select *
 from data_marts.load_parent_order_inc3(in_date_id := 20240320, in_parent_order_ids := '{285227584}', in_dataset_ids := '{36479955}')
 
-select 1/0--Oleh did it
+
 select *
 -- delete
 from data_marts.f_parent_order
