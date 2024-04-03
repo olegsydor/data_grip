@@ -1,4 +1,4 @@
-CREATE FUNCTION dash360.order_blotter_get_order_details(in_order_id bigint)
+CREATE or replace FUNCTION dash360.order_blotter_get_order_details(in_order_id bigint)
     RETURNS TABLE
             (
                 account_id              integer,
@@ -234,8 +234,8 @@ END;
 $$;
 
 
-
-CREATE FUNCTION dash360.order_chain_for_order_id(in_order_id bigint, in_is_start_from_current character)
+-- select * from dash360.order_chain_for_order_id(in_order_id := 1, in_is_start_from_current := 'Y');
+CREATE or replace FUNCTION dash360.order_chain_for_order_id(in_order_id bigint, in_is_start_from_current character)
     RETURNS TABLE
             (
                 exec_id                    bigint,
@@ -889,8 +889,8 @@ order by exec_id;
 end;
 $$;
 
-
-CREATE FUNCTION dash360.report_compliance_parent_orders(trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+-- select * from dash360.report_compliance_parent_orders();
+CREATE or replace FUNCTION dash360.report_compliance_parent_orders(trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                         account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         start_date_id integer DEFAULT NULL::integer,
                                                         end_date_id integer DEFAULT NULL::integer,
@@ -997,7 +997,7 @@ select_stmt='select
   fc.fix_comp_id clearing_firm_id,
   co.max_floor,
   co.open_close,
-  co.client_id,
+  co.client_id_text,
   oss.root_symbol as root_symbol,
   (case when co.multileg_reporting_type = ''1'' then ''N'' else ''Y'' end)::character as is_mleg,
   (case when co.cross_order_id is null then ''N'' else ''Y'' end)::character as is_cross,
@@ -1080,8 +1080,8 @@ execute select_stmt using start_date_id, end_date_id, trading_firm_ids, account_
 end;
 $_$;
 
-
-CREATE FUNCTION dash_reporting.get_parent_orders_trade_activity(p_accounts bigint[] DEFAULT '{}'::bigint[],
+-- select * from dash_reporting.get_parent_orders_trade_activity();
+CREATE or replace FUNCTION dash_reporting.get_parent_orders_trade_activity(p_accounts bigint[] DEFAULT '{}'::bigint[],
                                                                 p_exchanges character varying[] DEFAULT '{}'::character varying[],
                                                                 in_start_date_id integer DEFAULT NULL::integer,
                                                                 in_end_date_id integer DEFAULT NULL::integer)
@@ -1181,8 +1181,8 @@ RETURN QUERY
 end;
 $$;
 
-
-CREATE FUNCTION dash_reporting.get_street_orders_trade_activity(p_accounts bigint[] DEFAULT '{}'::bigint[],
+-- select * from dash_reporting.get_street_orders_trade_activity();
+CREATE or replace FUNCTION dash_reporting.get_street_orders_trade_activity(p_accounts bigint[] DEFAULT '{}'::bigint[],
                                                                 p_exchanges character varying[] DEFAULT '{}'::character varying[],
                                                                 in_start_date_id integer DEFAULT NULL::integer,
                                                                 in_end_date_id integer DEFAULT NULL::integer)
@@ -1286,8 +1286,8 @@ $$;
 
 
 
-
-CREATE FUNCTION data_marts.load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer) RETURNS integer
+-- select * from data_marts.load_ats_cons_inc();
+CREATE or replace FUNCTION data_marts.load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -2884,7 +2884,7 @@ END;
 $$;
 
 
-CREATE FUNCTION dwh.reload_historic_order_and_mleg(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[]) RETURNS integer
+CREATE or replace FUNCTION dwh.reload_historic_order_and_mleg(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[]) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 -- PD: 20240118 https://dashfinancial.atlassian.net/browse/DS-7780 added new Optwap columns
@@ -3316,7 +3316,7 @@ begin
 end
 $$;
 
-CREATE FUNCTION dwh.reload_historic_order_gtc(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[]) RETURNS integer
+CREATE or replace FUNCTION dwh.reload_historic_order_gtc(in_date_id integer, in_order_ids_arr bigint[] DEFAULT NULL::bigint[]) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 -- PD: 20240118 https://dashfinancial.atlassian.net/browse/DS-7780 added new Optwap columns
@@ -3751,7 +3751,7 @@ $$;
 
 
 
-CREATE FUNCTION dwh.reload_historic_tds(in_date_id integer) RETURNS integer
+CREATE or replace FUNCTION dwh.reload_historic_tds(in_date_id integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 declare
@@ -3910,7 +3910,7 @@ $$;
 
 
 
-CREATE FUNCTION dwh.reload_historic_tds_gtc(in_date_id integer) RETURNS integer
+CREATE or replace FUNCTION dwh.reload_historic_tds_gtc(in_date_id integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 declare
@@ -4068,8 +4068,8 @@ end
 $$;
 
 
-
-CREATE FUNCTION eod_reports.export_rbc_orders_tbl(in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer, in_client_ids character varying[] DEFAULT '{}'::character varying[]) RETURNS TABLE("Account" character varying, "Is Cross" character varying, "Is MLeg" character varying, "Ord Status" character varying, "Event Type" character varying, "Routed Time" character varying, "Event Time" character varying, "Cl Ord ID" character varying, "Side" character varying, "Symbol" character varying, "Ord Qty" bigint, "Price" numeric, "Ex Qty" bigint, "Avg Px" numeric, "Sub Strategy" character varying, "Ex Dest" character varying, "Ord Type" character varying, "TIF" character varying, "Sending Firm" character varying, "Capacity" character varying, "Client ID" character varying, "CMTA" character varying, "Creation Date" character varying, "Cross Ord Type" character varying, "Event Date" character varying, "Exec Broker" character varying, "Expiration Day" date, "Leg ID" character varying, "Lvs Qty" bigint, "O/C" character varying, "Orig Cl Ord ID" character varying, "OSI Symbol" character varying, "Root Symbol" character varying, "Security Type" character varying, "Stop Px" numeric, "Underlying Symbol" character varying)
+-- select * from eod_reports.export_rbc_orders_tbl();
+CREATE or replace FUNCTION eod_reports.export_rbc_orders_tbl(in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer, in_client_ids character varying[] DEFAULT '{}'::character varying[]) RETURNS TABLE("Account" character varying, "Is Cross" character varying, "Is MLeg" character varying, "Ord Status" character varying, "Event Type" character varying, "Routed Time" character varying, "Event Time" character varying, "Cl Ord ID" character varying, "Side" character varying, "Symbol" character varying, "Ord Qty" bigint, "Price" numeric, "Ex Qty" bigint, "Avg Px" numeric, "Sub Strategy" character varying, "Ex Dest" character varying, "Ord Type" character varying, "TIF" character varying, "Sending Firm" character varying, "Capacity" character varying, "Client ID" character varying, "CMTA" character varying, "Creation Date" character varying, "Cross Ord Type" character varying, "Event Date" character varying, "Exec Broker" character varying, "Expiration Day" date, "Leg ID" character varying, "Lvs Qty" bigint, "O/C" character varying, "Orig Cl Ord ID" character varying, "OSI Symbol" character varying, "Root Symbol" character varying, "Security Type" character varying, "Stop Px" numeric, "Underlying Symbol" character varying)
     LANGUAGE plpgsql
     AS $$
 -- SY: 20240307 client_id and x_destination_code_id fields have been removed
@@ -4365,7 +4365,7 @@ $$;
 
 
 
-CREATE FUNCTION external_data.p_load_f_box_street_executions_daily(in_date_id integer DEFAULT NULL::integer) RETURNS integer
+CREATE or replace FUNCTION external_data.p_load_f_box_street_executions_daily(in_date_id integer DEFAULT NULL::integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -4725,7 +4725,7 @@ $$;
 
 
 
-CREATE FUNCTION external_data.p_load_f_cboe_street_executions_daily(in_date_id integer DEFAULT NULL::integer) RETURNS integer
+CREATE or replace FUNCTION external_data.p_load_f_cboe_street_executions_daily(in_date_id integer DEFAULT NULL::integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -5345,7 +5345,7 @@ $$;
 
 
 
-CREATE FUNCTION staging.load_temp_conditional_execution(in_l_seq integer, in_l_step integer, in_l_table_name character varying) RETURNS integer
+CREATE or replace FUNCTION staging.load_temp_conditional_execution(in_l_seq integer, in_l_step integer, in_l_table_name character varying) RETURNS integer
     LANGUAGE plpgsql
     AS $_$ declare
 			date_id_curs cursor for select distinct date_id from staging.temp_conditional_execution where rtrim(operation )= 'I';
@@ -5431,7 +5431,7 @@ end;
 $_$;
 
 
-CREATE FUNCTION staging.tlnd_load_execution(in_l_seq integer, in_step integer, in_table_name character varying) RETURNS integer
+CREATE or replace FUNCTION staging.tlnd_load_execution(in_l_seq integer, in_step integer, in_table_name character varying) RETURNS integer
     LANGUAGE plpgsql
     AS $$DECLARE
  	date_id_crs cursor for select distinct exec_date_id from staging.tlnd_temp_execution  where rtrim(operation)='I';
@@ -5467,7 +5467,7 @@ CREATE FUNCTION staging.tlnd_load_execution(in_l_seq integer, in_step integer, i
 			)f ;
 
 	l_in_table_name:= in_table_name;
-select * from staging.tlnd_temp_execution
+
 	l_sql_block := 'INSERT INTO  partitions.execution_&p_month_id
 											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
@@ -5504,7 +5504,7 @@ select * from staging.tlnd_temp_execution
 		leaves_qty= EXCLUDED.leaves_qty,
 		order_id= EXCLUDED.order_id,
 		order_status= EXCLUDED.order_status,
-		text_=EXCLUDED.text_ ,
+		exec_text=EXCLUDED.exec_text ,
 		is_parent_level = EXCLUDED.is_parent_level,
 		exec_broker=EXCLUDED.exec_broker,
 		dataset_id = EXCLUDED.dataset_id,
@@ -5521,7 +5521,7 @@ l_sql_block2 := 'INSERT INTO  partitions.execution_&p_month_id
 											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
-													text_, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id,cnt)
+													exec_text, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id,cnt)
 				 SELECT exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
@@ -5658,7 +5658,7 @@ execute 'UPDATE dwh.execution ex
 				leaves_qty= EXCLUDED.leaves_qty,
 				order_id= EXCLUDED.order_id,
 				order_status= EXCLUDED.order_status,
-				text_=EXCLUDED.text_ ,
+				exec_text=EXCLUDED.exec_text ,
 				is_parent_level = EXCLUDED.is_parent_level,
 				exec_broker=EXCLUDED.exec_broker,
 				dataset_id = EXCLUDED.dataset_id,
@@ -5700,142 +5700,9 @@ select string_agg(exec_date_id::varchar,',')
 $$;
 
 
-CREATE FUNCTION staging.tlnd_load_execution_old(in_l_seq integer, in_date_id_list character varying, in_step integer, in_table_name character varying) RETURNS integer
-    LANGUAGE plpgsql
-    AS $$DECLARE
- 	date_id_crs cursor for select distinct exec_date_id from staging.tlnd_temp_execution  where rtrim(operation)='I';
-	l_sql_block text;
-	l_sql text;
-	l_date_id int;
-	l_in_l_seq int;
-	l_in_date_id_list text;
-	l_in_step int;
-	l_in_table_name text;
-	e1_step int;
-	date_id_crs_up cursor for select distinct exec_date_id from staging.tlnd_temp_execution where rtrim(operation)='UN';
-	l_exec_analyze text;
-	interval_rez int;
-	neighbourhood int;
-	last_partition_name text;
- begin
-	e1_step :=0;
-	l_in_l_seq:= in_l_seq;
-	l_in_step:= in_step;
-	l_in_date_id_list:= in_date_id_list;
-	l_in_table_name:= in_table_name;
-
-	l_sql_block := 'INSERT INTO  partitions.execution_&p_month_id
-											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
-													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
-													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
-													text_, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id)
-				 SELECT exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
-													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
-													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
-													text_, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id
-				 FROM staging.tlnd_temp_execution
-				 WHERE rtrim(operation)=''I'' and exec_date_id = &p_date_id
-			on conflict (exec_id) do update
-   set exec_date_id = coalesce(public.f_insert_etl_reject(''load_temp_execution''::varchar,''execution_202101_exec_id_exec_date_id_idx'',''(exec_date_id= ''||EXCLUDED.exec_date_id||'',exec_id= ''||EXCLUDED.exec_id||'',exec_time = ''||EXCLUDED.exec_time||'')''::varchar),
-   EXCLUDED.exec_date_id);';
-
-	analyze staging.tlnd_temp_execution;
-
-	open date_id_crs;
-
-	loop
-	fetch date_id_crs into l_date_id;
-	exit when not found;
-
-		l_sql := replace (l_sql_block ,'&p_month_id', substring(l_date_id::text,1,6));
-		l_sql := replace (l_sql ,'&p_date_id', l_date_id::text);
-
-	EXECUTE l_sql;
-
-		select public.load_log(
-							l_in_l_seq,
-							l_in_step,
-							l_in_table_name::text,
-						coalesce ((select count(1) from staging.tlnd_temp_execution where rtrim(operation)='I' and exec_date_id = l_date_id),0)::int,
-						'I'::text
-						) into e1_step
-					;
-
-	end loop;
-
-	close date_id_crs;
-
---	l_exec_analyze:= 'analyze partitions.execution_'||left(right(l_in_date_id_list, 8), 6);
---	execute l_exec_analyze;
-
-	neighbourhood:= 3600; --60 min
-	last_partition_name:= 'select execution_'||left(right(l_in_date_id_list, 8), 6); --extract last date from date_id_list in format YYYYMM
-
-	select abs(date_part('epoch'::text, clock_timestamp() AT TIME ZONE 'US/Eastern'
-										- (clock_timestamp()::date::timestamp AT TIME ZONE 'US/Eastern' + interval '8 hours 15 minutes') --8:15 AM current date
-						)
-				) into interval_rez;
-	--analyze only between 7:15 and 9:15
-	if (interval_rez < neighbourhood) then
-		perform  dwh.analyse_statistics (in_schema_name => 'partitions', in_table_name => last_partition_name, in_max_interval => 600);
-	end if;
-
-			UPDATE dwh.execution ex
-				SET
-				secondary_exch_exec_id= EXCLUDED.secondary_exch_exec_id,
-				secondary_order_id= EXCLUDED.secondary_order_id,
-				trade_liquidity_indicator= EXCLUDED.trade_liquidity_indicator,
-				avg_px= EXCLUDED.avg_px,
-				bust_qty= EXCLUDED.bust_qty,
-				contra_account_capacity= EXCLUDED.contra_account_capacity,
-				contra_broker= EXCLUDED.contra_broker,
-				cum_qty= EXCLUDED.cum_qty,
-				exch_exec_id= EXCLUDED.exch_exec_id,
-				exec_time= EXCLUDED.exec_time,
-				exec_type= EXCLUDED.exec_type,
-				exec_date_id= EXCLUDED.exec_date_id,
-				fix_message_id= EXCLUDED.fix_message_id,
-				account_id= EXCLUDED.account_id,
-				is_billed= EXCLUDED.is_billed,
-				is_busted= EXCLUDED.is_busted,
-				last_mkt= EXCLUDED.last_mkt,
-				last_px= EXCLUDED.last_px,
-				last_qty= EXCLUDED.last_qty,
-				leaves_qty= EXCLUDED.leaves_qty,
-				order_id= EXCLUDED.order_id,
-				order_status= EXCLUDED.order_status,
-				text_=EXCLUDED.text_ ,
-				is_parent_level = EXCLUDED.is_parent_level,
-				exec_broker=EXCLUDED.exec_broker,
-				dataset_id = EXCLUDED.dataset_id,
-				auction_id = EXCLUDED.auction_id,
-				match_qty = EXCLUDED.match_qty,
-				match_px = EXCLUDED.match_px,
-				internal_component_type = EXCLUDED.internal_component_type,
-				exchange_id = EXCLUDED.exchange_id,
-				contra_trader = EXCLUDED.contra_trader,
-				ref_exec_id = EXCLUDED.ref_exec_id
-			FROM  staging.tlnd_temp_execution  EXCLUDED
-				WHERE  ex.exec_id = EXCLUDED.exec_id
-				and ex.exec_date_id = EXCLUDED.exec_date_id
-				and EXCLUDED.operation='UN'
-				and ex.exec_date_id in(SELECT c::int FROM regexp_split_to_table((select l_in_date_id_list),',') as c);
-
-		select public.load_log(
-							l_in_l_seq,
-							e1_step,
-							l_in_table_name::text,
-						coalesce ((select count(1) from staging.tlnd_temp_execution where rtrim(operation)= 'UN'),0)::int,
-							'U'::text)
-						into e1_step
-					;
-	RETURN e1_step;
-
- end;
-$$;
 
 
-CREATE PROCEDURE staging.tlnd_load_execution_sp(IN in_l_seq bigint, IN in_step integer, IN in_table_name character varying)
+CREATE or replace PROCEDURE staging.tlnd_load_execution_sp(IN in_l_seq bigint, IN in_step integer, IN in_table_name character varying)
     LANGUAGE plpgsql
     AS $_$DECLARE
  	date_id_crs refcursor; --for select distinct exec_date_id from staging.tlnd_temp_execution  where rtrim(operation)='I';
@@ -5916,7 +5783,7 @@ CREATE PROCEDURE staging.tlnd_load_execution_sp(IN in_l_seq bigint, IN in_step i
 											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
-													text_, is_parent_level, time_in_force_id, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader, ref_exec_id, reject_code, order_create_date_id, cnt)
+													exec_text, is_parent_level, time_in_force_id, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader, ref_exec_id, reject_code, order_create_date_id, cnt)
 				 SELECT exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
@@ -5948,7 +5815,7 @@ CREATE PROCEDURE staging.tlnd_load_execution_sp(IN in_l_seq bigint, IN in_step i
 		leaves_qty= EXCLUDED.leaves_qty,
 		order_id= EXCLUDED.order_id,
 		order_status= EXCLUDED.order_status,
-		text_=EXCLUDED.text_ ,
+		exec_text=EXCLUDED.exec_text ,
 		is_parent_level = EXCLUDED.is_parent_level,
 		time_in_force_id = EXCLUDED.time_in_force_id,
 		exec_broker=EXCLUDED.exec_broker,
@@ -5968,7 +5835,7 @@ CREATE PROCEDURE staging.tlnd_load_execution_sp(IN in_l_seq bigint, IN in_step i
 											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
-													text_, is_parent_level, time_in_force_id, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader, ref_exec_id, reject_code, order_create_date_id, cnt)
+													exec_text, is_parent_level, time_in_force_id, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader, ref_exec_id, reject_code, order_create_date_id, cnt)
 				 SELECT exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_busted, leaves_qty, cum_qty,
 													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
 													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
@@ -6124,7 +5991,7 @@ execute 'UPDATE dwh.execution ex
 				leaves_qty= EXCLUDED.leaves_qty,
 				order_id= EXCLUDED.order_id,
 				order_status= EXCLUDED.order_status,
-				text_=EXCLUDED.text_ ,
+				exec_text=EXCLUDED.text_ ,
 				is_parent_level = EXCLUDED.is_parent_level,
 				time_in_force_id = EXCLUDED.time_in_force,
 				exec_broker=EXCLUDED.exec_broker,
@@ -6260,6 +6127,2384 @@ end if;
 
  end;
 $_$;
+
+
+-- select * from dwh.trade_record_v_historical
+CREATE or replace VIEW dwh.trade_record_v_historical AS
+ SELECT ex.exec_time AS trade_record_time,
+    ex.exec_date_id AS date_id,
+    cl.trans_type AS trade_record_trans_type,
+    cl.strtg_decision_reason_code AS trade_record_reason,
+    dss.sub_system_id,
+    cl.account_id,
+    cl.client_order_id,
+    cl.instrument_id,
+    cl.side,
+    cl.open_close,
+    cl.fix_connection_id,
+    cl.price AS order_price,
+    str.price AS street_order_price,
+    cl.process_time AS order_process_time,
+    ex.exec_id,
+    ex.exchange_id,
+    ex.trade_liquidity_indicator,
+    ex.secondary_order_id,
+    ex.exch_exec_id,
+    ex.secondary_exch_exec_id,
+    ex.last_mkt,
+    ex.last_qty,
+    ex.last_px,
+    cl.ex_destination,
+    cl.sub_strategy_desc AS sub_strategy,
+    str.order_id AS street_order_id,
+    cl.order_id,
+    str.order_qty AS street_order_qty,
+    cl.order_qty,
+    cl.multileg_reporting_type,
+    str.max_floor AS street_max_floor,
+        CASE
+            WHEN (i.instrument_type_id = 'O'::bpchar) THEN
+            CASE
+                WHEN ((acc.opt_is_fix_execbrok_processed)::text = 'Y'::text) THEN COALESCE(COALESCE(cl_br.opt_exec_broker, public.get_message_tag_string_cross_multileg(cl.fix_message_id, 76, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (cl.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END)), opx.opt_exec_broker)
+                ELSE opx.opt_exec_broker
+            END
+            ELSE public.get_message_tag_string_cross_multileg(str.fix_message_id, 76, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+            CASE
+                WHEN (str.cross_order_id IS NULL) THEN false
+                ELSE true
+            END)
+        END AS exec_broker,
+    lpad(
+        CASE
+            WHEN (i.instrument_type_id = 'O'::bpchar) THEN NULLIF((COALESCE(COALESCE(COALESCE(public.get_message_tag_string(ex.fix_message_id, 439, ex.exec_date_id), public.get_message_tag_string(str_ex.fix_message_id, 439, str_ex.exec_date_id)), ((str.clearing_firm_id)::text)::character varying), public.get_message_tag_string_cross_multileg(cl.fix_message_id, 439, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
+            CASE
+                WHEN (cl.cross_order_id IS NULL) THEN false
+                ELSE true
+            END)))::text, '949'::text)
+            ELSE NULL::text
+        END, 3, '0'::text) AS cmta,
+    str.time_in_force_id AS street_time_in_force,
+    str.order_type_id AS street_order_type,
+    cl.customer_or_firm_id AS opt_customer_firm,
+    ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) AS str_opt_customer_firm,
+    str.market_participant_id AS street_mpid,
+        CASE
+            WHEN (cl.cross_order_id IS NULL) THEN 'N'::text
+            ELSE 'Y'::text
+        END AS is_cross_order,
+        CASE
+            WHEN (str.cross_order_id IS NULL) THEN 'N'::text
+            ELSE 'Y'::text
+        END AS street_is_cross_order,
+    ( SELECT c.cross_type
+           FROM dwh.cross_order c
+          WHERE (c.cross_order_id = str.cross_order_id)) AS street_cross_type,
+    cl.is_originator AS cross_is_originator,
+    str.is_originator AS street_cross_is_originator,
+    ex.contra_account_capacity AS contra_account,
+    ex.contra_broker,
+    ex.exec_broker AS trade_exec_broker,
+    cl.fix_message_id AS order_fix_message_id,
+    ex.fix_message_id AS trade_fix_message_id,
+    str.fix_message_id AS street_order_fix_message_id,
+    cl.client_id_text AS client_id,
+    str.transaction_id AS street_transaction_id,
+    cl.transaction_id,
+    fc.fix_comp_id,
+    str.client_order_id AS street_client_order_id,
+    ex.leaves_qty,
+    str.exec_instruction AS street_exec_inst,
+    public.get_message_tag_string(ex.fix_message_id, 9090, ex.exec_date_id) AS fee_sensitivity,
+    COALESCE(str.strtg_decision_reason_code, cl.strtg_decision_reason_code) AS strategy_decision_reason_code,
+    cl.compliance_id,
+    public.get_message_tag_string_cross_multileg(cl.fix_message_id, 143, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
+        CASE
+            WHEN (cl.cross_order_id IS NULL) THEN false
+            ELSE true
+        END) AS floor_broker_id,
+    str2au.auction_id,
+        CASE
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('AMEX'::character varying)::text, ('ARCE'::character varying)::text])) THEN
+            CASE ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text))
+                WHEN '3'::text THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 50, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END))::text
+                ELSE NULL::text
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('ISE'::character varying)::text, ('GEMINI'::character varying)::text, ('MCRY'::character varying)::text, ('MIAX'::character varying)::text, ('MPRL'::character varying)::text, ('PHLX'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['4'::text, '5'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END))::text
+                ELSE NULL::text
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('BATO'::character varying)::text, ('EDGO'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'N'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END))::text
+                ELSE NULL::text
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('C2OX'::character varying)::text, ('CBOE'::character varying)::text, ('CBOEEH'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'N'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 1462, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END))::text
+                ELSE NULL::text
+            END
+            WHEN ((ex.exchange_id)::text = 'BOX'::text) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'X'::text])) THEN NULL::text
+                ELSE NULL::text
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('NSDQO'::character varying)::text, ('NQBXO'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'O'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END))::text
+                ELSE NULL::text
+            END
+            ELSE NULL::text
+        END AS sub_account,
+        CASE
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('AMEX'::character varying)::text, ('ARCE'::character varying)::text])) THEN
+            CASE ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text))
+                WHEN '3'::text THEN NULL::character varying
+                ELSE cross_acc.account_name
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('BATO'::character varying)::text, ('EDGO'::character varying)::text])) THEN cross_acc.account_name
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('C2OX'::character varying)::text, ('CBOE'::character varying)::text, ('CBOEEH'::character varying)::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+            CASE
+                WHEN (str.cross_order_id IS NULL) THEN false
+                ELSE true
+            END)
+            WHEN ((ex.exchange_id)::text = 'BOX'::text) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'X'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END)
+                ELSE cross_acc.account_name
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('ISE'::character varying)::text, ('GEMINI'::character varying)::text, ('MCRY'::character varying)::text, ('MIAX'::character varying)::text, ('MPRL'::character varying)::text, ('PHLX'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['4'::text, '5'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END)
+                ELSE cross_acc.account_name
+            END
+            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('NSDQO'::character varying)::text, ('NQBXO'::character varying)::text])) THEN
+            CASE
+                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'O'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+                CASE
+                    WHEN (str.cross_order_id IS NULL) THEN false
+                    ELSE true
+                END)
+                ELSE cross_acc.account_name
+            END
+            ELSE NULL::character varying
+        END AS clearing_account,
+    cl.multileg_order_id,
+    ex.internal_component_type,
+    str_ex.fix_message_id AS str_trade_fix_message_id,
+    cl.pt_basket_id,
+    cl.pt_order_id,
+    public.get_message_tag_string(str_ex.fix_message_id, 5049, str_ex.exec_date_id) AS str_cls_comp_id,
+    COALESCE(public.get_message_tag_string(str_ex.fix_message_id, 1, str_ex.exec_date_id), public.get_message_tag_string_cross_multileg(str.fix_message_id, 1, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
+        CASE
+            WHEN (str.cross_order_id IS NULL) THEN false
+            ELSE true
+        END)) AS street_account_name,
+    public.get_message_tag_string(str_ex.fix_message_id, 9861, str_ex.exec_date_id) AS branch_seq_num,
+    str_ex.exec_text AS trade_text,
+    public.get_message_tag_string(str_ex.fix_message_id, 21097, str_ex.exec_date_id) AS frequent_trader_id,
+    cl.time_in_force_id AS time_in_force,
+    cl.internal_component_type AS int_liq_source_type,
+    cl.market_participant_id AS mpid,
+    cl.alternative_compliance_id,
+    str_ex.exec_time AS street_trade_record_time,
+    str.process_time AS street_order_process_time,
+    cl.co_client_leg_ref_id,
+    public.get_message_tag_string_cross_multileg(cl.fix_message_id, 10445, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
+        CASE
+            WHEN (cl.cross_order_id IS NULL) THEN false
+            ELSE true
+        END) AS blaze_account_alias
+   FROM ((((((((((((dwh.execution ex
+     JOIN dwh.client_order cl ON (((ex.order_id = cl.order_id) AND (cl.multileg_reporting_type = ANY (ARRAY['1'::bpchar, '2'::bpchar])) AND (cl.parent_order_id IS NULL) AND (cl.trans_type <> 'F'::bpchar))))
+     JOIN dwh.d_account acc ON ((cl.account_id = acc.account_id)))
+     JOIN dwh.d_instrument i ON ((cl.instrument_id = i.instrument_id)))
+     LEFT JOIN dwh.d_sub_system dss ON ((cl.sub_system_unq_id = dss.sub_system_unq_id)))
+     LEFT JOIN dwh.client_order str ON ((((ex.secondary_order_id)::text = (str.client_order_id)::text) AND (str.parent_order_id = cl.order_id))))
+     LEFT JOIN dwh.client_order2auction str2au ON (((str.order_id = str2au.order_id) AND (str.create_date_id = str2au.create_date_id))))
+     LEFT JOIN dwh.d_account cross_acc ON ((str.cross_account_id = cross_acc.account_id)))
+     LEFT JOIN dwh.execution str_ex ON ((((ex.secondary_exch_exec_id)::text = (str_ex.exch_exec_id)::text) AND (str_ex.order_id = str.order_id) AND (ex.exec_date_id = str_ex.exec_date_id))))
+     LEFT JOIN dwh.d_opt_exec_broker opx ON (((cl.account_id = opx.account_id) AND opx.is_active AND ((opx.is_default)::text = 'Y'::text))))
+     LEFT JOIN dwh.d_opt_exec_broker cl_br ON ((cl.opt_exec_broker_id = cl_br.opt_exec_broker_id)))
+     LEFT JOIN dwh.d_opt_exec_broker str_br ON ((str_br.opt_exec_broker_id = opx.opt_exec_broker_id)))
+     LEFT JOIN dwh.d_fix_connection fc ON ((fc.fix_connection_id = cl.fix_connection_id)))
+  WHERE ((ex.is_busted <> 'Y'::bpchar) AND (ex.exec_type = 'F'::bpchar));
+
+
+/*
+---------------
+
+
+CREATE FUNCTION dash360.order_blotter_get_order_details_bkp(in_order_id bigint) RETURNS TABLE(account_id integer, trading_firm_id character varying, auction_id bigint, order_id bigint, client_order_id character varying, multileg_reporting_type character varying, cross_order_id bigint, side character varying, create_time timestamp without time zone, process_time timestamp without time zone, order_qty bigint, price numeric, sub_strategy character varying, display_instrument_id character varying, instrument_type_id character varying, instrument_id bigint, last_trade_date timestamp without time zone, customer_or_firm_id character varying, clearing_firm_id character varying, opt_exec_broker character varying, time_in_force_id character varying, open_close character varying, client_id character varying, ratio_qty bigint, no_legs integer, co_client_leg_ref_id character varying, fix_message_id bigint, order_type character varying, ex_destination character varying, exchange_id character varying, extended_ord_type character varying, sweep_style character varying, aggression_level smallint, order_status character varying, exec_qty bigint, avg_px numeric, leaves_qty integer)
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+	select_stmt     text;
+	sql_params      text;
+	row_cnt         integer;
+
+  l_create_date_id integer;
+
+   l_load_id        integer;
+   l_step_id        integer;
+
+begin
+  --select nextval('public.load_timing_seq') into l_load_id;
+  --l_step_id:=1;
+
+ 	 --select public.load_log(l_load_id, l_step_id, 'dash360.order_blotter_get_order_details STARTED===', 0, 'O')
+	 --into l_step_id;
+
+  l_create_date_id := coalesce((select o.create_date_id from dwh.client_order o where o.order_id = in_order_id limit 1)::integer, 21010101);
+
+  RAISE info 'l_create_date_id = % ', l_create_date_id;
+
+  --select public.load_log(l_load_id, l_step_id, 'l_create_date_id = '|| l_create_date_id::varchar, 0, 'O')
+	-- into l_step_id;
+
+
+
+   -- form the query
+   RETURN QUERY
+    select co.account_id
+      , tf.trading_firm_id
+      , auc.auction_id
+      , co.order_id
+      , co.client_order_id
+      , co.multileg_reporting_type::varchar
+      , co.cross_order_id
+      , co.side::varchar
+      , co.create_time
+      , co.process_time
+      , co.order_qty::bigint
+      , co.price
+      , co.sub_strategy_desc as sub_strategy
+      , i.display_instrument_id
+      , i.instrument_type_id::varchar
+      , co.instrument_id
+      , i.last_trade_date
+      , co.customer_or_firm_id::varchar
+      , co.clearing_firm_id
+      --, clo.opt_exec_broker --co.opt_exec_broker_id -- !!!! should be 792 ???
+      , eb.opt_exec_broker
+      , co.time_in_force_id::varchar
+      , co.open_close::varchar
+      , c.client_src_id as client_id
+      , co.ratio_qty
+      , co.no_legs
+      , co.co_client_leg_ref_id
+      , co.fix_message_id
+      , co.order_type_id::varchar as order_type --
+      , co.ex_destination
+      , co.exchange_id
+      , co.extended_ord_type::varchar
+      , co.sweep_style::varchar
+      , co.aggression_level
+      , ex.order_status::varchar
+      , trd.exec_qty::bigint
+      , trd.avg_px
+      , ex.leaves_qty
+      --, co.*
+    from dwh.client_order co
+      left join dwh.d_account ac on co.account_id = ac.account_id
+      left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
+      left join data_marts.d_client c on co.client_id = c.client_id
+      left join dwh.d_opt_exec_broker eb on co.opt_exec_broker_id = eb.opt_exec_broker_id
+      left join lateral
+        ( select oa.auction_id -- как вариант, еще сгруппировать все аукционы ордера
+          from dwh.client_order2auction oa
+          where oa.create_date_id >= l_create_date_id
+            and oa.order_id = co.order_id
+          order by oa.rfq_transact_time
+          limit 1 -- parent OFP orders can participate in thousands of auctions
+        ) auc on true
+      left join dwh.d_instrument i on co.instrument_id = i.instrument_id
+      left join lateral
+        ( select ex.text_
+            , ex.order_status
+            , ex.exec_id
+            , ex.leaves_qty
+          from dwh.execution ex
+          where ex.exec_date_id >= l_create_date_id -- l_order_create_date_id --
+            and ex.exec_date_id >= co.create_date_id
+            and ex.order_id = co.order_id
+          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
+          limit 1
+        ) ex on true
+      left join lateral
+        ( select sum(tr.last_qty) as exec_qty
+            , round(sum(tr.last_px * tr.last_qty) / sum(tr.last_qty), 4) as avg_px
+            , sum(tr.principal_amount) as principal_amount
+            , min(tr.trade_record_time) as first_fill_date_time
+            , max(tr.trade_record_id) as max_trade_record_id
+            , case when co.parent_order_id is null then tr.order_id else tr.street_order_id end as order_id
+          from dwh.flat_trade_record tr
+          where 1=1 -- try to calculate for both parent and street level orders
+            and tr.order_id = case when co.parent_order_id is null then co.order_id else co.parent_order_id end -- trade filter by parent level for both levels of orders
+            and co.order_id = case when co.parent_order_id is null then tr.order_id else tr.street_order_id end -- trade filter for street level !!!
+            and tr.date_id >= l_create_date_id
+            and tr.is_busted = 'N'
+          group by case when co.parent_order_id is null then tr.order_id else tr.street_order_id end
+          limit 1
+        ) trd ON true
+    where co.multileg_reporting_type in ('1','2')
+      and co.create_date_id = l_create_date_id
+      and co.order_id = in_order_id
+    limit 10000
+    ;
+  	 --GET DIAGNOSTICS row_cnt = ROW_COUNT;
+
+   --select public.load_log(l_load_id, l_step_id, 'orders returned cnt', row_cnt, 'O')
+	 --into l_step_id;
+
+ 	 --select public.load_log(l_load_id, l_step_id, 'dash360.order_blotter_get_order_details COMPLETE===', 0, 'O')
+	 --into l_step_id;
+
+END;
+$$;
+
+
+
+CREATE FUNCTION dash_reporting.get_parent_orders_trade_activity_bkp(p_accounts integer[] DEFAULT '{}'::integer[], p_exchanges character varying[] DEFAULT '{}'::character varying[], in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer) RETURNS TABLE(client_order_id character varying, exch_order_id character varying, order_id bigint, side character, order_qty integer, price numeric, time_in_force character varying, instrument_name character varying, last_trade_date timestamp without time zone, account_name character varying, sub_system_unq_id integer, multileg_reporting_type character, exec_id bigint, ref_exec_id bigint, exch_exec_id character varying, "Exec_Time_Orig" timestamp without time zone, exec_time text, "Exec_Type" character varying, "Order_Status" character varying, leaves_qty bigint, cum_qty bigint, avg_px numeric, last_qty bigint, last_px numeric, bust_qty bigint, last_mkt character varying, last_mkt_name character varying, text_ character varying, trade_liquidity_indicator character varying, is_busted character, exec_broker character varying, exchange_id character varying, exchange_name character varying)
+    LANGUAGE plpgsql PARALLEL SAFE
+    AS $$
+begin
+
+RETURN QUERY
+	Select
+	co.client_order_id --1
+	, co.exch_order_id
+	, ex.order_id
+	, co.side
+	, co.order_qty
+	, co.price
+	, tif.tif_short_name
+	, inst.instrument_name
+	, inst.last_trade_date
+	, acc.account_name --10
+	, dss.sub_system_id
+	, co.multileg_reporting_type
+	, ex.exec_id
+	, ex.ref_exec_id
+	, ex.exch_exec_id
+	, ex.exec_time
+	, to_char(ex.exec_time, 'HH:MI:SS.MS')
+	, et.exec_type_description
+	, os.order_status_description
+	, ex.leaves_qty --20
+	, ex.cum_qty
+	, ex.avg_px
+	, ex.last_qty
+	, ex.last_px
+	, ex.bust_qty
+	, ex.last_mkt
+	, lm.last_mkt_name
+	, ex.text_
+	, ex.trade_liquidity_indicator
+	, ex.is_busted --30
+	, ex.exec_broker
+	, ex.exchange_id
+	, e.exchange_name
+	From execution ex
+	INNER JOIN client_order co ON ex.order_id = co.order_id
+	inner join d_sub_system dss on co.sub_system_unq_id = dss.sub_system_unq_id
+	INNER JOIN d_account acc ON co.account_id = acc.account_id
+	INNER JOIN d_instrument inst ON co.instrument_id = inst.instrument_id
+	LEFT JOIN d_time_in_force tif ON co.time_in_force_id = tif.tif_id
+	LEFT JOIN d_order_status os ON os.order_status = ex.order_status
+	LEFT JOIN d_last_market lm ON lm.last_mkt = ex.last_mkt AND lm.is_active = true
+	LEFT JOIN d_exchange e ON e.exchange_id = ex.exchange_id AND e.is_active = true
+	LEFT JOIN d_exec_type et ON et.exec_type = ex.exec_type
+	Where ex.exec_type In ('F','H')
+	AND (p_accounts IS NULL OR co.account_id = any(p_accounts))
+	AND (p_exchanges IS null OR ex.exchange_id = any(p_exchanges))
+	And ex.exec_date_id  >= in_start_date_id
+	And ex.exec_date_id < in_end_date_id
+	And co.parent_order_id is null;
+end;
+$$;
+
+
+
+CREATE FUNCTION dash_reporting.get_street_orders_trade_activity_bkp(p_accounts integer[] DEFAULT '{}'::integer[], p_exchanges character varying[] DEFAULT '{}'::character varying[], in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer) RETURNS TABLE(client_order_id character varying, exch_order_id character varying, order_id bigint, side character, order_qty integer, price numeric, time_in_force character varying, instrument_name character varying, last_trade_date timestamp without time zone, account_name character varying, sub_system_unq_id integer, multileg_reporting_type character, exec_id bigint, ref_exec_id bigint, exch_exec_id character varying, "Exec_Time_Orig" timestamp without time zone, exec_time text, "Exec_Type" character varying, "Order_Status" character varying, leaves_qty bigint, cum_qty bigint, avg_px numeric, last_qty bigint, last_px numeric, bust_qty bigint, last_mkt character varying, last_mkt_name character varying, text_ character varying, trade_liquidity_indicator character varying, is_busted character, exec_broker character varying, exchange_id character varying, exchange_name character varying)
+    LANGUAGE plpgsql PARALLEL SAFE
+    AS $$
+begin
+
+RETURN QUERY
+	Select
+	co.client_order_id --1
+	, co.exch_order_id
+	, ex.order_id
+	, co.side
+	, co.order_qty
+	, co.price
+	, tif.tif_short_name
+	, inst.instrument_name
+	, inst.last_trade_date
+	, acc.account_name --10
+	, co.sub_system_unq_id
+	, co.multileg_reporting_type
+	, ex.exec_id
+	, ex.ref_exec_id
+	, ex.exch_exec_id
+	, ex.exec_time
+	, to_char(ex.exec_time, 'HH:MI:SSxFF')
+	, et.exec_type_description
+	, os.order_status_description
+	, ex.leaves_qty --20
+	, ex.cum_qty
+	, ex.avg_px
+	, ex.last_qty
+	, ex.last_px
+	, ex.bust_qty
+	, ex.last_mkt
+	, lm.last_mkt_name
+	, ex.text_
+	, ex.trade_liquidity_indicator
+	, ex.is_busted --30
+	, ex.exec_broker
+	, ex.exchange_id
+	, e.exchange_name
+	From execution ex
+	INNER JOIN client_order co ON ex.order_id = co.order_id
+	INNER JOIN d_account acc ON co.account_id = acc.account_id
+	INNER JOIN d_instrument inst ON co.instrument_id = inst.instrument_id
+	LEFT JOIN d_time_in_force tif ON co.time_in_force_id = tif.tif_id
+	LEFT JOIN d_order_status os ON os.order_status = ex.order_status
+	LEFT JOIN d_last_market lm ON lm.last_mkt = ex.last_mkt AND lm.is_active = true
+	LEFT JOIN d_exchange e ON e.exchange_id = ex.exchange_id AND e.is_active = true
+	LEFT JOIN d_exec_type et ON et.exec_type = ex.exec_type
+	Where ex.exec_type In ('F','H')
+	AND (p_accounts IS NULL OR co.account_id = any(p_accounts))
+	AND (p_exchanges IS null OR ex.exchange_id = any(p_exchanges))
+	And ex.exec_date_id  >= in_start_date_id
+	And ex.exec_date_id <= in_end_date_id
+	And co.parent_order_id is not null;
+end;
+$$;
+
+
+
+CREATE FUNCTION eod_reports.export_rbc_orders_tbl_bkp(in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer, in_client_ids character varying[] DEFAULT '{}'::character varying[]) RETURNS TABLE("Account" character varying, "Is Cross" character varying, "Is MLeg" character varying, "Ord Status" character varying, "Event Type" character varying, "Routed Time" character varying, "Event Time" character varying, "Cl Ord ID" character varying, "Side" character varying, "Symbol" character varying, "Ord Qty" bigint, "Price" numeric, "Ex Qty" bigint, "Avg Px" numeric, "Sub Strategy" character varying, "Ex Dest" character varying, "Ord Type" character varying, "TIF" character varying, "Sending Firm" character varying, "Capacity" character varying, "Client ID" character varying, "CMTA" character varying, "Creation Date" character varying, "Cross Ord Type" character varying, "Event Date" character varying, "Exec Broker" character varying, "Expiration Day" date, "Leg ID" character varying, "Lvs Qty" bigint, "O/C" character varying, "Orig Cl Ord ID" character varying, "OSI Symbol" character varying, "Root Symbol" character varying, "Security Type" character varying, "Stop Px" numeric, "Underlying Symbol" character varying)
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+
+   l_row_cnt integer;
+   l_load_id integer;
+   l_step_id integer;
+
+  l_start_date_id integer;
+  l_end_date_id   integer;
+
+  l_gtc_start_date_id integer;
+BEGIN
+
+  select nextval('public.load_timing_seq') into l_load_id;
+  l_step_id := 1;
+
+  raise notice 'l_load_id=%',l_load_id;
+
+  select public.load_log(l_load_id, l_step_id, 'export_rbc_orders_tbl STARTED===', 0, 'O')
+   into l_step_id;
+
+  if in_start_date_id is not null and in_end_date_id is not null
+  then
+    l_start_date_id := in_start_date_id;
+    l_end_date_id := in_end_date_id;
+  else
+    --l_start_date_id := (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer;
+    --l_end_date_id := (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer;
+    l_start_date_id := (to_char(NOW(), 'YYYYMMDD'))::integer;
+    l_end_date_id := (to_char(NOW(), 'YYYYMMDD'))::integer;
+
+  end if;
+
+  --l_start_date_id := coalesce(in_date_id, (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer);
+
+  l_gtc_start_date_id := to_char((to_date(l_start_date_id::varchar, 'YYYYMMDD')::date - interval '6 month'), 'YYYYMMDD');
+
+    select public.load_log(l_load_id, l_step_id, 'Step 1. l_start_date_id = '||l_start_date_id::varchar||', l_end_date_id = '||l_end_date_id::varchar||', l_gtc_start_date_id = '||l_gtc_start_date_id::varchar, 0 , 'O')
+     into l_step_id;
+
+  if in_client_ids = '{}'
+	then
+  return QUERY
+/*  with par_ords as
+      (
+        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
+        from dwh.client_order co
+        where
+          -- parent level only
+          co.parent_order_id is null
+          -- only single ords and legs
+          and co.multileg_reporting_type in ('1','2')
+          -- scope filter
+          and co.create_date_id between l_start_date_id and l_end_date_id
+          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+       -- union -- not all to distinct result set
+       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
+       -- from dwh.flat_trade_record tr
+       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
+       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+      ) */
+    select --po.order_id
+        ac.account_name as "Account"
+      , (case when po.cross_order_id is not null then 'Y' else 'N' end)::varchar as "Is Cross"
+      , (case when po.multileg_reporting_type = '1' then 'N' else 'Y' end)::varchar as "Is MLeg"
+      , st.order_status_description as "Ord Status"
+      , et.exec_type_description as "Event Type"
+      , to_char(fyc.routed_time, 'HH24:MI:SS.US')::varchar as "Routed Time"
+      --, to_char(po.process_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
+      , to_char(fyc.exec_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
+      , po.client_order_id as "Cl Ord ID"
+      , (case po.side
+                  when '1' then 'Buy'
+                  when '2' then 'Sell'
+                  when '3' then 'Buy minus'
+                  when '4' then 'Sell plus'
+                  when '5' then 'Sell short'
+                  when '6' then 'Sell short exempt'
+                  when '7' then 'Undisclosed'
+                  when '8' then 'Cross'
+                  when '9' then 'Cross short'
+                end)::varchar as "Side"
+      , i.display_instrument_id as "Symbol"
+      , po.order_qty::bigint as "Ord Qty"
+      , po.price as "Price"
+      , fyc.filled_qty as "Ex Qty"
+      , fyc.avg_px as "Avg Px"
+      , ss.target_strategy_desc as "Sub Strategy"
+      , dc.ex_destination_code_name as "Ex Dest"
+      , ot.order_type_name as "Ord Type"
+      , tif.tif_name as "TIF"
+      , f.fix_comp_id as "Sending Firm"
+      , cf.customer_or_firm_name as "Capacity"
+      , po.client_id_text as "Client ID"
+      , coalesce(po.clearing_firm_id, fx_co.clearing_firm_id) as "CMTA"
+      , to_char(to_date(po.create_date_id::varchar, 'YYYYMMDD'), 'DD.MM.YYYY')::varchar as "Creation Date"
+      , cro.cross_type::varchar as "Cross Ord Type"
+      , to_char(fyc.exec_time, 'DD.MM.YYYY')::varchar as "Event Date"
+      , ebr.opt_exec_broker as "Exec Broker"
+      , date_trunc('day', i.last_trade_date)::date as "Expiration Day"
+      , l.client_leg_ref_id as "Leg ID"
+      , ex.leaves_qty::bigint as "Lvs Qty"
+      , (case when po.open_close = 'O' then 'Open' else 'Close' end)::varchar as "O/C"
+      , oo.client_order_id as "Orig Cl Ord ID"
+      , po.opra_symbol as "OSI Symbol"
+      , po.root_symbol as "Root Symbol"
+      , it.instrument_type_name as "Security Type"
+      , po.stop_price as "Stop Px"
+      , ui.display_instrument_id as "Underlying Symbol"
+      --, po.*
+--select count(1)
+    from
+      (
+        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
+        from dwh.client_order co
+        where
+          -- parent level only
+          co.parent_order_id is null
+          -- only single ords and legs
+          and co.multileg_reporting_type in ('1','2')
+          -- scope filter
+          and co.create_date_id between l_start_date_id and l_end_date_id
+          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+       -- union -- not all to distinct result set
+       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
+       -- from dwh.flat_trade_record tr
+       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
+       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+      )  scp
+      left join lateral
+      (
+        select po.order_id
+          , po.orig_order_id
+          , po.account_id
+          , po.multileg_reporting_type
+          , po.multileg_order_id
+          , po.cross_order_id
+          , po.create_date_id
+          , po.client_order_id
+          , po.instrument_id
+          , po.order_qty
+          , po.price
+          , po.side
+          , po.sub_strategy_id
+          , po.ex_destination_code_id
+          , po.ex_destination
+          , po.order_type_id
+          , po.time_in_force_id
+          , po.customer_or_firm_id
+          , po.order_capacity_id
+          , po.client_id_text
+          , po.process_time
+          , po.opt_exec_broker_id
+          , po.no_legs
+          , po.open_close
+          , po.fix_connection_id
+          , po.clearing_firm_id
+          , po.fix_message_id
+          , po.stop_price
+          , po.trans_type
+          , oc.option_series_id
+          , oc.opra_symbol
+          , os.underlying_instrument_id
+          , os.root_symbol
+          --, po.*
+        from dwh.client_order po
+        left join dwh.d_option_contract oc
+          ON po.instrument_id = oc.instrument_id
+        left join dwh.d_option_series os
+          --ON oc.option_series_id = os.option_series_id
+          ON oc.option_series_id = os.option_series_id
+        where 1=1
+          and po.create_date_id between l_gtc_start_date_id and l_end_date_id -- last half of year. GTC purpose
+          and po.order_id = scp.order_id
+        limit 1 -- for NL acceleration
+      ) po ON true
+      left join dwh.client_order oo
+        ON po.orig_order_id = oo.order_id
+        and oo.create_date_id between l_gtc_start_date_id and l_end_date_id
+      left join dwh.d_account ac
+        ON po.account_id = ac.account_id
+      left join lateral
+        (
+           select sum(fyc.day_cum_qty) as filled_qty
+             , round(sum(fyc.day_avg_px*fyc.day_cum_qty)/nullif(sum(fyc.day_cum_qty), 0)::numeric, 4)::numeric as avg_px
+             , min(fyc.routed_time) as routed_time
+             , max(fyc.exec_time) as exec_time -- can it be event_time or transact time? min or max?
+             , fyc.order_id
+             , min(fyc.nbbo_bid_price) as nbbo_bid_price
+             , min(fyc.nbbo_bid_quantity) as nbbo_bid_quantity
+             , min(fyc.nbbo_ask_price) as nbbo_ask_price
+             , min(fyc.nbbo_ask_quantity) as nbbo_ask_quantity
+           from data_marts.f_yield_capture fyc -- here we have all orders, so we can use it for cum_qty calculation (instead of FTR)
+           where fyc.order_id = po.order_id
+             and fyc.status_date_id between l_gtc_start_date_id and l_end_date_id
+           group by fyc.order_id
+           limit 1 -- just in case to insure NL join method
+        ) fyc on true
+      -- the last execution
+      left join lateral
+        (
+          select ex.text_
+            , ex.order_status
+            , ex.exec_type
+            , ex.exec_id
+            , ex.leaves_qty
+          from dwh.execution ex
+          where 1=1
+            --and ex.exec_date_id = 20190604
+            and ex.exec_date_id between l_start_date_id and l_end_date_id
+            and ex.order_id = po.order_id
+          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
+          limit 1
+        ) ex on true
+      -- fix_message of order
+      left join lateral
+        (
+          select (j.fix_message->>'439')::varchar as clearing_firm_id
+          from fix_capture.fix_message_json j
+          where 1=1
+            and po.clearing_firm_id is null --
+            and j.date_id between l_start_date_id and l_end_date_id -- l_gtc_start_date_id was very slow condition
+            and j.fix_message_id = po.fix_message_id
+            and j.date_id = po.create_date_id
+          limit 1
+        ) fx_co on true
+      left join dwh.d_order_status st
+        ON ex.order_status = st.order_status
+      left join dwh.d_exec_type et
+        ON ex.exec_type = et.exec_type
+      left join dwh.d_instrument i
+        ON po.instrument_id = i.instrument_id
+      left join dwh.d_instrument_type it
+        ON i.instrument_type_id = it.instrument_type_id
+      left join dwh.d_instrument ui
+        --ON os.underlying_instrument_id = ui.instrument_id
+        ON po.underlying_instrument_id = ui.instrument_id
+      left join dwh.d_target_strategy ss
+        ON po.sub_strategy_id = ss.target_strategy_id
+      left join dwh.d_ex_destination_code dc
+        ON po.ex_destination = dc.ex_destination_code
+      left join dwh.d_order_type ot
+        ON po.order_type_id = ot.order_type_id
+      left join dwh.d_time_in_force tif
+        ON po.time_in_force_id = tif.tif_id
+    /*  left join --lateral
+        (
+          select ---min(ecf.customer_or_firm_id) as customer_or_firm_id
+            ecf.customer_or_firm_id
+            , ecf.exch_customer_or_firm_id, ecf.exchange_id  -- lookup key
+            , row_number() over (partition by ecf.exch_customer_or_firm_id, ecf.exchange_id order by ecf.customer_or_firm_id) as rn
+          from dwh.d_exchange2customer_or_firm ecf
+        ) ecf
+        ON ecf.rn = 1 --true
+          and o.customer_or_firm is null
+          and ecf.exch_customer_or_firm_id = o.order_capacity
+          and ecf.exchange_id = o.exchange_id */
+      left join dwh.d_customer_or_firm cf ON cf.customer_or_firm_id = COALESCE(po.customer_or_firm_id, ac.opt_customer_or_firm) and cf.is_active = true -- ecf.customer_or_firm_id,
+      left join dwh.cross_order cro
+        ON po.cross_order_id = cro.cross_order_id
+      left join dwh.d_opt_exec_broker ebr
+        ON po.opt_exec_broker_id = ebr.opt_exec_broker_id
+      left join dwh.d_fix_connection f
+        ON po.fix_connection_id = f.fix_connection_id
+      /*left join dwh.client_order_leg l
+        ON l.order_id = po.order_id
+        and l.multileg_order_id = po.multileg_order_id*/
+      left join lateral
+        (
+          select l.order_id, l.client_leg_ref_id
+          from dwh.client_order_leg l
+          where l.multileg_order_id = po.multileg_order_id
+          limit 3000
+        ) l ON l.order_id = po.order_id
+    where po.trans_type <> 'F' -- not cancell request
+    order by po.process_time, 1;
+
+
+   else
+
+
+     return QUERY
+     /*  with par_ords as
+      (
+        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
+        from dwh.client_order co
+        where
+          -- parent level only
+          co.parent_order_id is null
+          -- only single ords and legs
+          and co.multileg_reporting_type in ('1','2')
+          -- scope filter
+          and co.create_date_id between l_start_date_id and l_end_date_id
+          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+       -- union -- not all to distinct result set
+       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
+       -- from dwh.flat_trade_record tr
+       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
+       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+      ) */
+    select --po.order_id
+        ac.account_name as "Account"
+      , (case when po.cross_order_id is not null then 'Y' else 'N' end)::varchar as "Is Cross"
+      , (case when po.multileg_reporting_type = '1' then 'N' else 'Y' end)::varchar as "Is MLeg"
+      , st.order_status_description as "Ord Status"
+      , et.exec_type_description as "Event Type"
+      , to_char(fyc.routed_time, 'HH24:MI:SS.US')::varchar as "Routed Time"
+      --, to_char(po.process_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
+      , to_char(fyc.exec_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
+      , po.client_order_id as "Cl Ord ID"
+      , (case po.side
+                  when '1' then 'Buy'
+                  when '2' then 'Sell'
+                  when '3' then 'Buy minus'
+                  when '4' then 'Sell plus'
+                  when '5' then 'Sell short'
+                  when '6' then 'Sell short exempt'
+                  when '7' then 'Undisclosed'
+                  when '8' then 'Cross'
+                  when '9' then 'Cross short'
+                end)::varchar as "Side"
+      , i.display_instrument_id as "Symbol"
+      , po.order_qty::bigint as "Ord Qty"
+      , po.price as "Price"
+      , fyc.filled_qty as "Ex Qty"
+      , fyc.avg_px as "Avg Px"
+      , ss.target_strategy_desc as "Sub Strategy"
+      , dc.ex_destination_code_name as "Ex Dest"
+      , ot.order_type_name as "Ord Type"
+      , tif.tif_name as "TIF"
+      , f.fix_comp_id as "Sending Firm"
+      , cf.customer_or_firm_name as "Capacity"
+      , po.client_id_text as "Client ID"
+      , coalesce(po.clearing_firm_id, fx_co.clearing_firm_id) as "CMTA"
+      , to_char(to_date(po.create_date_id::varchar, 'YYYYMMDD'), 'DD.MM.YYYY')::varchar as "Creation Date"
+      , cro.cross_type::varchar as "Cross Ord Type"
+      , to_char(fyc.exec_time, 'DD.MM.YYYY')::varchar as "Event Date"
+      , ebr.opt_exec_broker as "Exec Broker"
+      , date_trunc('day', i.last_trade_date)::date as "Expiration Day"
+      , l.client_leg_ref_id as "Leg ID"
+      , ex.leaves_qty::bigint as "Lvs Qty"
+      , (case when po.open_close = 'O' then 'Open' else 'Close' end)::varchar as "O/C"
+      , oo.client_order_id as "Orig Cl Ord ID"
+      , po.opra_symbol as "OSI Symbol"
+      , po.root_symbol as "Root Symbol"
+      , it.instrument_type_name as "Security Type"
+      , po.stop_price as "Stop Px"
+      , ui.display_instrument_id as "Underlying Symbol"
+      --, po.*
+--select count(1)
+    from
+      (
+        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
+        from dwh.client_order co
+        where
+          -- parent level only
+          co.parent_order_id is null
+          -- only single ords and legs
+          and co.multileg_reporting_type in ('1','2')
+          -- scope filter
+          and co.create_date_id between l_start_date_id and l_end_date_id
+          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+       -- union -- not all to distinct result set
+       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
+       -- from dwh.flat_trade_record tr
+       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
+       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
+      )  scp
+      left join lateral
+      (
+        select po.order_id
+          , po.orig_order_id
+          , po.account_id
+          , po.multileg_reporting_type
+          , po.multileg_order_id
+          , po.cross_order_id
+          , po.create_date_id
+          , po.client_order_id
+          , po.instrument_id
+          , po.order_qty
+          , po.price
+          , po.side
+          , po.sub_strategy_id
+          , po.ex_destination_code_id
+          , po.ex_destination
+          , po.order_type_id
+          , po.time_in_force_id
+          , po.customer_or_firm_id
+          , po.order_capacity_id
+          , po.client_id_text
+          , po.process_time
+          , po.opt_exec_broker_id
+          , po.no_legs
+          , po.open_close
+          , po.fix_connection_id
+          , po.clearing_firm_id
+          , po.fix_message_id
+          , po.stop_price
+          , po.trans_type
+          , oc.option_series_id
+          , oc.opra_symbol
+          , os.underlying_instrument_id
+          , os.root_symbol
+          --, po.*
+        from dwh.client_order po
+        left join dwh.d_option_contract oc
+          ON po.instrument_id = oc.instrument_id
+        left join dwh.d_option_series os
+          --ON oc.option_series_id = os.option_series_id
+          ON oc.option_series_id = os.option_series_id
+        where 1=1
+          and po.create_date_id between l_gtc_start_date_id and l_end_date_id -- last half of year. GTC purpose
+          and po.order_id = scp.order_id
+        limit 1 -- for NL acceleration
+      ) po ON true
+      left join dwh.client_order oo
+        ON po.orig_order_id = oo.order_id
+        and oo.create_date_id between l_gtc_start_date_id and l_end_date_id
+      left join dwh.d_account ac
+        ON po.account_id = ac.account_id
+      left join lateral
+        (
+           select sum(fyc.day_cum_qty) as filled_qty
+             , round(sum(fyc.day_avg_px*fyc.day_cum_qty)/nullif(sum(fyc.day_cum_qty), 0)::numeric, 4)::numeric as avg_px
+             , min(fyc.routed_time) as routed_time
+             , max(fyc.exec_time) as exec_time -- can it be event_time or transact time? min or max?
+             , fyc.order_id
+             , min(fyc.nbbo_bid_price) as nbbo_bid_price
+             , min(fyc.nbbo_bid_quantity) as nbbo_bid_quantity
+             , min(fyc.nbbo_ask_price) as nbbo_ask_price
+             , min(fyc.nbbo_ask_quantity) as nbbo_ask_quantity
+           from data_marts.f_yield_capture fyc -- here we have all orders, so we can use it for cum_qty calculation (instead of FTR)
+           where fyc.order_id = po.order_id
+             and fyc.status_date_id between l_gtc_start_date_id and l_end_date_id
+           group by fyc.order_id
+           limit 1 -- just in case to insure NL join method
+        ) fyc on true
+      -- the last execution
+      left join lateral
+        (
+          select ex.text_
+            , ex.order_status
+            , ex.exec_type
+            , ex.exec_id
+            , ex.leaves_qty
+          from dwh.execution ex
+          where 1=1
+            --and ex.exec_date_id = 20190604
+            and ex.exec_date_id between l_start_date_id and l_end_date_id
+            and ex.order_id = po.order_id
+          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
+          limit 1
+        ) ex on true
+      -- fix_message of order
+      left join lateral
+        (
+          select (j.fix_message->>'439')::varchar as clearing_firm_id
+          from fix_capture.fix_message_json j
+          where 1=1
+            and po.clearing_firm_id is null --
+            and j.date_id between l_start_date_id and l_end_date_id -- l_gtc_start_date_id was very slow condition
+            and j.fix_message_id = po.fix_message_id
+            and j.date_id = po.create_date_id
+          limit 1
+        ) fx_co on true
+      left join dwh.d_order_status st
+        ON ex.order_status = st.order_status
+      left join dwh.d_exec_type et
+        ON ex.exec_type = et.exec_type
+      left join dwh.d_instrument i
+        ON po.instrument_id = i.instrument_id
+      left join dwh.d_instrument_type it
+        ON i.instrument_type_id = it.instrument_type_id
+      left join dwh.d_instrument ui
+        --ON os.underlying_instrument_id = ui.instrument_id
+        ON po.underlying_instrument_id = ui.instrument_id
+      left join dwh.d_target_strategy ss
+        ON po.sub_strategy_id = ss.target_strategy_id
+      left join dwh.d_ex_destination_code dc
+        ON po.ex_destination = dc.ex_destination_code
+      left join dwh.d_order_type ot
+        ON po.order_type_id = ot.order_type_id
+      left join dwh.d_time_in_force tif
+        ON po.time_in_force_id = tif.tif_id
+    /*  left join --lateral
+        (
+          select ---min(ecf.customer_or_firm_id) as customer_or_firm_id
+            ecf.customer_or_firm_id
+            , ecf.exch_customer_or_firm_id, ecf.exchange_id  -- lookup key
+            , row_number() over (partition by ecf.exch_customer_or_firm_id, ecf.exchange_id order by ecf.customer_or_firm_id) as rn
+          from dwh.d_exchange2customer_or_firm ecf
+        ) ecf
+        ON ecf.rn = 1 --true
+          and o.customer_or_firm is null
+          and ecf.exch_customer_or_firm_id = o.order_capacity
+          and ecf.exchange_id = o.exchange_id */
+      left join dwh.d_customer_or_firm cf ON cf.customer_or_firm_id = COALESCE(po.customer_or_firm_id, ac.opt_customer_or_firm) and cf.is_active = true -- ecf.customer_or_firm_id,
+      left join dwh.cross_order cro
+        ON po.cross_order_id = cro.cross_order_id
+      left join dwh.d_opt_exec_broker ebr
+        ON po.opt_exec_broker_id = ebr.opt_exec_broker_id
+      left join dwh.d_fix_connection f
+        ON po.fix_connection_id = f.fix_connection_id
+      /*left join dwh.client_order_leg l
+        ON l.order_id = po.order_id
+        and l.multileg_order_id = po.multileg_order_id*/
+      left join lateral
+        (
+          select l.order_id, l.client_leg_ref_id
+          from dwh.client_order_leg l
+          where l.multileg_order_id = po.multileg_order_id
+          limit 3000
+        ) l ON l.order_id = po.order_id
+    where po.trans_type <> 'F' -- not cancell request
+    order by po.process_time, 1;
+  end if;
+
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+ select public.load_log(l_load_id, l_step_id, 'export_rbc_orders_tbl COMPLETE ========= ' , l_row_cnt, 'O')
+   into l_step_id;
+   RETURN;
+END;
+$$;
+
+
+CREATE FUNCTION external_data.p_load_f_box_street_executions_daily_bkp(in_date_id integer DEFAULT NULL::integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+   l_row_cnt integer;
+
+   l_load_id int;
+   l_step_id int;
+
+   l_cur_date_id integer;
+   l_min_gtc_date_id integer;
+
+BEGIN
+  /*
+    we don't need to run this AFTER the HODS processed.
+  */
+
+  --if in_recalc_date_id is null
+  --then return -1;
+  --end if;
+
+  select nextval('public.load_timing_seq') into l_load_id;
+
+  l_step_id:=1;
+
+  select public.load_log(l_load_id, l_step_id, 'p_load_f_box_street_executions_daily STARTED===', 0, 'O')
+   into l_step_id;
+
+
+   -- Variables definition
+   l_cur_date_id   := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::integer);
+   l_min_gtc_date_id := to_char(to_date(l_cur_date_id::text,'YYYYMMDD') - interval '180 days', 'YYYYMMDD')::integer;
+
+
+  -- Temporary table definition
+
+/*    execute 'CREATE TEMP TABLE IF NOT EXISTS tmp_box_street_orders (
+      create_date_id int4 NULL,
+      client_order_id varchar(256) NULL,
+      parent_client_order_id varchar(256) NULL,
+      parent_create_date_id int4 NULL,
+      orders_count int4 NULL,
+      CONSTRAINT "tmp_PK_tmp_box_street_orders" PRIMARY KEY (parent_client_order_id, create_date_id, client_order_id)
+    )';
+
+  execute 'truncate table tmp_box_street_orders';
+*/
+
+-- fill Temp table
+
+/*    insert into tmp_box_street_orders
+      (
+        create_date_id,
+        client_order_id,
+        parent_client_order_id,
+        parent_create_date_id,
+        orders_count
+      )
+    select so.create_date_id, so.client_order_id, po.client_order_id as parent_client_order_id, po.create_date_id as parent_create_date_id, count(1)
+    from dwh.client_order so
+      left join lateral
+        (
+          select po.client_order_id, po.create_date_id
+          from dwh.client_order po
+          where po.create_date_id between l_min_gtc_date_id and l_cur_date_id --20190414 and 20190514
+            and po.order_id = so.parent_order_id
+          limit 1
+        ) po on true
+    where so.parent_order_id is not null -- street level
+      and so.create_date_id = l_cur_date_id
+      --and so.ex_destination = 'W' -- box -- a little bit slower than via exchange_id
+      and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'box') -- быстрее
+    group by so.create_date_id, so.client_order_id, po.client_order_id, po.create_date_id
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'street orders loaded into tmp_box_street_orders ', l_row_cnt , 'I')
+     into l_step_id;
+
+    ANALYZE tmp_box_street_orders;
+    select public.load_log(l_load_id, l_step_id, 'Statistics gathered for tmp_box_street_orders ', 0 , 'O')
+     into l_step_id;
+
+ IF (l_row_cnt > 0) -- we have some data loaded
+  THEN
+
+  --> correction of Min date_id for parent orders
+    select coalesce( (select min(parent_create_date_id) from tmp_box_street_orders), l_min_gtc_date_id) into l_min_gtc_date_id
+    ;
+    select public.load_log(l_load_id, l_step_id, 'Calculation date_id = '||l_cur_date_id::varchar||', MIN parent orders date_id = '||l_min_gtc_date_id::varchar, 0 , 'O')
+     into l_step_id;
+
+  --> delete calculated data befor recalculation
+    delete
+    from external_data.f_box_street_executions t
+    where t.create_date_id = l_cur_date_id -- date_id of street orders
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_box_street_executions before calculation.', l_row_cnt , 'D')
+     into l_step_id;
+
+  --> insert data
+    INSERT INTO external_data.f_box_street_executions
+      ( create_date_id
+      , message_type
+      , parent_message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_routed_time
+      , parent_create_date_id )
+
+--select count(1) into l_row_cnt from (
+    select str.create_date_id
+      , fs.message_type_2 as message_type
+      , fp.message_type_2 as parent_message_type
+      , fs.exec_type
+      , fs.order_status
+      , fs.street_client_order_id
+      , fs.street_orig_client_order_id
+      , fs.street_order_id
+      , fs.street_exec_id
+      , fs.street_secondary_order_id
+      , fs.street_orig_exec_id
+      --, to_char(fs.street_transact_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_transact_time
+      --, to_char(fs.street_sending_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_sending_time
+      --, to_char(fs.street_routed_time, 'YYYY-MM-DD HH24:MI:SS.US') as street_routed_time
+      , fs.street_transact_time
+      , fs.street_sending_time
+      , fs.street_routed_time
+      , fs.target_location_id
+      , fs.client_id
+      , fs.clearing_optional_data
+      , coalesce(fs.parent_client_order_id, str.parent_client_order_id) as parent_client_order_id
+      , fp.parent_exec_id
+      , fp.parent_orig_client_order_id
+      , fp.parent_secondary_order_id
+      , fp.parent_secondary_exec_id
+      , fp.parent_routed_time
+      , case when fs.message_type not in ('8','9') then str.parent_create_date_id end as parent_create_date_id
+      --select count(1) -- should be about 300k. nope. only 116k and it takes about 4 minutes to filter out street orders
+    from
+      (
+        select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
+        from tmp_box_street_orders tmp
+        --from staging.sdn_tmp_box_street_orders tmp
+        --limit 10000
+      ) str -- the list of street orders
+      left join lateral
+      (
+        select j.message_type
+          , j.fix_message->>'35' as message_type_2
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'39' as order_status
+          , j.fix_message->>'11' as street_client_order_id
+          , j.fix_message->>'41' as street_orig_client_order_id
+          --, to_timestamp(j.fix_message->>'5050', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5050
+          --, to_timestamp(j.fix_message->>'5051', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5051
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , j.fix_message->>'143' as target_location_id
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , coalesce(j.fix_message->>'10442', j.fix_message->>'5059')::varchar as parent_client_order_id
+          -- additional attrinutes as 9769 tag is often missed in parent reports
+          , j.fix_message->>'55' as symbol
+          , j.fix_message->>'167' as instrument_type
+          , j.fix_message->>'200' as exp_ym
+          , j.fix_message->>'205' as exp_day
+          , j.fix_message->>'201' as put_call
+          , j.fix_message->>'202' as strike_px
+          , j.fix_message->>'31' as last_px
+          , j.fix_message->>'32' as last_qty
+        from fix_capture.fix_message_json j
+        where j.date_id = l_cur_date_id::integer
+          and j.date_id = str.create_date_id
+          and j.client_order_id = str.client_order_id
+          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar = '4' ))
+        limit 1000 -- executions count for one street_client_order_id
+      ) fs on true -- fix_str
+      left join lateral
+      (
+        select j.message_type
+          , j.fix_message->>'35' as message_type_2
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'39' as order_status
+          , j.client_order_id
+          , j.fix_message->>'17' as parent_exec_id
+          , j.fix_message->>'41' as parent_orig_client_order_id
+          , j.fix_message->>'198' as parent_secondary_order_id
+          , j.fix_message->>'9769' as parent_secondary_exec_id
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as parent_routed_time
+        from fix_capture.fix_message_json j
+        where j.date_id = l_cur_date_id::integer --between l_min_gtc_date_id and l_cur_date_id
+          --and j.date_id = str.create_date_id -- this is a question
+          --and case when j.message_type in ('8','9') then str.create_date_id else str.parent_create_date_id end = j.date_id
+
+--какой date_id у GTC-шного парентового ордера нам нужен?
+-- теоретически для ордера - дата клайант-ордера
+-- для репорта = дата репорта
+
+          and j.client_order_id = str.parent_client_order_id --coalesce(fs.parent_client_order_id, str.parent_client_order_id)
+          and ( (j.fix_message->>'9769')::varchar = fs.street_exec_id
+               or
+               ( ( ( (j.fix_message->>'442')::varchar = '2' -- only for legs including last prices and qty's
+                     and (j.fix_message->>'31')::numeric = fs.last_px::numeric
+                     and (j.fix_message->>'32')::varchar = fs.last_qty::varchar
+                   )
+                    or fs.exec_type = '0' -- first report can also not to have 9769 tag
+                 )
+                 --   (j.fix_message->>'39')::varchar = fs.order_status
+                and (j.fix_message->>'150')::varchar <> 'E' -- not "pending replace" - exec_type
+                and (case when (j.fix_message->>'150')::varchar = '5' then '0' else j.fix_message->>'150' end)::varchar = fs.exec_type -- Replaced status of report will be equal to New
+                and (j.fix_message->>'55')::varchar = fs.symbol
+                and (j.fix_message->>'167')::varchar = fs.instrument_type
+                and coalesce((j.fix_message->>'200')::varchar, '-1') = coalesce(fs.exp_ym, '-1') -- exp_year_month
+                and coalesce((j.fix_message->>'205')::varchar, '-1') = coalesce(fs.exp_day, '-1') -- exp_day
+                and coalesce((j.fix_message->>'201')::varchar, '-1') = coalesce(fs.put_call, '-1') -- put_call
+                and coalesce((j.fix_message->>'202')::numeric, '-1') = coalesce(fs.strike_px::numeric, '-1') -- strike
+                --and (  )
+               )
+               or
+               ( fs.message_type not in ('8','9') -- in case of orders(not reports). Just match them
+                 --and (j.fix_message->>'41')::varchar = fs.
+               )
+              )
+          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar in ('4','E') ))
+          and case when j.message_type in ('8','9') then 'r' else 'o' end = case when fs.message_type in ('8','9') then 'r' else 'o' end -- order messages to orders, reports to reports
+        limit 1 -- just in case. We need one to one, street to parent matched executions.
+      ) fp on true -- fix_par
+    --order by coalesce(fs.street_orig_client_order_id, fs.street_client_order_id), fs.street_routed_time
+--  ) src
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_box_street_executions ', l_row_cnt , 'I')
+     into l_step_id;
+*/
+
+  --> delete calculated data befor recalculation
+    delete
+    from external_data.f_box_street_executions t
+    where t.create_date_id = l_cur_date_id -- date_id of street orders
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_box_street_executions before calculation. l_cur_date_id = '||l_cur_date_id::varchar, l_row_cnt , 'R')
+     into l_step_id;
+
+
+    INSERT INTO external_data.f_box_street_executions
+      ( create_date_id
+      , message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_create_date_id
+      , street_account_name
+      , on_behalf_of_comp_id
+      , price_type
+      , exec_inst
+      , sender_comp_id
+      , side
+      , price
+      , order_qty)
+  select
+        create_date_id
+      , message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_create_date_id
+      , street_account_name
+      , on_behalf_of_comp_id
+      , price_type
+      , exec_inst
+      , sender_comp_id
+      , side
+      , price
+      , order_qty
+  from
+  (
+
+    with str_ord as materialized
+      (
+        --select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
+        --from tmp_box_street_orders tmp
+        --from staging.sdn_tmp_box_street_orders  tmp
+        --limit 10000
+
+        select so.create_date_id, so.client_order_id, so.order_id as order_id, so.fix_message_id -- message of order, not report. Sometimes it points to parent level fix message.
+          , po.client_order_id as parent_client_order_id, so.parent_order_id, po.fix_message_id as parent_fix_message_id, po.create_date_id as parent_create_date_id, count(1)
+          , so.orig_order_id, so_org.client_order_id as street_orig_client_order_id, po_org.client_order_id as parent_orig_client_order_id
+          , so.multileg_reporting_type, so.client_id_text, ac.account_name, so.instrument_id
+        from dwh.client_order so
+          left join dwh.d_account ac
+            on so.account_id = ac.account_id
+          left join lateral
+            (
+              select po.client_order_id, po.create_date_id, po.fix_message_id, po.orig_order_id
+              from dwh.client_order po
+              where po.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and po.order_id = so.parent_order_id
+                --and  cross_order_id is not null
+              limit 1
+            ) po on true
+           left join lateral
+            (
+              select org.client_order_id, org.create_date_id
+              from dwh.client_order org
+              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and org.order_id = so.orig_order_id
+              limit 1
+            ) so_org on true
+           left join lateral
+            (
+              select org.client_order_id, org.create_date_id
+              from dwh.client_order org
+              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and org.order_id = po.orig_order_id
+              limit 1
+            ) po_org on true
+        where so.parent_order_id is not null -- street level
+          and so.create_date_id = l_cur_date_id -- between 20190509 and 20190517 -- = 20190515 --l_cur_date_id
+          --and so.ex_destination = 'W' -- box -- a little bit slower than via exchange_id
+          and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'BOX' union select 'C1PAR' union select 'CBOEEH') -- быстрее
+          and so.multileg_reporting_type in ('1','2')
+          and so.cross_order_id is not null
+          --and so.client_order_id in ('AAA0053-20190514','LAA2248-20190517','MTA2616-20190509','MTA3809-20190509','MTA2333-20190513', 'MTA2355-20190513', 'MTA3079-20190510', 'MTA3086-20190510')
+        group by so.create_date_id, so.client_order_id, so.order_id, so.fix_message_id, po.client_order_id, so.parent_order_id, po.fix_message_id, po.create_date_id
+          , so.orig_order_id, so_org.client_order_id, po_org.client_order_id
+          , so.multileg_reporting_type, so.client_id_text, ac.account_name, so.instrument_id
+      )
+    select str.create_date_id --count(1) -- 131309
+      , sef.message_type
+      , coalesce(sef.exec_type, ser.exec_type) as exec_type -- in executions we have replacement of 1 and 2 into F
+      , ser.order_status
+      , str.client_order_id as street_client_order_id
+      , coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id) as street_orig_client_order_id
+      --, str.street_orig_client_order_id --, sef.street_orig_client_order_id
+
+      , sef.street_order_id as street_order_id -- 37
+      , coalesce(ser.exch_exec_id, sef.street_exec_id) as street_exec_id -- 17 ? why aren't they equal
+      , coalesce(ser.secondary_order_id, sef.street_secondary_order_id) as street_secondary_order_id
+      , sef.street_orig_exec_id as street_orig_exec_id -- 19
+
+      , coalesce(sef.street_transact_time, ser.exec_time) as street_transact_time
+      , sef.street_sending_time as street_sending_time
+      , sef.street_routed_time as street_routed_time
+      , sef.target_location_id as target_location_id -- it is only for orders reports sent to exchange
+      , coalesce(str.client_id_text, sef.client_id) as client_id
+      , sef.clearing_optional_data -- 9324
+
+      , str.parent_client_order_id
+      , per.exch_exec_id as parent_exec_id
+      , str.parent_orig_client_order_id
+      , per.secondary_order_id as parent_secondary_order_id
+      , per.secondary_exch_exec_id as parent_secondary_exec_id
+
+
+      -- additional information needed
+      , str.parent_create_date_id
+      , sef.street_instrument_type
+      , row_number() over (partition by str.client_order_id, ser.exch_exec_id, coalesce(sef.account_name, str.account_name) order by str.order_id) as rn1 -- need only one order record for multileg
+      , row_number() over (partition by str.create_date_id, sef.message_type, str.client_order_id, sef.street_order_id, coalesce(ser.exch_exec_id, sef.street_exec_id), coalesce(sef.account_name, str.account_name), str.instrument_id order by str.order_id) as rn2 -- deduplication when we have (43) PossDupFlag = 'Y' (BAA0002-20181002)
+      , coalesce(sef.account_name, str.account_name) as street_account_name
+
+      -- requested by John
+      , sef.fix_tag_115 as on_behalf_of_comp_id
+      , sef.fix_tag_423 as price_type
+      , sef.fix_tag_18 as exec_inst
+      , sef.sender_comp_id
+      , sef.side
+      , sef.price::numeric
+      , sef.order_qty::int
+
+      /*, sef.client_order
+      , str.fix_message_id
+      , str.order_id
+      , str.multileg_reporting_type
+      , str.parent_order_id
+      --, ser.* --exec_id
+      , per.* */
+
+    from
+      (
+        select str.order_id -- for executions -> reports lookup
+          , str.parent_order_id  -- for executions -> reports of parent orders lookup
+          , null::bigint as fix_message_id        -- for orders messages lookup
+          , null::bigint as parent_fix_message_id -- for parent orders messages direct lookup
+          , str.create_date_id
+          , str.client_order_id
+          , str.street_orig_client_order_id
+          , str.multileg_reporting_type
+          , str.client_id_text
+          , str.parent_client_order_id
+          , null as parent_orig_client_order_id
+          , null as parent_create_date_id
+          , str.account_name
+          , str.instrument_id
+        from str_ord  str -- the list of street orders
+        union all
+        select distinct null::bigint as order_id -- for executions -> reports lookup
+          , null::bigint as parent_order_id     -- for executions -> reports of parent orders lookup
+          , str.fix_message_id         -- for orders messages lookup
+          , str.parent_fix_message_id  -- for parent orders messages direct lookup
+          , str.create_date_id
+          , str.client_order_id
+          , str.street_orig_client_order_id
+          , str.multileg_reporting_type
+          , str.client_id_text
+          , str.parent_client_order_id
+          , str.parent_orig_client_order_id
+          , str.parent_create_date_id
+          , str.account_name
+          , null::bigint as instrument_id
+        from str_ord  str -- the list of street orders
+      ) str -- the list of street orders plus their orders fix message ids
+      left join lateral
+      (
+        select -- for return
+            e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
+          -- for join
+          , e.fix_message_id, e.exec_id, e.order_id, e.text_
+          --, e.*
+        from dwh.execution e
+        where 1=1
+          and e.fix_message_id is not null -- if it is null then there is possibility that execution is syntethic generated
+          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
+          and e.order_id = str.order_id -- in (1679652736,1679652738,1679652740,1679660660,1679660663,1679660666) --
+          and e.exec_type not in ('4', 'A', 'b')
+          --and not exists (select 1 from fix_capture.fix_message_json j where j.date_id = 20190513 and j.fix_message_id = e.fix_message_id and ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' ))
+          --and e.order_id = 1679652736 -- in (1679652736,1679652738,1679652740) -- (1674593569, 1674593570, 1674593571) --
+      ) ser on true -- street executions reports from exchange
+      inner join lateral
+      (
+        select j.fix_message->>'35' as message_type
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'11' as client_order
+          , j.fix_message->>'41' as street_orig_client_order_id
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , (j.fix_message->>'167')::varchar as street_instrument_type
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , j.fix_message->>'1' as account_name
+          , j.fix_message->>'115' as fix_tag_115
+          , j.fix_message->>'423' as fix_tag_423
+          , j.fix_message->>'18' as fix_tag_18
+          , j.fix_message->>'49' as sender_comp_id
+          , j.fix_message->>'54' as side
+          , j.fix_message->>'44' as price
+          , j.fix_message->>'38' as order_qty
+        from fix_capture.fix_message_json j
+        where 1=1
+          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
+          and j.fix_message_id = ser.fix_message_id -- coalesce(ser.fix_message_id, fix_message_id) --in (3914795705, 3914778052) -- message for street report and not orders
+          and j.fix_message->>'9383' = 'R'
+          -- try to exclude multileg reports except rejects
+          --and not ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' )
+        union
+        select j.fix_message->>'35' as message_type
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'11' as client_order
+          , j.fix_message->>'41' as street_orig_client_order_id
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , (j.fix_message->>'167')::varchar as street_instrument_type
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , j.fix_message->>'1' as account_name
+          , j.fix_message->>'115' as fix_tag_115
+          , j.fix_message->>'423' as fix_tag_423
+          , j.fix_message->>'18' as fix_tag_18
+          , j.fix_message->>'49' as sender_comp_id
+          , j.fix_message->>'54' as side
+          , j.fix_message->>'44' as price
+          , j.fix_message->>'38' as order_qty
+        from fix_capture.fix_message_json j
+        where 1=1
+          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
+          and j.fix_message_id = str.fix_message_id ---  3914778051 --  in (3914795705, 3914778052) -- message for street order and not report
+          and j.fix_message->>'9383' = 'R'
+      ) sef on true -- street execution fix messages for reports from exchange
+      left join lateral
+      (
+        select -- fields to return
+            e.fix_message_id -- for return
+          , e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
+          -- other fields
+          , e.fix_message_id, e.exec_id, e.order_id, e.text_
+          --, e.*
+        from dwh.execution e
+        where 1=1
+          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
+          and e.order_id = str.parent_order_id -- (1674593565, 1674593567)  two legs with their own parents
+          -- get rid of multileg message
+          and (e.secondary_order_id is not null or e.order_status = '0')
+          -- status matching
+          and
+            (
+              e.secondary_exch_exec_id = ser.exch_exec_id
+              or
+              (e.order_status = '0' and ser.order_status = '0')
+            )
+        order by e.secondary_order_id desc nulls last, e.exec_time desc -- in case of presence both mleg and opt order executions for order with status = '0'
+        limit 1
+      ) per on true -- parent execution reports from exchange
+ -- order by coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id, str.client_order_id), sef.street_routed_time
+
+    ) src
+  where 1=1 and (case when src.street_instrument_type = 'MLEG' then src.rn1 else 1 end = 1) and src.rn2 = 1
+  --order by coalesce(src.street_orig_client_order_id, src.street_client_order_id), src.street_routed_time
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_box_street_executions ', l_row_cnt , 'I')
+     into l_step_id;
+
+
+
+  select public.load_log(l_load_id, l_step_id, 'p_load_f_box_street_executions_daily COMPLETE ========= ' , 0, 'O')
+   into l_step_id;
+  RETURN 1;
+
+exception when others then
+  select public.load_log(l_load_id, l_step_id, sqlerrm , 0, 'E')
+  into l_step_id;
+  -- PERFORM public.load_error_log('p_load_f_box_street_executions_daily',  'I', sqlerrm, l_load_id);
+
+  RAISE;
+
+END;
+$$;
+
+
+CREATE FUNCTION external_data.p_load_f_cboe_street_executions_daily_bkp(in_date_id integer DEFAULT NULL::integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+   l_row_cnt integer;
+
+   l_load_id int;
+   l_step_id int;
+
+   l_cur_date_id integer;
+   l_min_gtc_date_id integer;
+
+BEGIN
+  /*
+    we don't need to run this AFTER the HODS processed.
+  */
+
+  --if in_recalc_date_id is null
+  --then return -1;
+  --end if;
+
+  select nextval('public.load_timing_seq') into l_load_id;
+
+  l_step_id:=1;
+
+  select public.load_log(l_load_id, l_step_id, 'p_load_f_cboe_street_executions_daily STARTED===', 0, 'O')
+   into l_step_id;
+
+
+   -- Variables definition
+   l_cur_date_id   := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::integer);
+   l_min_gtc_date_id := to_char(to_date(l_cur_date_id::text,'YYYYMMDD') - interval '180 days', 'YYYYMMDD')::integer;
+
+
+  -- Temporary table definition
+
+/*    execute 'CREATE TEMP TABLE IF NOT EXISTS tmp_cboe_street_orders (
+      create_date_id int4 NULL,
+      client_order_id varchar(256) NULL,
+      parent_client_order_id varchar(256) NULL,
+      parent_create_date_id int4 NULL,
+      orders_count int4 NULL,
+      CONSTRAINT "tmp_PK_tmp_cboe_street_orders" PRIMARY KEY (parent_client_order_id, create_date_id, client_order_id)
+    )';
+
+  execute 'truncate table tmp_cboe_street_orders';
+*/
+
+-- fill Temp table
+
+/*    insert into tmp_cboe_street_orders
+      (
+        create_date_id,
+        client_order_id,
+        parent_client_order_id,
+        parent_create_date_id,
+        orders_count
+      )
+    select so.create_date_id, so.client_order_id, po.client_order_id as parent_client_order_id, po.create_date_id as parent_create_date_id, count(1)
+    from dwh.client_order so
+      left join lateral
+        (
+          select po.client_order_id, po.create_date_id
+          from dwh.client_order po
+          where po.create_date_id between l_min_gtc_date_id and l_cur_date_id --20190414 and 20190514
+            and po.order_id = so.parent_order_id
+          limit 1
+        ) po on true
+    where so.parent_order_id is not null -- street level
+      and so.create_date_id = l_cur_date_id
+      --and so.ex_destination = 'W' -- CBOE -- a little bit slower than via exchange_id
+      and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'CBOE') -- быстрее
+    group by so.create_date_id, so.client_order_id, po.client_order_id, po.create_date_id
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'street orders loaded into tmp_cboe_street_orders ', l_row_cnt , 'I')
+     into l_step_id;
+
+    ANALYZE tmp_cboe_street_orders;
+    select public.load_log(l_load_id, l_step_id, 'Statistics gathered for tmp_cboe_street_orders ', 0 , 'O')
+     into l_step_id;
+
+ IF (l_row_cnt > 0) -- we have some data loaded
+  THEN
+
+  --> correction of Min date_id for parent orders
+    select coalesce( (select min(parent_create_date_id) from tmp_cboe_street_orders), l_min_gtc_date_id) into l_min_gtc_date_id
+    ;
+    select public.load_log(l_load_id, l_step_id, 'Calculation date_id = '||l_cur_date_id::varchar||', MIN parent orders date_id = '||l_min_gtc_date_id::varchar, 0 , 'O')
+     into l_step_id;
+
+  --> delete calculated data befor recalculation
+    delete
+    from external_data.f_cboe_street_executions t
+    where t.create_date_id = l_cur_date_id -- date_id of street orders
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_cboe_street_executions before calculation.', l_row_cnt , 'D')
+     into l_step_id;
+
+  --> insert data
+    INSERT INTO external_data.f_cboe_street_executions
+      ( create_date_id
+      , message_type
+      , parent_message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_routed_time
+      , parent_create_date_id )
+
+--select count(1) into l_row_cnt from (
+    select str.create_date_id
+      , fs.message_type_2 as message_type
+      , fp.message_type_2 as parent_message_type
+      , fs.exec_type
+      , fs.order_status
+      , fs.street_client_order_id
+      , fs.street_orig_client_order_id
+      , fs.street_order_id
+      , fs.street_exec_id
+      , fs.street_secondary_order_id
+      , fs.street_orig_exec_id
+      --, to_char(fs.street_transact_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_transact_time
+      --, to_char(fs.street_sending_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_sending_time
+      --, to_char(fs.street_routed_time, 'YYYY-MM-DD HH24:MI:SS.US') as street_routed_time
+      , fs.street_transact_time
+      , fs.street_sending_time
+      , fs.street_routed_time
+      , fs.target_location_id
+      , fs.client_id
+      , fs.clearing_optional_data
+      , coalesce(fs.parent_client_order_id, str.parent_client_order_id) as parent_client_order_id
+      , fp.parent_exec_id
+      , fp.parent_orig_client_order_id
+      , fp.parent_secondary_order_id
+      , fp.parent_secondary_exec_id
+      , fp.parent_routed_time
+      , case when fs.message_type not in ('8','9') then str.parent_create_date_id end as parent_create_date_id
+      --select count(1) -- should be about 300k. nope. only 116k and it takes about 4 minutes to filter out street orders
+    from
+      (
+        select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
+        from tmp_cboe_street_orders tmp
+        --from staging.sdn_tmp_cboe_street_orders tmp
+        --limit 10000
+      ) str -- the list of street orders
+      left join lateral
+      (
+        select j.message_type
+          , j.fix_message->>'35' as message_type_2
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'39' as order_status
+          , j.fix_message->>'11' as street_client_order_id
+          , j.fix_message->>'41' as street_orig_client_order_id
+          --, to_timestamp(j.fix_message->>'5050', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5050
+          --, to_timestamp(j.fix_message->>'5051', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5051
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , j.fix_message->>'143' as target_location_id
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , coalesce(j.fix_message->>'10442', j.fix_message->>'5059')::varchar as parent_client_order_id
+          -- additional attrinutes as 9769 tag is often missed in parent reports
+          , j.fix_message->>'55' as symbol
+          , j.fix_message->>'167' as instrument_type
+          , j.fix_message->>'200' as exp_ym
+          , j.fix_message->>'205' as exp_day
+          , j.fix_message->>'201' as put_call
+          , j.fix_message->>'202' as strike_px
+          , j.fix_message->>'31' as last_px
+          , j.fix_message->>'32' as last_qty
+        from fix_capture.fix_message_json j
+        where j.date_id = l_cur_date_id::integer
+          and j.date_id = str.create_date_id
+          and j.client_order_id = str.client_order_id
+          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar = '4' ))
+        limit 1000 -- executions count for one street_client_order_id
+      ) fs on true -- fix_str
+      left join lateral
+      (
+        select j.message_type
+          , j.fix_message->>'35' as message_type_2
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'39' as order_status
+          , j.client_order_id
+          , j.fix_message->>'17' as parent_exec_id
+          , j.fix_message->>'41' as parent_orig_client_order_id
+          , j.fix_message->>'198' as parent_secondary_order_id
+          , j.fix_message->>'9769' as parent_secondary_exec_id
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as parent_routed_time
+        from fix_capture.fix_message_json j
+        where j.date_id = l_cur_date_id::integer --between l_min_gtc_date_id and l_cur_date_id
+          --and j.date_id = str.create_date_id -- this is a question
+          --and case when j.message_type in ('8','9') then str.create_date_id else str.parent_create_date_id end = j.date_id
+
+--какой date_id у GTC-шного парентового ордера нам нужен?
+-- теоретически для ордера - дата клайант-ордера
+-- для репорта = дата репорта
+
+          and j.client_order_id = str.parent_client_order_id --coalesce(fs.parent_client_order_id, str.parent_client_order_id)
+          and ( (j.fix_message->>'9769')::varchar = fs.street_exec_id
+               or
+               ( ( ( (j.fix_message->>'442')::varchar = '2' -- only for legs including last prices and qty's
+                     and (j.fix_message->>'31')::numeric = fs.last_px::numeric
+                     and (j.fix_message->>'32')::varchar = fs.last_qty::varchar
+                   )
+                    or fs.exec_type = '0' -- first report can also not to have 9769 tag
+                 )
+                 --   (j.fix_message->>'39')::varchar = fs.order_status
+                and (j.fix_message->>'150')::varchar <> 'E' -- not "pending replace" - exec_type
+                and (case when (j.fix_message->>'150')::varchar = '5' then '0' else j.fix_message->>'150' end)::varchar = fs.exec_type -- Replaced status of report will be equal to New
+                and (j.fix_message->>'55')::varchar = fs.symbol
+                and (j.fix_message->>'167')::varchar = fs.instrument_type
+                and coalesce((j.fix_message->>'200')::varchar, '-1') = coalesce(fs.exp_ym, '-1') -- exp_year_month
+                and coalesce((j.fix_message->>'205')::varchar, '-1') = coalesce(fs.exp_day, '-1') -- exp_day
+                and coalesce((j.fix_message->>'201')::varchar, '-1') = coalesce(fs.put_call, '-1') -- put_call
+                and coalesce((j.fix_message->>'202')::numeric, '-1') = coalesce(fs.strike_px::numeric, '-1') -- strike
+                --and (  )
+               )
+               or
+               ( fs.message_type not in ('8','9') -- in case of orders(not reports). Just match them
+                 --and (j.fix_message->>'41')::varchar = fs.
+               )
+              )
+          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar in ('4','E') ))
+          and case when j.message_type in ('8','9') then 'r' else 'o' end = case when fs.message_type in ('8','9') then 'r' else 'o' end -- order messages to orders, reports to reports
+        limit 1 -- just in case. We need one to one, street to parent matched executions.
+      ) fp on true -- fix_par
+    --order by coalesce(fs.street_orig_client_order_id, fs.street_client_order_id), fs.street_routed_time
+--  ) src
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_cboe_street_executions ', l_row_cnt , 'I')
+     into l_step_id;
+*/
+
+  --> delete calculated data befor recalculation
+    delete
+    from external_data.f_cboe_street_executions t
+    where t.create_date_id = l_cur_date_id -- date_id of street orders
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_cboe_street_executions before calculation. l_cur_date_id = '||l_cur_date_id::varchar, l_row_cnt , 'R')
+     into l_step_id;
+
+
+    INSERT INTO external_data.f_cboe_street_executions
+      ( create_date_id
+      , message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_create_date_id
+      , street_account_name
+      , on_behalf_of_comp_id
+      , price_type
+      , exec_inst)
+  select
+        create_date_id
+      , message_type
+      , exec_type
+      , order_status
+      , street_client_order_id
+      , street_orig_client_order_id
+      , street_order_id
+      , street_exec_id
+      , street_secondary_order_id
+      , street_orig_exec_id
+      , street_transact_time
+      , street_sending_time
+      , street_routed_time
+      , target_location_id
+      , client_id
+      , clearing_optional_data
+      , parent_client_order_id
+      , parent_exec_id
+      , parent_orig_client_order_id
+      , parent_secondary_order_id
+      , parent_secondary_exec_id
+      , parent_create_date_id
+      , street_account_name
+      , on_behalf_of_comp_id
+      , price_type
+      , exec_inst
+  from
+  (
+
+    with str_ord as materialized
+      (
+        --select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
+        --from tmp_cboe_street_orders tmp
+        --from staging.sdn_tmp_cboe_street_orders  tmp
+        --limit 10000
+
+        select so.create_date_id, so.client_order_id, so.order_id as order_id, so.fix_message_id -- message of order, not report. Sometimes it points to parent level fix message.
+          , po.client_order_id as parent_client_order_id, so.parent_order_id, po.fix_message_id as parent_fix_message_id, po.create_date_id as parent_create_date_id, count(1)
+          , so.orig_order_id, so_org.client_order_id as street_orig_client_order_id, po_org.client_order_id as parent_orig_client_order_id
+          , so.multileg_reporting_type, cl.client_src_id, ac.account_name, so.instrument_id
+        from dwh.client_order so
+          left join data_marts.d_client cl
+            on so.client_id = cl.client_id
+          left join dwh.d_account ac
+            on so.account_id = ac.account_id
+          left join lateral
+            (
+              select po.client_order_id, po.create_date_id, po.fix_message_id, po.orig_order_id
+              from dwh.client_order po
+              where po.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and po.order_id = so.parent_order_id
+              limit 1
+            ) po on true
+           left join lateral
+            (
+              select org.client_order_id, org.create_date_id
+              from dwh.client_order org
+              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and org.order_id = so.orig_order_id
+              limit 1
+            ) so_org on true
+           left join lateral
+            (
+              select org.client_order_id, org.create_date_id
+              from dwh.client_order org
+              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
+                and org.order_id = po.orig_order_id
+              limit 1
+            ) po_org on true
+        where so.parent_order_id is not null -- street level
+          and so.create_date_id = l_cur_date_id -- between 20190509 and 20190517 -- = 20190515 --l_cur_date_id
+          --and so.ex_destination = 'W' -- CBOE -- a little bit slower than via exchange_id
+          and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'CBOE' union select 'C1PAR' union select 'CBOEEH') -- быстрее
+          and so.multileg_reporting_type in ('1','2')
+          --and so.client_order_id in ('AAA0053-20190514','LAA2248-20190517','MTA2616-20190509','MTA3809-20190509','MTA2333-20190513', 'MTA2355-20190513', 'MTA3079-20190510', 'MTA3086-20190510')
+        group by so.create_date_id, so.client_order_id, so.order_id, so.fix_message_id, po.client_order_id, so.parent_order_id, po.fix_message_id, po.create_date_id
+          , so.orig_order_id, so_org.client_order_id, po_org.client_order_id
+          , so.multileg_reporting_type, cl.client_src_id, ac.account_name, so.instrument_id
+      )
+    select str.create_date_id --count(1) -- 131309
+      , sef.message_type
+      , coalesce(sef.exec_type, ser.exec_type) as exec_type -- in executions we have replacement of 1 and 2 into F
+      , ser.order_status
+      , str.client_order_id as street_client_order_id
+      , coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id) as street_orig_client_order_id
+      --, str.street_orig_client_order_id --, sef.street_orig_client_order_id
+
+      , sef.street_order_id as street_order_id -- 37
+      , coalesce(ser.exch_exec_id, sef.street_exec_id) as street_exec_id -- 17 ? why aren't they equal
+      , coalesce(ser.secondary_order_id, sef.street_secondary_order_id) as street_secondary_order_id
+      , sef.street_orig_exec_id as street_orig_exec_id -- 19
+
+      , coalesce(sef.street_transact_time, ser.exec_time) as street_transact_time
+      , sef.street_sending_time as street_sending_time
+      , sef.street_routed_time as street_routed_time
+      , sef.target_location_id as target_location_id -- it is only for orders reports sent to exchange
+      , coalesce(str.client_src_id, sef.client_id) as client_id
+      , sef.clearing_optional_data -- 9324
+
+      , str.parent_client_order_id
+      , per.exch_exec_id as parent_exec_id
+      , str.parent_orig_client_order_id
+      , per.secondary_order_id as parent_secondary_order_id
+      , per.secondary_exch_exec_id as parent_secondary_exec_id
+
+
+      -- additional information needed
+      , str.parent_create_date_id
+      , sef.street_instrument_type
+      , row_number() over (partition by str.client_order_id, ser.exch_exec_id, coalesce(sef.account_name, str.account_name) order by str.order_id) as rn1 -- need only one order record for multileg
+      , row_number() over (partition by str.create_date_id, sef.message_type, str.client_order_id, sef.street_order_id, coalesce(ser.exch_exec_id, sef.street_exec_id), coalesce(sef.account_name, str.account_name), str.instrument_id order by str.order_id) as rn2 -- deduplication when we have (43) PossDupFlag = 'Y' (BAA0002-20181002)
+      , coalesce(sef.account_name, str.account_name) as street_account_name
+
+      -- requested by John
+      , sef.fix_tag_115 as on_behalf_of_comp_id
+      , sef.fix_tag_423 as price_type
+      , sef.fix_tag_18 as exec_inst
+
+      /*, sef.client_order
+      , str.fix_message_id
+      , str.order_id
+      , str.multileg_reporting_type
+      , str.parent_order_id
+      --, ser.* --exec_id
+      , per.* */
+
+    from
+      (
+        select str.order_id -- for executions -> reports lookup
+          , str.parent_order_id  -- for executions -> reports of parent orders lookup
+          , null::bigint as fix_message_id        -- for orders messages lookup
+          , null::bigint as parent_fix_message_id -- for parent orders messages direct lookup
+          , str.create_date_id
+          , str.client_order_id
+          , str.street_orig_client_order_id
+          , str.multileg_reporting_type
+          , str.client_src_id
+          , str.parent_client_order_id
+          , null as parent_orig_client_order_id
+          , null as parent_create_date_id
+          , str.account_name
+          , str.instrument_id
+        from str_ord  str -- the list of street orders
+        union all
+        select distinct null::bigint as order_id -- for executions -> reports lookup
+          , null::bigint as parent_order_id     -- for executions -> reports of parent orders lookup
+          , str.fix_message_id         -- for orders messages lookup
+          , str.parent_fix_message_id  -- for parent orders messages direct lookup
+          , str.create_date_id
+          , str.client_order_id
+          , str.street_orig_client_order_id
+          , str.multileg_reporting_type
+          , str.client_src_id
+          , str.parent_client_order_id
+          , str.parent_orig_client_order_id
+          , str.parent_create_date_id
+          , str.account_name
+          , null::bigint as instrument_id
+        from str_ord  str -- the list of street orders
+      ) str -- the list of street orders plus their orders fix message ids
+      left join lateral
+      (
+        select -- for return
+            e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
+          -- for join
+          , e.fix_message_id, e.exec_id, e.order_id, e.text_
+          --, e.*
+        from dwh.execution e
+        where 1=1
+          and e.fix_message_id is not null -- if it is null then there is possibility that execution is syntethic generated
+          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
+          and e.order_id = str.order_id -- in (1679652736,1679652738,1679652740,1679660660,1679660663,1679660666) --
+          and e.exec_type not in ('4', 'A', 'b')
+          --and not exists (select 1 from fix_capture.fix_message_json j where j.date_id = 20190513 and j.fix_message_id = e.fix_message_id and ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' ))
+          --and e.order_id = 1679652736 -- in (1679652736,1679652738,1679652740) -- (1674593569, 1674593570, 1674593571) --
+      ) ser on true -- street executions reports from exchange
+      inner join lateral
+      (
+        select j.fix_message->>'35' as message_type
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'11' as client_order
+          , j.fix_message->>'41' as street_orig_client_order_id
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , (j.fix_message->>'167')::varchar as street_instrument_type
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , j.fix_message->>'1' as account_name
+          , j.fix_message->>'115' as fix_tag_115
+          , j.fix_message->>'423' as fix_tag_423
+          , j.fix_message->>'18' as fix_tag_18
+        from fix_capture.fix_message_json j
+        where 1=1
+          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
+          and j.fix_message_id = ser.fix_message_id -- coalesce(ser.fix_message_id, fix_message_id) --in (3914795705, 3914778052) -- message for street report and not orders
+          -- try to exclude multileg reports except rejects
+          --and not ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' )
+        union
+        select j.fix_message->>'35' as message_type
+          , j.fix_message->>'150' as exec_type
+          , j.fix_message->>'11' as client_order
+          , j.fix_message->>'41' as street_orig_client_order_id
+          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
+          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
+          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
+          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
+          , j.fix_message->>'37' as street_order_id
+          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
+          , j.fix_message->>'198' as street_secondary_order_id
+          , j.fix_message->>'19' as street_orig_exec_id
+          , (j.fix_message->>'167')::varchar as street_instrument_type
+          , j.fix_message->>'109' as client_id
+          , j.fix_message->>'9324' as clearing_optional_data
+          , j.fix_message->>'1' as account_name
+          , j.fix_message->>'115' as fix_tag_115
+          , j.fix_message->>'423' as fix_tag_423
+          , j.fix_message->>'18' as fix_tag_18
+        from fix_capture.fix_message_json j
+        where 1=1
+          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
+          and j.fix_message_id = str.fix_message_id ---  3914778051 --  in (3914795705, 3914778052) -- message for street order and not report
+      ) sef on true -- street execution fix messages for reports from exchange
+      left join lateral
+      (
+        select -- fields to return
+            e.fix_message_id -- for return
+          , e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
+          -- other fields
+          , e.fix_message_id, e.exec_id, e.order_id, e.text_
+          --, e.*
+        from dwh.execution e
+        where 1=1
+          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
+          and e.order_id = str.parent_order_id -- (1674593565, 1674593567)  two legs with their own parents
+          -- get rid of multileg message
+          and (e.secondary_order_id is not null or e.order_status = '0')
+          -- status matching
+          and
+            (
+              e.secondary_exch_exec_id = ser.exch_exec_id
+              or
+              (e.order_status = '0' and ser.order_status = '0')
+            )
+        order by e.secondary_order_id desc nulls last, e.exec_time desc -- in case of presence both mleg and opt order executions for order with status = '0'
+        limit 1
+      ) per on true -- parent execution reports from exchange
+ -- order by coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id, str.client_order_id), sef.street_routed_time
+
+    ) src
+  where 1=1 and (case when src.street_instrument_type = 'MLEG' then src.rn1 else 1 end = 1) and src.rn2 = 1
+  --order by coalesce(src.street_orig_client_order_id, src.street_client_order_id), src.street_routed_time
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_cboe_street_executions ', l_row_cnt , 'I')
+     into l_step_id;
+
+
+  --> update GTC parent orders data
+/*    update external_data.f_cboe_street_executions trg
+      set parent_orig_client_order_id = src.parent_orig_client_order_id
+        , parent_routed_time = src.parent_routed_time
+        , parent_message_type = src.parent_message_type
+    from
+      (
+        select to_timestamp(to_char(o.process_time, 'YYYY-MM-DD HH24:MI:SS')::varchar||'.'||o.process_time_micsec, 'YYYY-MM-DD HH24:MI:SS.US')::timestamp without time zone as parent_routed_time
+          , oo.client_order_id as parent_orig_client_order_id
+          , o.trans_type as parent_message_type
+          , o.client_order_id as parent_client_order_id
+          , o.create_date_id as parent_create_date_id
+          , s.street_client_order_id
+          , s.create_date_id
+          , row_number() over (partition by s.street_client_order_id, o.client_order_id, o.create_date_id order by o.process_time) as rn
+        from external_data.f_cboe_street_executions s
+          inner join dwh.client_order o -- parent order
+            on o.create_date_id between l_min_gtc_date_id and l_cur_date_id
+            and o.client_order_id = s.parent_client_order_id
+            and o.create_date_id = s.parent_create_date_id
+            and o.multileg_reporting_type in ('1','3')
+          left join dwh.client_order oo
+            on o.orig_order_id = oo.order_id
+        where s.create_date_id = l_cur_date_id
+          and s.parent_create_date_id is not null
+          and s.parent_routed_time is null
+      ) src
+    where trg.create_date_id = l_cur_date_id
+      and trg.create_date_id = src.create_date_id
+      and trg.parent_create_date_id is not null -- message type not in (8,9)
+      and trg.parent_routed_time is null
+      and trg.street_client_order_id = src.street_client_order_id
+      and trg.parent_client_order_id = src.parent_client_order_id
+      and src.rn = 1 -- it is not needed, but just in case
+    ;
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+    select public.load_log(l_load_id, l_step_id, 'UPD of GTC parent orders data ', l_row_cnt , 'U')
+     into l_step_id;
+
+ END IF; */
+---------------------------------------------------------------------------------------------------------
+  select public.load_log(l_load_id, l_step_id, 'p_load_f_cboe_street_executions_daily COMPLETE ========= ' , 0, 'O')
+   into l_step_id;
+  RETURN 1;
+
+exception when others then
+  select public.load_log(l_load_id, l_step_id, sqlerrm , 0, 'E')
+  into l_step_id;
+  -- PERFORM public.load_error_log('p_load_f_cboe_street_executions_daily',  'I', sqlerrm, l_load_id);
+
+  RAISE;
+
+END;
+$$;
+
+
+
+
+CREATE FUNCTION staging.tlnd_load_execution_old(in_l_seq integer, in_date_id_list character varying, in_step integer, in_table_name character varying) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$DECLARE
+ 	date_id_crs cursor for select distinct exec_date_id from staging.tlnd_temp_execution  where rtrim(operation)='I';
+	l_sql_block text;
+	l_sql text;
+	l_date_id int;
+	l_in_l_seq int;
+	l_in_date_id_list text;
+	l_in_step int;
+	l_in_table_name text;
+	e1_step int;
+	date_id_crs_up cursor for select distinct exec_date_id from staging.tlnd_temp_execution where rtrim(operation)='UN';
+	l_exec_analyze text;
+	interval_rez int;
+	neighbourhood int;
+	last_partition_name text;
+ begin
+	e1_step :=0;
+	l_in_l_seq:= in_l_seq;
+	l_in_step:= in_step;
+	l_in_date_id_list:= in_date_id_list;
+	l_in_table_name:= in_table_name;
+
+	l_sql_block := 'INSERT INTO  partitions.execution_&p_month_id
+											(exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
+													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
+													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
+													text_, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id)
+				 SELECT exec_id, order_id, order_status, exec_type, exec_date_id, exec_time, is_billed, is_busted, leaves_qty, cum_qty,
+													avg_px, last_qty, last_px, bust_qty, dataset_id, last_mkt, contra_broker, secondary_order_id, exch_exec_id,
+													secondary_exch_exec_id, contra_account_capacity, trade_liquidity_indicator, account_id, fix_message_id,
+													text_, is_parent_level, exec_broker, auction_id, match_qty, match_px, internal_component_type, exchange_id, contra_trader,ref_exec_id
+				 FROM staging.tlnd_temp_execution
+				 WHERE rtrim(operation)=''I'' and exec_date_id = &p_date_id
+			on conflict (exec_id) do update
+   set exec_date_id = coalesce(public.f_insert_etl_reject(''load_temp_execution''::varchar,''execution_202101_exec_id_exec_date_id_idx'',''(exec_date_id= ''||EXCLUDED.exec_date_id||'',exec_id= ''||EXCLUDED.exec_id||'',exec_time = ''||EXCLUDED.exec_time||'')''::varchar),
+   EXCLUDED.exec_date_id);';
+
+	analyze staging.tlnd_temp_execution;
+
+	open date_id_crs;
+
+	loop
+	fetch date_id_crs into l_date_id;
+	exit when not found;
+
+		l_sql := replace (l_sql_block ,'&p_month_id', substring(l_date_id::text,1,6));
+		l_sql := replace (l_sql ,'&p_date_id', l_date_id::text);
+
+	EXECUTE l_sql;
+
+		select public.load_log(
+							l_in_l_seq,
+							l_in_step,
+							l_in_table_name::text,
+						coalesce ((select count(1) from staging.tlnd_temp_execution where rtrim(operation)='I' and exec_date_id = l_date_id),0)::int,
+						'I'::text
+						) into e1_step
+					;
+
+	end loop;
+
+	close date_id_crs;
+
+--	l_exec_analyze:= 'analyze partitions.execution_'||left(right(l_in_date_id_list, 8), 6);
+--	execute l_exec_analyze;
+
+	neighbourhood:= 3600; --60 min
+	last_partition_name:= 'select execution_'||left(right(l_in_date_id_list, 8), 6); --extract last date from date_id_list in format YYYYMM
+
+	select abs(date_part('epoch'::text, clock_timestamp() AT TIME ZONE 'US/Eastern'
+										- (clock_timestamp()::date::timestamp AT TIME ZONE 'US/Eastern' + interval '8 hours 15 minutes') --8:15 AM current date
+						)
+				) into interval_rez;
+	--analyze only between 7:15 and 9:15
+	if (interval_rez < neighbourhood) then
+		perform  dwh.analyse_statistics (in_schema_name => 'partitions', in_table_name => last_partition_name, in_max_interval => 600);
+	end if;
+
+			UPDATE dwh.execution ex
+				SET
+				secondary_exch_exec_id= EXCLUDED.secondary_exch_exec_id,
+				secondary_order_id= EXCLUDED.secondary_order_id,
+				trade_liquidity_indicator= EXCLUDED.trade_liquidity_indicator,
+				avg_px= EXCLUDED.avg_px,
+				bust_qty= EXCLUDED.bust_qty,
+				contra_account_capacity= EXCLUDED.contra_account_capacity,
+				contra_broker= EXCLUDED.contra_broker,
+				cum_qty= EXCLUDED.cum_qty,
+				exch_exec_id= EXCLUDED.exch_exec_id,
+				exec_time= EXCLUDED.exec_time,
+				exec_type= EXCLUDED.exec_type,
+				exec_date_id= EXCLUDED.exec_date_id,
+				fix_message_id= EXCLUDED.fix_message_id,
+				account_id= EXCLUDED.account_id,
+				is_billed= EXCLUDED.is_billed,
+				is_busted= EXCLUDED.is_busted,
+				last_mkt= EXCLUDED.last_mkt,
+				last_px= EXCLUDED.last_px,
+				last_qty= EXCLUDED.last_qty,
+				leaves_qty= EXCLUDED.leaves_qty,
+				order_id= EXCLUDED.order_id,
+				order_status= EXCLUDED.order_status,
+				text_=EXCLUDED.text_ ,
+				is_parent_level = EXCLUDED.is_parent_level,
+				exec_broker=EXCLUDED.exec_broker,
+				dataset_id = EXCLUDED.dataset_id,
+				auction_id = EXCLUDED.auction_id,
+				match_qty = EXCLUDED.match_qty,
+				match_px = EXCLUDED.match_px,
+				internal_component_type = EXCLUDED.internal_component_type,
+				exchange_id = EXCLUDED.exchange_id,
+				contra_trader = EXCLUDED.contra_trader,
+				ref_exec_id = EXCLUDED.ref_exec_id
+			FROM  staging.tlnd_temp_execution  EXCLUDED
+				WHERE  ex.exec_id = EXCLUDED.exec_id
+				and ex.exec_date_id = EXCLUDED.exec_date_id
+				and EXCLUDED.operation='UN'
+				and ex.exec_date_id in(SELECT c::int FROM regexp_split_to_table((select l_in_date_id_list),',') as c);
+
+		select public.load_log(
+							l_in_l_seq,
+							e1_step,
+							l_in_table_name::text,
+						coalesce ((select count(1) from staging.tlnd_temp_execution where rtrim(operation)= 'UN'),0)::int,
+							'U'::text)
+						into e1_step
+					;
+	RETURN e1_step;
+
+ end;
+$$;
+
 
 
 CREATE FUNCTION staging.tlnd_load_execution_test(in_l_seq bigint, in_step integer, in_table_name character varying) RETURNS integer
@@ -6851,135 +9096,6 @@ BEGIN
  select public.load_log(l_load_id, l_step_id, 'export_rbc_orders_tbl COMPLETE ========= ' , l_row_cnt, 'O')
    into l_step_id;
    RETURN;
-END;
-$$;
-
-
-
-CREATE FUNCTION trash.dash360_order_blotter_get_order_details(in_order_id bigint) RETURNS TABLE(account_id integer, trading_firm_id character varying, auction_id bigint, order_id bigint, client_order_id character varying, multileg_reporting_type character varying, cross_order_id bigint, side character varying, create_time timestamp without time zone, process_time timestamp without time zone, order_qty bigint, price numeric, sub_strategy character varying, display_instrument_id character varying, instrument_type_id character varying, instrument_id bigint, last_trade_date timestamp without time zone, customer_or_firm_id character varying, clearing_firm_id character varying, opt_exec_broker character varying, time_in_force_id character varying, open_close character varying, client_id character varying, ratio_qty bigint, no_legs integer, co_client_leg_ref_id character varying, fix_message_id bigint, order_type character varying, ex_destination character varying, exchange_id character varying, extended_ord_type character varying, sweep_style character varying, aggression_level smallint, order_status character varying, exec_qty bigint, avg_px numeric, leaves_qty integer)
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-	select_stmt     text;
-	sql_params      text;
-	row_cnt         integer;
-
-  l_create_date_id integer;
-
-   l_load_id        integer;
-   l_step_id        integer;
-
-begin
-  --select nextval('public.load_timing_seq') into l_load_id;
-  --l_step_id:=1;
-
- 	 --select public.load_log(l_load_id, l_step_id, 'dash360.order_blotter_get_order_details STARTED===', 0, 'O')
-	 --into l_step_id;
-
-  l_create_date_id := coalesce((select o.create_date_id from dwh.client_order o where o.order_id = in_order_id limit 1)::integer, 21010101);
-
-  RAISE info 'l_create_date_id = % ', l_create_date_id;
-
-  --select public.load_log(l_load_id, l_step_id, 'l_create_date_id = '|| l_create_date_id::varchar, 0, 'O')
-	-- into l_step_id;
-
-
-
-   -- form the query
-   RETURN QUERY
-    select co.account_id
-      , tf.trading_firm_id
-      , auc.auction_id
-      , co.order_id
-      , co.client_order_id
-      , co.multileg_reporting_type::varchar
-      , co.cross_order_id
-      , co.side::varchar
-      , co.create_time
-      , co.process_time
-      , co.order_qty::bigint
-      , co.price
-      , case  when  co.sub_strategy_desc  =  'SENSORDRK'  then  'SENSORDARK'  else  co.sub_strategy_desc  end  sub_strategy
-      , i.display_instrument_id2 display_instrument_id
-      , i.instrument_type_id::varchar
-      , co.instrument_id
-      , i.last_trade_date
-      , co.customer_or_firm_id::varchar
-      , co.clearing_firm_id
-      --, clo.opt_exec_broker --co.opt_exec_broker_id -- !!!! should be 792 ???
-      , eb.opt_exec_broker
-      , co.time_in_force_id::varchar
-      , co.open_close::varchar
-      , co.client_id as client_id
-      , co.ratio_qty
-      , co.no_legs
-      , co.co_client_leg_ref_id
-      , co.fix_message_id
-      , co.order_type_id::varchar as order_type --
-      , co.ex_destination
-      , co.exchange_id
-      , co.extended_ord_type::varchar
-      , co.sweep_style::varchar
-      , co.aggression_level
-      , ex.order_status::varchar
-      , trd.exec_qty::bigint
-      , trd.avg_px
-      , ex.leaves_qty
-      --, co.*
-    from dwh.client_order co
-      left join dwh.d_account ac on co.account_id = ac.account_id
-      left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
-      left join dwh.d_opt_exec_broker eb on co.opt_exec_broker_id = eb.opt_exec_broker_id
-      left join lateral
-        ( select oa.auction_id -- как вариант, еще сгруппировать все аукционы ордера
-          from dwh.client_order2auction oa
-          where oa.create_date_id >= l_create_date_id
-            and oa.order_id = co.order_id
-          order by oa.rfq_transact_time
-          limit 1 -- parent OFP orders can participate in thousands of auctions
-        ) auc on true
-      left join dwh.d_instrument i on co.instrument_id = i.instrument_id
-      left join lateral
-        ( select ex.text_
-            , ex.order_status
-            , ex.exec_id
-            , ex.leaves_qty
-          from dwh.execution ex
-          where ex.exec_date_id >= l_create_date_id -- l_order_create_date_id --
-            and ex.exec_date_id >= co.create_date_id
-            and ex.order_id = co.order_id
-          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
-          limit 1
-        ) ex on true
-      left join lateral
-        ( select sum(tr.last_qty) as exec_qty
-            , round(sum(tr.last_px * tr.last_qty) / sum(tr.last_qty), 4) as avg_px
-            , sum(tr.principal_amount) as principal_amount
-            , min(tr.trade_record_time) as first_fill_date_time
-            , max(tr.trade_record_id) as max_trade_record_id
-            , case when co.parent_order_id is null then tr.order_id else tr.street_order_id end as order_id
-          from dwh.flat_trade_record tr
-          where 1=1 -- try to calculate for both parent and street level orders
-            and tr.order_id = case when co.parent_order_id is null then co.order_id else co.parent_order_id end -- trade filter by parent level for both levels of orders
-            and co.order_id = case when co.parent_order_id is null then tr.order_id else tr.street_order_id end -- trade filter for street level !!!
-            and tr.date_id >= l_create_date_id
-            and tr.is_busted = 'N'
-          group by case when co.parent_order_id is null then tr.order_id else tr.street_order_id end
-          limit 1
-        ) trd ON true
-    where co.multileg_reporting_type in ('1','2')
-      and co.create_date_id = l_create_date_id
-      and co.order_id = in_order_id
-    limit 10000
-    ;
-  	 --GET DIAGNOSTICS row_cnt = ROW_COUNT;
-
-   --select public.load_log(l_load_id, l_step_id, 'orders returned cnt', row_cnt, 'O')
-	 --into l_step_id;
-
- 	 --select public.load_log(l_load_id, l_step_id, 'dash360.order_blotter_get_order_details COMPLETE===', 0, 'O')
-	 --into l_step_id;
-
 END;
 $$;
 
@@ -9177,250 +11293,51 @@ begin
 end
 $$;
 
-
-
-CREATE VIEW dwh.trade_record_v_historical AS
- SELECT ex.exec_time AS trade_record_time,
-    ex.exec_date_id AS date_id,
-    cl.trans_type AS trade_record_trans_type,
-    cl.strtg_decision_reason_code AS trade_record_reason,
-    dss.sub_system_id,
-    cl.account_id,
-    cl.client_order_id,
-    cl.instrument_id,
-    cl.side,
-    cl.open_close,
-    cl.fix_connection_id,
-    cl.price AS order_price,
-    str.price AS street_order_price,
-    cl.process_time AS order_process_time,
-    ex.exec_id,
-    ex.exchange_id,
-    ex.trade_liquidity_indicator,
-    ex.secondary_order_id,
-    ex.exch_exec_id,
-    ex.secondary_exch_exec_id,
-    ex.last_mkt,
-    ex.last_qty,
-    ex.last_px,
-    cl.ex_destination,
-    cl.sub_strategy_desc AS sub_strategy,
-    str.order_id AS street_order_id,
-    cl.order_id,
-    str.order_qty AS street_order_qty,
-    cl.order_qty,
-    cl.multileg_reporting_type,
-    str.max_floor AS street_max_floor,
-        CASE
-            WHEN (i.instrument_type_id = 'O'::bpchar) THEN
-            CASE
-                WHEN ((acc.opt_is_fix_execbrok_processed)::text = 'Y'::text) THEN COALESCE(COALESCE(cl_br.opt_exec_broker, public.get_message_tag_string_cross_multileg(cl.fix_message_id, 76, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (cl.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END)), opx.opt_exec_broker)
-                ELSE opx.opt_exec_broker
-            END
-            ELSE public.get_message_tag_string_cross_multileg(str.fix_message_id, 76, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-            CASE
-                WHEN (str.cross_order_id IS NULL) THEN false
-                ELSE true
-            END)
-        END AS exec_broker,
-    lpad(
-        CASE
-            WHEN (i.instrument_type_id = 'O'::bpchar) THEN NULLIF((COALESCE(COALESCE(COALESCE(public.get_message_tag_string(ex.fix_message_id, 439, ex.exec_date_id), public.get_message_tag_string(str_ex.fix_message_id, 439, str_ex.exec_date_id)), ((str.clearing_firm_id)::text)::character varying), public.get_message_tag_string_cross_multileg(cl.fix_message_id, 439, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
-            CASE
-                WHEN (cl.cross_order_id IS NULL) THEN false
-                ELSE true
-            END)))::text, '949'::text)
-            ELSE NULL::text
-        END, 3, '0'::text) AS cmta,
-    str.time_in_force_id AS street_time_in_force,
-    str.order_type_id AS street_order_type,
-    cl.customer_or_firm_id AS opt_customer_firm,
-    ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) AS str_opt_customer_firm,
-    str.market_participant_id AS street_mpid,
-        CASE
-            WHEN (cl.cross_order_id IS NULL) THEN 'N'::text
-            ELSE 'Y'::text
-        END AS is_cross_order,
-        CASE
-            WHEN (str.cross_order_id IS NULL) THEN 'N'::text
-            ELSE 'Y'::text
-        END AS street_is_cross_order,
-    ( SELECT c.cross_type
-           FROM dwh.cross_order c
-          WHERE (c.cross_order_id = str.cross_order_id)) AS street_cross_type,
-    cl.is_originator AS cross_is_originator,
-    str.is_originator AS street_cross_is_originator,
-    ex.contra_account_capacity AS contra_account,
-    ex.contra_broker,
-    ex.exec_broker AS trade_exec_broker,
-    cl.fix_message_id AS order_fix_message_id,
-    ex.fix_message_id AS trade_fix_message_id,
-    str.fix_message_id AS street_order_fix_message_id,
-    cl.client_id_text AS client_id,
-    str.transaction_id AS street_transaction_id,
-    cl.transaction_id,
-    fc.fix_comp_id,
-    str.client_order_id AS street_client_order_id,
-    ex.leaves_qty,
-    str.exec_instruction AS street_exec_inst,
-    public.get_message_tag_string(ex.fix_message_id, 9090, ex.exec_date_id) AS fee_sensitivity,
-    COALESCE(str.strtg_decision_reason_code, cl.strtg_decision_reason_code) AS strategy_decision_reason_code,
-    cl.compliance_id,
-    public.get_message_tag_string_cross_multileg(cl.fix_message_id, 143, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
-        CASE
-            WHEN (cl.cross_order_id IS NULL) THEN false
-            ELSE true
-        END) AS floor_broker_id,
-    str2au.auction_id,
-        CASE
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('AMEX'::character varying)::text, ('ARCE'::character varying)::text])) THEN
-            CASE ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text))
-                WHEN '3'::text THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 50, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END))::text
-                ELSE NULL::text
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('ISE'::character varying)::text, ('GEMINI'::character varying)::text, ('MCRY'::character varying)::text, ('MIAX'::character varying)::text, ('MPRL'::character varying)::text, ('PHLX'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['4'::text, '5'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END))::text
-                ELSE NULL::text
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('BATO'::character varying)::text, ('EDGO'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'N'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END))::text
-                ELSE NULL::text
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('C2OX'::character varying)::text, ('CBOE'::character varying)::text, ('CBOEEH'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'N'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 1462, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END))::text
-                ELSE NULL::text
-            END
-            WHEN ((ex.exchange_id)::text = 'BOX'::text) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'X'::text])) THEN NULL::text
-                ELSE NULL::text
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('NSDQO'::character varying)::text, ('NQBXO'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'O'::text])) THEN (public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END))::text
-                ELSE NULL::text
-            END
-            ELSE NULL::text
-        END AS sub_account,
-        CASE
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('AMEX'::character varying)::text, ('ARCE'::character varying)::text])) THEN
-            CASE ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text))
-                WHEN '3'::text THEN NULL::character varying
-                ELSE cross_acc.account_name
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('BATO'::character varying)::text, ('EDGO'::character varying)::text])) THEN cross_acc.account_name
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('C2OX'::character varying)::text, ('CBOE'::character varying)::text, ('CBOEEH'::character varying)::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 440, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-            CASE
-                WHEN (str.cross_order_id IS NULL) THEN false
-                ELSE true
-            END)
-            WHEN ((ex.exchange_id)::text = 'BOX'::text) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'X'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END)
-                ELSE cross_acc.account_name
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('ISE'::character varying)::text, ('GEMINI'::character varying)::text, ('MCRY'::character varying)::text, ('MIAX'::character varying)::text, ('MPRL'::character varying)::text, ('PHLX'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['4'::text, '5'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END)
-                ELSE cross_acc.account_name
-            END
-            WHEN ((ex.exchange_id)::text = ANY (ARRAY[('NSDQO'::character varying)::text, ('NQBXO'::character varying)::text])) THEN
-            CASE
-                WHEN (ltrim(rtrim((COALESCE(str.eq_order_capacity, str.customer_or_firm_id))::text)) = ANY (ARRAY['M'::text, 'O'::text])) THEN public.get_message_tag_string_cross_multileg(str.fix_message_id, 58, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-                CASE
-                    WHEN (str.cross_order_id IS NULL) THEN false
-                    ELSE true
-                END)
-                ELSE cross_acc.account_name
-            END
-            ELSE NULL::character varying
-        END AS clearing_account,
-    cl.multileg_order_id,
-    ex.internal_component_type,
-    str_ex.fix_message_id AS str_trade_fix_message_id,
-    cl.pt_basket_id,
-    cl.pt_order_id,
-    public.get_message_tag_string(str_ex.fix_message_id, 5049, str_ex.exec_date_id) AS str_cls_comp_id,
-    COALESCE(public.get_message_tag_string(str_ex.fix_message_id, 1, str_ex.exec_date_id), public.get_message_tag_string_cross_multileg(str.fix_message_id, 1, str.create_date_id, (str.client_order_id)::text, (acc.account_name)::text, (str.co_client_leg_ref_id)::text,
-        CASE
-            WHEN (str.cross_order_id IS NULL) THEN false
-            ELSE true
-        END)) AS street_account_name,
-    public.get_message_tag_string(str_ex.fix_message_id, 9861, str_ex.exec_date_id) AS branch_seq_num,
-    str_ex.text_ AS trade_text,
-    public.get_message_tag_string(str_ex.fix_message_id, 21097, str_ex.exec_date_id) AS frequent_trader_id,
-    cl.time_in_force_id AS time_in_force,
-    cl.internal_component_type AS int_liq_source_type,
-    cl.market_participant_id AS mpid,
-    cl.alternative_compliance_id,
-    str_ex.exec_time AS street_trade_record_time,
-    str.process_time AS street_order_process_time,
-    cl.co_client_leg_ref_id,
-    public.get_message_tag_string_cross_multileg(cl.fix_message_id, 10445, cl.create_date_id, (cl.client_order_id)::text, (acc.account_name)::text, (cl.co_client_leg_ref_id)::text,
-        CASE
-            WHEN (cl.cross_order_id IS NULL) THEN false
-            ELSE true
-        END) AS blaze_account_alias
-   FROM ((((((((((((dwh.execution ex
-     JOIN dwh.client_order cl ON (((ex.order_id = cl.order_id) AND (cl.multileg_reporting_type = ANY (ARRAY['1'::bpchar, '2'::bpchar])) AND (cl.parent_order_id IS NULL) AND (cl.trans_type <> 'F'::bpchar))))
-     JOIN dwh.d_account acc ON ((cl.account_id = acc.account_id)))
-     JOIN dwh.d_instrument i ON ((cl.instrument_id = i.instrument_id)))
-     LEFT JOIN dwh.d_sub_system dss ON ((cl.sub_system_unq_id = dss.sub_system_unq_id)))
-     LEFT JOIN dwh.client_order str ON ((((ex.secondary_order_id)::text = (str.client_order_id)::text) AND (str.parent_order_id = cl.order_id))))
-     LEFT JOIN dwh.client_order2auction str2au ON (((str.order_id = str2au.order_id) AND (str.create_date_id = str2au.create_date_id))))
-     LEFT JOIN dwh.d_account cross_acc ON ((str.cross_account_id = cross_acc.account_id)))
-     LEFT JOIN dwh.execution str_ex ON ((((ex.secondary_exch_exec_id)::text = (str_ex.exch_exec_id)::text) AND (str_ex.order_id = str.order_id) AND (ex.exec_date_id = str_ex.exec_date_id))))
-     LEFT JOIN dwh.d_opt_exec_broker opx ON (((cl.account_id = opx.account_id) AND opx.is_active AND ((opx.is_default)::text = 'Y'::text))))
-     LEFT JOIN dwh.d_opt_exec_broker cl_br ON ((cl.opt_exec_broker_id = cl_br.opt_exec_broker_id)))
-     LEFT JOIN dwh.d_opt_exec_broker str_br ON ((str_br.opt_exec_broker_id = opx.opt_exec_broker_id)))
-     LEFT JOIN dwh.d_fix_connection fc ON ((fc.fix_connection_id = cl.fix_connection_id)))
-  WHERE ((ex.is_busted <> 'Y'::bpchar) AND (ex.exec_type = 'F'::bpchar));
-
-
-
-
-
-
----------------
-
-CREATE FUNCTION dash360.order_blotter_get_order_details_bkp(in_order_id bigint) RETURNS TABLE(account_id integer, trading_firm_id character varying, auction_id bigint, order_id bigint, client_order_id character varying, multileg_reporting_type character varying, cross_order_id bigint, side character varying, create_time timestamp without time zone, process_time timestamp without time zone, order_qty bigint, price numeric, sub_strategy character varying, display_instrument_id character varying, instrument_type_id character varying, instrument_id bigint, last_trade_date timestamp without time zone, customer_or_firm_id character varying, clearing_firm_id character varying, opt_exec_broker character varying, time_in_force_id character varying, open_close character varying, client_id character varying, ratio_qty bigint, no_legs integer, co_client_leg_ref_id character varying, fix_message_id bigint, order_type character varying, ex_destination character varying, exchange_id character varying, extended_ord_type character varying, sweep_style character varying, aggression_level smallint, order_status character varying, exec_qty bigint, avg_px numeric, leaves_qty integer)
+select * from trash.dash360_order_blotter_get_order_details(in_order_id := 1)
+CREATE or replace FUNCTION trash.dash360_order_blotter_get_order_details(in_order_id bigint)
+    RETURNS TABLE
+            (
+                account_id              integer,
+                trading_firm_id         character varying,
+                auction_id              bigint,
+                order_id                bigint,
+                client_order_id         character varying,
+                multileg_reporting_type character varying,
+                cross_order_id          bigint,
+                side                    character varying,
+                create_time             timestamp without time zone,
+                process_time            timestamp without time zone,
+                order_qty               bigint,
+                price                   numeric,
+                sub_strategy            character varying,
+                display_instrument_id   character varying,
+                instrument_type_id      character varying,
+                instrument_id           bigint,
+                last_trade_date         timestamp without time zone,
+                customer_or_firm_id     character varying,
+                clearing_firm_id        character varying,
+                opt_exec_broker         character varying,
+                time_in_force_id        character varying,
+                open_close              character varying,
+                client_id               character varying,
+                ratio_qty               bigint,
+                no_legs                 integer,
+                co_client_leg_ref_id    character varying,
+                fix_message_id          bigint,
+                order_type              character varying,
+                ex_destination          character varying,
+                exchange_id             character varying,
+                extended_ord_type       character varying,
+                sweep_style             character varying,
+                aggression_level        smallint,
+                order_status            character varying,
+                exec_qty                bigint,
+                avg_px                  numeric,
+                leaves_qty              integer
+            )
     LANGUAGE plpgsql
-    AS $$
+AS
+$$
 DECLARE
 	select_stmt     text;
 	sql_params      text;
@@ -9461,8 +11378,8 @@ begin
       , co.process_time
       , co.order_qty::bigint
       , co.price
-      , co.sub_strategy_desc as sub_strategy
-      , i.display_instrument_id
+      , case  when  co.sub_strategy_desc  =  'SENSORDRK'  then  'SENSORDARK'  else  co.sub_strategy_desc  end  sub_strategy
+      , i.display_instrument_id2 display_instrument_id
       , i.instrument_type_id::varchar
       , co.instrument_id
       , i.last_trade_date
@@ -9472,7 +11389,7 @@ begin
       , eb.opt_exec_broker
       , co.time_in_force_id::varchar
       , co.open_close::varchar
-      , c.client_src_id as client_id
+      , co.client_id_text as client_id
       , co.ratio_qty
       , co.no_legs
       , co.co_client_leg_ref_id
@@ -9491,7 +11408,6 @@ begin
     from dwh.client_order co
       left join dwh.d_account ac on co.account_id = ac.account_id
       left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
-      left join data_marts.d_client c on co.client_id = c.client_id
       left join dwh.d_opt_exec_broker eb on co.opt_exec_broker_id = eb.opt_exec_broker_id
       left join lateral
         ( select oa.auction_id -- как вариант, еще сгруппировать все аукционы ордера
@@ -9503,7 +11419,7 @@ begin
         ) auc on true
       left join dwh.d_instrument i on co.instrument_id = i.instrument_id
       left join lateral
-        ( select ex.text_
+        ( select ex.exec_text
             , ex.order_status
             , ex.exec_id
             , ex.leaves_qty
@@ -9547,1875 +11463,5 @@ END;
 $$;
 
 
-
-CREATE FUNCTION dash_reporting.get_parent_orders_trade_activity_bkp(p_accounts integer[] DEFAULT '{}'::integer[], p_exchanges character varying[] DEFAULT '{}'::character varying[], in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer) RETURNS TABLE(client_order_id character varying, exch_order_id character varying, order_id bigint, side character, order_qty integer, price numeric, time_in_force character varying, instrument_name character varying, last_trade_date timestamp without time zone, account_name character varying, sub_system_unq_id integer, multileg_reporting_type character, exec_id bigint, ref_exec_id bigint, exch_exec_id character varying, "Exec_Time_Orig" timestamp without time zone, exec_time text, "Exec_Type" character varying, "Order_Status" character varying, leaves_qty bigint, cum_qty bigint, avg_px numeric, last_qty bigint, last_px numeric, bust_qty bigint, last_mkt character varying, last_mkt_name character varying, text_ character varying, trade_liquidity_indicator character varying, is_busted character, exec_broker character varying, exchange_id character varying, exchange_name character varying)
-    LANGUAGE plpgsql PARALLEL SAFE
-    AS $$
-begin
-
-RETURN QUERY
-	Select
-	co.client_order_id --1
-	, co.exch_order_id
-	, ex.order_id
-	, co.side
-	, co.order_qty
-	, co.price
-	, tif.tif_short_name
-	, inst.instrument_name
-	, inst.last_trade_date
-	, acc.account_name --10
-	, dss.sub_system_id
-	, co.multileg_reporting_type
-	, ex.exec_id
-	, ex.ref_exec_id
-	, ex.exch_exec_id
-	, ex.exec_time
-	, to_char(ex.exec_time, 'HH:MI:SS.MS')
-	, et.exec_type_description
-	, os.order_status_description
-	, ex.leaves_qty --20
-	, ex.cum_qty
-	, ex.avg_px
-	, ex.last_qty
-	, ex.last_px
-	, ex.bust_qty
-	, ex.last_mkt
-	, lm.last_mkt_name
-	, ex.text_
-	, ex.trade_liquidity_indicator
-	, ex.is_busted --30
-	, ex.exec_broker
-	, ex.exchange_id
-	, e.exchange_name
-	From execution ex
-	INNER JOIN client_order co ON ex.order_id = co.order_id
-	inner join d_sub_system dss on co.sub_system_unq_id = dss.sub_system_unq_id
-	INNER JOIN d_account acc ON co.account_id = acc.account_id
-	INNER JOIN d_instrument inst ON co.instrument_id = inst.instrument_id
-	LEFT JOIN d_time_in_force tif ON co.time_in_force_id = tif.tif_id
-	LEFT JOIN d_order_status os ON os.order_status = ex.order_status
-	LEFT JOIN d_last_market lm ON lm.last_mkt = ex.last_mkt AND lm.is_active = true
-	LEFT JOIN d_exchange e ON e.exchange_id = ex.exchange_id AND e.is_active = true
-	LEFT JOIN d_exec_type et ON et.exec_type = ex.exec_type
-	Where ex.exec_type In ('F','H')
-	AND (p_accounts IS NULL OR co.account_id = any(p_accounts))
-	AND (p_exchanges IS null OR ex.exchange_id = any(p_exchanges))
-	And ex.exec_date_id  >= in_start_date_id
-	And ex.exec_date_id < in_end_date_id
-	And co.parent_order_id is null;
-end;
-$$;
-
-
-
-CREATE FUNCTION dash_reporting.get_street_orders_trade_activity_bkp(p_accounts integer[] DEFAULT '{}'::integer[], p_exchanges character varying[] DEFAULT '{}'::character varying[], in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer) RETURNS TABLE(client_order_id character varying, exch_order_id character varying, order_id bigint, side character, order_qty integer, price numeric, time_in_force character varying, instrument_name character varying, last_trade_date timestamp without time zone, account_name character varying, sub_system_unq_id integer, multileg_reporting_type character, exec_id bigint, ref_exec_id bigint, exch_exec_id character varying, "Exec_Time_Orig" timestamp without time zone, exec_time text, "Exec_Type" character varying, "Order_Status" character varying, leaves_qty bigint, cum_qty bigint, avg_px numeric, last_qty bigint, last_px numeric, bust_qty bigint, last_mkt character varying, last_mkt_name character varying, text_ character varying, trade_liquidity_indicator character varying, is_busted character, exec_broker character varying, exchange_id character varying, exchange_name character varying)
-    LANGUAGE plpgsql PARALLEL SAFE
-    AS $$
-begin
-
-RETURN QUERY
-	Select
-	co.client_order_id --1
-	, co.exch_order_id
-	, ex.order_id
-	, co.side
-	, co.order_qty
-	, co.price
-	, tif.tif_short_name
-	, inst.instrument_name
-	, inst.last_trade_date
-	, acc.account_name --10
-	, co.sub_system_unq_id
-	, co.multileg_reporting_type
-	, ex.exec_id
-	, ex.ref_exec_id
-	, ex.exch_exec_id
-	, ex.exec_time
-	, to_char(ex.exec_time, 'HH:MI:SSxFF')
-	, et.exec_type_description
-	, os.order_status_description
-	, ex.leaves_qty --20
-	, ex.cum_qty
-	, ex.avg_px
-	, ex.last_qty
-	, ex.last_px
-	, ex.bust_qty
-	, ex.last_mkt
-	, lm.last_mkt_name
-	, ex.text_
-	, ex.trade_liquidity_indicator
-	, ex.is_busted --30
-	, ex.exec_broker
-	, ex.exchange_id
-	, e.exchange_name
-	From execution ex
-	INNER JOIN client_order co ON ex.order_id = co.order_id
-	INNER JOIN d_account acc ON co.account_id = acc.account_id
-	INNER JOIN d_instrument inst ON co.instrument_id = inst.instrument_id
-	LEFT JOIN d_time_in_force tif ON co.time_in_force_id = tif.tif_id
-	LEFT JOIN d_order_status os ON os.order_status = ex.order_status
-	LEFT JOIN d_last_market lm ON lm.last_mkt = ex.last_mkt AND lm.is_active = true
-	LEFT JOIN d_exchange e ON e.exchange_id = ex.exchange_id AND e.is_active = true
-	LEFT JOIN d_exec_type et ON et.exec_type = ex.exec_type
-	Where ex.exec_type In ('F','H')
-	AND (p_accounts IS NULL OR co.account_id = any(p_accounts))
-	AND (p_exchanges IS null OR ex.exchange_id = any(p_exchanges))
-	And ex.exec_date_id  >= in_start_date_id
-	And ex.exec_date_id <= in_end_date_id
-	And co.parent_order_id is not null;
-end;
-$$;
-
-
-
-CREATE FUNCTION eod_reports.export_rbc_orders_tbl_bkp(in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer, in_client_ids character varying[] DEFAULT '{}'::character varying[]) RETURNS TABLE("Account" character varying, "Is Cross" character varying, "Is MLeg" character varying, "Ord Status" character varying, "Event Type" character varying, "Routed Time" character varying, "Event Time" character varying, "Cl Ord ID" character varying, "Side" character varying, "Symbol" character varying, "Ord Qty" bigint, "Price" numeric, "Ex Qty" bigint, "Avg Px" numeric, "Sub Strategy" character varying, "Ex Dest" character varying, "Ord Type" character varying, "TIF" character varying, "Sending Firm" character varying, "Capacity" character varying, "Client ID" character varying, "CMTA" character varying, "Creation Date" character varying, "Cross Ord Type" character varying, "Event Date" character varying, "Exec Broker" character varying, "Expiration Day" date, "Leg ID" character varying, "Lvs Qty" bigint, "O/C" character varying, "Orig Cl Ord ID" character varying, "OSI Symbol" character varying, "Root Symbol" character varying, "Security Type" character varying, "Stop Px" numeric, "Underlying Symbol" character varying)
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-
-   l_row_cnt integer;
-   l_load_id integer;
-   l_step_id integer;
-
-  l_start_date_id integer;
-  l_end_date_id   integer;
-
-  l_gtc_start_date_id integer;
-BEGIN
-
-  select nextval('public.load_timing_seq') into l_load_id;
-  l_step_id := 1;
-
-  raise notice 'l_load_id=%',l_load_id;
-
-  select public.load_log(l_load_id, l_step_id, 'export_rbc_orders_tbl STARTED===', 0, 'O')
-   into l_step_id;
-
-  if in_start_date_id is not null and in_end_date_id is not null
-  then
-    l_start_date_id := in_start_date_id;
-    l_end_date_id := in_end_date_id;
-  else
-    --l_start_date_id := (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer;
-    --l_end_date_id := (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer;
-    l_start_date_id := (to_char(NOW(), 'YYYYMMDD'))::integer;
-    l_end_date_id := (to_char(NOW(), 'YYYYMMDD'))::integer;
-
-  end if;
-
-  --l_start_date_id := coalesce(in_date_id, (to_char(NOW() - interval '1 day', 'YYYYMMDD'))::integer);
-
-  l_gtc_start_date_id := to_char((to_date(l_start_date_id::varchar, 'YYYYMMDD')::date - interval '6 month'), 'YYYYMMDD');
-
-    select public.load_log(l_load_id, l_step_id, 'Step 1. l_start_date_id = '||l_start_date_id::varchar||', l_end_date_id = '||l_end_date_id::varchar||', l_gtc_start_date_id = '||l_gtc_start_date_id::varchar, 0 , 'O')
-     into l_step_id;
-
-  if in_client_ids = '{}'
-	then
-  return QUERY
-/*  with par_ords as
-      (
-        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
-        from dwh.client_order co
-        where
-          -- parent level only
-          co.parent_order_id is null
-          -- only single ords and legs
-          and co.multileg_reporting_type in ('1','2')
-          -- scope filter
-          and co.create_date_id between l_start_date_id and l_end_date_id
-          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-       -- union -- not all to distinct result set
-       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
-       -- from dwh.flat_trade_record tr
-       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
-       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-      ) */
-    select --po.order_id
-        ac.account_name as "Account"
-      , (case when po.cross_order_id is not null then 'Y' else 'N' end)::varchar as "Is Cross"
-      , (case when po.multileg_reporting_type = '1' then 'N' else 'Y' end)::varchar as "Is MLeg"
-      , st.order_status_description as "Ord Status"
-      , et.exec_type_description as "Event Type"
-      , to_char(fyc.routed_time, 'HH24:MI:SS.US')::varchar as "Routed Time"
-      --, to_char(po.process_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
-      , to_char(fyc.exec_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
-      , po.client_order_id as "Cl Ord ID"
-      , (case po.side
-                  when '1' then 'Buy'
-                  when '2' then 'Sell'
-                  when '3' then 'Buy minus'
-                  when '4' then 'Sell plus'
-                  when '5' then 'Sell short'
-                  when '6' then 'Sell short exempt'
-                  when '7' then 'Undisclosed'
-                  when '8' then 'Cross'
-                  when '9' then 'Cross short'
-                end)::varchar as "Side"
-      , i.display_instrument_id as "Symbol"
-      , po.order_qty::bigint as "Ord Qty"
-      , po.price as "Price"
-      , fyc.filled_qty as "Ex Qty"
-      , fyc.avg_px as "Avg Px"
-      , ss.target_strategy_desc as "Sub Strategy"
-      , dc.ex_destination_code_name as "Ex Dest"
-      , ot.order_type_name as "Ord Type"
-      , tif.tif_name as "TIF"
-      , f.fix_comp_id as "Sending Firm"
-      , cf.customer_or_firm_name as "Capacity"
-      , po.client_id_text as "Client ID"
-      , coalesce(po.clearing_firm_id, fx_co.clearing_firm_id) as "CMTA"
-      , to_char(to_date(po.create_date_id::varchar, 'YYYYMMDD'), 'DD.MM.YYYY')::varchar as "Creation Date"
-      , cro.cross_type::varchar as "Cross Ord Type"
-      , to_char(fyc.exec_time, 'DD.MM.YYYY')::varchar as "Event Date"
-      , ebr.opt_exec_broker as "Exec Broker"
-      , date_trunc('day', i.last_trade_date)::date as "Expiration Day"
-      , l.client_leg_ref_id as "Leg ID"
-      , ex.leaves_qty::bigint as "Lvs Qty"
-      , (case when po.open_close = 'O' then 'Open' else 'Close' end)::varchar as "O/C"
-      , oo.client_order_id as "Orig Cl Ord ID"
-      , po.opra_symbol as "OSI Symbol"
-      , po.root_symbol as "Root Symbol"
-      , it.instrument_type_name as "Security Type"
-      , po.stop_price as "Stop Px"
-      , ui.display_instrument_id as "Underlying Symbol"
-      --, po.*
---select count(1)
-    from
-      (
-        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
-        from dwh.client_order co
-        where
-          -- parent level only
-          co.parent_order_id is null
-          -- only single ords and legs
-          and co.multileg_reporting_type in ('1','2')
-          -- scope filter
-          and co.create_date_id between l_start_date_id and l_end_date_id
-          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-       -- union -- not all to distinct result set
-       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
-       -- from dwh.flat_trade_record tr
-       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
-       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-      )  scp
-      left join lateral
-      (
-        select po.order_id
-          , po.orig_order_id
-          , po.account_id
-          , po.multileg_reporting_type
-          , po.multileg_order_id
-          , po.cross_order_id
-          , po.create_date_id
-          , po.client_order_id
-          , po.instrument_id
-          , po.order_qty
-          , po.price
-          , po.side
-          , po.sub_strategy_id
-          , po.ex_destination_code_id
-          , po.ex_destination
-          , po.order_type_id
-          , po.time_in_force_id
-          , po.customer_or_firm_id
-          , po.order_capacity_id
-          , po.client_id_text
-          , po.process_time
-          , po.opt_exec_broker_id
-          , po.no_legs
-          , po.open_close
-          , po.fix_connection_id
-          , po.clearing_firm_id
-          , po.fix_message_id
-          , po.stop_price
-          , po.trans_type
-          , oc.option_series_id
-          , oc.opra_symbol
-          , os.underlying_instrument_id
-          , os.root_symbol
-          --, po.*
-        from dwh.client_order po
-        left join dwh.d_option_contract oc
-          ON po.instrument_id = oc.instrument_id
-        left join dwh.d_option_series os
-          --ON oc.option_series_id = os.option_series_id
-          ON oc.option_series_id = os.option_series_id
-        where 1=1
-          and po.create_date_id between l_gtc_start_date_id and l_end_date_id -- last half of year. GTC purpose
-          and po.order_id = scp.order_id
-        limit 1 -- for NL acceleration
-      ) po ON true
-      left join dwh.client_order oo
-        ON po.orig_order_id = oo.order_id
-        and oo.create_date_id between l_gtc_start_date_id and l_end_date_id
-      left join dwh.d_account ac
-        ON po.account_id = ac.account_id
-      left join lateral
-        (
-           select sum(fyc.day_cum_qty) as filled_qty
-             , round(sum(fyc.day_avg_px*fyc.day_cum_qty)/nullif(sum(fyc.day_cum_qty), 0)::numeric, 4)::numeric as avg_px
-             , min(fyc.routed_time) as routed_time
-             , max(fyc.exec_time) as exec_time -- can it be event_time or transact time? min or max?
-             , fyc.order_id
-             , min(fyc.nbbo_bid_price) as nbbo_bid_price
-             , min(fyc.nbbo_bid_quantity) as nbbo_bid_quantity
-             , min(fyc.nbbo_ask_price) as nbbo_ask_price
-             , min(fyc.nbbo_ask_quantity) as nbbo_ask_quantity
-           from data_marts.f_yield_capture fyc -- here we have all orders, so we can use it for cum_qty calculation (instead of FTR)
-           where fyc.order_id = po.order_id
-             and fyc.status_date_id between l_gtc_start_date_id and l_end_date_id
-           group by fyc.order_id
-           limit 1 -- just in case to insure NL join method
-        ) fyc on true
-      -- the last execution
-      left join lateral
-        (
-          select ex.text_
-            , ex.order_status
-            , ex.exec_type
-            , ex.exec_id
-            , ex.leaves_qty
-          from dwh.execution ex
-          where 1=1
-            --and ex.exec_date_id = 20190604
-            and ex.exec_date_id between l_start_date_id and l_end_date_id
-            and ex.order_id = po.order_id
-          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
-          limit 1
-        ) ex on true
-      -- fix_message of order
-      left join lateral
-        (
-          select (j.fix_message->>'439')::varchar as clearing_firm_id
-          from fix_capture.fix_message_json j
-          where 1=1
-            and po.clearing_firm_id is null --
-            and j.date_id between l_start_date_id and l_end_date_id -- l_gtc_start_date_id was very slow condition
-            and j.fix_message_id = po.fix_message_id
-            and j.date_id = po.create_date_id
-          limit 1
-        ) fx_co on true
-      left join dwh.d_order_status st
-        ON ex.order_status = st.order_status
-      left join dwh.d_exec_type et
-        ON ex.exec_type = et.exec_type
-      left join dwh.d_instrument i
-        ON po.instrument_id = i.instrument_id
-      left join dwh.d_instrument_type it
-        ON i.instrument_type_id = it.instrument_type_id
-      left join dwh.d_instrument ui
-        --ON os.underlying_instrument_id = ui.instrument_id
-        ON po.underlying_instrument_id = ui.instrument_id
-      left join dwh.d_target_strategy ss
-        ON po.sub_strategy_id = ss.target_strategy_id
-      left join dwh.d_ex_destination_code dc
-        ON po.ex_destination = dc.ex_destination_code
-      left join dwh.d_order_type ot
-        ON po.order_type_id = ot.order_type_id
-      left join dwh.d_time_in_force tif
-        ON po.time_in_force_id = tif.tif_id
-    /*  left join --lateral
-        (
-          select ---min(ecf.customer_or_firm_id) as customer_or_firm_id
-            ecf.customer_or_firm_id
-            , ecf.exch_customer_or_firm_id, ecf.exchange_id  -- lookup key
-            , row_number() over (partition by ecf.exch_customer_or_firm_id, ecf.exchange_id order by ecf.customer_or_firm_id) as rn
-          from dwh.d_exchange2customer_or_firm ecf
-        ) ecf
-        ON ecf.rn = 1 --true
-          and o.customer_or_firm is null
-          and ecf.exch_customer_or_firm_id = o.order_capacity
-          and ecf.exchange_id = o.exchange_id */
-      left join dwh.d_customer_or_firm cf ON cf.customer_or_firm_id = COALESCE(po.customer_or_firm_id, ac.opt_customer_or_firm) and cf.is_active = true -- ecf.customer_or_firm_id,
-      left join dwh.cross_order cro
-        ON po.cross_order_id = cro.cross_order_id
-      left join dwh.d_opt_exec_broker ebr
-        ON po.opt_exec_broker_id = ebr.opt_exec_broker_id
-      left join dwh.d_fix_connection f
-        ON po.fix_connection_id = f.fix_connection_id
-      /*left join dwh.client_order_leg l
-        ON l.order_id = po.order_id
-        and l.multileg_order_id = po.multileg_order_id*/
-      left join lateral
-        (
-          select l.order_id, l.client_leg_ref_id
-          from dwh.client_order_leg l
-          where l.multileg_order_id = po.multileg_order_id
-          limit 3000
-        ) l ON l.order_id = po.order_id
-    where po.trans_type <> 'F' -- not cancell request
-    order by po.process_time, 1;
-
-
-   else
-
-
-     return QUERY
-     /*  with par_ords as
-      (
-        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
-        from dwh.client_order co
-        where
-          -- parent level only
-          co.parent_order_id is null
-          -- only single ords and legs
-          and co.multileg_reporting_type in ('1','2')
-          -- scope filter
-          and co.create_date_id between l_start_date_id and l_end_date_id
-          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-       -- union -- not all to distinct result set
-       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
-       -- from dwh.flat_trade_record tr
-       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
-       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-      ) */
-    select --po.order_id
-        ac.account_name as "Account"
-      , (case when po.cross_order_id is not null then 'Y' else 'N' end)::varchar as "Is Cross"
-      , (case when po.multileg_reporting_type = '1' then 'N' else 'Y' end)::varchar as "Is MLeg"
-      , st.order_status_description as "Ord Status"
-      , et.exec_type_description as "Event Type"
-      , to_char(fyc.routed_time, 'HH24:MI:SS.US')::varchar as "Routed Time"
-      --, to_char(po.process_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
-      , to_char(fyc.exec_time, 'HH24:MI:SS.MS')::varchar as "Event Time"
-      , po.client_order_id as "Cl Ord ID"
-      , (case po.side
-                  when '1' then 'Buy'
-                  when '2' then 'Sell'
-                  when '3' then 'Buy minus'
-                  when '4' then 'Sell plus'
-                  when '5' then 'Sell short'
-                  when '6' then 'Sell short exempt'
-                  when '7' then 'Undisclosed'
-                  when '8' then 'Cross'
-                  when '9' then 'Cross short'
-                end)::varchar as "Side"
-      , i.display_instrument_id as "Symbol"
-      , po.order_qty::bigint as "Ord Qty"
-      , po.price as "Price"
-      , fyc.filled_qty as "Ex Qty"
-      , fyc.avg_px as "Avg Px"
-      , ss.target_strategy_desc as "Sub Strategy"
-      , dc.ex_destination_code_name as "Ex Dest"
-      , ot.order_type_name as "Ord Type"
-      , tif.tif_name as "TIF"
-      , f.fix_comp_id as "Sending Firm"
-      , cf.customer_or_firm_name as "Capacity"
-      , po.client_id_text as "Client ID"
-      , coalesce(po.clearing_firm_id, fx_co.clearing_firm_id) as "CMTA"
-      , to_char(to_date(po.create_date_id::varchar, 'YYYYMMDD'), 'DD.MM.YYYY')::varchar as "Creation Date"
-      , cro.cross_type::varchar as "Cross Ord Type"
-      , to_char(fyc.exec_time, 'DD.MM.YYYY')::varchar as "Event Date"
-      , ebr.opt_exec_broker as "Exec Broker"
-      , date_trunc('day', i.last_trade_date)::date as "Expiration Day"
-      , l.client_leg_ref_id as "Leg ID"
-      , ex.leaves_qty::bigint as "Lvs Qty"
-      , (case when po.open_close = 'O' then 'Open' else 'Close' end)::varchar as "O/C"
-      , oo.client_order_id as "Orig Cl Ord ID"
-      , po.opra_symbol as "OSI Symbol"
-      , po.root_symbol as "Root Symbol"
-      , it.instrument_type_name as "Security Type"
-      , po.stop_price as "Stop Px"
-      , ui.display_instrument_id as "Underlying Symbol"
-      --, po.*
---select count(1)
-    from
-      (
-        select order_id  -- , null::integer as date_id --, date_id -- non-GTC or today's GTC. null in date_id is because we need to have distincted order_ids
-        from dwh.client_order co
-        where
-          -- parent level only
-          co.parent_order_id is null
-          -- only single ords and legs
-          and co.multileg_reporting_type in ('1','2')
-          -- scope filter
-          and co.create_date_id between l_start_date_id and l_end_date_id
-          and co.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-       -- union -- not all to distinct result set
-       -- select tr.order_id -- , null::integer as date_id -- trades have no time_in_force information
-       -- from dwh.flat_trade_record tr
-       -- where tr.date_id between 20181001 and 20181231 --l_start_date_id and l_end_date_id
-       --   and tr.account_id in (select ac.account_id from dwh.d_account ac where ac.trading_firm_id in ('ebsrbc'))
-      )  scp
-      left join lateral
-      (
-        select po.order_id
-          , po.orig_order_id
-          , po.account_id
-          , po.multileg_reporting_type
-          , po.multileg_order_id
-          , po.cross_order_id
-          , po.create_date_id
-          , po.client_order_id
-          , po.instrument_id
-          , po.order_qty
-          , po.price
-          , po.side
-          , po.sub_strategy_id
-          , po.ex_destination_code_id
-          , po.ex_destination
-          , po.order_type_id
-          , po.time_in_force_id
-          , po.customer_or_firm_id
-          , po.order_capacity_id
-          , po.client_id_text
-          , po.process_time
-          , po.opt_exec_broker_id
-          , po.no_legs
-          , po.open_close
-          , po.fix_connection_id
-          , po.clearing_firm_id
-          , po.fix_message_id
-          , po.stop_price
-          , po.trans_type
-          , oc.option_series_id
-          , oc.opra_symbol
-          , os.underlying_instrument_id
-          , os.root_symbol
-          --, po.*
-        from dwh.client_order po
-        left join dwh.d_option_contract oc
-          ON po.instrument_id = oc.instrument_id
-        left join dwh.d_option_series os
-          --ON oc.option_series_id = os.option_series_id
-          ON oc.option_series_id = os.option_series_id
-        where 1=1
-          and po.create_date_id between l_gtc_start_date_id and l_end_date_id -- last half of year. GTC purpose
-          and po.order_id = scp.order_id
-        limit 1 -- for NL acceleration
-      ) po ON true
-      left join dwh.client_order oo
-        ON po.orig_order_id = oo.order_id
-        and oo.create_date_id between l_gtc_start_date_id and l_end_date_id
-      left join dwh.d_account ac
-        ON po.account_id = ac.account_id
-      left join lateral
-        (
-           select sum(fyc.day_cum_qty) as filled_qty
-             , round(sum(fyc.day_avg_px*fyc.day_cum_qty)/nullif(sum(fyc.day_cum_qty), 0)::numeric, 4)::numeric as avg_px
-             , min(fyc.routed_time) as routed_time
-             , max(fyc.exec_time) as exec_time -- can it be event_time or transact time? min or max?
-             , fyc.order_id
-             , min(fyc.nbbo_bid_price) as nbbo_bid_price
-             , min(fyc.nbbo_bid_quantity) as nbbo_bid_quantity
-             , min(fyc.nbbo_ask_price) as nbbo_ask_price
-             , min(fyc.nbbo_ask_quantity) as nbbo_ask_quantity
-           from data_marts.f_yield_capture fyc -- here we have all orders, so we can use it for cum_qty calculation (instead of FTR)
-           where fyc.order_id = po.order_id
-             and fyc.status_date_id between l_gtc_start_date_id and l_end_date_id
-           group by fyc.order_id
-           limit 1 -- just in case to insure NL join method
-        ) fyc on true
-      -- the last execution
-      left join lateral
-        (
-          select ex.text_
-            , ex.order_status
-            , ex.exec_type
-            , ex.exec_id
-            , ex.leaves_qty
-          from dwh.execution ex
-          where 1=1
-            --and ex.exec_date_id = 20190604
-            and ex.exec_date_id between l_start_date_id and l_end_date_id
-            and ex.order_id = po.order_id
-          order by ex.exec_time desc, ex.cum_qty desc nulls last, ex.exec_id desc -- last execution definition
-          limit 1
-        ) ex on true
-      -- fix_message of order
-      left join lateral
-        (
-          select (j.fix_message->>'439')::varchar as clearing_firm_id
-          from fix_capture.fix_message_json j
-          where 1=1
-            and po.clearing_firm_id is null --
-            and j.date_id between l_start_date_id and l_end_date_id -- l_gtc_start_date_id was very slow condition
-            and j.fix_message_id = po.fix_message_id
-            and j.date_id = po.create_date_id
-          limit 1
-        ) fx_co on true
-      left join dwh.d_order_status st
-        ON ex.order_status = st.order_status
-      left join dwh.d_exec_type et
-        ON ex.exec_type = et.exec_type
-      left join dwh.d_instrument i
-        ON po.instrument_id = i.instrument_id
-      left join dwh.d_instrument_type it
-        ON i.instrument_type_id = it.instrument_type_id
-      left join dwh.d_instrument ui
-        --ON os.underlying_instrument_id = ui.instrument_id
-        ON po.underlying_instrument_id = ui.instrument_id
-      left join dwh.d_target_strategy ss
-        ON po.sub_strategy_id = ss.target_strategy_id
-      left join dwh.d_ex_destination_code dc
-        ON po.ex_destination = dc.ex_destination_code
-      left join dwh.d_order_type ot
-        ON po.order_type_id = ot.order_type_id
-      left join dwh.d_time_in_force tif
-        ON po.time_in_force_id = tif.tif_id
-    /*  left join --lateral
-        (
-          select ---min(ecf.customer_or_firm_id) as customer_or_firm_id
-            ecf.customer_or_firm_id
-            , ecf.exch_customer_or_firm_id, ecf.exchange_id  -- lookup key
-            , row_number() over (partition by ecf.exch_customer_or_firm_id, ecf.exchange_id order by ecf.customer_or_firm_id) as rn
-          from dwh.d_exchange2customer_or_firm ecf
-        ) ecf
-        ON ecf.rn = 1 --true
-          and o.customer_or_firm is null
-          and ecf.exch_customer_or_firm_id = o.order_capacity
-          and ecf.exchange_id = o.exchange_id */
-      left join dwh.d_customer_or_firm cf ON cf.customer_or_firm_id = COALESCE(po.customer_or_firm_id, ac.opt_customer_or_firm) and cf.is_active = true -- ecf.customer_or_firm_id,
-      left join dwh.cross_order cro
-        ON po.cross_order_id = cro.cross_order_id
-      left join dwh.d_opt_exec_broker ebr
-        ON po.opt_exec_broker_id = ebr.opt_exec_broker_id
-      left join dwh.d_fix_connection f
-        ON po.fix_connection_id = f.fix_connection_id
-      /*left join dwh.client_order_leg l
-        ON l.order_id = po.order_id
-        and l.multileg_order_id = po.multileg_order_id*/
-      left join lateral
-        (
-          select l.order_id, l.client_leg_ref_id
-          from dwh.client_order_leg l
-          where l.multileg_order_id = po.multileg_order_id
-          limit 3000
-        ) l ON l.order_id = po.order_id
-    where po.trans_type <> 'F' -- not cancell request
-    order by po.process_time, 1;
-  end if;
-
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
- select public.load_log(l_load_id, l_step_id, 'export_rbc_orders_tbl COMPLETE ========= ' , l_row_cnt, 'O')
-   into l_step_id;
-   RETURN;
-END;
-$$;
-
-
-CREATE FUNCTION external_data.p_load_f_box_street_executions_daily_bkp(in_date_id integer DEFAULT NULL::integer) RETURNS integer
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-   l_row_cnt integer;
-
-   l_load_id int;
-   l_step_id int;
-
-   l_cur_date_id integer;
-   l_min_gtc_date_id integer;
-
-BEGIN
-  /*
-    we don't need to run this AFTER the HODS processed.
-  */
-
-  --if in_recalc_date_id is null
-  --then return -1;
-  --end if;
-
-  select nextval('public.load_timing_seq') into l_load_id;
-
-  l_step_id:=1;
-
-  select public.load_log(l_load_id, l_step_id, 'p_load_f_box_street_executions_daily STARTED===', 0, 'O')
-   into l_step_id;
-
-
-   -- Variables definition
-   l_cur_date_id   := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::integer);
-   l_min_gtc_date_id := to_char(to_date(l_cur_date_id::text,'YYYYMMDD') - interval '180 days', 'YYYYMMDD')::integer;
-
-
-  -- Temporary table definition
-
-/*    execute 'CREATE TEMP TABLE IF NOT EXISTS tmp_box_street_orders (
-      create_date_id int4 NULL,
-      client_order_id varchar(256) NULL,
-      parent_client_order_id varchar(256) NULL,
-      parent_create_date_id int4 NULL,
-      orders_count int4 NULL,
-      CONSTRAINT "tmp_PK_tmp_box_street_orders" PRIMARY KEY (parent_client_order_id, create_date_id, client_order_id)
-    )';
-
-  execute 'truncate table tmp_box_street_orders';
-*/
-
--- fill Temp table
-
-/*    insert into tmp_box_street_orders
-      (
-        create_date_id,
-        client_order_id,
-        parent_client_order_id,
-        parent_create_date_id,
-        orders_count
-      )
-    select so.create_date_id, so.client_order_id, po.client_order_id as parent_client_order_id, po.create_date_id as parent_create_date_id, count(1)
-    from dwh.client_order so
-      left join lateral
-        (
-          select po.client_order_id, po.create_date_id
-          from dwh.client_order po
-          where po.create_date_id between l_min_gtc_date_id and l_cur_date_id --20190414 and 20190514
-            and po.order_id = so.parent_order_id
-          limit 1
-        ) po on true
-    where so.parent_order_id is not null -- street level
-      and so.create_date_id = l_cur_date_id
-      --and so.ex_destination = 'W' -- box -- a little bit slower than via exchange_id
-      and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'box') -- быстрее
-    group by so.create_date_id, so.client_order_id, po.client_order_id, po.create_date_id
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'street orders loaded into tmp_box_street_orders ', l_row_cnt , 'I')
-     into l_step_id;
-
-    ANALYZE tmp_box_street_orders;
-    select public.load_log(l_load_id, l_step_id, 'Statistics gathered for tmp_box_street_orders ', 0 , 'O')
-     into l_step_id;
-
- IF (l_row_cnt > 0) -- we have some data loaded
-  THEN
-
-  --> correction of Min date_id for parent orders
-    select coalesce( (select min(parent_create_date_id) from tmp_box_street_orders), l_min_gtc_date_id) into l_min_gtc_date_id
-    ;
-    select public.load_log(l_load_id, l_step_id, 'Calculation date_id = '||l_cur_date_id::varchar||', MIN parent orders date_id = '||l_min_gtc_date_id::varchar, 0 , 'O')
-     into l_step_id;
-
-  --> delete calculated data befor recalculation
-    delete
-    from external_data.f_box_street_executions t
-    where t.create_date_id = l_cur_date_id -- date_id of street orders
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_box_street_executions before calculation.', l_row_cnt , 'D')
-     into l_step_id;
-
-  --> insert data
-    INSERT INTO external_data.f_box_street_executions
-      ( create_date_id
-      , message_type
-      , parent_message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_routed_time
-      , parent_create_date_id )
-
---select count(1) into l_row_cnt from (
-    select str.create_date_id
-      , fs.message_type_2 as message_type
-      , fp.message_type_2 as parent_message_type
-      , fs.exec_type
-      , fs.order_status
-      , fs.street_client_order_id
-      , fs.street_orig_client_order_id
-      , fs.street_order_id
-      , fs.street_exec_id
-      , fs.street_secondary_order_id
-      , fs.street_orig_exec_id
-      --, to_char(fs.street_transact_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_transact_time
-      --, to_char(fs.street_sending_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_sending_time
-      --, to_char(fs.street_routed_time, 'YYYY-MM-DD HH24:MI:SS.US') as street_routed_time
-      , fs.street_transact_time
-      , fs.street_sending_time
-      , fs.street_routed_time
-      , fs.target_location_id
-      , fs.client_id
-      , fs.clearing_optional_data
-      , coalesce(fs.parent_client_order_id, str.parent_client_order_id) as parent_client_order_id
-      , fp.parent_exec_id
-      , fp.parent_orig_client_order_id
-      , fp.parent_secondary_order_id
-      , fp.parent_secondary_exec_id
-      , fp.parent_routed_time
-      , case when fs.message_type not in ('8','9') then str.parent_create_date_id end as parent_create_date_id
-      --select count(1) -- should be about 300k. nope. only 116k and it takes about 4 minutes to filter out street orders
-    from
-      (
-        select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
-        from tmp_box_street_orders tmp
-        --from staging.sdn_tmp_box_street_orders tmp
-        --limit 10000
-      ) str -- the list of street orders
-      left join lateral
-      (
-        select j.message_type
-          , j.fix_message->>'35' as message_type_2
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'39' as order_status
-          , j.fix_message->>'11' as street_client_order_id
-          , j.fix_message->>'41' as street_orig_client_order_id
-          --, to_timestamp(j.fix_message->>'5050', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5050
-          --, to_timestamp(j.fix_message->>'5051', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5051
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , j.fix_message->>'143' as target_location_id
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , coalesce(j.fix_message->>'10442', j.fix_message->>'5059')::varchar as parent_client_order_id
-          -- additional attrinutes as 9769 tag is often missed in parent reports
-          , j.fix_message->>'55' as symbol
-          , j.fix_message->>'167' as instrument_type
-          , j.fix_message->>'200' as exp_ym
-          , j.fix_message->>'205' as exp_day
-          , j.fix_message->>'201' as put_call
-          , j.fix_message->>'202' as strike_px
-          , j.fix_message->>'31' as last_px
-          , j.fix_message->>'32' as last_qty
-        from fix_capture.fix_message_json j
-        where j.date_id = l_cur_date_id::integer
-          and j.date_id = str.create_date_id
-          and j.client_order_id = str.client_order_id
-          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar = '4' ))
-        limit 1000 -- executions count for one street_client_order_id
-      ) fs on true -- fix_str
-      left join lateral
-      (
-        select j.message_type
-          , j.fix_message->>'35' as message_type_2
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'39' as order_status
-          , j.client_order_id
-          , j.fix_message->>'17' as parent_exec_id
-          , j.fix_message->>'41' as parent_orig_client_order_id
-          , j.fix_message->>'198' as parent_secondary_order_id
-          , j.fix_message->>'9769' as parent_secondary_exec_id
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as parent_routed_time
-        from fix_capture.fix_message_json j
-        where j.date_id = l_cur_date_id::integer --between l_min_gtc_date_id and l_cur_date_id
-          --and j.date_id = str.create_date_id -- this is a question
-          --and case when j.message_type in ('8','9') then str.create_date_id else str.parent_create_date_id end = j.date_id
-
---какой date_id у GTC-шного парентового ордера нам нужен?
--- теоретически для ордера - дата клайант-ордера
--- для репорта = дата репорта
-
-          and j.client_order_id = str.parent_client_order_id --coalesce(fs.parent_client_order_id, str.parent_client_order_id)
-          and ( (j.fix_message->>'9769')::varchar = fs.street_exec_id
-               or
-               ( ( ( (j.fix_message->>'442')::varchar = '2' -- only for legs including last prices and qty's
-                     and (j.fix_message->>'31')::numeric = fs.last_px::numeric
-                     and (j.fix_message->>'32')::varchar = fs.last_qty::varchar
-                   )
-                    or fs.exec_type = '0' -- first report can also not to have 9769 tag
-                 )
-                 --   (j.fix_message->>'39')::varchar = fs.order_status
-                and (j.fix_message->>'150')::varchar <> 'E' -- not "pending replace" - exec_type
-                and (case when (j.fix_message->>'150')::varchar = '5' then '0' else j.fix_message->>'150' end)::varchar = fs.exec_type -- Replaced status of report will be equal to New
-                and (j.fix_message->>'55')::varchar = fs.symbol
-                and (j.fix_message->>'167')::varchar = fs.instrument_type
-                and coalesce((j.fix_message->>'200')::varchar, '-1') = coalesce(fs.exp_ym, '-1') -- exp_year_month
-                and coalesce((j.fix_message->>'205')::varchar, '-1') = coalesce(fs.exp_day, '-1') -- exp_day
-                and coalesce((j.fix_message->>'201')::varchar, '-1') = coalesce(fs.put_call, '-1') -- put_call
-                and coalesce((j.fix_message->>'202')::numeric, '-1') = coalesce(fs.strike_px::numeric, '-1') -- strike
-                --and (  )
-               )
-               or
-               ( fs.message_type not in ('8','9') -- in case of orders(not reports). Just match them
-                 --and (j.fix_message->>'41')::varchar = fs.
-               )
-              )
-          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar in ('4','E') ))
-          and case when j.message_type in ('8','9') then 'r' else 'o' end = case when fs.message_type in ('8','9') then 'r' else 'o' end -- order messages to orders, reports to reports
-        limit 1 -- just in case. We need one to one, street to parent matched executions.
-      ) fp on true -- fix_par
-    --order by coalesce(fs.street_orig_client_order_id, fs.street_client_order_id), fs.street_routed_time
---  ) src
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_box_street_executions ', l_row_cnt , 'I')
-     into l_step_id;
-*/
-
-  --> delete calculated data befor recalculation
-    delete
-    from external_data.f_box_street_executions t
-    where t.create_date_id = l_cur_date_id -- date_id of street orders
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_box_street_executions before calculation. l_cur_date_id = '||l_cur_date_id::varchar, l_row_cnt , 'R')
-     into l_step_id;
-
-
-    INSERT INTO external_data.f_box_street_executions
-      ( create_date_id
-      , message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_create_date_id
-      , street_account_name
-      , on_behalf_of_comp_id
-      , price_type
-      , exec_inst
-      , sender_comp_id
-      , side
-      , price
-      , order_qty)
-  select
-        create_date_id
-      , message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_create_date_id
-      , street_account_name
-      , on_behalf_of_comp_id
-      , price_type
-      , exec_inst
-      , sender_comp_id
-      , side
-      , price
-      , order_qty
-  from
-  (
-
-    with str_ord as materialized
-      (
-        --select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
-        --from tmp_box_street_orders tmp
-        --from staging.sdn_tmp_box_street_orders  tmp
-        --limit 10000
-
-        select so.create_date_id, so.client_order_id, so.order_id as order_id, so.fix_message_id -- message of order, not report. Sometimes it points to parent level fix message.
-          , po.client_order_id as parent_client_order_id, so.parent_order_id, po.fix_message_id as parent_fix_message_id, po.create_date_id as parent_create_date_id, count(1)
-          , so.orig_order_id, so_org.client_order_id as street_orig_client_order_id, po_org.client_order_id as parent_orig_client_order_id
-          , so.multileg_reporting_type, so.client_id_text, ac.account_name, so.instrument_id
-        from dwh.client_order so
-          left join dwh.d_account ac
-            on so.account_id = ac.account_id
-          left join lateral
-            (
-              select po.client_order_id, po.create_date_id, po.fix_message_id, po.orig_order_id
-              from dwh.client_order po
-              where po.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and po.order_id = so.parent_order_id
-                --and  cross_order_id is not null
-              limit 1
-            ) po on true
-           left join lateral
-            (
-              select org.client_order_id, org.create_date_id
-              from dwh.client_order org
-              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and org.order_id = so.orig_order_id
-              limit 1
-            ) so_org on true
-           left join lateral
-            (
-              select org.client_order_id, org.create_date_id
-              from dwh.client_order org
-              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and org.order_id = po.orig_order_id
-              limit 1
-            ) po_org on true
-        where so.parent_order_id is not null -- street level
-          and so.create_date_id = l_cur_date_id -- between 20190509 and 20190517 -- = 20190515 --l_cur_date_id
-          --and so.ex_destination = 'W' -- box -- a little bit slower than via exchange_id
-          and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'BOX' union select 'C1PAR' union select 'CBOEEH') -- быстрее
-          and so.multileg_reporting_type in ('1','2')
-          and so.cross_order_id is not null
-          --and so.client_order_id in ('AAA0053-20190514','LAA2248-20190517','MTA2616-20190509','MTA3809-20190509','MTA2333-20190513', 'MTA2355-20190513', 'MTA3079-20190510', 'MTA3086-20190510')
-        group by so.create_date_id, so.client_order_id, so.order_id, so.fix_message_id, po.client_order_id, so.parent_order_id, po.fix_message_id, po.create_date_id
-          , so.orig_order_id, so_org.client_order_id, po_org.client_order_id
-          , so.multileg_reporting_type, so.client_id_text, ac.account_name, so.instrument_id
-      )
-    select str.create_date_id --count(1) -- 131309
-      , sef.message_type
-      , coalesce(sef.exec_type, ser.exec_type) as exec_type -- in executions we have replacement of 1 and 2 into F
-      , ser.order_status
-      , str.client_order_id as street_client_order_id
-      , coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id) as street_orig_client_order_id
-      --, str.street_orig_client_order_id --, sef.street_orig_client_order_id
-
-      , sef.street_order_id as street_order_id -- 37
-      , coalesce(ser.exch_exec_id, sef.street_exec_id) as street_exec_id -- 17 ? why aren't they equal
-      , coalesce(ser.secondary_order_id, sef.street_secondary_order_id) as street_secondary_order_id
-      , sef.street_orig_exec_id as street_orig_exec_id -- 19
-
-      , coalesce(sef.street_transact_time, ser.exec_time) as street_transact_time
-      , sef.street_sending_time as street_sending_time
-      , sef.street_routed_time as street_routed_time
-      , sef.target_location_id as target_location_id -- it is only for orders reports sent to exchange
-      , coalesce(str.client_id_text, sef.client_id) as client_id
-      , sef.clearing_optional_data -- 9324
-
-      , str.parent_client_order_id
-      , per.exch_exec_id as parent_exec_id
-      , str.parent_orig_client_order_id
-      , per.secondary_order_id as parent_secondary_order_id
-      , per.secondary_exch_exec_id as parent_secondary_exec_id
-
-
-      -- additional information needed
-      , str.parent_create_date_id
-      , sef.street_instrument_type
-      , row_number() over (partition by str.client_order_id, ser.exch_exec_id, coalesce(sef.account_name, str.account_name) order by str.order_id) as rn1 -- need only one order record for multileg
-      , row_number() over (partition by str.create_date_id, sef.message_type, str.client_order_id, sef.street_order_id, coalesce(ser.exch_exec_id, sef.street_exec_id), coalesce(sef.account_name, str.account_name), str.instrument_id order by str.order_id) as rn2 -- deduplication when we have (43) PossDupFlag = 'Y' (BAA0002-20181002)
-      , coalesce(sef.account_name, str.account_name) as street_account_name
-
-      -- requested by John
-      , sef.fix_tag_115 as on_behalf_of_comp_id
-      , sef.fix_tag_423 as price_type
-      , sef.fix_tag_18 as exec_inst
-      , sef.sender_comp_id
-      , sef.side
-      , sef.price::numeric
-      , sef.order_qty::int
-
-      /*, sef.client_order
-      , str.fix_message_id
-      , str.order_id
-      , str.multileg_reporting_type
-      , str.parent_order_id
-      --, ser.* --exec_id
-      , per.* */
-
-    from
-      (
-        select str.order_id -- for executions -> reports lookup
-          , str.parent_order_id  -- for executions -> reports of parent orders lookup
-          , null::bigint as fix_message_id        -- for orders messages lookup
-          , null::bigint as parent_fix_message_id -- for parent orders messages direct lookup
-          , str.create_date_id
-          , str.client_order_id
-          , str.street_orig_client_order_id
-          , str.multileg_reporting_type
-          , str.client_id_text
-          , str.parent_client_order_id
-          , null as parent_orig_client_order_id
-          , null as parent_create_date_id
-          , str.account_name
-          , str.instrument_id
-        from str_ord  str -- the list of street orders
-        union all
-        select distinct null::bigint as order_id -- for executions -> reports lookup
-          , null::bigint as parent_order_id     -- for executions -> reports of parent orders lookup
-          , str.fix_message_id         -- for orders messages lookup
-          , str.parent_fix_message_id  -- for parent orders messages direct lookup
-          , str.create_date_id
-          , str.client_order_id
-          , str.street_orig_client_order_id
-          , str.multileg_reporting_type
-          , str.client_id_text
-          , str.parent_client_order_id
-          , str.parent_orig_client_order_id
-          , str.parent_create_date_id
-          , str.account_name
-          , null::bigint as instrument_id
-        from str_ord  str -- the list of street orders
-      ) str -- the list of street orders plus their orders fix message ids
-      left join lateral
-      (
-        select -- for return
-            e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
-          -- for join
-          , e.fix_message_id, e.exec_id, e.order_id, e.text_
-          --, e.*
-        from dwh.execution e
-        where 1=1
-          and e.fix_message_id is not null -- if it is null then there is possibility that execution is syntethic generated
-          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
-          and e.order_id = str.order_id -- in (1679652736,1679652738,1679652740,1679660660,1679660663,1679660666) --
-          and e.exec_type not in ('4', 'A', 'b')
-          --and not exists (select 1 from fix_capture.fix_message_json j where j.date_id = 20190513 and j.fix_message_id = e.fix_message_id and ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' ))
-          --and e.order_id = 1679652736 -- in (1679652736,1679652738,1679652740) -- (1674593569, 1674593570, 1674593571) --
-      ) ser on true -- street executions reports from exchange
-      inner join lateral
-      (
-        select j.fix_message->>'35' as message_type
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'11' as client_order
-          , j.fix_message->>'41' as street_orig_client_order_id
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , (j.fix_message->>'167')::varchar as street_instrument_type
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , j.fix_message->>'1' as account_name
-          , j.fix_message->>'115' as fix_tag_115
-          , j.fix_message->>'423' as fix_tag_423
-          , j.fix_message->>'18' as fix_tag_18
-          , j.fix_message->>'49' as sender_comp_id
-          , j.fix_message->>'54' as side
-          , j.fix_message->>'44' as price
-          , j.fix_message->>'38' as order_qty
-        from fix_capture.fix_message_json j
-        where 1=1
-          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
-          and j.fix_message_id = ser.fix_message_id -- coalesce(ser.fix_message_id, fix_message_id) --in (3914795705, 3914778052) -- message for street report and not orders
-          and j.fix_message->>'9383' = 'R'
-          -- try to exclude multileg reports except rejects
-          --and not ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' )
-        union
-        select j.fix_message->>'35' as message_type
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'11' as client_order
-          , j.fix_message->>'41' as street_orig_client_order_id
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , (j.fix_message->>'167')::varchar as street_instrument_type
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , j.fix_message->>'1' as account_name
-          , j.fix_message->>'115' as fix_tag_115
-          , j.fix_message->>'423' as fix_tag_423
-          , j.fix_message->>'18' as fix_tag_18
-          , j.fix_message->>'49' as sender_comp_id
-          , j.fix_message->>'54' as side
-          , j.fix_message->>'44' as price
-          , j.fix_message->>'38' as order_qty
-        from fix_capture.fix_message_json j
-        where 1=1
-          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
-          and j.fix_message_id = str.fix_message_id ---  3914778051 --  in (3914795705, 3914778052) -- message for street order and not report
-          and j.fix_message->>'9383' = 'R'
-      ) sef on true -- street execution fix messages for reports from exchange
-      left join lateral
-      (
-        select -- fields to return
-            e.fix_message_id -- for return
-          , e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
-          -- other fields
-          , e.fix_message_id, e.exec_id, e.order_id, e.text_
-          --, e.*
-        from dwh.execution e
-        where 1=1
-          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
-          and e.order_id = str.parent_order_id -- (1674593565, 1674593567)  two legs with their own parents
-          -- get rid of multileg message
-          and (e.secondary_order_id is not null or e.order_status = '0')
-          -- status matching
-          and
-            (
-              e.secondary_exch_exec_id = ser.exch_exec_id
-              or
-              (e.order_status = '0' and ser.order_status = '0')
-            )
-        order by e.secondary_order_id desc nulls last, e.exec_time desc -- in case of presence both mleg and opt order executions for order with status = '0'
-        limit 1
-      ) per on true -- parent execution reports from exchange
- -- order by coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id, str.client_order_id), sef.street_routed_time
-
-    ) src
-  where 1=1 and (case when src.street_instrument_type = 'MLEG' then src.rn1 else 1 end = 1) and src.rn2 = 1
-  --order by coalesce(src.street_orig_client_order_id, src.street_client_order_id), src.street_routed_time
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_box_street_executions ', l_row_cnt , 'I')
-     into l_step_id;
-
-
-
-  select public.load_log(l_load_id, l_step_id, 'p_load_f_box_street_executions_daily COMPLETE ========= ' , 0, 'O')
-   into l_step_id;
-  RETURN 1;
-
-exception when others then
-  select public.load_log(l_load_id, l_step_id, sqlerrm , 0, 'E')
-  into l_step_id;
-  -- PERFORM public.load_error_log('p_load_f_box_street_executions_daily',  'I', sqlerrm, l_load_id);
-
-  RAISE;
-
-END;
-$$;
-
-
-CREATE FUNCTION external_data.p_load_f_cboe_street_executions_daily_bkp(in_date_id integer DEFAULT NULL::integer) RETURNS integer
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-   l_row_cnt integer;
-
-   l_load_id int;
-   l_step_id int;
-
-   l_cur_date_id integer;
-   l_min_gtc_date_id integer;
-
-BEGIN
-  /*
-    we don't need to run this AFTER the HODS processed.
-  */
-
-  --if in_recalc_date_id is null
-  --then return -1;
-  --end if;
-
-  select nextval('public.load_timing_seq') into l_load_id;
-
-  l_step_id:=1;
-
-  select public.load_log(l_load_id, l_step_id, 'p_load_f_cboe_street_executions_daily STARTED===', 0, 'O')
-   into l_step_id;
-
-
-   -- Variables definition
-   l_cur_date_id   := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::integer);
-   l_min_gtc_date_id := to_char(to_date(l_cur_date_id::text,'YYYYMMDD') - interval '180 days', 'YYYYMMDD')::integer;
-
-
-  -- Temporary table definition
-
-/*    execute 'CREATE TEMP TABLE IF NOT EXISTS tmp_cboe_street_orders (
-      create_date_id int4 NULL,
-      client_order_id varchar(256) NULL,
-      parent_client_order_id varchar(256) NULL,
-      parent_create_date_id int4 NULL,
-      orders_count int4 NULL,
-      CONSTRAINT "tmp_PK_tmp_cboe_street_orders" PRIMARY KEY (parent_client_order_id, create_date_id, client_order_id)
-    )';
-
-  execute 'truncate table tmp_cboe_street_orders';
-*/
-
--- fill Temp table
-
-/*    insert into tmp_cboe_street_orders
-      (
-        create_date_id,
-        client_order_id,
-        parent_client_order_id,
-        parent_create_date_id,
-        orders_count
-      )
-    select so.create_date_id, so.client_order_id, po.client_order_id as parent_client_order_id, po.create_date_id as parent_create_date_id, count(1)
-    from dwh.client_order so
-      left join lateral
-        (
-          select po.client_order_id, po.create_date_id
-          from dwh.client_order po
-          where po.create_date_id between l_min_gtc_date_id and l_cur_date_id --20190414 and 20190514
-            and po.order_id = so.parent_order_id
-          limit 1
-        ) po on true
-    where so.parent_order_id is not null -- street level
-      and so.create_date_id = l_cur_date_id
-      --and so.ex_destination = 'W' -- CBOE -- a little bit slower than via exchange_id
-      and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'CBOE') -- быстрее
-    group by so.create_date_id, so.client_order_id, po.client_order_id, po.create_date_id
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'street orders loaded into tmp_cboe_street_orders ', l_row_cnt , 'I')
-     into l_step_id;
-
-    ANALYZE tmp_cboe_street_orders;
-    select public.load_log(l_load_id, l_step_id, 'Statistics gathered for tmp_cboe_street_orders ', 0 , 'O')
-     into l_step_id;
-
- IF (l_row_cnt > 0) -- we have some data loaded
-  THEN
-
-  --> correction of Min date_id for parent orders
-    select coalesce( (select min(parent_create_date_id) from tmp_cboe_street_orders), l_min_gtc_date_id) into l_min_gtc_date_id
-    ;
-    select public.load_log(l_load_id, l_step_id, 'Calculation date_id = '||l_cur_date_id::varchar||', MIN parent orders date_id = '||l_min_gtc_date_id::varchar, 0 , 'O')
-     into l_step_id;
-
-  --> delete calculated data befor recalculation
-    delete
-    from external_data.f_cboe_street_executions t
-    where t.create_date_id = l_cur_date_id -- date_id of street orders
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_cboe_street_executions before calculation.', l_row_cnt , 'D')
-     into l_step_id;
-
-  --> insert data
-    INSERT INTO external_data.f_cboe_street_executions
-      ( create_date_id
-      , message_type
-      , parent_message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_routed_time
-      , parent_create_date_id )
-
---select count(1) into l_row_cnt from (
-    select str.create_date_id
-      , fs.message_type_2 as message_type
-      , fp.message_type_2 as parent_message_type
-      , fs.exec_type
-      , fs.order_status
-      , fs.street_client_order_id
-      , fs.street_orig_client_order_id
-      , fs.street_order_id
-      , fs.street_exec_id
-      , fs.street_secondary_order_id
-      , fs.street_orig_exec_id
-      --, to_char(fs.street_transact_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_transact_time
-      --, to_char(fs.street_sending_time, 'YYYY-MM-DD HH24:MI:SS.MS') as street_sending_time
-      --, to_char(fs.street_routed_time, 'YYYY-MM-DD HH24:MI:SS.US') as street_routed_time
-      , fs.street_transact_time
-      , fs.street_sending_time
-      , fs.street_routed_time
-      , fs.target_location_id
-      , fs.client_id
-      , fs.clearing_optional_data
-      , coalesce(fs.parent_client_order_id, str.parent_client_order_id) as parent_client_order_id
-      , fp.parent_exec_id
-      , fp.parent_orig_client_order_id
-      , fp.parent_secondary_order_id
-      , fp.parent_secondary_exec_id
-      , fp.parent_routed_time
-      , case when fs.message_type not in ('8','9') then str.parent_create_date_id end as parent_create_date_id
-      --select count(1) -- should be about 300k. nope. only 116k and it takes about 4 minutes to filter out street orders
-    from
-      (
-        select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
-        from tmp_cboe_street_orders tmp
-        --from staging.sdn_tmp_cboe_street_orders tmp
-        --limit 10000
-      ) str -- the list of street orders
-      left join lateral
-      (
-        select j.message_type
-          , j.fix_message->>'35' as message_type_2
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'39' as order_status
-          , j.fix_message->>'11' as street_client_order_id
-          , j.fix_message->>'41' as street_orig_client_order_id
-          --, to_timestamp(j.fix_message->>'5050', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5050
-          --, to_timestamp(j.fix_message->>'5051', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as routed_time_5051
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , j.fix_message->>'143' as target_location_id
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , coalesce(j.fix_message->>'10442', j.fix_message->>'5059')::varchar as parent_client_order_id
-          -- additional attrinutes as 9769 tag is often missed in parent reports
-          , j.fix_message->>'55' as symbol
-          , j.fix_message->>'167' as instrument_type
-          , j.fix_message->>'200' as exp_ym
-          , j.fix_message->>'205' as exp_day
-          , j.fix_message->>'201' as put_call
-          , j.fix_message->>'202' as strike_px
-          , j.fix_message->>'31' as last_px
-          , j.fix_message->>'32' as last_qty
-        from fix_capture.fix_message_json j
-        where j.date_id = l_cur_date_id::integer
-          and j.date_id = str.create_date_id
-          and j.client_order_id = str.client_order_id
-          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar = '4' ))
-        limit 1000 -- executions count for one street_client_order_id
-      ) fs on true -- fix_str
-      left join lateral
-      (
-        select j.message_type
-          , j.fix_message->>'35' as message_type_2
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'39' as order_status
-          , j.client_order_id
-          , j.fix_message->>'17' as parent_exec_id
-          , j.fix_message->>'41' as parent_orig_client_order_id
-          , j.fix_message->>'198' as parent_secondary_order_id
-          , j.fix_message->>'9769' as parent_secondary_exec_id
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as parent_routed_time
-        from fix_capture.fix_message_json j
-        where j.date_id = l_cur_date_id::integer --between l_min_gtc_date_id and l_cur_date_id
-          --and j.date_id = str.create_date_id -- this is a question
-          --and case when j.message_type in ('8','9') then str.create_date_id else str.parent_create_date_id end = j.date_id
-
---какой date_id у GTC-шного парентового ордера нам нужен?
--- теоретически для ордера - дата клайант-ордера
--- для репорта = дата репорта
-
-          and j.client_order_id = str.parent_client_order_id --coalesce(fs.parent_client_order_id, str.parent_client_order_id)
-          and ( (j.fix_message->>'9769')::varchar = fs.street_exec_id
-               or
-               ( ( ( (j.fix_message->>'442')::varchar = '2' -- only for legs including last prices and qty's
-                     and (j.fix_message->>'31')::numeric = fs.last_px::numeric
-                     and (j.fix_message->>'32')::varchar = fs.last_qty::varchar
-                   )
-                    or fs.exec_type = '0' -- first report can also not to have 9769 tag
-                 )
-                 --   (j.fix_message->>'39')::varchar = fs.order_status
-                and (j.fix_message->>'150')::varchar <> 'E' -- not "pending replace" - exec_type
-                and (case when (j.fix_message->>'150')::varchar = '5' then '0' else j.fix_message->>'150' end)::varchar = fs.exec_type -- Replaced status of report will be equal to New
-                and (j.fix_message->>'55')::varchar = fs.symbol
-                and (j.fix_message->>'167')::varchar = fs.instrument_type
-                and coalesce((j.fix_message->>'200')::varchar, '-1') = coalesce(fs.exp_ym, '-1') -- exp_year_month
-                and coalesce((j.fix_message->>'205')::varchar, '-1') = coalesce(fs.exp_day, '-1') -- exp_day
-                and coalesce((j.fix_message->>'201')::varchar, '-1') = coalesce(fs.put_call, '-1') -- put_call
-                and coalesce((j.fix_message->>'202')::numeric, '-1') = coalesce(fs.strike_px::numeric, '-1') -- strike
-                --and (  )
-               )
-               or
-               ( fs.message_type not in ('8','9') -- in case of orders(not reports). Just match them
-                 --and (j.fix_message->>'41')::varchar = fs.
-               )
-              )
-          and not ((j.fix_message->>'35')::varchar in ('8','9') and ((j.fix_message->>'167')::varchar = 'MLEG' or (j.fix_message->>'150')::varchar in ('4','E') ))
-          and case when j.message_type in ('8','9') then 'r' else 'o' end = case when fs.message_type in ('8','9') then 'r' else 'o' end -- order messages to orders, reports to reports
-        limit 1 -- just in case. We need one to one, street to parent matched executions.
-      ) fp on true -- fix_par
-    --order by coalesce(fs.street_orig_client_order_id, fs.street_client_order_id), fs.street_routed_time
---  ) src
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_cboe_street_executions ', l_row_cnt , 'I')
-     into l_step_id;
-*/
-
-  --> delete calculated data befor recalculation
-    delete
-    from external_data.f_cboe_street_executions t
-    where t.create_date_id = l_cur_date_id -- date_id of street orders
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'cleanup of external_data.f_cboe_street_executions before calculation. l_cur_date_id = '||l_cur_date_id::varchar, l_row_cnt , 'R')
-     into l_step_id;
-
-
-    INSERT INTO external_data.f_cboe_street_executions
-      ( create_date_id
-      , message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_create_date_id
-      , street_account_name
-      , on_behalf_of_comp_id
-      , price_type
-      , exec_inst)
-  select
-        create_date_id
-      , message_type
-      , exec_type
-      , order_status
-      , street_client_order_id
-      , street_orig_client_order_id
-      , street_order_id
-      , street_exec_id
-      , street_secondary_order_id
-      , street_orig_exec_id
-      , street_transact_time
-      , street_sending_time
-      , street_routed_time
-      , target_location_id
-      , client_id
-      , clearing_optional_data
-      , parent_client_order_id
-      , parent_exec_id
-      , parent_orig_client_order_id
-      , parent_secondary_order_id
-      , parent_secondary_exec_id
-      , parent_create_date_id
-      , street_account_name
-      , on_behalf_of_comp_id
-      , price_type
-      , exec_inst
-  from
-  (
-
-    with str_ord as materialized
-      (
-        --select tmp.create_date_id, tmp.client_order_id, tmp.parent_client_order_id, tmp.parent_create_date_id, tmp.orders_count
-        --from tmp_cboe_street_orders tmp
-        --from staging.sdn_tmp_cboe_street_orders  tmp
-        --limit 10000
-
-        select so.create_date_id, so.client_order_id, so.order_id as order_id, so.fix_message_id -- message of order, not report. Sometimes it points to parent level fix message.
-          , po.client_order_id as parent_client_order_id, so.parent_order_id, po.fix_message_id as parent_fix_message_id, po.create_date_id as parent_create_date_id, count(1)
-          , so.orig_order_id, so_org.client_order_id as street_orig_client_order_id, po_org.client_order_id as parent_orig_client_order_id
-          , so.multileg_reporting_type, cl.client_src_id, ac.account_name, so.instrument_id
-        from dwh.client_order so
-          left join data_marts.d_client cl
-            on so.client_id = cl.client_id
-          left join dwh.d_account ac
-            on so.account_id = ac.account_id
-          left join lateral
-            (
-              select po.client_order_id, po.create_date_id, po.fix_message_id, po.orig_order_id
-              from dwh.client_order po
-              where po.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and po.order_id = so.parent_order_id
-              limit 1
-            ) po on true
-           left join lateral
-            (
-              select org.client_order_id, org.create_date_id
-              from dwh.client_order org
-              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and org.order_id = so.orig_order_id
-              limit 1
-            ) so_org on true
-           left join lateral
-            (
-              select org.client_order_id, org.create_date_id
-              from dwh.client_order org
-              where org.create_date_id between l_min_gtc_date_id and l_cur_date_id  --l_min_gtc_date_id and l_cur_date_id --
-                and org.order_id = po.orig_order_id
-              limit 1
-            ) po_org on true
-        where so.parent_order_id is not null -- street level
-          and so.create_date_id = l_cur_date_id -- between 20190509 and 20190517 -- = 20190515 --l_cur_date_id
-          --and so.ex_destination = 'W' -- CBOE -- a little bit slower than via exchange_id
-          and so.exchange_id in (select ex.exchange_id from dwh.d_exchange ex where ex.real_exchange_id = 'CBOE' union select 'C1PAR' union select 'CBOEEH') -- быстрее
-          and so.multileg_reporting_type in ('1','2')
-          --and so.client_order_id in ('AAA0053-20190514','LAA2248-20190517','MTA2616-20190509','MTA3809-20190509','MTA2333-20190513', 'MTA2355-20190513', 'MTA3079-20190510', 'MTA3086-20190510')
-        group by so.create_date_id, so.client_order_id, so.order_id, so.fix_message_id, po.client_order_id, so.parent_order_id, po.fix_message_id, po.create_date_id
-          , so.orig_order_id, so_org.client_order_id, po_org.client_order_id
-          , so.multileg_reporting_type, cl.client_src_id, ac.account_name, so.instrument_id
-      )
-    select str.create_date_id --count(1) -- 131309
-      , sef.message_type
-      , coalesce(sef.exec_type, ser.exec_type) as exec_type -- in executions we have replacement of 1 and 2 into F
-      , ser.order_status
-      , str.client_order_id as street_client_order_id
-      , coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id) as street_orig_client_order_id
-      --, str.street_orig_client_order_id --, sef.street_orig_client_order_id
-
-      , sef.street_order_id as street_order_id -- 37
-      , coalesce(ser.exch_exec_id, sef.street_exec_id) as street_exec_id -- 17 ? why aren't they equal
-      , coalesce(ser.secondary_order_id, sef.street_secondary_order_id) as street_secondary_order_id
-      , sef.street_orig_exec_id as street_orig_exec_id -- 19
-
-      , coalesce(sef.street_transact_time, ser.exec_time) as street_transact_time
-      , sef.street_sending_time as street_sending_time
-      , sef.street_routed_time as street_routed_time
-      , sef.target_location_id as target_location_id -- it is only for orders reports sent to exchange
-      , coalesce(str.client_src_id, sef.client_id) as client_id
-      , sef.clearing_optional_data -- 9324
-
-      , str.parent_client_order_id
-      , per.exch_exec_id as parent_exec_id
-      , str.parent_orig_client_order_id
-      , per.secondary_order_id as parent_secondary_order_id
-      , per.secondary_exch_exec_id as parent_secondary_exec_id
-
-
-      -- additional information needed
-      , str.parent_create_date_id
-      , sef.street_instrument_type
-      , row_number() over (partition by str.client_order_id, ser.exch_exec_id, coalesce(sef.account_name, str.account_name) order by str.order_id) as rn1 -- need only one order record for multileg
-      , row_number() over (partition by str.create_date_id, sef.message_type, str.client_order_id, sef.street_order_id, coalesce(ser.exch_exec_id, sef.street_exec_id), coalesce(sef.account_name, str.account_name), str.instrument_id order by str.order_id) as rn2 -- deduplication when we have (43) PossDupFlag = 'Y' (BAA0002-20181002)
-      , coalesce(sef.account_name, str.account_name) as street_account_name
-
-      -- requested by John
-      , sef.fix_tag_115 as on_behalf_of_comp_id
-      , sef.fix_tag_423 as price_type
-      , sef.fix_tag_18 as exec_inst
-
-      /*, sef.client_order
-      , str.fix_message_id
-      , str.order_id
-      , str.multileg_reporting_type
-      , str.parent_order_id
-      --, ser.* --exec_id
-      , per.* */
-
-    from
-      (
-        select str.order_id -- for executions -> reports lookup
-          , str.parent_order_id  -- for executions -> reports of parent orders lookup
-          , null::bigint as fix_message_id        -- for orders messages lookup
-          , null::bigint as parent_fix_message_id -- for parent orders messages direct lookup
-          , str.create_date_id
-          , str.client_order_id
-          , str.street_orig_client_order_id
-          , str.multileg_reporting_type
-          , str.client_src_id
-          , str.parent_client_order_id
-          , null as parent_orig_client_order_id
-          , null as parent_create_date_id
-          , str.account_name
-          , str.instrument_id
-        from str_ord  str -- the list of street orders
-        union all
-        select distinct null::bigint as order_id -- for executions -> reports lookup
-          , null::bigint as parent_order_id     -- for executions -> reports of parent orders lookup
-          , str.fix_message_id         -- for orders messages lookup
-          , str.parent_fix_message_id  -- for parent orders messages direct lookup
-          , str.create_date_id
-          , str.client_order_id
-          , str.street_orig_client_order_id
-          , str.multileg_reporting_type
-          , str.client_src_id
-          , str.parent_client_order_id
-          , str.parent_orig_client_order_id
-          , str.parent_create_date_id
-          , str.account_name
-          , null::bigint as instrument_id
-        from str_ord  str -- the list of street orders
-      ) str -- the list of street orders plus their orders fix message ids
-      left join lateral
-      (
-        select -- for return
-            e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
-          -- for join
-          , e.fix_message_id, e.exec_id, e.order_id, e.text_
-          --, e.*
-        from dwh.execution e
-        where 1=1
-          and e.fix_message_id is not null -- if it is null then there is possibility that execution is syntethic generated
-          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
-          and e.order_id = str.order_id -- in (1679652736,1679652738,1679652740,1679660660,1679660663,1679660666) --
-          and e.exec_type not in ('4', 'A', 'b')
-          --and not exists (select 1 from fix_capture.fix_message_json j where j.date_id = 20190513 and j.fix_message_id = e.fix_message_id and ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' ))
-          --and e.order_id = 1679652736 -- in (1679652736,1679652738,1679652740) -- (1674593569, 1674593570, 1674593571) --
-      ) ser on true -- street executions reports from exchange
-      inner join lateral
-      (
-        select j.fix_message->>'35' as message_type
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'11' as client_order
-          , j.fix_message->>'41' as street_orig_client_order_id
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , (j.fix_message->>'167')::varchar as street_instrument_type
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , j.fix_message->>'1' as account_name
-          , j.fix_message->>'115' as fix_tag_115
-          , j.fix_message->>'423' as fix_tag_423
-          , j.fix_message->>'18' as fix_tag_18
-        from fix_capture.fix_message_json j
-        where 1=1
-          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
-          and j.fix_message_id = ser.fix_message_id -- coalesce(ser.fix_message_id, fix_message_id) --in (3914795705, 3914778052) -- message for street report and not orders
-          -- try to exclude multileg reports except rejects
-          --and not ( (j.fix_message->>'167')::varchar = 'MLEG' and (j.fix_message->>'150')::varchar <> '8' )
-        union
-        select j.fix_message->>'35' as message_type
-          , j.fix_message->>'150' as exec_type
-          , j.fix_message->>'11' as client_order
-          , j.fix_message->>'41' as street_orig_client_order_id
-          , to_timestamp(j.fix_message->>'60', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_transact_time -- order_creation_time - вообще это креэйшен тайм
-          , to_timestamp(j.fix_message->>'52', 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC' as street_sending_time -- вообще это служебное поле
-          , coalesce(to_timestamp((j.fix_message->>'5050')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC', to_timestamp((j.fix_message->>'5051')::varchar, 'YYYYMMDD-HH24:MI:SS.US' )::timestamp at time zone 'UTC') as street_routed_time -- а вот это как раз транзакт тайм
-          , j.fix_message->>'143' as target_location_id -- will be filled for order message sent to exchange
-          , j.fix_message->>'37' as street_order_id
-          , j.fix_message->>'17' as street_exec_id -- почему-то не совпадает с exch_exec_id экзекьюшена
-          , j.fix_message->>'198' as street_secondary_order_id
-          , j.fix_message->>'19' as street_orig_exec_id
-          , (j.fix_message->>'167')::varchar as street_instrument_type
-          , j.fix_message->>'109' as client_id
-          , j.fix_message->>'9324' as clearing_optional_data
-          , j.fix_message->>'1' as account_name
-          , j.fix_message->>'115' as fix_tag_115
-          , j.fix_message->>'423' as fix_tag_423
-          , j.fix_message->>'18' as fix_tag_18
-        from fix_capture.fix_message_json j
-        where 1=1
-          and j.date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513
-          and j.fix_message_id = str.fix_message_id ---  3914778051 --  in (3914795705, 3914778052) -- message for street order and not report
-      ) sef on true -- street execution fix messages for reports from exchange
-      left join lateral
-      (
-        select -- fields to return
-            e.fix_message_id -- for return
-          , e.order_status, e.exec_type, e.exec_time, e.exch_exec_id, e.secondary_exch_exec_id, e.secondary_order_id
-          -- other fields
-          , e.fix_message_id, e.exec_id, e.order_id, e.text_
-          --, e.*
-        from dwh.execution e
-        where 1=1
-          and e.exec_date_id = l_cur_date_id -- between 20190509 and 20190517 --= 20190513 -- 20190509 --
-          and e.order_id = str.parent_order_id -- (1674593565, 1674593567)  two legs with their own parents
-          -- get rid of multileg message
-          and (e.secondary_order_id is not null or e.order_status = '0')
-          -- status matching
-          and
-            (
-              e.secondary_exch_exec_id = ser.exch_exec_id
-              or
-              (e.order_status = '0' and ser.order_status = '0')
-            )
-        order by e.secondary_order_id desc nulls last, e.exec_time desc -- in case of presence both mleg and opt order executions for order with status = '0'
-        limit 1
-      ) per on true -- parent execution reports from exchange
- -- order by coalesce(str.street_orig_client_order_id, sef.street_orig_client_order_id, str.client_order_id), sef.street_routed_time
-
-    ) src
-  where 1=1 and (case when src.street_instrument_type = 'MLEG' then src.rn1 else 1 end = 1) and src.rn2 = 1
-  --order by coalesce(src.street_orig_client_order_id, src.street_client_order_id), src.street_routed_time
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'Load into external_data.f_cboe_street_executions ', l_row_cnt , 'I')
-     into l_step_id;
-
-
-  --> update GTC parent orders data
-/*    update external_data.f_cboe_street_executions trg
-      set parent_orig_client_order_id = src.parent_orig_client_order_id
-        , parent_routed_time = src.parent_routed_time
-        , parent_message_type = src.parent_message_type
-    from
-      (
-        select to_timestamp(to_char(o.process_time, 'YYYY-MM-DD HH24:MI:SS')::varchar||'.'||o.process_time_micsec, 'YYYY-MM-DD HH24:MI:SS.US')::timestamp without time zone as parent_routed_time
-          , oo.client_order_id as parent_orig_client_order_id
-          , o.trans_type as parent_message_type
-          , o.client_order_id as parent_client_order_id
-          , o.create_date_id as parent_create_date_id
-          , s.street_client_order_id
-          , s.create_date_id
-          , row_number() over (partition by s.street_client_order_id, o.client_order_id, o.create_date_id order by o.process_time) as rn
-        from external_data.f_cboe_street_executions s
-          inner join dwh.client_order o -- parent order
-            on o.create_date_id between l_min_gtc_date_id and l_cur_date_id
-            and o.client_order_id = s.parent_client_order_id
-            and o.create_date_id = s.parent_create_date_id
-            and o.multileg_reporting_type in ('1','3')
-          left join dwh.client_order oo
-            on o.orig_order_id = oo.order_id
-        where s.create_date_id = l_cur_date_id
-          and s.parent_create_date_id is not null
-          and s.parent_routed_time is null
-      ) src
-    where trg.create_date_id = l_cur_date_id
-      and trg.create_date_id = src.create_date_id
-      and trg.parent_create_date_id is not null -- message type not in (8,9)
-      and trg.parent_routed_time is null
-      and trg.street_client_order_id = src.street_client_order_id
-      and trg.parent_client_order_id = src.parent_client_order_id
-      and src.rn = 1 -- it is not needed, but just in case
-    ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
-    select public.load_log(l_load_id, l_step_id, 'UPD of GTC parent orders data ', l_row_cnt , 'U')
-     into l_step_id;
-
- END IF; */
----------------------------------------------------------------------------------------------------------
-  select public.load_log(l_load_id, l_step_id, 'p_load_f_cboe_street_executions_daily COMPLETE ========= ' , 0, 'O')
-   into l_step_id;
-  RETURN 1;
-
-exception when others then
-  select public.load_log(l_load_id, l_step_id, sqlerrm , 0, 'E')
-  into l_step_id;
-  -- PERFORM public.load_error_log('p_load_f_cboe_street_executions_daily',  'I', sqlerrm, l_load_id);
-
-  RAISE;
-
-END;
-$$;
+ */
 
