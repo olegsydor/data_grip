@@ -862,3 +862,5 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+
+
