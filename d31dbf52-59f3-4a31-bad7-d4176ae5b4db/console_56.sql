@@ -142,7 +142,9 @@ select array_to_string(ARRAY [
 	"AA_EXTERNAL_REFNO", --  text NULL,
 	"AA_ACTION_CODE", --  text NULL,
 	"AA_EXCEPTION_CODE" --  text NULL, from base
-     ], ',', '')
+     ], ',', ''),
+    row_number() over () as rn,
+    "AA_RECORD_TYPE" as tp
 from base
 -- where "AA_RECORD_TYPE" = 'AA'
 union all
@@ -182,6 +184,8 @@ select array_to_string(ARRAY [
 	"BB_EXTERNAL_REFNO", -- text NULL,
 	"BB_ACTION_CODE", -- text NULL,
 	"BB_EXCEPTION_CODE" -- text NULL
- ], ',', '')
+ ], ',', ''),
+    row_number() over () as rn,
+    "BB_RECORD_TYPE" as tp
 from base
--- where "AA_RECORD_TYPE" = ''
+order by rn, tp

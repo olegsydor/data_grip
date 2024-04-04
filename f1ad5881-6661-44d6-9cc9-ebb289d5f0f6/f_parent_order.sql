@@ -421,3 +421,11 @@ where parent_order_id = 285227634
 and status_date_id = 20240320
 
 
+select * from data_marts.f_parent_order
+where parent_order_id=285151125
+and status_date_id = 20240402
+order by status_date_id asc;
+
+
+select * from dwh.execution
+where exec_id = 849552334
