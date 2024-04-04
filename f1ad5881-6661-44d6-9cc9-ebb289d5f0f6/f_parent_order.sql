@@ -142,7 +142,7 @@ begin
            min(par.trading_firm_unq_id) as trading_firm_unq_id,
            min(par.order_qty)           as parent_order_qty
     from dwh.execution ex
-             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = l_date_id
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
              join lateral (select par.create_date_id,
                                   par.time_in_force_id,
                                   par.account_id,
