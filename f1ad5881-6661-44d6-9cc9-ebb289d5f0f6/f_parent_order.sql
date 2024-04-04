@@ -187,7 +187,7 @@ begin
 --                                        else false end as need_update
 --         ) nup on true
              join lateral (select true as need_update) nup on true
-             join lateral (select street_count, trade_count, last_qty, amount, street_order_qty
+             join lateral (select street_count, trade_count, last_qty, amount, street_order_qty, leaves_qty
                            from data_marts.get_exec_for_parent_order(in_parent_order_id := bs.parent_order_id,
                                                                      in_date_id := l_date_id,
                                                                      in_min_exec_id := case when nup.need_update then 0 else bs.min_exec_id end,
@@ -433,39 +433,52 @@ from data_marts.get_exec_for_parent_order(in_parent_order_id := 285227584,
 
 select * from data_marts.f_yield_capture
 where parent_order_id = 285227634
-and status_date_id = 20240320
+and status_date_id = 20240320;
 
-SELECT account_Id
-    , instrument_type_id
-    , COUNT(1) noOrdersSent
-    , SUM( CASE WHEN side = '1' THEN leaves_qty ELSE 0 END) AS QtyOpenToBuy
-    , SUM( CASE WHEN side = '1' THEN exec_qty   ELSE 0 END) AS QtyBought
-    ,
-      ---
-      SUM( CASE WHEN side <> '1' THEN t.last_qty ELSE 0 END) AS QtyOpenToSell
-    , SUM( CASE WHEN side <> '1' THEN t.exec_qty   ELSE 0 END) AS QtySold
-    ,
-      -- select
-      SUM(t.street_count) AS streetOrdersSent
-    , MAX(coalesce(t.pg_db_update_time, t.pg_db_create_time))    AS last_Trade_Time
-    FROM
-    (
-select *
-from data_marts.f_parent_order
--- from dwh.client_order
-where parent_order_id=285151125
--- and create_date_id = 20240402
--- order by status_date_id asc
-    ) t;
+SELECT --tf.trading_firm_name
+       x.trading_firm_unq_id,
+       x.account_ID,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN noOrdersSent ELSE 0 END)     EQ_NO_ORDERS_SENT,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyOpenToBuy ELSE 0 END)     EQ_QTY_OPEN_TO_BUY,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyBought ELSE 0 END)        EQ_QTY_BOUGHT,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyOpenToSell ELSE 0 END)    EQ_QTY_OPEN_TO_SELL,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN QtySold ELSE 0 END)          EQ_QTY_SOLD,
+       SUM(CASE WHEN instrument_type_id = 'E' THEN streetOrdersSent ELSE 0 END) EQ_STREET_QTY,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN noOrdersSent ELSE 0 END)     OPT_NO_ORDERS_SENT,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyOpenToBuy ELSE 0 END)     OPT_QTY_OPEN_TO_BUY,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyBought ELSE 0 END)        OPT_QTY_BOUGHT,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyOpenToSell ELSE 0 END)    OPT_QTY_OPEN_TO_SELL,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN QtySold ELSE 0 END)          OPT_QTY_SOLD,
+       SUM(CASE WHEN instrument_type_id = 'O' THEN streetOrdersSent ELSE 0 END) OPT_STREET_QTY,
+       MAX(last_Trade_Time) as                                                  LAST_TRADE_TIME
+FROM (select account_id,
+             instrument_type_id,
+             trading_firm_unq_id,
+             count(1)                                                   noorderssent,
+             sum(case when side = '1' then t.leaves_qty else 0 end)  as qtyopentobuy,
+             sum(case when side = '1' then t.last_qty else 0 end)    as qtybought,
+             ---
+             sum(case when side <> '1' then t.leaves_qty else 0 end) as qtyopentosell,
+             sum(case when side <> '1' then t.last_qty else 0 end)   as qtysold,
+             sum(t.street_count)                                     as streetorderssent,
+             max(coalesce(t.pg_db_update_time, t.pg_db_create_time)) as last_trade_time
+      FROM (select *
+            from data_marts.f_parent_order
+            where status_date_id = 20240404) t
+      GROUP BY t.account_id,
+               t.instrument_type_id,
+               t.trading_firm_unq_id) x
+group by x.trading_firm_unq_id,
+         x.account_ID
 
-  INNER JOIN account ac ON ac.account_id = t.account_id
-  INNER JOIN TRADING_FIRM TF ON ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
-  GROUP BY tf.trading_firm_name
-  , ac.trading_firm_id
-  , t.account_id
-  , ac.account_name
 
 
 select *
 from data_marts.f_parent_order
 where status_date_id = 20240404
+and leaves_qty is not null
+
+
+select * from data_marts.run_f_parent_order_process();
+
+select * from data_marts.get_exec_for_parent_order(286230453, 20240404)
