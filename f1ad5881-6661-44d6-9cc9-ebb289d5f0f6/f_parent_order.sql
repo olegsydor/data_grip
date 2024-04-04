@@ -103,14 +103,17 @@ and source_table_name = 'execution'
 -- and subscription_name = 'main_job'
 and to_char(subscribe_time, 'YYYYMMDD')::int4 = 20240320
 
+alter table data_marts.f_parent_order add column side bpchar(1);
+alter table data_marts.f_parent_order add column leaves_qty int8;
+
 
 create or replace function data_marts.load_parent_order_inc3(in_parent_order_ids bigint[] default null::bigint[],
                                                              in_date_id integer default null::integer,
                                                              in_dataset_ids bigint[] default null::bigint[])
-    returns int4
+    returns integer
     language plpgsql
 as
-$fn$
+$function$
     -- SO: 20240307 https://dashfinancial.atlassian.net/browse/DS-8065
 declare
     l_row_cnt int4;
@@ -140,7 +143,8 @@ begin
            min(par.instrument_id)       as instrument_id,
            min(par.instrument_type_id)  as instrument_type_id,
            min(par.trading_firm_unq_id) as trading_firm_unq_id,
-           min(par.order_qty)           as parent_order_qty
+           min(par.order_qty)           as parent_order_qty,
+           min(par.side)                as side
     from dwh.execution ex
              join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
              join lateral (select par.create_date_id,
@@ -149,7 +153,8 @@ begin
                                   par.instrument_id,
                                   di.instrument_type_id,
                                   par.trading_firm_unq_id,
-                                  par.order_qty
+                                  par.order_qty,
+                                  par.side
                            from dwh.client_order par
                                     join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
                            where par.order_id = cl.parent_order_id
@@ -196,10 +201,11 @@ begin
 
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count, last_qty, amount, street_order_qty,
+                                           leaves_qty,
                                            pg_db_create_time,
                                            order_qty,
                                            time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
-                                           instrument_type_id)
+                                           instrument_type_id, side)
     select tp.parent_order_id,
            tp.max_exec_id,
            tp.create_date_id,
@@ -209,6 +215,7 @@ begin
            case when tp.need_update then tp.last_qty else tp.last_qty + coalesce(fp.last_qty, 0) end,
            case when tp.need_update then tp.amount else tp.amount + coalesce(fp.amount, 0) end,
            case when tp.need_update then tp.street_order_qty else tp.amount + coalesce(fp.street_order_qty, 0) end,
+           case when tp.need_update then tp.leaves_qty else tp.leaves_qty + coalesce(fp.leaves_qty, 0) end,
            clock_timestamp(),
            --
            tp.parent_order_qty,
@@ -216,7 +223,8 @@ begin
            tp.account_id,
            tp.trading_firm_unq_id,
            tp.instrument_id,
-           tp.instrument_type_id
+           tp.instrument_type_id,
+           tp.side
     from t_parent_orders tp
              left join data_marts.f_parent_order fp
                        on fp.parent_order_id = tp.parent_order_id and fp.status_date_id = l_date_id
@@ -242,24 +250,27 @@ begin
 
     return l_row_cnt;
 end;
-$fn$;
+$function$
+;
 
 
-create or replace function data_marts.get_exec_for_parent_order(in_parent_order_id int8,
-                                                                in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int,
-                                                                in_min_exec_id int8 default null,
-                                                                in_max_exec_id int8 default null)
-    returns table
+drop function if exists data_marts.get_exec_for_parent_order;
+create function data_marts.get_exec_for_parent_order(in_parent_order_id bigint,
+                                                     in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                     in_min_exec_id bigint DEFAULT NULL::bigint,
+                                                     in_max_exec_id bigint DEFAULT NULL::bigint)
+    RETURNS TABLE
             (
-                street_count     int8,
-                trade_count      int8,
+                street_count     bigint,
+                trade_count      bigint,
                 last_qty         numeric,
                 amount           numeric,
-                street_order_qty int4
+                street_order_qty integer,
+                leaves_qty       numeric
             )
-    language plpgsql
-as
-$fx$
+    LANGUAGE plpgsql
+AS
+$function$
 declare
 
 begin
@@ -268,12 +279,14 @@ begin
                count(case when ex.exec_type = 'F' then 1 end)                               as trade_count,
                sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)                as last_qty,
                sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end)   as amount,
-               sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty
+               sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty,
+               sum(case when ex.exec_type = 'F' then ex.leaves_qty else 0 end)              as leaves_qty
         from (select distinct on (ex.order_id, ex.exec_type) cl.order_id,
                                                              cl.order_qty,
                                                              ex.exec_type,
                                                              ex.last_qty,
-                                                             ex.last_px
+                                                             ex.last_px,
+                                                             ex.leaves_qty
               from dwh.execution ex
                        join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
               where ex.exec_date_id = in_date_id
@@ -283,7 +296,9 @@ begin
                 and cl.trans_type <> 'F'
                 and ex.is_busted = 'N') ex;
 end;
-$fx$;
+$function$
+;
+
 
 select * from data_marts.load_parent_order_inc3(in_date_id := 20240308), in_dataset_ids := '{35872659,35872674,35872684,35872693,35872708,35872718,35872728,35872742,35872751,35872761,35872776,35872786,35872795,35872811,35872820,35872830,35872845,35872854,35872864,35872878,35872888,35872898,35872914,35872923,35872933,35872948,35872957,35872966,35872981,35872991,35873000,35873015,35873025,35873034,35873049,35873059,35873068,35873083,35873092,35873102,35873117,35873136,35873150,35873161,35873170,35873184,35873195,35873211,35873221,35873233,35873248,35873258,35873267,35873284,35873294,35873319,35873329,35873338,35873353,35873363,35873373,35873388,35873397,35873406,35873421,35873431,35873440,35873455,35873465,35873475,35873489,35873499,35873508,35873523,35873533,35873542,35873557,35873567,35873583,35873592,35873602,35873617,35873626,35873636,35873652,35873662,35873671,35873687,35873696,35873705,35873721,35873731,35873741,35873756,35873766,35873775,35873790,35873800,35873810,35873826,35873836,35873850,35873862,35873872,35873886,35873895,35873904,35873918,35873929,35873938,35873954,35873962,35873972,35873988,35873996,35874006,35874022,35874031,35874041,35874054,35874066,35874074,35874083,35874097,35874107,35874116,35874132,35874141,35874150,35874165,35874174,35874183,35874197,35874207,35874216,35874231,35874240,35874250,35874265,35874274,35874283,35874299,35874308,35874317,35874332,35874342,35874351,35874367,35874377,35874386,35874401,35874410,35874435,35874445,35874455,35874470,35874479,35874489,35874503,35874513,35874522,35874537,35874546,35874555,35874571,35874580,35874590,35874605,35874614,35874624,35874639,35874648,35874657,35874673,35874683,35874693,35874707,35874716,35874726,35874742,35874751,35874762,35874777,35874786,35874796,35874812,35874822,35874838,35874848,35874858,35874873,35874883,35874893,35874907,35874917,35874926,35874941,35874951,35874961,35874975,35874984,35874993,35875008,35875017,35875027,35875042,35875051,35875061,35875123,35875133,35875143,35875203,35875213,35875223,35875285,35875294,35875365,35875376,35875388,35875447,35875457,35875518,35875528,35875538,35875600,35875610,35875619,35875681,35875692,35875701,35875762,35875772,35875782,35875843,35875852,35875862,35875923,35875933,35875943,35876004,35876014,35876036,35876084,35876094,35876116,35876164,35876174,35876189,35876245,35876254,35876276,35876325,35876335,35876395,35876405,35876415,35876476,35876485,35876495,35876556,35876565,35876574,35876636,35876646,35876655,35876717,35876728,35876738,35876800,35876810,35876819,35876880,35876891,35876925,35876963,35876973,35877034,35877044,35877053,35877115,35877124,35877133,35877195,35877204,35877214,35877275,35877285,35877294,35877355,35877365,35877374,35877436,35877446,35877456,35877517,35877526,35877535,35877595,35877604,35877614,35877676,35877685,35877694,35877755,35877765,35877774,35877835,35877845,35877854,35877915,35877925,35877934,35877995,35878004,35878013,35878074,35878084,35878093,35878155,35878165,35878175,35878236,35878246,35878260,35878317,35878328,35878363,35878400,35878410,35878471,35878480,35878491,35878551,35878562,35878571,35878632,35878642,35878652,35878713,35878725,35878788,35878798,35878808,35878868,35878888,35879505,35879515,35879747,35879756,35879827,35879896,35880115,35880131,35880184,35880205,35880218,35880228,35880242,35880608,35880634,35880658,35880683,35880692,35880702,35880754,35880773,35880860,35880877,35880935,35880944,35880952,35880967,35880976,35880986,35881015,35881027,35881039,35881048,35881058,35881074,35881084,35881094,35881109,35881118,35881144,35881153,35881165,35881176,35881198,35881231,35881248,35881258,35881383,35881404,35881607,35881632,35881644,35881660}');
 
@@ -420,12 +435,37 @@ select * from data_marts.f_yield_capture
 where parent_order_id = 285227634
 and status_date_id = 20240320
 
-
-select * from data_marts.f_parent_order
+SELECT account_Id
+    , instrument_type_id
+    , COUNT(1) noOrdersSent
+    , SUM( CASE WHEN side = '1' THEN leaves_qty ELSE 0 END) AS QtyOpenToBuy
+    , SUM( CASE WHEN side = '1' THEN exec_qty   ELSE 0 END) AS QtyBought
+    ,
+      ---
+      SUM( CASE WHEN side <> '1' THEN t.last_qty ELSE 0 END) AS QtyOpenToSell
+    , SUM( CASE WHEN side <> '1' THEN t.exec_qty   ELSE 0 END) AS QtySold
+    ,
+      -- select
+      SUM(t.street_count) AS streetOrdersSent
+    , MAX(coalesce(t.pg_db_update_time, t.pg_db_create_time))    AS last_Trade_Time
+    FROM
+    (
+select *
+from data_marts.f_parent_order
+-- from dwh.client_order
 where parent_order_id=285151125
-and status_date_id = 20240402
-order by status_date_id asc;
+-- and create_date_id = 20240402
+-- order by status_date_id asc
+    ) t;
+
+  INNER JOIN account ac ON ac.account_id = t.account_id
+  INNER JOIN TRADING_FIRM TF ON ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
+  GROUP BY tf.trading_firm_name
+  , ac.trading_firm_id
+  , t.account_id
+  , ac.account_name
 
 
-select * from dwh.execution
-where exec_id = 849552334
+select *
+from data_marts.f_parent_order
+where status_date_id = 20240404
