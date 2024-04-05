@@ -40,7 +40,6 @@ with base as (select
                   null                                                       as "AA_ATS_MPID",
                   null                                                       as "AA_PRODUCT_TYPE",
                   null                                                       as "AA_PRODUCT_ID",
---                   null                                                       as "AA_FILLER",
                   null                                                       as "AA_EXTERNAL_REFNO",
                   null                                                       as "AA_ACTION_CODE",
                   null                                                       as "AA_EXCEPTION_CODE",
@@ -105,12 +104,12 @@ with base as (select
                        "BB_TRADE_DATE",
                        "BB_SHORT_SALE")
 select array_to_string(ARRAY [
-    "AA_RECORD_TYPE", -- text NULL,
-	"AA_REFERENCE_NUMBER"::text, --  int8 NULL,
-	"AA_TRADE_DATE", --  text NULL,
-	"AA_ACCOUNT_NUMBER", --  text NULL,
+    "AA_RECORD_TYPE", -- text NULL, 1-2
+	lpad("AA_REFERENCE_NUMBER"::text, 5, '0'),--  int8 NULL, 3-7
+	"AA_TRADE_DATE", --  text, - 8-15
+	left("AA_ACCOUNT_NUMBER", 10),--  text, 16-25
 	"AA_BUY/SELL", --  text NULL,
-	"AA_EXECUTING_BROKER", --  text NULL,
+	"AA_EXECUTING_BROKER", --  text,
 	"AA_RECEIVE/DELIVER_BROKER_ALPHA", --  text NULL,
 	"AA_RECEIVE/DELIVER_BROKER_NUMBER", --  text NULL,
 	"AA_MARKET/EXCHANGE", --  text NULL,
