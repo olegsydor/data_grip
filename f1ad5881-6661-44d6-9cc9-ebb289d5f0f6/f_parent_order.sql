@@ -483,19 +483,19 @@ and leaves_qty is not null
 
 select * from data_marts.run_f_parent_order_process();
 
-select * from data_marts.get_exec_for_parent_order(286230453, 20240404)
+select * from data_marts.get_exec_for_parent_order(286081164, 20240402,)
 
 -----------------------------------------------------------------------------------------------------------------------
 
 select * from data_marts.f_parent_order
-where parent_order_id = 286055098;
+where parent_order_id = 286081164;
 
-select ex.exec_type, exec_date_id, ex.exec_id, * from dwh.client_order cl
+select ex.exec_type, exec_date_id, ex.exec_id, ex.leaves_qty, * from dwh.client_order cl
          join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id >= cl.create_date_id
-where parent_order_id = 286055098;
+where parent_order_id = 286081164;
 
 select * from data_marts.load_parent_order_inc3(in_date_id := 20240401), in_dataset_ids := '{37112338}');
-select * from data_marts.load_parent_order_inc3(in_date_id := 20240402), in_parent_order_ids := '{286055098}');
+select * from data_marts.load_parent_order_inc3(in_date_id := 20240402), in_parent_order_ids := '{286081164}');
 
 
     create temp table t_base as
@@ -556,7 +556,7 @@ select count(distinct order_id)    as street_count,
                sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)                as last_qty,
                sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end)   as amount,
                sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty,
-               min(case when ex.exec_type = 'F' then ex.leaves_qty else 0 end)              as leaves_qty
+               min(case when ex.exec_type = 'F' then ex.leaves_qty end)              as leaves_qty
         from (select --distinct on (ex.order_id, ex.exec_id)
                   cl.order_id,
                                                              cl.order_qty,
@@ -569,7 +569,7 @@ select count(distinct order_id)    as street_count,
                            where ex.exec_date_id = :in_date_id
                 and cl.parent_order_id = :in_parent_order_id
                 and ex.exec_id between :in_min_exec_id and :in_max_exec_id
---                 and ex.exec_type in ('F', '0', 'W')
---                 and cl.trans_type <> 'F'
---                 and ex.is_busted = 'N'
+                and ex.exec_type in ('F', '0', 'W')
+                and cl.trans_type <> 'F'
+                and ex.is_busted = 'N'
                            ) ex;
