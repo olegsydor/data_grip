@@ -247,46 +247,47 @@ with base as (select
                        "BB_TRADE_DATE",
                        "BB_SHORT_SALE")
 select array_to_string(ARRAY [
-    "AA_RECORD_TYPE", -- text NULL, 1-2
-	lpad("AA_REFERENCE_NUMBER"::text, 5, '0'),--  int8 NULL, 3-7
-	"AA_TRADE_DATE", --  text, - 8-15
-	left("AA_ACCOUNT_NUMBER", 10),--  text, 16-25
-	"AA_BUY/SELL", --  text NULL,
-	"AA_EXECUTING_BROKER", --  text,
-	"AA_RECEIVE/DELIVER_BROKER_ALPHA", --  text NULL,
-	"AA_RECEIVE/DELIVER_BROKER_NUMBER", --  text NULL,
-	"AA_MARKET/EXCHANGE", --  text NULL,
-	"AA_TIME", --  text NULL,
-	"AA_EXTENDED_TIME", --  text NULL,
-	"AA_FILLER", --  text NULL,
-	"AA_QUANTITY"::text, --  int8 NULL,
-	"AA_SYMBOL/CUSIP", --  varchar(10) NULL,
-	"AA_STOCK/BOND/OPTION", --  text NULL,
-	"AA_BLOTTER_CODE/PUT_CALL_INDICATOR", --  text NULL,
-	"AA_BILL/NO_BILL_CODE", --  text NULL,
-	"AA_RECEIVE/DELIVER_BADGE_", --  text NULL,
-	"AA_AGENCY/PRINC", --  text NULL,
-	"AA_CONTRACT_CODE", --  text NULL,
-	"AA_MISCELLANEOUS_TRADE_TYPE_INDICATOR", --  text NULL,
-	"AA_MULTI_CONTRA_FLAG", --  text NULL,
-	"AA_EXTENDED_PRICE"::text, --  numeric NULL,
-	"AA_EXECUTING_BADGE", --  text NULL,
-	"AA_QSR_BRANCH", --  text NULL,
-	"AA_QSR_SEQUENCE_NUMBER", --  text NULL,
-	"AA_CUSTOMER_MNEMONIC", --  text NULL,
-	"AA_RESERVED", --  text NULL,
-	"AA_CUSTOMER_ID", --  text NULL,
-	"AA_ORIGIN_EXCHANGE", --  text NULL,
-	"AA_NTCA_INDICATOR", --  text NULL,
-	"AA_ATS_MPID", --  text NULL,
-	"AA_PRODUCT_TYPE", --  text NULL,
-	"AA_PRODUCT_ID", --  text NULL,
-	"AA_EXTERNAL_REFNO", --  text NULL,
-	"AA_ACTION_CODE", --  text NULL,
-	"AA_EXCEPTION_CODE" --  text NULL, from base
-     ], ',', ''),
-    row_number() over () as rn,
-    "AA_RECORD_TYPE" as tp
+                           "AA_RECORD_TYPE", -- text NULL, 1-2
+                           lpad("AA_REFERENCE_NUMBER"::text, 5, '0'),--  int8 NULL, 3-7
+                           "AA_TRADE_DATE", --  text, - 8-15
+                           left("AA_ACCOUNT_NUMBER", 10),--  text, 16-25
+                           "AA_BUY/SELL", --  text, 26
+                           "AA_EXECUTING_BROKER", --  text, 27-30
+                           repeat(' ', 4), --"AA_RECEIVE/DELIVER_BROKER_ALPHA", --  text, 31-34
+                           "AA_RECEIVE/DELIVER_BROKER_NUMBER", --  text, 35-38
+                           "AA_MARKET/EXCHANGE", --  text, 39
+                           repeat(' ', 4), --"AA_TIME", --  text, 40-43
+                           repeat(' ', 4), --"AA_EXTENDED_TIME", --  text, 44-47
+                           repeat(' ', 6), --"AA_FILLER", --  text, 48-53
+                           lpad("AA_QUANTITY"::text, 9, '0'), --  int8, 54-62
+                           rpad("AA_SYMBOL/CUSIP", 10, ' '), --  varchar(10), 63-72
+                           "AA_STOCK/BOND/OPTION", --  text, 73
+                           "AA_BLOTTER_CODE/PUT_CALL_INDICATOR", --  text, 74-75
+                           ' ', --"AA_BILL/NO_BILL_CODE", --  text, 76
+                           repeat(' ', 4), --"AA_RECEIVE/DELIVER_BADGE_", --  text, 77-80
+                           "AA_AGENCY/PRINC", --  text, 81
+                           "AA_CONTRACT_CODE", --  text, 82
+                           ' ', --"AA_MISCELLANEOUS_TRADE_TYPE_INDICATOR", --  text, 83
+                           ' ', --"AA_MULTI_CONTRA_FLAG", --  text, 84
+                           to_char("AA_EXTENDED_PRICE", 'FM09999V99999990'), --  numeric, 85-97
+                           repeat(' ', 4), -- "AA_EXECUTING_BADGE", --  text, 98-101
+                           repeat(' ', 4), -- "AA_QSR_BRANCH", --  text NULL, 102-105
+                           repeat(' ', 4), -- "AA_QSR_SEQUENCE_NUMBER", --  text, 106-109
+                           repeat(' ', 4), -- "AA_CUSTOMER_MNEMONIC", --  text, 110-113
+                           repeat(' ', 13), -- "AA_RESERVED", --  text NULL, 114-126
+                           repeat(' ', 10), -- "AA_CUSTOMER_ID", --  text NULL, 127-136
+                           ' ', -- "AA_ORIGIN_EXCHANGE", --  text NULL, 137
+                           ' ', -- "AA_NTCA_INDICATOR", --  text NULL, 138
+                           repeat(' ', 4), -- "AA_ATS_MPID", --  text NULL, 139-142
+                           ' ', -- "AA_PRODUCT_TYPE", --  text NULL, 143
+                           repeat(' ', 21), -- "AA_PRODUCT_ID", --  text NULL, 144-164
+                           repeat(' ', 20), -- filler 165-184
+                           repeat(' ', 10), -- "AA_EXTERNAL_REFNO", --  text NULL,185-194
+                           ' ', -- "AA_ACTION_CODE", --  text NULL,195
+                           repeat(' ', 4) -- "AA_EXCEPTION_CODE" --  text NULL,  196-199
+                           ], '', ''),
+       row_number() over () as rn,
+       "AA_RECORD_TYPE"     as tp
 from base
 -- where "AA_RECORD_TYPE" = 'AA'
 union all
