@@ -561,6 +561,7 @@ select count(distinct order_id)    as street_count,
 
                   cl.create_date_id,
                   cl.order_id,
+                  ex.exec_id,
                                                              cl.order_qty,
                                                              ex.exec_type,
                                                              ex.last_qty,
@@ -571,7 +572,23 @@ select count(distinct order_id)    as street_count,
                            where ex.exec_date_id = :in_date_id
                 and cl.parent_order_id = :in_parent_order_id
                 and ex.exec_id between :in_min_exec_id and :in_max_exec_id
-                and ex.exec_type in ('F', '0', 'W')
+                and ex.exec_type in ('F', '0', 'W', '4')
                 and cl.trans_type <> 'F'
                 and ex.is_busted = 'N'
+                           order by ex.exec_id
                            ) ex;
+
+
+select par.order_id, ex.last_qty--, pex.*
+from dwh.client_order par
+         join dwh.client_order cl on cl.parent_order_id = par.order_id
+         join dwh.execution ex on ex.order_id = cl.order_id and ex.order_create_date_id = cl.create_date_id
+
+where par.order_id = :in_parent_order_id
+  and par.create_date_id = :l_date_id
+  and ex.exec_type in ('F', '4')
+and ex.exec_id between :in_min_exec_id and :in_max_exec_id;
+
+select exec_id, leaves_qty, ex.last_qty, exec_type, * from dwh.client_order cl
+join dwh.execution ex on ex.order_id = cl.order_id
+where cl.order_id = :in_parent_order_id
