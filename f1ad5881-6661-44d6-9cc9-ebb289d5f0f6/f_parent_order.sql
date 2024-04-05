@@ -487,3 +487,12 @@ select * from data_marts.get_exec_for_parent_order(286230453, 20240404)
 
 -----------------------------------------------------------------------------------------------------------------------
 
+select * from data_marts.f_parent_order
+where parent_order_id = 286055098;
+
+select ex.exec_type, exec_date_id, * from dwh.client_order cl
+         join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id >= cl.create_date_id
+where parent_order_id = 286055098;
+
+select * from data_marts.load_parent_order_inc3(in_date_id := 20240401, in_dataset_ids := '{37112338}');
+select * from data_marts.load_parent_order_inc3(in_date_id := 20240402)
