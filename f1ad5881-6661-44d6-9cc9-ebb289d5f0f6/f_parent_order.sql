@@ -435,26 +435,27 @@ select * from data_marts.f_yield_capture
 where parent_order_id = 285227634
 and status_date_id = 20240320;
 
-SELECT --tf.trading_firm_name
+create view data_marts.v_mon_dash_trade as
+select --tf.trading_firm_name
        x.trading_firm_unq_id,
        x.account_ID,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN noOrdersSent ELSE 0 END)     EQ_NO_ORDERS_SENT,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyOpenToBuy ELSE 0 END)     EQ_QTY_OPEN_TO_BUY,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyBought ELSE 0 END)        EQ_QTY_BOUGHT,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN QtyOpenToSell ELSE 0 END)    EQ_QTY_OPEN_TO_SELL,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN QtySold ELSE 0 END)          EQ_QTY_SOLD,
-       SUM(CASE WHEN instrument_type_id = 'E' THEN streetOrdersSent ELSE 0 END) EQ_STREET_QTY,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN noOrdersSent ELSE 0 END)     OPT_NO_ORDERS_SENT,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyOpenToBuy ELSE 0 END)     OPT_QTY_OPEN_TO_BUY,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyBought ELSE 0 END)        OPT_QTY_BOUGHT,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN QtyOpenToSell ELSE 0 END)    OPT_QTY_OPEN_TO_SELL,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN QtySold ELSE 0 END)          OPT_QTY_SOLD,
-       SUM(CASE WHEN instrument_type_id = 'O' THEN streetOrdersSent ELSE 0 END) OPT_STREET_QTY,
-       MAX(last_Trade_Time) as                                                  LAST_TRADE_TIME
+       sum(case when instrument_type_id = 'E' then noorderssent else 0 end)     eq_no_orders_sent,
+       sum(case when instrument_type_id = 'E' then qtyopentobuy else 0 end)     eq_qty_open_to_buy,
+       sum(case when instrument_type_id = 'E' then qtybought else 0 end)        eq_qty_bought,
+       sum(case when instrument_type_id = 'E' then qtyopentosell else 0 end)    eq_qty_open_to_sell,
+       sum(case when instrument_type_id = 'E' then qtysold else 0 end)          eq_qty_sold,
+       sum(case when instrument_type_id = 'E' then streetorderssent else 0 end) eq_street_qty,
+       sum(case when instrument_type_id = 'O' then noorderssent else 0 end)     opt_no_orders_sent,
+       sum(case when instrument_type_id = 'O' then qtyopentobuy else 0 end)     opt_qty_open_to_buy,
+       sum(case when instrument_type_id = 'O' then qtybought else 0 end)        opt_qty_bought,
+       sum(case when instrument_type_id = 'O' then qtyopentosell else 0 end)    opt_qty_open_to_sell,
+       sum(case when instrument_type_id = 'O' then qtysold else 0 end)          opt_qty_sold,
+       sum(case when instrument_type_id = 'O' then streetorderssent else 0 end) opt_street_qty,
+       max(last_trade_time) as                                                  last_trade_time
 FROM (select account_id,
              instrument_type_id,
              trading_firm_unq_id,
-             count(1)                                                   noorderssent,
+             count(1)                                                as noorderssent,
              sum(case when side = '1' then t.leaves_qty else 0 end)  as qtyopentobuy,
              sum(case when side = '1' then t.last_qty else 0 end)    as qtybought,
              ---
@@ -462,14 +463,15 @@ FROM (select account_id,
              sum(case when side <> '1' then t.last_qty else 0 end)   as qtysold,
              sum(t.street_count)                                     as streetorderssent,
              max(coalesce(t.pg_db_update_time, t.pg_db_create_time)) as last_trade_time
-      FROM (select *
+      from (select *
             from data_marts.f_parent_order
-            where status_date_id = 20240404) t
-      GROUP BY t.account_id,
+            where status_date_id = to_char(current_date, 'YYYYMMDD')::int
+                  ) t
+      group by t.account_id,
                t.instrument_type_id,
                t.trading_firm_unq_id) x
 group by x.trading_firm_unq_id,
-         x.account_ID
+         x.account_id
 
 
 
@@ -482,3 +484,6 @@ and leaves_qty is not null
 select * from data_marts.run_f_parent_order_process();
 
 select * from data_marts.get_exec_for_parent_order(286230453, 20240404)
+
+-----------------------------------------------------------------------------------------------------------------------
+
