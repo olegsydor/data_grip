@@ -490,9 +490,84 @@ select * from data_marts.get_exec_for_parent_order(286230453, 20240404)
 select * from data_marts.f_parent_order
 where parent_order_id = 286055098;
 
-select ex.exec_type, exec_date_id, * from dwh.client_order cl
+select ex.exec_type, exec_date_id, ex.exec_id, * from dwh.client_order cl
          join dwh.execution ex on ex.order_id = cl.order_id and ex.exec_date_id >= cl.create_date_id
 where parent_order_id = 286055098;
 
 select * from data_marts.load_parent_order_inc3(in_date_id := 20240401, in_dataset_ids := '{37112338}');
-select * from data_marts.load_parent_order_inc3(in_date_id := 20240402)
+select * from data_marts.load_parent_order_inc3(in_date_id := 20240402), in_parent_order_ids := '{286055098}');
+
+
+    create temp table t_base as
+    select cl.parent_order_id,
+           min(par.create_date_id)      as create_date_id,
+           min(exec_id)                 as min_exec_id,
+           max(exec_id)                 as max_exec_id,
+           min(par.time_in_force_id)    as time_in_force_id,
+           min(par.account_id)          as account_id,
+           min(par.instrument_id)       as instrument_id,
+           min(par.instrument_type_id)  as instrument_type_id,
+           min(par.trading_firm_unq_id) as trading_firm_unq_id,
+           min(par.order_qty)           as parent_order_qty,
+           min(par.side)                as side
+    from dwh.execution ex
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+             join lateral (select par.create_date_id,
+                                  par.time_in_force_id,
+                                  par.account_id,
+                                  par.instrument_id,
+                                  di.instrument_type_id,
+                                  par.trading_firm_unq_id,
+                                  par.order_qty,
+                                  par.side
+                           from dwh.client_order par
+                                    join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+                           where par.order_id = cl.parent_order_id
+                           limit 1) par on true
+    where exec_date_id = :l_date_id
+      and case when :in_dataset_ids is null then true else ex.dataset_id = any (:in_dataset_ids) end
+      and case when :in_parent_order_ids is null then true else cl.parent_order_id = any (:in_parent_order_ids) end
+      and not is_parent_level
+      and ex.exec_type in ('F', '0', 'W')
+      and cl.parent_order_id is not null
+    group by cl.parent_order_id;
+
+select * from t_base;
+
+create temp table t_parent_orders as
+    select bs.*,
+           val.*,
+           nup.need_update
+    from t_base bs
+             join lateral (select true as need_update) nup on true
+             join lateral (select street_count, trade_count, last_qty, amount, street_order_qty, leaves_qty
+                           from data_marts.get_exec_for_parent_order(in_parent_order_id := bs.parent_order_id,
+                                                                     in_date_id := :l_date_id,
+                                                                     in_min_exec_id := case when nup.need_update then 0 else bs.min_exec_id end,
+                                                                     in_max_exec_id := bs.max_exec_id
+                                )
+                           limit 1) val on true;
+
+
+select * from data_marts.get_exec_for_parent_order(in_parent_order_id := 286055098, in_date_id := 20240402, in_min_exec_id := 849515366, in_max_exec_id := 849515393);
+
+select count(distinct order_id)    as street_count,
+               count(case when ex.exec_type = 'F' then 1 end)                               as trade_count,
+               sum(case when ex.exec_type = 'F' then ex.last_qty else 0 end)                as last_qty,
+               sum(case when ex.exec_type = 'F' then ex.last_qty * ex.last_px else 0 end)   as amount,
+               sum(case when ex.exec_type in ('0', 'W') then ex.order_qty else 0 end)::int4 as street_order_qty,
+               sum(case when ex.exec_type = 'F' then ex.leaves_qty else 0 end)              as leaves_qty
+        from (select distinct on (ex.order_id, ex.exec_id) cl.order_id,
+                                                             cl.order_qty,
+                                                             ex.exec_type,
+                                                             ex.last_qty,
+                                                             ex.last_px,
+                                                             ex.leaves_qty
+              from dwh.execution ex
+                       join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+                           where ex.exec_date_id = :in_date_id
+                and cl.parent_order_id = :in_parent_order_id
+                and ex.exec_id between :in_min_exec_id and :in_max_exec_id
+                and ex.exec_type in ('F', '0', 'W')
+                and cl.trans_type <> 'F'
+                and ex.is_busted = 'N') ex;
