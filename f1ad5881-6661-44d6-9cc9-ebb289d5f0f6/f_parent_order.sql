@@ -592,3 +592,58 @@ and ex.exec_id between :in_min_exec_id and :in_max_exec_id;
 select exec_id, leaves_qty, ex.last_qty, exec_type, * from dwh.client_order cl
 join dwh.execution ex on ex.order_id = cl.order_id
 where cl.order_id = :in_parent_order_id
+
+
+
+select * from data_marts.v_mon_dash_trade;
+
+select cl.parent_order_id,
+           min(par.create_date_id)      as create_date_id,
+           min(exec_id)                 as min_exec_id,
+           max(exec_id)                 as max_exec_id,
+           min(par.time_in_force_id)    as time_in_force_id,
+           min(par.account_id)          as account_id,
+           min(par.instrument_id)       as instrument_id,
+           min(par.instrument_type_id)  as instrument_type_id,
+           min(par.trading_firm_unq_id) as trading_firm_unq_id,
+           min(par.order_qty)           as parent_order_qty,
+           min(par.side)                as side,
+           last_value(leaves_qty) over (partition by cl.parent_order_id order by ex.exec_time);
+
+select cl.parent_order_id,
+    par.create_date_id,
+       exec_id,
+       exec_id,
+       par.time_in_force_id,
+       par.account_id,
+       par.instrument_id,
+       par.instrument_type_id,
+       par.trading_firm_unq_id,
+       par.order_qty,
+       par.side,
+       leaves_qty
+-- select cl.parent_order_id, count(*)
+from dwh.execution ex
+         join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+         join lateral (select par.create_date_id,
+                              par.time_in_force_id,
+                              par.account_id,
+                              par.instrument_id,
+                              di.instrument_type_id,
+                              par.trading_firm_unq_id,
+                              par.order_qty,
+                              par.side
+                       from dwh.client_order par
+                                join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+                       where par.order_id = cl.parent_order_id
+                       limit 1) par on true
+where exec_date_id = :l_date_id
+--       and case when :in_dataset_ids is null then true else ex.dataset_id = any (:in_dataset_ids) end
+--       and case when :in_parent_order_ids is null then true else cl.parent_order_id = any (:in_parent_order_ids) end
+  and not is_parent_level
+  and ex.exec_type in ('F', '0', 'W')
+  and cl.parent_order_id is not null
+--   and cl.parent_order_id = 286263275
+    group by cl.parent_order_id
+having count(*) > 4
+limit 10;

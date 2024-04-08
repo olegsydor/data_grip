@@ -122,7 +122,7 @@ begin
                                "AA_TRADE_DATE", -- text, 8-15
                                repeat(' ', 5), --"BB_FILLER", -- text, 16-20
                                "BB_RATE_ID", -- text, 21
-                               to_char("BB_COMMISSION_RATE/AMOUNT/BPS", 'FM099V99990')::text, -- numeric NULL, 00025000 0002500000
+                               to_char("BB_COMMISSION_RATE/AMOUNT/BPS", 'FM00999V990')::text, -- numeric NULL, 00025000 0002500000
                                repeat(' ', 2), --"BB_MISCELLANEOUS_RATE_ID_1", -- text, 30-31
                                repeat(' ', 8), --"BB_MISCELLANEOUS_RATE_1", -- text, 32-39
                                "BB_EXECUTING_SERVICE", -- text, 40-43
@@ -190,14 +190,18 @@ $fx$;
 
 
 select *
-from dash360.report_fintech_ml_pro_200byte(in_start_date_id := 20240404,
-                                           in_end_date_id := 20240404,
+from dash360.report_fintech_ml_pro_200byte(in_start_date_id := 20240405,
+                                           in_end_date_id := 20240405,
                                            in_account_ids := '{70406}',
                                            in_instrument_type_ids := '{"O", "E"}');
 
 
 select to_char(current_date, 'YYYYDDD')
 
+select to_char(:"BB_COMMISSION_RATE/AMOUNT/BPS", 'FM00999V990')
+
+select * from dwh.d_account
+where account_id = 70406
 
 select tr.date_id,
                            tr.instrument_type_id,
