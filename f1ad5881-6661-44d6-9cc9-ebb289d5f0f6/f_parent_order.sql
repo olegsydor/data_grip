@@ -597,6 +597,10 @@ where cl.order_id = :in_parent_order_id
 
 select * from data_marts.v_mon_dash_trade;
 
+ select * from data_marts.f_parent_order;
+
+
+
 select cl.parent_order_id,
            min(par.create_date_id)      as create_date_id,
            min(exec_id)                 as min_exec_id,
@@ -607,43 +611,209 @@ select cl.parent_order_id,
            min(par.instrument_type_id)  as instrument_type_id,
            min(par.trading_firm_unq_id) as trading_firm_unq_id,
            min(par.order_qty)           as parent_order_qty,
-           min(par.side)                as side,
-           last_value(leaves_qty) over (partition by cl.parent_order_id order by ex.exec_time);
+           min(par.side)                as side
+--            min(par.leaves_qty)
+    from dwh.execution ex
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+             join lateral (select par.create_date_id,
+                                  par.time_in_force_id,
+                                  par.account_id,
+                                  par.instrument_id,
+                                  di.instrument_type_id,
+                                  par.trading_firm_unq_id,
+                                  par.order_qty,
+                                  par.side
+--                                   epar.leaves_qty
+                           from dwh.client_order par
+                                    join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+--                                     left join lateral (select leaves_qty
+--                                                        from dwh.execution ep
+--                                                        where ep.order_id = par.order_id
+--                                                          and ep.exec_date_id = :l_date_id
+--                                                        order by ep.exec_time desc
+--                                                        limit 1) epar on true
+                           where par.order_id = cl.parent_order_id
+                           limit 1) par on true
+    where exec_date_id = :l_date_id
+      and not is_parent_level
+      and ex.exec_type in ('F', '0', 'W')
+      and cl.parent_order_id is not null
+    group by cl.parent_order_id;
+
+
 
 select cl.parent_order_id,
-    par.create_date_id,
-       exec_id,
-       exec_id,
-       par.time_in_force_id,
-       par.account_id,
-       par.instrument_id,
-       par.instrument_type_id,
-       par.trading_firm_unq_id,
-       par.order_qty,
-       par.side,
-       leaves_qty
--- select cl.parent_order_id, count(*)
+       min(ex.exec_id) as min_exec_id,
+       max(ex.exec_id) as max_exec_id
 from dwh.execution ex
          join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
-         join lateral (select par.create_date_id,
-                              par.time_in_force_id,
-                              par.account_id,
-                              par.instrument_id,
-                              di.instrument_type_id,
-                              par.trading_firm_unq_id,
-                              par.order_qty,
-                              par.side
-                       from dwh.client_order par
-                                join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
-                       where par.order_id = cl.parent_order_id
-                       limit 1) par on true
-where exec_date_id = :l_date_id
---       and case when :in_dataset_ids is null then true else ex.dataset_id = any (:in_dataset_ids) end
---       and case when :in_parent_order_ids is null then true else cl.parent_order_id = any (:in_parent_order_ids) end
-  and not is_parent_level
-  and ex.exec_type in ('F', '0', 'W')
-  and cl.parent_order_id is not null
---   and cl.parent_order_id = 286263275
-    group by cl.parent_order_id
-having count(*) > 4
-limit 10;
+where ex.exec_date_id = 20240404
+--                          and ex.order_id = cl.order_id
+--                          and ex.order_create_date_id = cl.create_date_id
+group by cl.parent_order_id
+
+select *
+from dwh.client_order cl
+         join lateral (
+                       limit 1) ex on true
+group by cl.parent_order_id
+
+
+
+create function data_marts.load_parent_order_inc4(in_parent_order_ids bigint[] DEFAULT NULL::bigint[],
+                                                  in_date_id integer DEFAULT NULL::integer,
+                                                  in_dataset_ids bigint[] DEFAULT NULL::bigint[]) returns integer
+    language plpgsql
+as
+$$
+    -- SO: 20240307 https://dashfinancial.atlassian.net/browse/DS-8065
+declare
+    l_row_cnt int4;
+    l_load_id int8;
+    l_step_id int4;
+    l_date_id int4 := coalesce(in_date_id, to_char(current_date, 'YYYYMMDD')::int4);
+
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'load_parent_order_inc for ' || l_date_id::text || ' STARTED ===', 0, 'O')
+    into l_step_id;
+
+    --     raise notice '%, %, %', in_parent_order_ids, in_dataset_ids, in_date_id;
+
+    -- the list of orders with permanent attributes
+    drop table if exists t_base;
+    create temp table t_base as
+    select cl.parent_order_id,
+           min(exec_id)                 as min_exec_id,
+           max(exec_id)                 as max_exec_id
+    from dwh.execution ex
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+    where exec_date_id = l_date_id
+      and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
+      and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
+      and not is_parent_level
+      and ex.exec_type in ('F', '0', 'W')
+      and cl.parent_order_id is not null
+    group by cl.parent_order_id;
+
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_base - %', l_row_cnt;
+
+
+     create temp table t_base_ext as
+    select cl.parent_order_id,
+           min(par.create_date_id)      as create_date_id,
+           min_exec_id                as min_exec_id,
+           max_exec_id                as max_exec_id,
+           min(par.time_in_force_id)    as time_in_force_id,
+           min(par.account_id)          as account_id,
+           min(par.instrument_id)       as instrument_id,
+           min(par.instrument_type_id)  as instrument_type_id,
+           min(par.trading_firm_unq_id) as trading_firm_unq_id,
+           min(par.order_qty)           as parent_order_qty,
+           min(par.side)                as side
+    from t_base ex
+             join lateral (select par.create_date_id,
+                                  par.time_in_force_id,
+                                  par.account_id,
+                                  par.instrument_id,
+                                  di.instrument_type_id,
+                                  par.trading_firm_unq_id,
+                                  par.order_qty,
+                                  par.side
+                           from dwh.client_order par
+                                    join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+                           where par.order_id = cl.parent_order_id
+                           limit 1) par on true
+    where exec_date_id = :l_date_id
+      and case when :in_dataset_ids is null then true else ex.dataset_id = any (:in_dataset_ids) end
+      and case when :in_parent_order_ids is null then true else cl.parent_order_id = any (:in_parent_order_ids) end
+      and not is_parent_level
+      and ex.exec_type in ('F', '0', 'W')
+      and cl.parent_order_id is not null
+    group by cl.parent_order_id;
+
+    -- new groupped by parent_order
+    drop table if exists t_parent_orders;
+    create temp table t_parent_orders as
+    select bs.*,
+           val.*,
+           nup.need_update
+    from t_base bs
+             --              join lateral ( select case
+--                                        when exists (select null
+--                                                     from data_marts.f_parent_order fp
+--                                                     where fp.status_date_id = l_date_id
+--                                                       and fp.parent_order_id = bs.parent_order_id
+--                                                       and fp.last_exec_id > bs.min_exec_id)
+--                                            then true
+--                                        else false end as need_update
+--         ) nup on true
+             join lateral (select true as need_update) nup on true
+             join lateral (select street_count, trade_count, last_qty, amount, street_order_qty
+                           from data_marts.get_exec_for_parent_order(in_parent_order_id := bs.parent_order_id,
+                                                                     in_date_id := l_date_id,
+                                                                     in_min_exec_id := case when nup.need_update then 0 else bs.min_exec_id end,
+                                                                     in_max_exec_id := bs.max_exec_id
+                                )
+                           limit 1) val on true;
+
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_street_orders create - %', l_row_cnt;
+    create index on t_parent_orders (parent_order_id);
+
+    insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
+                                           street_count, trade_count, last_qty, amount, street_order_qty,
+                                           leaves_qty,
+                                           pg_db_create_time,
+                                           order_qty,
+                                           time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
+                                           instrument_type_id, side)
+    select tp.parent_order_id,
+           tp.max_exec_id,
+           tp.create_date_id,
+           l_date_id,
+           case when tp.need_update then tp.street_count else tp.street_count + coalesce(fp.street_count, 0) end,
+           case when tp.need_update then tp.trade_count else tp.trade_count + coalesce(fp.trade_count, 0) end,
+           case when tp.need_update then tp.last_qty else tp.last_qty + coalesce(fp.last_qty, 0) end,
+           case when tp.need_update then tp.amount else tp.amount + coalesce(fp.amount, 0) end,
+           case when tp.need_update then tp.street_order_qty else tp.amount + coalesce(fp.street_order_qty, 0) end,
+           case when tp.need_update then tp.leaves_qty else tp.leaves_qty + coalesce(fp.leaves_qty, 0) end,
+           clock_timestamp(),
+           --
+           tp.parent_order_qty,
+           tp.time_in_force_id,
+           tp.account_id,
+           tp.trading_firm_unq_id,
+           tp.instrument_id,
+           tp.instrument_type_id,
+           tp.side
+    from t_parent_orders tp
+             left join data_marts.f_parent_order fp
+                       on fp.parent_order_id = tp.parent_order_id and fp.status_date_id = l_date_id
+    on conflict (status_date_id, parent_order_id) do update
+        set last_exec_id      = excluded.last_exec_id,
+            street_count      = excluded.street_count,
+            trade_count       = excluded.trade_count,
+            last_qty          = excluded.last_qty,
+            amount            = excluded.amount,
+            street_order_qty  = excluded.street_order_qty,
+            pg_db_update_time = clock_timestamp()
+--     and hash ???
+    ;
+
+    get diagnostics l_row_cnt = row_count;
+    raise notice 't_parent_orders insert - %', l_row_cnt;
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'load_parent_order_inc for ' || l_date_id::text || ' FINISHED ===', l_row_cnt, 'E')
+    into l_step_id;
+
+    return l_row_cnt;
+end;
+$$;
