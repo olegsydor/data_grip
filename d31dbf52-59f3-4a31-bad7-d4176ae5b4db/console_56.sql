@@ -216,11 +216,6 @@ with base as (select
                   round(sum(tr.last_px * tr.last_qty) / sum(tr.last_qty), 4) as "AA_EXTENDED_PRICE",
                   --BB Record
                   'BB'                                                       as "BB_RECORD_TYPE",
-                  row_number() over (
-                      partition by tr.date_id
-                      order by tr.date_id, tr.instrument_type_id, hsd.display_instrument_id
-                      )                                                      as "BB_REFERENCE_NUMBER",
-                  to_char(tr.trade_record_time, 'yyyyMMdd')                  as "BB_TRADE_DATE",
                   null                                                       as "BB_FILLER",
                   '2'                                                        as "BB_RATE_ID",
                   round(sum(coalesce(tr.tcce_account_dash_commission_amount, 0.0)),
@@ -244,7 +239,6 @@ with base as (select
                        "AA_BUY/SELL",
                        "AA_SYMBOL/CUSIP",
                        "AA_STOCK/BOND/OPTION",
-                       "BB_TRADE_DATE",
                        "BB_SHORT_SALE")
 select array_to_string(ARRAY [
                            "AA_RECORD_TYPE", -- text NULL, 1-2
@@ -292,12 +286,12 @@ from base
 -- where "AA_RECORD_TYPE" = 'AA'
 union all
 select array_to_string(ARRAY [
-    "BB_RECORD_TYPE", -- text NULL,
-	"BB_REFERENCE_NUMBER"::text, -- int8 NULL,
-	"BB_TRADE_DATE", -- text NULL,
-	"BB_FILLER", -- text NULL,
-	"BB_RATE_ID", -- text NULL,
-	"BB_COMMISSION_RATE/AMOUNT/BPS"::text, -- numeric NULL,
+    "BB_RECORD_TYPE", -- text, 1-2
+lpad("BB_REFERENCE_NUMBER"::text, 5, '0'),--  int8 NULL, 3-7
+	"AA_TRADE_DATE", -- text, 8-15
+	repeat(' ', 5) , --"BB_FILLER", -- text, 16-20
+	"BB_RATE_ID", -- text, 21
+	select to_char(:"BB_COMMISSION_RATE/AMOUNT/BPS", 'FM099V99990')::text = '00250000', -- numeric NULL, 00025000 0002500000
 	"BB_MISCELLANEOUS_RATE_ID_1", -- text NULL,
 	"BB_MISCELLANEOUS_RATE_1", -- text NULL,
 	"BB_EXECUTING_SERVICE", -- text NULL,
