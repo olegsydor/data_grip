@@ -63,6 +63,7 @@ begin
                     and a.account_id = any (in_account_ids)
                     and tr.instrument_type_id = any (in_instrument_type_ids)
                     and tr.is_busted = 'N'
+--                   and display_instrument_id = 'VXX'
                   group by tr.date_id,
                            tr.instrument_type_id,
                            hsd.display_instrument_id,
@@ -162,7 +163,7 @@ begin
 
     return query
         select 'UHDR ' ||
-               to_char(current_date, 'CCYYDDD') ||
+               to_char(current_date, 'YYYYDDD') ||
                repeat(' ', 12) ||
                '1700' ||
                lpad('SDS', 20, ' ') ||
@@ -195,4 +196,26 @@ from dash360.report_fintech_ml_pro_200byte(in_start_date_id := 20240404,
                                            in_instrument_type_ids := '{"O", "E"}');
 
 
-select to_char(current_date, 'CCYYDDD')
+select to_char(current_date, 'YYYYDDD')
+
+
+select tr.date_id,
+                           tr.instrument_type_id,
+                           hsd.display_instrument_id,
+                           tr.side,
+                           hsd.symbol,
+                           sum(tcce_account_dash_commission_amount),
+                           to_char(round(sum(tcce_account_dash_commission_amount), 2), 'FM099V99990')::text
+  from dwh.flat_trade_record tr
+                           join dwh.d_account a on (a.account_id = tr.account_id)
+                           join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
+                  where tr.date_id between :in_start_date_id and :in_end_date_id
+                    and a.account_id = any (:in_account_ids)
+                    and tr.instrument_type_id = any (:in_instrument_type_ids)
+                    and tr.is_busted = 'N'
+                  and display_instrument_id = 'VXX'
+                  group by tr.date_id,
+                           tr.instrument_type_id,
+                           hsd.display_instrument_id,
+                           tr.side,
+                           hsd.symbol
