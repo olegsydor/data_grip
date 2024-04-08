@@ -162,7 +162,7 @@ begin
 
     return query
         select 'UHDR ' ||
-               in_start_date_id::text ||
+               to_char(current_date, 'CCYYDDD') ||
                repeat(' ', 12) ||
                '1700' ||
                lpad('SDS', 20, ' ') ||
@@ -189,7 +189,10 @@ $fx$;
 
 
 select *
-from dash360.report_fintech_ml_pro_200byte(in_start_date_id := 20240327,
-                                           in_end_date_id := 20240328,
+from dash360.report_fintech_ml_pro_200byte(in_start_date_id := 20240404,
+                                           in_end_date_id := 20240404,
                                            in_account_ids := '{70406}',
-                                           in_instrument_type_ids := '{"O", "E"}')
+                                           in_instrument_type_ids := '{"O", "E"}');
+
+
+select to_char(current_date, 'CCYYDDD')
