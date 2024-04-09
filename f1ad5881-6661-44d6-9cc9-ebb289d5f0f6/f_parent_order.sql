@@ -661,8 +661,8 @@ group by cl.parent_order_id
 
 
 create or replace function data_marts.load_parent_order_inc4(in_parent_order_ids bigint[] DEFAULT NULL::bigint[],
-                                                  in_date_id integer DEFAULT NULL::integer,
-                                                  in_dataset_ids bigint[] DEFAULT NULL::bigint[]) returns integer
+                                                             in_date_id integer DEFAULT NULL::integer,
+                                                             in_dataset_ids bigint[] DEFAULT NULL::bigint[]) returns integer
     language plpgsql
 as
 $$
@@ -717,13 +717,17 @@ begin
     from t_base base
              join lateral (select *
                            from dwh.client_order par
-                           where par.order_id = base.parent_order_id and par.parent_order_id is null
+                           where par.order_id = base.parent_order_id
+                             and par.parent_order_id is null
                            limit 1) par on true
              join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
              left join lateral (select *
                                 from dwh.execution ex
                                 where ex.order_id = base.parent_order_id
                                   and ex.exec_date_id = l_date_id
+                                  and ex.is_busted <> 'Y'
+                                  and is_parent_level
+                                  and ex.exec_type in ('F', '0', 'W')
                                 order by ex.exec_time desc
                                 limit 1) ex on true
     where true
@@ -811,3 +815,20 @@ select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id);
 
 select * from data_marts.f_parent_order
 where status_date_id = 20240401
+
+
+select order_qty, trans_type, * from dwh.client_order
+where order_id in (286055098, 286009436)
+
+select is_parent_level, leaves_qty, cum_qty, last_qty, dos.order_status_description, *
+from dwh.execution ex
+left join dwh.d_order_status dos on dos.order_status = ex.order_status
+where order_id = 286055098
+and is_parent_level
+order by exec_time;
+
+
+
+select is_parent_level, leaves_qty, last_qty, * from dwh.execution
+where order_id in (select order_id from dwh.client_order where parent_order_id = 286055098)--in (286055098, 286009436))
+and not is_parent_level;
