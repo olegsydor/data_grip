@@ -727,7 +727,7 @@ begin
                                   and ex.exec_date_id = l_date_id
                                   and ex.is_busted <> 'Y'
                                   and is_parent_level
-                                  and ex.exec_type in ('F', '0', 'W')
+--                                   and ex.exec_type in ('F', '0', 'W')
                                 order by ex.exec_time desc
                                 limit 1) ex on true
     where true
@@ -814,7 +814,8 @@ $$;
 select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id);
 
 select * from data_marts.f_parent_order
-where status_date_id = 20240401
+where status_date_id = 20240402
+and parent_order_id = 285151125
 
 
 select order_qty, trans_type, * from dwh.client_order
@@ -823,7 +824,7 @@ where order_id in (286055098, 286009436)
 select is_parent_level, leaves_qty, cum_qty, last_qty, dos.order_status_description, *
 from dwh.execution ex
 left join dwh.d_order_status dos on dos.order_status = ex.order_status
-where order_id = 286055098
+where order_id = 285151125
 and is_parent_level
 order by exec_time;
 
