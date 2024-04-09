@@ -807,4 +807,7 @@ end;
 $$;
 
 
-select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id)
+select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id);
+
+select * from data_marts.f_parent_order
+where status_date_id = 20240401
