@@ -1,14 +1,28 @@
 (select dex.ex_destination_desc from dwh.d_ex_destination dex where dex.ex_destination_code = tr.ex_destination limit 1) as ex_destination,
 
 -- DROP FUNCTION dash360.dash360_export_bunched_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar);
+select distinct tr.account_id
+from dwh.flat_trade_record tr
+inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
+inner join dwh.d_account a on a.account_id = tr.account_id
+left join dwh.d_option_contract oc on i.instrument_id = oc.instrument_id
+left join dwh.d_option_series os on oc.option_series_id = os.option_series_id
+left join dwh.d_trading_firm dtf on dtf.trading_firm_unq_id = tr.trading_firm_unq_id
+left join lateral (select dex.ex_destination_desc from dwh.d_ex_destination dex where dex.ex_destination_code = tr.ex_destination limit 1) dst on true
+where
+	tr.is_busted = 'N'
+	and date_id >= 20240409 and date_id <= 20240409
 
-CREATE FUNCTION dash360.dash360_export_bunched_executions2(account_ids bigint[] DEFAULT '{}'::bigint[], start_status_date_id integer DEFAULT NULL::integer, end_status_date_id integer DEFAULT NULL::integer, start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, end_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, user_filter character varying DEFAULT NULL::character varying, is_demo character DEFAULT 'N'::bpchar)
+select * from drop function  dash360.dash360_export_bunched_executions2('{14532,50009,59930,13736}', 20240409, 20240409);
+select * from dash360.dash360_export_bunched_executions('{14532,50009,59930,13736}', 20240409, 20240409);
+
+CREATE or replace FUNCTION dash360.dash360_export_bunched_executions(account_ids bigint[] DEFAULT '{}'::bigint[], start_status_date_id integer DEFAULT NULL::integer, end_status_date_id integer DEFAULT NULL::integer, start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, end_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, user_filter character varying DEFAULT NULL::character varying, is_demo character DEFAULT 'N'::bpchar)
  RETURNS TABLE(trade_date date, account_id integer, client_id character varying, account_name character varying, side character, instrument_id integer, instrument_type_id character, display_instrument_id character varying, open_close character, opra_symbol character varying, last_trade_date timestamp without time zone, exec_broker character varying, cmta character varying, opt_customer_firm character, principal_amount numeric, exec_qty bigint, avg_px numeric, exec_cost numeric, customer_review_status character, remarks character varying, blaze_account_alias character varying, ex_destination character varying, fix_comp_id character varying, subsystem_id character varying, trade_liquidity_indicator character varying, opt_customer_or_firm character varying, put_call character, strike_price numeric, symbol_suffix character varying, trading_firm_name character varying, date_id integer, street_mpid character varying)
  LANGUAGE plpgsql
  COST 1
 AS $function$
 -- AK: 20211118 DS-4430 added date_id column to return result
-
+-- OS: 20240410 https://dashfinancial.atlassian.net/browse/DS-8185 Return user friendly value ex_destination
 DECLARE
 	select_stmt text;
 	sql_params text;
