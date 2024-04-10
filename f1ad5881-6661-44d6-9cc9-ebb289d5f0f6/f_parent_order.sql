@@ -724,7 +724,7 @@ begin
              left join lateral (select *
                                 from dwh.execution ex
                                 where ex.order_id = base.parent_order_id
-                                  and ex.exec_date_id = l_date_id
+                                  and ex.exec_date_id <= l_date_id
                                   and ex.is_busted <> 'Y'
                                   and is_parent_level
 --                                   and ex.exec_type in ('F', '0', 'W')
@@ -811,11 +811,20 @@ end;
 $$;
 
 
-select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id);
+select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id), in_parent_order_ids := '{286055098}');
 
-select * from data_marts.f_parent_order
-where status_date_id = 20240402
-and parent_order_id = 285151125
+select *
+from data_marts.f_parent_order
+where status_date_id = 20240401
+and parent_order_id in (286002922,
+286018988,
+286018989,
+286018992,
+286018993,
+286018994,
+286018995,
+286018997,
+286018999)
 
 
 select order_qty, trans_type, * from dwh.client_order
@@ -824,7 +833,7 @@ where order_id in (286055098, 286009436)
 select is_parent_level, leaves_qty, cum_qty, last_qty, dos.order_status_description, *
 from dwh.execution ex
 left join dwh.d_order_status dos on dos.order_status = ex.order_status
-where order_id = 285151125
+where order_id = 286055098
 and is_parent_level
 order by exec_time;
 
@@ -833,3 +842,54 @@ order by exec_time;
 select is_parent_level, leaves_qty, last_qty, * from dwh.execution
 where order_id in (select order_id from dwh.client_order where parent_order_id = 286055098)--in (286055098, 286009436))
 and not is_parent_level;
+
+with base as (select cl.parent_order_id,
+                     min(exec_id) as min_exec_id,
+                     max(exec_id) as max_exec_id
+              from dwh.execution ex
+                       join dwh.client_order cl
+                            on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+              where exec_date_id = :l_date_id
+                and case
+                        when :in_parent_order_ids is null then true
+                        else cl.parent_order_id = any (:in_parent_order_ids) end
+                and not is_parent_level
+                and ex.exec_type in ('F', '0', 'W')
+                and cl.parent_order_id is not null
+              group by cl.parent_order_id)
+select ex.*, base.parent_order_id,
+           par.create_date_id      as create_date_id,
+           base.min_exec_id        as min_exec_id,
+           base.max_exec_id        as max_exec_id,
+           par.time_in_force_id    as time_in_force_id,
+           par.account_id          as account_id,
+           par.instrument_id       as instrument_id,
+           di.instrument_type_id   as instrument_type_id,
+           par.trading_firm_unq_id as trading_firm_unq_id,
+           par.order_qty           as parent_order_qty,
+           par.side                as side,
+           ex.leaves_qty           as leaves_qty
+-- select *
+    from base base
+             join lateral (select *
+                           from dwh.client_order par
+                           where par.order_id = base.parent_order_id
+                             and par.parent_order_id is null
+                           limit 1) par on true
+             join dwh.d_instrument di on di.instrument_id = par.instrument_id and di.is_active
+             left join lateral (select *
+                                from dwh.execution ex
+                                where ex.order_id = base.parent_order_id
+                                  and ex.exec_date_id <= :l_date_id
+                                  and ex.is_busted <> 'Y'
+                                  and is_parent_level
+--                                   and ex.exec_type in ('F', '0', 'W')
+                                order by ex.exec_time desc
+                                limit 1) ex on true
+    where true
+      and par.parent_order_id is null;
+
+select * from dwh.execution ex
+where true
+--     and ex.exec_date_id = 20240402
+    and ex.order_id = 286055098
