@@ -693,6 +693,7 @@ begin
       and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
       and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
       and not is_parent_level
+      and ex.is_busted <> 'Y'
       and ex.exec_type in ('F', '0', 'W')
       and cl.parent_order_id is not null
     group by cl.parent_order_id;
@@ -814,8 +815,9 @@ $$;
 select * from data_marts.load_parent_order_inc4(in_date_id := :l_date_id), in_parent_order_ids := '{286055098}');
 
 select *
+-- delete
 from data_marts.f_parent_order
-where status_date_id = 20240401
+where status_date_id = 20240403
 and parent_order_id in (286002922,
 286018988,
 286018989,
@@ -840,8 +842,9 @@ order by exec_time;
 
 
 select is_parent_level, leaves_qty, last_qty, * from dwh.execution
-where order_id in (select order_id from dwh.client_order where parent_order_id = 286055098)--in (286055098, 286009436))
-and not is_parent_level;
+where order_id in (select order_id from dwh.client_order where parent_order_id = 286002922)--in (286055098, 286009436))
+and not is_parent_level
+and exec_date_id = 20240401;
 
 with base as (select cl.parent_order_id,
                      min(exec_id) as min_exec_id,
