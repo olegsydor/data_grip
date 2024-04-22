@@ -223,3 +223,6 @@ select tr.date_id,
                            hsd.display_instrument_id,
                            tr.side,
                            hsd.symbol
+
+
+
