@@ -898,15 +898,17 @@ where true
     and ex.order_id = 286055098
 
 
-
-CREATE OR REPLACE FUNCTION data_marts.run_f_parent_order_process()
-    RETURNS integer
-    LANGUAGE plpgsql
-AS
+select * from data_marts.run_f_parent_order_process()
+create or replace function data_marts.run_f_parent_order_process()
+    returns integer
+    language plpgsql
+as
 $function$
+    -- 2024-04-24 SO added processing diferent date_id from unprocessed subscriptions
 declare
     l_load_batch_ids int8[];
-    l_row_cnt        int4;
+    l_row_cnt        int4 := 0;
+    l_sum_row_cnt    int4 := 0;
     l_date_id        int4;
 begin
     for l_date_id in
@@ -917,7 +919,6 @@ begin
           and subscription_name = 'f_parent_order'
           and not is_processed
         loop
-        begin
             select array_agg(load_batch_id order by load_batch_id)
             into l_load_batch_ids
             from (select load_batch_id
@@ -926,6 +927,7 @@ begin
                     and source_table_name = 'execution'
                     and subscription_name = 'f_parent_order'
                     and not is_processed
+                    and date_id = coalesce(l_date_id, to_char(current_date, 'YYYYMMDD')::int4)
                   limit 500) x;
 
             perform data_marts.load_parent_order_inc4(
@@ -938,12 +940,14 @@ begin
               and source_table_name = 'execution'
               and subscription_name = 'f_parent_order'
               and not is_processed
-              and load_batch_id = any (l_load_batch_ids);
+              and load_batch_id = any (l_load_batch_ids)
+              and date_id = coalesce(l_date_id, to_char(current_date, 'YYYYMMDD')::int4);
 
             get diagnostics l_row_cnt = row_count;
-            commit;
+            l_sum_row_cnt = l_sum_row_cnt + l_row_cnt;
         end loop;
-    return l_row_cnt;
+
+    return l_sum_row_cnt;
 end;
 $function$
 ;
