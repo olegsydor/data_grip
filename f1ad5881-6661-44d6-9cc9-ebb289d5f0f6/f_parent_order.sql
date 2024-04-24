@@ -937,3 +937,11 @@ begin
 end;
 $function$
 ;
+
+
+select count(load_batch_id)
+          from public.etl_subscriptions
+          where true
+            and source_table_name = 'execution'
+            and subscription_name = 'f_parent_order'
+            and not is_processed
