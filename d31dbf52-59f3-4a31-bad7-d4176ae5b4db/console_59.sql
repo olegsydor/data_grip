@@ -2622,7 +2622,7 @@ $function$
 ;
 
 create or replace function dash360.report_fintech_adh_active_liquidity_indicators(in_exchange_ids varchar(6)[] default '{}'::varchar(6)[],
-                                                                       in_instrument_type_id character default null::character(1))
+                                                                                  in_instrument_type_id character default null::character(1))
     returns table
             (
                 ret_row text
@@ -2647,11 +2647,11 @@ begin
 
     select public.load_log(l_load_id, l_step_id,
                            'report_fintech_adh_active_liquidity_indicators for ' || l_exchange_text ||
-                           ' exchanges for ' || l_instrument_type_id_text || 'instrument_type_id' || ' STARTED===',
+                           ' exchanges for instrument_type_id ' || l_instrument_type_id_text || ' STARTED===',
                            0, 'O')
     into l_step_id;
---     return query
---         select 'Security Type,Exchange ID,Exchange Name,Trade Liq Ind,Description,DASH Liq Ind Type,Is Grey';
+    return query
+        select 'Security Type,Exchange ID,Exchange Name,Trade Liq Ind,Description,DASH Liq Ind Type,Is Grey';
     return query
         select array_to_string(array [
                                    case
@@ -2670,17 +2670,15 @@ begin
                  left join dwh.d_liquidity_indicator_type lit
                            on (lit.liquidity_indicator_type_id = li.liquidity_indicator_type_id and lit.is_active)
         where true
-          and li.exchange_id in ('ARCAE', 'NSDQE', 'NQBXO')
-          and e.instrument_type_id = 'E'
---           and case when in_exchange_ids = '{}' then true else li.exchange_id = any (in_exchange_ids) end
---           and case when in_instrument_type_id is null then true else e.instrument_type_id = instrument_type_id end
+          and case when in_exchange_ids = '{}' then true else li.exchange_id = any (in_exchange_ids) end
+          and case when in_instrument_type_id is null then true else e.instrument_type_id = in_instrument_type_id end
           and li.is_active
         order by e.instrument_type_id, li.exchange_id, li.trade_liquidity_indicator;
 
     get diagnostics row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
                            'report_fintech_adh_active_liquidity_indicators for ' || l_exchange_text ||
-                           ' exchanges for ' || l_instrument_type_id_text || 'instrument_type_id' || ' COMPLETED===',
+                           ' exchanges for instrument_type_id ' || l_instrument_type_id_text || ' COMPLETED===',
                            row_cnt, 'O')
     into l_step_id;
 
@@ -2689,6 +2687,11 @@ $function$
 ;
 select * from dash360.report_fintech_adh_active_liquidity_indicators(in_exchange_ids := '{"ARCAE", "NSDQE", "NQBXO"}',
                                                                        in_instrument_type_id := 'E');
+
+select *
+from dash360.report_fintech_adh_active_liquidity_indicators(in_exchange_ids := '{"ARCAE", "NSDQE", "NQBXO"}');
+
+
 select
 	case
 		when e.instrument_type_id  = 'E' then 'Equity'
@@ -2704,6 +2707,30 @@ from dwh.d_liquidity_indicator li
 left join dwh.d_exchange e on (e.exchange_id = li.exchange_id and e.is_active)
 left join dwh.d_liquidity_indicator_type lit on (lit.liquidity_indicator_type_id = li.liquidity_indicator_type_id and lit.is_active)
 where li.exchange_id in ('ARCAE', 'NSDQE', 'NQBXO')
-	and e.instrument_type_id = 'E'
+-- 	and e.instrument_type_id = 'E'
 	and li.is_active
 order by "Security Type", "Exchange ID", "Trade Liq Ind";
+
+
+ select array_to_string(array [
+                                   case
+                                       when e.instrument_type_id = 'E' then 'Equity'
+                                       when e.instrument_type_id = 'O' then 'Option'
+                                       end, -- as "Security Type",
+                                   li.exchange_id, -- as as "Exchange ID",
+                                   e.exchange_name, -- as  as "Exchange Name",
+                                   li.trade_liquidity_indicator, -- as  as "Trade Liq Ind",
+                                   li.description, -- as as "Description",
+                                   lit.liquidity_indicator_type, -- as  as "DASH Liq Ind Type",
+                                   li.is_grey --  as "Is Grey"
+                                   ], ',', '')
+        from dwh.d_liquidity_indicator li
+                 left join dwh.d_exchange e on (e.exchange_id = li.exchange_id and e.is_active)
+                 left join dwh.d_liquidity_indicator_type lit
+                           on (lit.liquidity_indicator_type_id = li.liquidity_indicator_type_id and lit.is_active)
+        where true
+--            and li.exchange_id in ('ARCAE', 'NSDQE', 'NQBXO')
+--           and e.instrument_type_id = 'E'
+          and case when :in_exchange_ids = '{}' then true else li.exchange_id = any (:in_exchange_ids) end
+           and case when :in_instrument_type_id is null then true else e.instrument_type_id = instrument_type_id end
+          and li.is_active
