@@ -907,32 +907,42 @@ $function$
 declare
     l_load_batch_ids int8[];
     l_row_cnt        int4;
-    l_date_id        int4 := to_char(current_date, 'YYYYMMDD')::int4;
+    l_date_id        int4;
 begin
-    select array_agg(load_batch_id order by load_batch_id)
-    into l_load_batch_ids
-    from (select load_batch_id
-          from public.etl_subscriptions
-          where true
-            and source_table_name = 'execution'
-            and subscription_name = 'f_parent_order'
-            and not is_processed
-          limit 500) x;
+    for l_date_id in
+        select distinct date_id
+        from public.etl_subscriptions
+        where true
+          and source_table_name = 'execution'
+          and subscription_name = 'f_parent_order'
+          and not is_processed
+        loop
+        begin
+            select array_agg(load_batch_id order by load_batch_id)
+            into l_load_batch_ids
+            from (select load_batch_id
+                  from public.etl_subscriptions
+                  where true
+                    and source_table_name = 'execution'
+                    and subscription_name = 'f_parent_order'
+                    and not is_processed
+                  limit 500) x;
 
-    perform data_marts.load_parent_order_inc4(
-            in_date_id := l_date_id,
-            in_dataset_ids := l_load_batch_ids);
+            perform data_marts.load_parent_order_inc4(
+                    in_date_id := l_date_id,
+                    in_dataset_ids := l_load_batch_ids);
 
-    update public.etl_subscriptions
-    set is_processed = true
-    where true
-      and source_table_name = 'execution'
-      and subscription_name = 'f_parent_order'
-      and not is_processed
-      and load_batch_id = any (l_load_batch_ids);
+            update public.etl_subscriptions
+            set is_processed = true
+            where true
+              and source_table_name = 'execution'
+              and subscription_name = 'f_parent_order'
+              and not is_processed
+              and load_batch_id = any (l_load_batch_ids);
 
-    get diagnostics l_row_cnt = row_count;
-
+            get diagnostics l_row_cnt = row_count;
+            commit;
+        end loop;
     return l_row_cnt;
 end;
 $function$
