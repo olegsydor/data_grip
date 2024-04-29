@@ -141,3 +141,10 @@ begin
 end;
 $function$
 ;
+
+
+-- DROP FUNCTION dash360.report_fintech_adh_active_liquidity_indicators(_varchar, bpchar);
+
+select *
+from dash360.report_fintech_adh_active_liquidity_indicators(in_exchange_ids := null,
+                                                                       in_instrument_type_id := 'E');
