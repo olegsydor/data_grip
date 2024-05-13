@@ -54,6 +54,10 @@ from dash360.report_rps_trade_details(in_start_date_id := 20240418, in_end_date_
                                       in_account_ids := '{2928,11203,11209}',
                                       in_trading_firm_ids := '{"dashdesk", "stifel"}');
 
+select * from dash360.report_lpeod_aos_compliance(p_start_date_id := 20240506, p_end_date_id := 20240506)
+
+
+
 CREATE FUNCTION dash360.report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                           in_end_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                           in_account_ids integer[] DEFAULT '{}'::integer[],
@@ -2733,4 +2737,217 @@ order by "Security Type", "Exchange ID", "Trade Liq Ind";
 --           and e.instrument_type_id = 'E'
           and case when :in_exchange_ids = '{}' then true else li.exchange_id = any (:in_exchange_ids) end
            and case when :in_instrument_type_id is null then true else e.instrument_type_id = instrument_type_id end
-          and li.is_active
+          and li.is_active;
+
+
+create or replace function dash360.report_fintech_eod_nirvana_plp_allocation(in_start_date_id int4, in_end_date_id int4)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$function$
+    -- 2024-04-29 SO: https://dashfinancial.atlassian.net/browse/DS-8292
+declare
+    l_load_id int;
+    l_step_id int;
+    row_cnt   int;
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'dash360.report_fintech_eod_nirvana_plp_allocation for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED===',
+                           0, 'O')
+    into l_step_id;
+    return query
+        select 'Trade Date,Dash Prime Account,Dash Prime DTC,Dash Agent Bank,Symbol,Side,Exec Qty,Avg Px,Principal Amount,Commissions,SEC Fee,Net Money,Client Prime DTC,Client Prime Account,Client Agent Bank,Client Insitution ID';
+
+    return query
+        with cte_cross_ref ("Dash Prime Account", "Dash Prime DTC", "Dash Agent Bank", "Client Prime DTC",
+                            "Client Prime Account", "Client Agent Bank", "Client Insitution ID") as
+                 (values ('3Q802H59', '0161', '27952', '0161', '599-55161', '94167', '94167'),
+                         ('3Q802F94', '0161', '27952', '0352', '102-04446', '94012', '94012'))
+        select array_to_string(ARRAY [
+                                   cm."Trade Date",
+                                   cm."Dash Prime Account",
+                                   ccr."Dash Prime DTC",
+                                   ccr."Dash Agent Bank",
+                                   cm."Symbol",
+                                   cm."Side",
+                                   cm."Exec Qty"::text,
+                                   cm."Avg Px"::text,
+                                   cm."Principal Amount"::text,
+                                   cm."Commissions"::text,
+                                   cm."SEC Fee"::text,
+                                   (case
+                                        when cm."Side" = 'BOT' then cm."Principal Amount" + cm."Commissions"
+                                        when cm."Side" in ('SLD', 'SLD SHORT')
+                                            then cm."Principal Amount" - cm."Commissions" - cm."SEC Fee"
+                                       end)::text,
+                                   ccr."Client Prime DTC",
+                                   ccr."Client Prime Account",
+                                   ccr."Client Agent Bank",
+                                   ccr."Client Insitution ID"
+                                   ], ',', '')
+        from (select to_char(tr.trade_record_time, 'MM/dd/yyyy')                as "Trade Date",
+                     ca.clearing_account_number                                 as "Dash Prime Account",
+                     hsd.display_instrument_id                                  as "Symbol",
+                     case
+                         when tr.side = '1' then 'BOT'
+                         when tr.side = '2' then 'SLD'
+                         when tr.side in ('5', '6') then 'SLD SHORT'
+                         end                                                    as "Side",
+                     sum(tr.last_qty)                                           as "Exec Qty",
+                     round(sum(tr.last_qty * tr.last_px) / sum(tr.last_qty), 4) as "Avg Px",
+                     round(sum(tr.last_qty * tr.last_px) / sum(tr.last_qty), 4) * sum(tr.last_qty) *
+                     coalesce(hsd.contract_multiplier, 1.0)                     as "Principal Amount",
+                     round(a.eq_commission * sum(tr.last_qty), 2)               as "Commissions",
+                     round(sum(coalesce(tr.tcce_sec_fee_amount, 0.0)), 2)       as "SEC Fee",
+                     --
+                     ai.alloc_instr_id
+              from dwh.flat_trade_record tr
+                       join dwh.d_account a on (a.account_id = tr.account_id)
+                       join dwh.historic_security_definition_all hsd
+                            on (hsd.instrument_id = tr.instrument_id)
+                       left join lateral (
+                  select alloc_qty, alloc_instr_id, clearing_account_id
+                  from dwh.allocation2trade_record atr
+                  where atr.trade_record_id = tr.trade_record_id
+                    and atr.date_id = tr.date_id
+                    and atr.is_active
+                  limit 1) alt on true
+                       left join staging.allocation_instruction ai
+                                 on (ai.date_id between in_start_date_id and in_end_date_id and
+                                     ai.alloc_instr_id = alt.alloc_instr_id and
+                                     ai.is_deleted = 'N')
+                       left join staging.allocation_instruction_entry aie
+                                 on (aie.date_id between in_start_date_id and in_end_date_id and
+                                     aie.alloc_instr_id = alt.alloc_instr_id and
+                                     aie.clearing_account_id = alt.clearing_account_id)
+                       left join dwh.d_clearing_account ca
+                                 on (ca.clearing_account_id = aie.clearing_account_id)
+              where tr.date_id between in_start_date_id and in_end_date_id
+                and a.account_name in ('PLPARTNERS', 'PLPARTNERSPT')
+                and tr.is_busted = 'N'
+              group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), ca.clearing_account_number,
+                       hsd.display_instrument_id, tr.side, ai.alloc_instr_id,
+                       hsd.contract_multiplier, a.eq_commission) cm
+                 left join cte_cross_ref as ccr on (ccr."Dash Prime Account" = cm."Dash Prime Account")
+        order by alloc_instr_id;
+
+    get diagnostics row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id,
+                           'dash360.report_fintech_eod_nirvana_plp_allocation for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' COMPLETED===',
+                           row_cnt, 'O')
+    into l_step_id;
+
+end ;
+$function$
+;
+
+select * from dash360.report_fintech_eod_nirvana_plp_allocation(20240507, 20240507);
+
+
+select coalesce(hsd.contract_multiplier, 1.0), round(a.eq_commission * sum(tr.last_qty), 2), round(sum(coalesce(tr.tcce_sec_fee_amount, 0.0)), 2)
+--     array_agg(tr.trade_record_id)
+--     sum(tr.tcce_sec_fee_amount),
+--        sum(tr.last_qty)
+from dwh.flat_trade_record tr
+         join dwh.d_account a on (a.account_id = tr.account_id)
+         join dwh.historic_security_definition_all hsd
+              on (hsd.instrument_id = tr.instrument_id)
+         left join lateral (
+    select alloc_qty, alloc_instr_id, clearing_account_id
+    from dwh.allocation2trade_record atr
+    where atr.trade_record_id = tr.trade_record_id
+      and atr.date_id = tr.date_id
+      and atr.is_active
+    limit 1) alt on true
+         left join staging.allocation_instruction ai
+                   on (ai.date_id = :in_start_date_id and
+                       ai.alloc_instr_id = alt.alloc_instr_id and
+                       ai.is_deleted = 'N')
+         left join staging.allocation_instruction_entry aie
+                   on (aie.date_id = :in_start_date_id and
+                       aie.alloc_instr_id = alt.alloc_instr_id and
+                       aie.clearing_account_id = alt.clearing_account_id)
+         left join dwh.d_clearing_account ca
+                   on (ca.clearing_account_id = aie.clearing_account_id)
+where tr.date_id = :in_start_date_id
+  and a.account_name in ('PLPARTNERS', 'PLPARTNERSPT')
+  and tr.is_busted = 'N'
+  and hsd.display_instrument_id = 'W'
+  and tr.side = '2'
+group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), ca.clearing_account_number,
+         hsd.display_instrument_id, tr.side, ai.alloc_instr_id,
+         hsd.contract_multiplier, a.eq_commission
+
+
+select sum(case when book_record_type_id = 'TSEC' then amount else null end) as TCCE_SEC_Fee_Amount,
+       count(case when book_record_type_id = 'TSEC' then 1 else null end)    as TSEC_cnt
+from staging.trade_level_book_record
+where date_id = 20240507
+  and book_record_type_id = 'TSEC'
+  and trade_record_id = any
+      ('{3529227499,3529371262,3529392136,3529461592,3529472507,3529422860,3529503528,3529227741,3529239731,3529461256,3530865208,3529422858,3529423347,3529371150,3529451332,3529226759,3529462998,3529391936,3529371149,3529426711,3529371679,3529371681,3529226760,3529228006,3529504663,3529460882,3529226309,3529423534,3529461074,3529372283,3529471633,3529371148,3529449049,3529448196,3529372503,3529371465,3529419092,3529462134,3529391939,3529461771,3529462808,3529239231,3529372005,3529461426,3529419870,3529361744,3529417335,3529361747,3529371358,3529360694,3529391858,3529503619,3529448361,3529448459,3529371890,3529226100,3529449756,3529513624,3529461590,3529361033,3529372004,3529418949,3529371682,3529463352,3530841773,3530865129,3530852352,3530943351,3530852509,3530841774,3530852410,3530829554,3530829380,3530865076,3530864923,3530829585,3530841861,3530864737,3530943034,3530865038,3530864779,3530864868,3529719355,3530841640,3530865174,3530865001,3530864922,3530852438,3530943900,3529450972,3529420638,3529461436,3529372309,3529513743,3529362217,3529372188,3529361034,3529361519,3529371492,3529371183,3529240700,3529418058,3529420639,3529372754,3529461434,3529460877,3529417487,3529462809,3529360446,3529237755,3529503700,3529361032,3529361745,3529451556,3529450639,3529418060,3529463189,3529423345,3529227742,3529472673,3529426712,3529391774,3529449381,3529360562,3529449292,3529461593,3529371263,3530942859,3530841659,3530943287,3530864659,3530841771,3530865000,3530864917,3530943510,3530864615,3530865003,3530864777,3530852195,3530864824,3530944000,3529719781,3530841718,3530841824,3530852409,3530865039,3530943286,3529418631,3529450408,3529451456,3529392663,3529371787,3529471499,3529372753,3529462990,3529420107,3529372126,3529372722,3529371586,3529361037,3529423272,3529450395,3529472830,3529427331,3529225397,3529227007,3529372500,3529448980,3529392954,3529371182,3529419869,3529225876,3529227500,3529361281,3529371786,3529423029,3529423198,3529372508,3529461254,3529237754,3529391940,3529372495,3529460883,3529448861,3529372621,3529463350,3529226531,3529471980,3529360812,3529417044,3530841752,3530864658,3530841772,3530864867,3530864776,3530829648,3530943433,3530841660,3530865206,3530865204,3530865004,3530862676,3530852408,3530841603,3530865175,3530865037,3530841661,3530841719,3530841790,3530864616,3530841641,3530864734,3530943288,3530943427,3530852170,3529372499,3529472506,3529391938,3529421003,3529371788,3529448863,3529462810,3529462306,3529449490,3529462308,3529470996,3529462640,3529448197,3529361520,3529428693,3529238459,3529371717,3529513682,3529513356,3529225128,3529428278,3529504562,3529463191,3529372104,3529462136,3529449347,3529225875,3529427583,3529372723,3529470999,3529371686,3529463504,3529360695,3529427719,3529461437,3529514030,3529361518,3529462639,3529450977,3529427223,3529362106,3529372494,3529372729,3529448942,3529462484,3529228513,3529461950,3529392218,3529451555,3529372496,3529513625,3530865205,3530864660,3530829626,3530864780,3530865256,3530829627,3530862644,3530852439,3530865258,3530841717,3529719852,3530864778,3530864869,3530852320,3530865075,3530865255,3529720121,3530865262,3530864998,3530942942,3530864962,3530865254,3530862414,3529720054,3530864920,3530852510,3530864694}')
+
+select tr.tcce_sec_fee_amount
+from dwh.flat_trade_record tr
+         join dwh.d_account a on (a.account_id = tr.account_id)
+         join dwh.historic_security_definition_all hsd
+              on (hsd.instrument_id = tr.instrument_id)
+where tr.date_id = :in_start_date_id
+  and a.account_name in ('PLPARTNERS', 'PLPARTNERSPT')
+  and tr.is_busted = 'N'
+  and hsd.display_instrument_id = 'W'
+  and tr.side = '2'
+
+
+with
+cte_cross_ref ("Dash Prime Account", "Dash Prime DTC", "Dash Agent Bank", "Client Prime DTC", "Client Prime Account", "Client Agent Bank", "Client Insitution ID") as (
+	values
+	('3Q802H59', '0161', '27952', '0161', '599-55161', '94167', '94167'),
+	('3Q802F94', '0161', '27952', '0352', '102-04446', '94012', '94012')
+),
+cte_main as (
+	select
+	tr.trade_record_id, tr.last_qty, tr.last_px, coalesce(hsd.contract_multiplier, 1.0), tr.tcce_sec_fee_amount
+	from dwh.flat_trade_record tr
+	join dwh.d_account a on (a.account_id = tr.account_id)
+	join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
+
+	where tr.date_id = :in_start_date_id
+		and a.account_name in ('PLPARTNERS', 'PLPARTNERSPT')
+		and tr.is_busted = 'N'
+	and hsd.display_instrument_id = 'W'
+  and tr.side = '2'
+	and tr.tcce_sec_fee_amount is null
+-- 	group by "Trade Date", "Dash Prime Account", "Symbol", "Side", ai.alloc_instr_id, hsd.contract_multiplier, a.eq_commission
+-- 	order by ai.alloc_instr_id
+)
+select *
+-- 	cm."Trade Date",
+-- 	cm."Dash Prime Account",
+-- 	ccr."Dash Prime DTC",
+-- 	ccr."Dash Agent Bank",
+-- 	cm."Symbol",
+-- 	cm."Side",
+-- 	cm."Exec Qty",
+-- 	cm."Avg Px",
+-- 	cm."Principal Amount",
+-- 	cm."Commissions",
+-- 	cm."SEC Fee",
+-- 	case
+-- 		when cm."Side" = 'BOT' then cm."Principal Amount" + cm."Commissions"
+-- 		when cm."Side" in ('SLD', 'SLD SHORT') then cm."Principal Amount" - cm."Commissions" - cm."SEC Fee"
+-- 	end as "Net Money",
+-- 	ccr."Client Prime DTC",
+-- 	ccr."Client Prime Account",
+-- 	ccr."Client Agent Bank",
+-- 	ccr."Client Insitution ID"
+from cte_main as cm
+left join cte_cross_ref as ccr on (ccr."Dash Prime Account" = cm."Dash Prime Account");

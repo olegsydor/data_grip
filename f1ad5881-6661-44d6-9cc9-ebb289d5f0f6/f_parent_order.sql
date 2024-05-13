@@ -983,7 +983,8 @@ begin
     create temp table t_base as
     select cl.parent_order_id,
            min(exec_id) as min_exec_id,
-           max(exec_id) as max_exec_id
+           max(exec_id) as max_exec_id,
+           min(cl.parent_order_process_time) as parent_order_process_time
     from dwh.execution ex
              join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
     where exec_date_id = l_date_id
