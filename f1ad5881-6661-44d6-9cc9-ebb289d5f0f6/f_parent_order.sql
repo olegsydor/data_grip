@@ -1011,9 +1011,9 @@ begin
            di.instrument_type_id   as instrument_type_id,
            par.trading_firm_unq_id as trading_firm_unq_id,
            par.order_qty           as parent_order_qty,
-           par.side                as side,
+           par.side                as side
 --           ex.leaves_qty           as leaves_qty /* SY: we do not track cancels rejects etc. So we are not able to track leaves_qty correctly. Let's skip that field */
-           0                       as leaves_qty /* SO: aggree and confirmed with O.Semenchenko */
+--            0                       as leaves_qty /* SO: aggree and confirmed with O.Semenchenko */
     from t_base base
              join lateral (select *
                            from dwh.client_order par
@@ -1052,7 +1052,6 @@ begin
 
     insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_date_id, status_date_id,
                                            street_count, trade_count, last_qty, amount, street_order_qty,
-                                           leaves_qty,
                                            pg_db_create_time,
                                            order_qty,
                                            time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
@@ -1066,7 +1065,6 @@ begin
            case when tp.need_update then tp.last_qty else tp.last_qty + coalesce(fp.last_qty, 0) end,
            case when tp.need_update then tp.amount else tp.amount + coalesce(fp.amount, 0) end,
            case when tp.need_update then tp.street_order_qty else tp.amount + coalesce(fp.street_order_qty, 0) end,
-           case when tp.need_update then tp.leaves_qty else tp.leaves_qty + coalesce(fp.leaves_qty, 0) end,
            clock_timestamp(),
            --
            tp.parent_order_qty,
@@ -1086,10 +1084,7 @@ begin
             last_qty          = excluded.last_qty,
             amount            = excluded.amount,
             street_order_qty  = excluded.street_order_qty,
-            leaves_qty        = excluded.leaves_qty,
-            pg_db_update_time = clock_timestamp()
---     and hash ???
-    ;
+            pg_db_update_time = clock_timestamp();
 
     get diagnostics l_row_cnt = row_count;
     raise notice 't_parent_orders insert - %', l_row_cnt;
