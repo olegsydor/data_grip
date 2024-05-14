@@ -388,5 +388,68 @@ select ex.order_id, *
 commit;
 
 end;
-$$
+$$;
+
+create temp table t_os as
+select cl.order_id,
+       cl.transaction_id,
+       cl.create_time,
+       cl.order_qty,
+       cl.price,
+       cl.parent_order_id,
+       cl.exch_order_id,
+       cl.cross_order_id,
+       cl.is_originator,
+       cl.orig_order_id,
+       cl.client_order_id,
+       cl.exchange_id as cl_exchange_id,
+       cl.sub_strategy_id,
+       cl.sub_system_unq_id,
+       cl.opt_exec_broker_id,
+       cl.clearing_firm_id,
+       cl.clearing_account,
+       cl.sub_account,
+       cl.open_close,
+       cl.opt_customer_firm_street,
+       cl.eq_order_capacity,
+       cl.exec_instruction,
+       cl.strtg_decision_reason_code,
+       cl.request_number,
+       cl.order_type_id,
+       cl.time_in_force_id,
+       cl.multileg_reporting_type,
+       cl.cons_payment_per_contract,
+       cl.instrument_id,
+       cl.create_date_id,
+       cl.fix_connection_id,
+       ex.exec_id,
+       ex.exec_time,
+       ex.exec_type,
+       ex.cum_qty,
+       ex.order_status,
+       ex.last_px,
+       ex.last_qty,
+       ex.contra_account_capacity,
+       ex.trade_liquidity_indicator,
+       ex.exch_exec_id,
+       ex.exchange_id as ex_exchange_id,
+       ex.contra_broker,
+       ex.contra_trader,
+       ex.secondary_order_id,
+       ac.trading_firm_id,
+       ac.opt_is_fix_clfirm_processed,
+       ac.opt_customer_or_firm
+from dwh.execution ex
+         inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
+         inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
+         inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+         inner join dwh.d_account ac on ac.account_id = cl.account_id
+         inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+where ex.exec_date_id = :in_date_id
+  and cl.multileg_reporting_type in ('1', '2')
+  and ex.is_busted = 'N'
+  and ex.exec_type not in ('E', 'S', 'D', 'y')
+  and cl.trans_type <> 'F'
+  and tf.is_eligible4consolidator = 'Y'
+  and fc.fix_comp_id <> 'IMCCONS'
 
