@@ -84,3 +84,5 @@ from (select left(md5(i::text), 32)                                             
 
 select * from test.mab_order_old
 where advice_id = 100008
+
+show all
