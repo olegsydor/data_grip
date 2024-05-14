@@ -350,13 +350,13 @@ language plpgsql
         end
 select ex.order_id, *
 	  from dwh.execution ex
-	  inner join dwh.client_order cl on cl.order_id = ex.order_id and ex.exec_date_id >= cl.create_date_id
+	  inner join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id <= ex.exec_date_id and cl.create_date_id = ex.order_create_date_id
       inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
 	  left join dwh.client_order pro on cl.parent_order_id = pro.order_id and pro.create_date_id >= cl.create_date_id
 	  inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
 	  inner join dwh.d_account ac on ac.account_id = cl.account_id
 	  inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-/*      left join dwh.client_order str on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and ex.exec_type = 'F') --street order for this trade
+      left join dwh.client_order str on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and ex.exec_type = 'F') --street order for this trade
 	  left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = ex.secondary_exch_exec_id and es.exec_date_id >= str.create_date_id)
 	  left join dwh.cross_order cro on cro.cross_order_id = cl.cross_order_id
 	  left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
@@ -373,7 +373,7 @@ select ex.order_id, *
 	  left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
 	  left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
 	  left join dwh.client_order_leg_num ln on ln.order_id = cl.order_id
-*/
+
       where ex.exec_date_id = :in_date_id
       and cl.multileg_reporting_type in ('1','2')
       and ex.is_busted = 'N'
@@ -381,20 +381,12 @@ select ex.order_id, *
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
 	  and fc.fix_comp_id <> 'IMCCONS'
-      and ex.order_id in (15540506881,15540506885,15540506892,15540506879,15540506885,15540506892,15540506879,15540506890,15540506890,15540506887)
-	limit 100
---      and 1=2
+      and ex.order_id in (15542560675,15542560660,15492639045,15552212542,15552212532,15548377847,15548377841,15541277969,15540889011,15498877889,15552819621,15552819618,15541284196,15540967929,15425639726,15177722058,15541310070,15541274402,15540957625,15540953970,15548089097,15548089087,15541539475,15541306532,15541271881,15541149439,15540885998,
+15540869339,15502362442,15457126263,15554912742,15554912727,15554520546,15554520539,15196238716,14546327076,15548161904,15548161893,15549947121,15549947116,15541921821,15541921627,15522318877,15522292326,15541009407,15541291289,15540859829,15549411693,15549411688,15541316119)
+
       ;
 commit;
 
 end;
 $$
 
-
-select ex.order_id, *
-	  from dwh.execution ex
-where ex.exec_date_id = :in_date_id
-
-      and ex.is_busted = 'N'
-      and ex.exec_type not in ('E','S','D','y')
-      and ex.order_id in ()
