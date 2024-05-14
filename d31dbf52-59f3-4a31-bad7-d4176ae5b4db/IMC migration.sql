@@ -4,7 +4,8 @@ create table if not exists trash.matched_cross_trades_pg_2
     contra_exec_id int8,
     constraint matched_cross_trades_pg_2_pk primary key (orig_exec_id, contra_exec_id)
 );
-call trash.match_cross_trades_pg(in_date_id := 20240506)
+call trash.match_cross_trades_pg(in_date_id := 20240513);
+
 CREATE OR REPLACE PROCEDURE trash.match_cross_trades_pg(in_date_id int4)
     language plpgsql
 as
@@ -347,13 +348,15 @@ language plpgsql
 			when CL.PARENT_ORDER_ID is not null and CL.CROSS_ORDER_ID is not null
 				then getContraCrossLPID_2(CL.ORDER_ID,CL.CROSS_ORDER_ID)
         end
-select *
+select ex.order_id, *
 	  from dwh.execution ex
 	  inner join dwh.client_order cl on cl.order_id = ex.order_id and ex.exec_date_id >= cl.create_date_id
       inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
 	  left join dwh.client_order pro on cl.parent_order_id = pro.order_id and pro.create_date_id >= cl.create_date_id
 	  inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
-      left join dwh.client_order str on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and ex.exec_type = 'F') --street order for this trade
+	  inner join dwh.d_account ac on ac.account_id = cl.account_id
+	  inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+/*      left join dwh.client_order str on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and ex.exec_type = 'F') --street order for this trade
 	  left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = ex.secondary_exch_exec_id and es.exec_date_id >= str.create_date_id)
 	  left join dwh.cross_order cro on cro.cross_order_id = cl.cross_order_id
 	  left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
@@ -362,15 +365,15 @@ select *
 	  left join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id)
 	  left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
 	  left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
-	  inner join dwh.d_account ac on ac.account_id = cl.account_id
 
-	  inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+
+
 	  left join dwh.d_clearing_account ca on (cl.account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and ca.market_type = 'O' and ca.clearing_account_type = '1')
 	  left join dwh.d_opt_exec_broker opx on (opx.account_id = ac.account_id and opx.is_default = 'Y' and opx.is_active)
 	  left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
 	  left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
 	  left join dwh.client_order_leg_num ln on ln.order_id = cl.order_id
-
+*/
       where ex.exec_date_id = :in_date_id
       and cl.multileg_reporting_type in ('1','2')
       and ex.is_busted = 'N'
@@ -378,9 +381,20 @@ select *
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
 	  and fc.fix_comp_id <> 'IMCCONS'
+      and ex.order_id in (15540506881,15540506885,15540506892,15540506879,15540506885,15540506892,15540506879,15540506890,15540506890,15540506887)
+	limit 100
 --      and 1=2
       ;
 commit;
 
 end;
 $$
+
+
+select ex.order_id, *
+	  from dwh.execution ex
+where ex.exec_date_id = :in_date_id
+
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E','S','D','y')
+      and ex.order_id in ()
