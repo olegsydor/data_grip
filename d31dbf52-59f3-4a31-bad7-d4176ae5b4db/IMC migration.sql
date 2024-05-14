@@ -390,6 +390,7 @@ commit;
 end;
 $$;
 
+drop table t_os;
 create temp table t_os as
 select cl.order_id,
        cl.transaction_id,
@@ -436,9 +437,11 @@ select cl.order_id,
        ex.contra_broker,
        ex.contra_trader,
        ex.secondary_order_id,
+       ex.secondary_exch_exec_id,
        ac.trading_firm_id,
        ac.opt_is_fix_clfirm_processed,
-       ac.opt_customer_or_firm
+       ac.opt_customer_or_firm,
+       ac.account_id
 from dwh.execution ex
          inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
          inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
@@ -451,5 +454,33 @@ where ex.exec_date_id = :in_date_id
   and ex.exec_type not in ('E', 'S', 'D', 'y')
   and cl.trans_type <> 'F'
   and tf.is_eligible4consolidator = 'Y'
-  and fc.fix_comp_id <> 'IMCCONS'
+  and fc.fix_comp_id <> 'IMCCONS';
 
+
+select *
+from t_os cl
+         inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
+         left join dwh.client_order pro on cl.parent_order_id = pro.order_id and pro.create_date_id >= cl.create_date_id
+         inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+         left join dwh.client_order str
+                   on (cl.order_id = str.parent_order_id and cl.secondary_order_id = str.client_order_id and
+                       cl.exec_type = 'F' and str.create_date_id >= cl.create_date_id) --street order for this trade
+         left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = cl.secondary_exch_exec_id and
+                                        es.exec_date_id >= str.create_date_id)
+         left join dwh.cross_order cro on cro.cross_order_id = cl.cross_order_id
+         left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, cl.exec_id)
+
+         left join dwh.d_exchange exc on exc.exchange_id = cl.cl_exchange_id
+         left join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id)
+         left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+         left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
+
+
+         left join dwh.d_clearing_account ca
+                   on (cl.account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and
+                       ca.market_type = 'O' and ca.clearing_account_type = '1')
+         left join dwh.d_opt_exec_broker opx
+                   on (opx.account_id = cl.account_id and opx.is_default = 'Y' and opx.is_active)
+         left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+         left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
+	  left join dwh.client_order_leg_num ln on ln.order_id = cl.order_id
