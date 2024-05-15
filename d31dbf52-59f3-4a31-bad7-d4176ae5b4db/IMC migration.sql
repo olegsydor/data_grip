@@ -484,3 +484,5 @@ from t_os cl
          left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
          left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
 	  left join dwh.client_order_leg_num ln on ln.order_id = cl.order_id
+
+
