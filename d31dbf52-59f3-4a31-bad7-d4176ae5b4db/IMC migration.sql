@@ -406,6 +406,7 @@ select cl.order_id,
        cl.client_order_id,
        cl.exchange_id as cl_exchange_id,
        cl.sub_strategy_id,
+       cl.sub_strategy_desc,
        cl.sub_system_unq_id,
        cl.opt_exec_broker_id,
        cl.clearing_firm_id,
@@ -424,6 +425,8 @@ select cl.order_id,
        cl.instrument_id,
        cl.create_date_id,
        cl.fix_connection_id,
+       cl.no_legs,
+       cl.side,
        ex.exec_id,
        ex.exec_time,
        ex.exec_type,
@@ -442,13 +445,15 @@ select cl.order_id,
        ac.trading_firm_id,
        ac.opt_is_fix_clfirm_processed,
        ac.opt_customer_or_firm,
-       ac.account_id
+       ac.account_id,
+       opx.opt_exec_broker
 from dwh.execution ex
          inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
          inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
          inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
          inner join dwh.d_account ac on ac.account_id = cl.account_id
          inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+         left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
 where ex.exec_date_id = :in_date_id
   and cl.multileg_reporting_type in ('1', '2')
   and ex.is_busted = 'N'
@@ -460,7 +465,7 @@ limit 100
 ;
 
 -- 2. NON GTC orders
-insert into t_base (order_id, transaction_id, create_time, order_qty, price, parent_order_id, exch_order_id, cross_order_id, is_originator, orig_order_id, client_order_id, cl_exchange_id, sub_strategy_id, sub_system_unq_id, opt_exec_broker_id, clearing_firm_id, clearing_account, sub_account, open_close, opt_customer_firm_street, eq_order_capacity, exec_instruction, strtg_decision_reason_code, request_number, order_type_id, time_in_force_id, multileg_reporting_type, cons_payment_per_contract, instrument_id, create_date_id, fix_connection_id, exec_id, exec_time, exec_type, cum_qty, order_status, last_px, last_qty, contra_account_capacity, trade_liquidity_indicator, exch_exec_id, ex_exchange_id, contra_broker, contra_trader, secondary_order_id, secondary_exch_exec_id, trading_firm_id, opt_is_fix_clfirm_processed, opt_customer_or_firm, account_id)
+insert into t_base
 select cl.order_id,
        cl.transaction_id,
        cl.create_time,
@@ -474,6 +479,7 @@ select cl.order_id,
        cl.client_order_id,
        cl.exchange_id as cl_exchange_id,
        cl.sub_strategy_id,
+       cl.sub_strategy_desc,
        cl.sub_system_unq_id,
        cl.opt_exec_broker_id,
        cl.clearing_firm_id,
@@ -492,6 +498,8 @@ select cl.order_id,
        cl.instrument_id,
        cl.create_date_id,
        cl.fix_connection_id,
+       cl.no_legs,
+       cl.side,
        ex.exec_id,
        ex.exec_time,
        ex.exec_type,
@@ -510,12 +518,14 @@ select cl.order_id,
        ac.trading_firm_id,
        ac.opt_is_fix_clfirm_processed,
        ac.opt_customer_or_firm,
-       ac.account_id
+       ac.account_id,
+       opx.opt_exec_broker
 from dwh.execution ex
          inner join dwh.client_order cl on cl.order_id = ex.order_id
          inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
          inner join dwh.d_account ac on ac.account_id = cl.account_id
          inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
 where ex.exec_date_id = :in_date_id
   and cl.create_date_id = :in_date_id
   and cl.multileg_reporting_type in ('1', '2')
@@ -537,107 +547,133 @@ with white as (select ss.symbol, clp.instrument_type_id
                from staging.symbol2lp_symbol_list ss
                         inner join staging.cons_lp_symbol_black_list clp on clp.lp_symbol_list_id = ss.lp_symbol_list_id
                where clp.liquidity_provider_id = 'IMC')
-		select
-		tbs.TRANSACTION_ID,
-		tbs.ORDER_ID as REC_TYPE,
-		tbs.EXEC_ID as ORDER_STATUS,
-		tbs.TRADING_FIRM_ID, --EntityCode
-		tbs.CREATE_TIME,
-		tbs.EXEC_TIME,
-		OC.OPRA_SYMBOL, --OSI
-		decode(I.INSTRUMENT_TYPE_ID,'E',I.SYMBOL, 'O',UI.SYMBOL) as BASE_CODE,
-		decode(I.INSTRUMENT_TYPE_ID,'E',I.SYMBOL, 'O',OS.ROOT_SYMBOL) as ROOT_SYMBOL,
-		--ETF - use file?
-		decode(UI.INSTRUMENT_TYPE_ID,'E','EQUITY','I','INDEX') as BASE_ASSET_TYPE,
-		--
-		OC.MATURITY_YEAR||to_char(OC.MATURITY_MONTH, 'FM00')||to_char(OC.MATURITY_DAY, 'FM00') as EXPIRATION_DATE,
-		OC.STRIKE_PRICE,
-		decode(OC.PUT_CALL,'0','P','1','C','S') as TYPE_CODE, -- (S - stock)
-		decode(tbs.SIDE,'1','B','2','S', '5','SS', '6', 'SS'), --SIDE
-
-		NVL((select CO_NO_LEGS from CLIENT_ORDER where ORDER_ID = tbs.CO_MULTILEG_ORDER_ID),1), --LEG_COUNT
-		LN.LEG_NUMBER,
-		case
-		 when tbs.EXEC_TYPE in ('4','5') then decode(tbs.EXEC_TYPE,'4','Canceled','5','Replaced')
-		 when tbs.EXEC_TYPE = 'F' and tbs.ORDER_STATUS = '6' then
-			case
-			  when tbs.CUM_QTY = tbs.ORDER_QTY then 'Filled'
-			  else 'Partial Fill'
-			end
-		else decode(tbs.ORDER_STATUS,'A','Pending New','0','New','8','Rejected', 'a','Pending Replace','b','Pending Cancel','1','Partial Fill','2','Filled','3','Done For Day', tbs.ORDER_STATUS )  --Status
-		end, --ORD_STATUS
-		tbs.PRICE,
-		tbs.LAST_PX,
-		tbs.ORDER_QTY, --Entered Qty
+select tbs.transaction_id,
+       tbs.order_id                                                                                                  as rec_type,
+       tbs.exec_id                                                                                                   as order_status,
+       tbs.trading_firm_id,                                                                         --entitycode
+       tbs.create_time,
+       tbs.exec_time,
+       oc.opra_symbol,                                                                              --osi
+       case i.instrument_type_id
+           when 'E' then i.symbol
+           when 'O'
+               then ui.symbol end                                                                                    as base_code,
+       case i.instrument_type_id
+           when 'E' then i.symbol
+           when 'O'
+               then os.root_symbol end                                                                               as root_symbol,
+       case ui.instrument_type_id when 'E' then 'EQUITY' when 'I' then 'INDEX' end                                   as base_asset_type,
+       --
+       to_char(oc.maturity_year, 'FM0000') || to_char(oc.maturity_month, 'FM00') ||
+       to_char(oc.maturity_day, 'FM00')                                                                              as expiration_date,
+       oc.strike_price,
+       case oc.put_call when '0' then 'P' when '1' then 'C' else 'S' end                                             as type_code,
+       case tbs.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SS' end, --SIDE
+-- 		NVL((select CO_NO_LEGS from CLIENT_ORDER where ORDER_ID = tbs.CO_MULTILEG_ORDER_ID),1), --LEG_COUNT
+		tbs.no_legs, --LEG_COUNT ???
+		ln.leg_number,
+       case
+           when tbs.exec_type = '4' then 'Canceled'
+           when tbs.exec_type = '5' then 'Replaced'
+           when tbs.exec_type = 'F' and tbs.order_status = '6' then
+               case
+                   when tbs.cum_qty = tbs.order_qty then 'Filled'
+                   else 'Partial Fill'
+                   end
+           when tbs.order_status = 'A' then 'Pending New'
+           when tbs.order_status = '0' then 'New'
+           when tbs.order_status = '8' then 'Rejected'
+           when tbs.order_status = 'a' then 'Pending Replace'
+           when tbs.order_status = 'b' then 'Pending Cancel'
+           when tbs.order_status = '1' then 'Partial Fill'
+           when tbs.order_status = '2' then 'Filled'
+           when tbs.order_status = '3' then 'Done For Day'
+           else tbs.order_status end,                                                               --Status, --ORD_STATUS
+    tbs.price,
+		tbs.last_px,
+		tbs.order_qty, --entered qty
 		-- ask++
-		tbs.LAST_QTY, --StatusQty
+		tbs.last_qty, --statusqty
 
+       case
+           when tbs.parent_order_id is null then tbs.exch_order_id
+           when tbs.trading_firm_id <> 'imc01' then (select exch_order_id
+                                                     from client_order
+                                                     where order_id = tbs.parent_order_id)
+           else (select exch_order_id
+                 from client_order
+                 where order_id = (select max(parent_order_id)
+                                   from client_order
+                                   where cross_order_id = tbs.cross_order_id
+                                     and is_originator <> tbs.is_originator))
+           end,--rfr_id
+       case
+           when tbs.parent_order_id is null then (select orig.exch_order_id
+                                                  from client_order orig
+                                                  where orig.order_id = tbs.orig_order_id
+                                                  limit 1)
+           when tbs.trading_firm_id <> 'imc01' then (select orig.exch_order_id
+                                                     from client_order orig,
+                                                          client_order co
+                                                     where orig.order_id = co.orig_order_id
+                                                       and co.order_id = tbs.parent_order_id
+                                                     limit 1)
+           else (select orig.exch_order_id
+                 from client_order orig,
+                      client_order co
+                 where orig.order_id = co.orig_order_id
+                   and co.order_id = (select max(parent_order_id)
+                                      from client_order
+                                      where cross_order_id = tbs.cross_order_id
+                                        and is_originator <> tbs.is_originator))
+           end,--orig_rfr_id
+		tbs.client_order_id,
 		case
-		  when tbs.PARENT_ORDER_ID is null then tbs.EXCH_ORDER_ID
-		  when tbs.TRADING_FIRM_ID <> 'imc01' then (select EXCH_ORDER_ID from CLIENT_ORDER where ORDER_ID = tbs.PARENT_ORDER_ID)
-		  else (select EXCH_ORDER_ID from CLIENT_ORDER where ORDER_ID = (select max(PARENT_ORDER_ID) from CLIENT_ORDER where CROSS_ORDER_ID = tbs.CROSS_ORDER_ID and IS_ORIGINATOR <> tbs.IS_ORIGINATOR))
-		end,--RFR_ID
-		case
-		  when tbs.PARENT_ORDER_ID is null then (select ORIG.EXCH_ORDER_ID from CLIENT_ORDER ORIG where ORIG.ORDER_ID = tbs.ORIG_ORDER_ID)
-		  when tbs.TRADING_FIRM_ID <> 'imc01' then (select ORIG.EXCH_ORDER_ID from CLIENT_ORDER ORIG, CLIENT_ORDER CO where ORIG.ORDER_ID = CO.ORIG_ORDER_ID and CO.ORDER_ID =  tbs.PARENT_ORDER_ID)
-		  else (select ORIG.EXCH_ORDER_ID from CLIENT_ORDER ORIG, CLIENT_ORDER CO where ORIG.ORDER_ID = CO.ORIG_ORDER_ID and CO.ORDER_ID =  (select max(PARENT_ORDER_ID) from CLIENT_ORDER where CROSS_ORDER_ID = tbs.CROSS_ORDER_ID and IS_ORIGINATOR <> tbs.IS_ORIGINATOR))
-		end,--ORIG_RFR_ID
-
-		tbs.CLIENT_ORDER_ID,
-
-		case
-		  when tbs.EXEC_TYPE in ('S','W') then
-			(select ORIG.CLIENT_ORDER_ID from CLIENT_ORDER ORIG where ORIG.ORDER_ID = tbs.ORIG_ORDER_ID)
+		  when tbs.exec_type in ('S','W') then
+			(select orig.client_order_id from client_order orig where orig.order_id = tbs.orig_order_id)
 		end,--REPLACED_ORDER_ID
-
 		case
-		  when tbs.EXEC_TYPE in ('b','4') then
-		  (select min(CXL.CLIENT_ORDER_ID) from CLIENT_ORDER CXL where CXL.ORIG_ORDER_ID = tbs.ORDER_ID)
-		end,--CANCEL_ORDER_ID
-
-		PRO.CLIENT_ORDER_ID AS PARENT_CLIENT_ORDER_ID,
-
-		tbs.ORDER_ID, --SystemOrderID
-
+		  when tbs.exec_type in ('b','4') then
+		  (select min(cxl.client_order_id) from client_order cxl where cxl.orig_order_id = tbs.order_id)
+		end,--cancel_order_id
+		pro.client_order_id as parent_client_order_id,
+		tbs.order_id, --systemorderid
 		case
 			when tbs.cl_exchange_id = 'ALGOWX' then 'WEX_SWEEP'
-			else NVL(tbs.SUB_STRATEGY, EXC.MIC_CODE)
-		end,-- EXCHANGE_CODE
-		--
-		--
-		--
-		case
-		  when tbs.PARENT_ORDER_ID is null then FC.ACCEPTOR_ID
-		  when tbs.sub_system_unq_id like '%CONS%' then 'CONS'
-		  when tbs.sub_system_unq_id like '%OSR%' then 'SOR'
-		  when tbs.sub_system_unq_id like '%ATLAS%' or tbs.sub_system_unq_id like '%ATS%' then 'ATS'
-		  else tbs.sub_system_unq_id
-		end, --EX_CONNECTION
-		--
-		--
-		--
+			else coalesce(tbs.sub_strategy_desc, exc.mic_code)
+		end,-- exchange_code
 
-		NVL(tbs.OPT_EXEC_BROKER,OPX.OPT_EXEC_BROKER), --GIVE_UP_FIRM
-		case
-		  when tbs.OPT_IS_FIX_CLFIRM_PROCESSED = 'Y' then CL.OPT_CLEARING_FIRM_ID
-		  else NVL(lpad(CA.CMTA, 3, 0),tbs.OPT_CLEARING_FIRM_ID)
-		end, --CMTA_FIRM
+       case
+           when tbs.parent_order_id is null then fc.acceptor_id
+           when tbs.sub_system_unq_id like '%CONS%' then 'CONS'
+           when tbs.sub_system_unq_id like '%OSR%' then 'SOR'
+           when tbs.sub_system_unq_id like '%ATLAS%' or tbs.sub_system_unq_id like '%ATS%' then 'ATS'
+           else tbs.sub_system_unq_id
+           end, --EX_CONNECTION
 
-		tbs.CO_CLEARING_ACCOUNT,
-		tbs.CO_SUB_ACCOUNT,
-		tbs.OPEN_CLOSE,
+
+		coalesce(tbs.opt_exec_broker,opx.opt_exec_broker), --give_up_firm
+       case
+           when tbs.opt_is_fix_clfirm_processed = 'Y' then tbs.clearing_firm_id
+           else coalesce(lpad(ca.cmta, 3, 0), tbs.clearing_firm_id)
+           end, --cmta_firm
+
+		tbs.clearing_account,
+		tbs.sub_account,
+		tbs.open_close,
 		case
-			  when (tbs.PARENT_ORDER_ID is null or tbs.OPT_CUSTOMER_FIRM is not null)
-				then decode(NVL(tbs.OPT_CUSTOMER_FIRM, tbs.OPT_CUSTOMER_OR_FIRM)
-				 , '0' , 'CUST'
-				 , '1' , 'FIRM'
-				 , '2' , 'BD'
-				 , '3' , 'BD-CUST'
-				 , '4' , 'MM'
-				 , '5' , 'AMM'
-				 , '7' , 'BD-FIRM'
-				 , '8' , 'CUST-PRO'
-				 , 'J' , 'JBO')
+			  when (tbs.PARENT_ORDER_ID is null or tbs.opt_customer_firm_street is not null)
+				then case coalesce(tbs.opt_customer_firm_street, tbs.OPT_CUSTOMER_OR_FIRM)
+				 when '0' then 'CUST'
+				 when '1' then 'FIRM'
+				 when '2' then 'BD'
+				 when '3' then 'BD-CUST'
+				 when '4' then 'MM'
+				 when '5' then 'AMM'
+				 when '7' then 'BD-FIRM'
+				 when '8' then 'CUST-PRO'
+				 when 'J' then 'JBO'
+
 			  else coalesce(tbs.OPT_CUSTOMER_FIRM,tbs.EQ_ORDER_CAPACITY,tbs.OPT_CUSTOMER_FIRM_STREET)
 		end, --RANGE
 		case when tbs.EXEC_TYPE = 'F' then
@@ -763,6 +799,7 @@ from t_base tbs
                    on (opx.account_id = tbs.account_id and opx.is_default = 'Y' and opx.is_active)
          left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
          left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
-	  left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id
+	  left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
 
 
+select * from dwh.d_opt_exec_broker
