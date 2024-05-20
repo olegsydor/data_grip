@@ -233,10 +233,7 @@ limit 100
 ;
 
 
-
-select * from dwh.d_opt_exec_broker
-
-
+create temp table t_main as
 with white as (select ss.symbol, clp.instrument_type_id
                from staging.symbol2lp_symbol_list ss
                         inner join staging.cons_lp_symbol_list clp on clp.lp_symbol_list_id = ss.lp_symbol_list_id
@@ -245,9 +242,10 @@ with white as (select ss.symbol, clp.instrument_type_id
                from staging.symbol2lp_symbol_list ss
                         inner join staging.cons_lp_symbol_black_list clp on clp.lp_symbol_list_id = ss.lp_symbol_list_id
                where clp.liquidity_provider_id = 'IMC')
+
 select tbs.transaction_id,
        tbs.order_id                                                                                                  as rec_type,
-       tbs.exec_id                                                                                                   as order_status,
+       tbs.exec_id,
        tbs.trading_firm_id,                                                                         --entitycode
        tbs.create_time,
        tbs.exec_time,
@@ -266,10 +264,10 @@ select tbs.transaction_id,
        to_char(oc.maturity_day, 'FM00')                                                                              as expiration_date,
        oc.strike_price,
        case oc.put_call when '0' then 'P' when '1' then 'C' else 'S' end                                             as type_code,
-       case tbs.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SS' end, --SIDE
+       case tbs.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SS' end as SIDE,
 -- 		NVL((select CO_NO_LEGS from CLIENT_ORDER where ORDER_ID = tbs.CO_MULTILEG_ORDER_ID),1), --LEG_COUNT
-       tbs.no_legs, --LEG_COUNT ???
-       ln.leg_number,
+--        tbs.no_legs, --LEG_COUNT ???
+--        ln.leg_number,
        case
            when tbs.exec_type = '4' then 'Canceled'
            when tbs.exec_type = '5' then 'Replaced'
@@ -286,7 +284,7 @@ select tbs.transaction_id,
            when tbs.order_status = '1' then 'Partial Fill'
            when tbs.order_status = '2' then 'Filled'
            when tbs.order_status = '3' then 'Done For Day'
-           else tbs.order_status end,                                                               --Status, --ORD_STATUS
+           else tbs.order_status end as ORD_STATUS,
        tbs.price,
        tbs.last_px,
        tbs.order_qty, --entered qty
@@ -304,7 +302,7 @@ select tbs.transaction_id,
                                    from client_order
                                    where cross_order_id = tbs.cross_order_id
                                      and is_originator <> tbs.is_originator))
-           end,--rfr_id
+           end as RFR_ID,--rfr_id
        case
            when tbs.parent_order_id is null then (select orig.exch_order_id
                                                   from client_order orig
@@ -324,22 +322,22 @@ select tbs.transaction_id,
                                       from client_order
                                       where cross_order_id = tbs.cross_order_id
                                         and is_originator <> tbs.is_originator))
-           end,--orig_rfr_id
+           end as ORIG_RFR_ID,--orig_rfr_id
        tbs.client_order_id,
        case
            when tbs.exec_type in ('S','W') then
                (select orig.client_order_id from client_order orig where orig.order_id = tbs.orig_order_id)
-           end,--REPLACED_ORDER_ID
+           end as REPLACED_ORDER_ID,
        case
            when tbs.exec_type in ('b','4') then
                (select min(cxl.client_order_id) from client_order cxl where cxl.orig_order_id = tbs.order_id)
-           end,--cancel_order_id
+           end as cancel_order_id,
        pro.client_order_id as parent_client_order_id,
        tbs.order_id, --systemorderid
        case
            when tbs.cl_exchange_id = 'ALGOWX' then 'WEX_SWEEP'
            else coalesce(tbs.sub_strategy_desc, exc.mic_code)
-           end,-- exchange_code
+           end as exchange_code,
 
        case
            when tbs.parent_order_id is null then fc.acceptor_id
@@ -347,15 +345,14 @@ select tbs.transaction_id,
            when dss.sub_system_id like '%OSR%' then 'SOR'
            when dss.sub_system_id like '%ATLAS%' or dss.sub_system_id like '%ATS%' then 'ATS'
            else dss.sub_system_id
-           end, --EX_CONNECTION
+           end as EX_CONNECTION,
 
 
-       coalesce(tbs.opt_exec_broker,opx.opt_exec_broker), --give_up_firm
+       coalesce(tbs.opt_exec_broker,opx.opt_exec_broker) asgive_up_firm,
        case
            when tbs.opt_is_fix_clfirm_processed = 'Y' then tbs.clearing_firm_id
            else coalesce(lpad(ca.cmta, 3, '0'), tbs.clearing_firm_id)
-           end, --cmta_firm
-
+           end as cmta_firm,
        tbs.clearing_account,
        tbs.sub_account,
        tbs.open_close,
@@ -372,16 +369,16 @@ select tbs.transaction_id,
                         when '8' then 'CUST-PRO'
                         when 'J' then 'JBO' end
            else coalesce(tbs.opt_customer_firm_street, tbs.eq_order_capacity, tbs.opt_customer_firm_street)
-           end, --RANGE
+           end as RANGE,
        case when tbs.EXEC_TYPE = 'F' then
                 case
                     when tbs.parent_order_id is not null then tbs.contra_account_capacity
                     else es.contra_account_capacity
                     end
-           end, --COUNTERPARTY_RANGE
+           end as COUNTERPARTY_RANGE,
        ot.order_type_short_name,
-       tif.tif_short_name,
-       tbs.exec_instruction,
+       tif.tif_short_name, -- TIME_IN_FORCE
+       tbs.exec_instruction, -- EXEC_INST
        tbs.trade_liquidity_indicator,
 
        tbs.exch_exec_id,
@@ -394,12 +391,12 @@ select tbs.transaction_id,
            when CRO.CROSS_TYPE = 'Q' then 'QCC'
            when CRO.CROSS_TYPE = 'F' then 'Facilitation'
            when CRO.CROSS_TYPE = 'S' then 'Solicitation'
-           else CRO.CROSS_TYPE end,--AUCTION_TYPE
+           else CRO.CROSS_TYPE end as AUCTION_TYPE,
 
        case
            when tbs.REQUEST_NUMBER >= 99 then ''
            else tbs.REQUEST_NUMBER::text
-           end, --REQUEST_COUNT
+           end as REQUEST_COUNT,
 
        case
            when tbs.EXEC_TYPE = 'F' then
@@ -427,7 +424,7 @@ select tbs.transaction_id,
                    else 'Other'
                    --
                    end
-           end, --BILLING_CODE
+           end as BILLING_CODE,
        case
            when tbs.EXEC_TYPE = 'F' then
                case
@@ -437,13 +434,13 @@ select tbs.transaction_id,
                                                                  else tbs.CONTRA_BROKER end
                    else coalesce(es.exchange_id, 'CBOE', ltrim(ES.CONTRA_BROKER, 'CBOE:'), ES.CONTRA_BROKER)
                    end
-           end, --CONTRA_BROKER
+           end as CONTRA_BROKER,
        case when tbs.EXEC_TYPE = 'F' then
                 case
                     when tbs.PARENT_ORDER_ID is not null then tbs.CONTRA_TRADER
                     else ES.CONTRA_TRADER
                     end
-           end, --CONTRA_TRADER
+           end as CONTRA_TRADER,
        case
            when case I.INSTRUMENT_TYPE_ID when 'E' then I.SYMBOL when 'O' then OS.ROOT_SYMBOL end in
                 (select SYMBOL
@@ -458,7 +455,7 @@ select tbs.transaction_id,
                  where INSTRUMENT_TYPE_ID = case when tbs.multileg_reporting_type = '1' then 'O' else 'M' end) = 0
                then 'Y'
            else 'N'
-           end, --as white_list --WHITE_LIST
+           end as white_list, --WHITE_LIST
        case
            when tbs.EXEC_TYPE = 'F' then
                case
@@ -475,7 +472,11 @@ select tbs.transaction_id,
                then staging.get_contra_cross_lpid2(STR.ORDER_ID,STR.CROSS_ORDER_ID, :in_date_id)
            when tbs.PARENT_ORDER_ID is not null and tbs.CROSS_ORDER_ID is not null
                then staging.get_contra_cross_lpid2(tbs.ORDER_ID,tbs.CROSS_ORDER_ID, :in_date_id)
-           end
+           end as CONTRA_CROSS_LP_ID,
+        coalesce(tbs.strtg_decision_reason_code, STR.strtg_decision_reason_code) as STRATEGY_DECISION_REASON_CODE,
+        cro.CROSS_TYPE,
+        es.FIX_MESSAGE_ID,
+        tbs.ex_exchange_id
 from t_base tbs
          inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
          left join dwh.client_order pro on tbs.parent_order_id = pro.order_id and pro.create_date_id >= tbs.create_date_id
@@ -501,7 +502,7 @@ from t_base tbs
                    on (opx.account_id = tbs.account_id and opx.is_default = 'Y' and opx.is_active)
          left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
          left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
-         left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
+--          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
     left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
 $$
 
