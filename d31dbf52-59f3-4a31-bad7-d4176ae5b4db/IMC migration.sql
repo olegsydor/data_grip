@@ -503,7 +503,24 @@ from t_base tbs
          left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
          left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
 --          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
-    left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
+    left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id;
 $$
 
-select * from dwh.d_sub_system
+select * from dwh.client_order_leg_num
+limit 50;
+
+select * from dwh.client_order
+where order_id = 496627958;
+
+select * from client_order_leg
+where order_id = 496627958;
+
+
+select * from staging.get_multileg_leg_number(in_order_id := 496627958)
+-- hint
+        , case
+            when co.multileg_reporting_type = '1'
+              then '0'
+            when co.multileg_reporting_type = '2'
+              then dense_rank() over (partition by co.multileg_order_id order by gtc.order_id) -- leg_number
+          end as order_leg_id
