@@ -234,7 +234,15 @@ where ex.exec_date_id = :in_date_id
 limit 100
 ;
 
+    drop table if exists t_alp;
+    create temp table t_alp as
+    select lc.fix_connection_id, alp.lp_demo_mnemonic
+    from staging.lp_connection lc
+         inner join staging.ats_liquidity_provider alp on alp.liquidity_provider_id = lc.liquidity_provider_id;
 
+    create index on t_alp (fix_connection_id);
+
+    
 create temp table t_main as
 with white as (select ss.symbol, clp.instrument_type_id
                from staging.symbol2lp_symbol_list ss
@@ -491,8 +499,8 @@ from t_base tbs
                    on (tbs.order_id = str.parent_order_id and tbs.secondary_order_id = str.client_order_id and
                        tbs.exec_type = 'F' and str.create_date_id >= tbs.create_date_id) --street order for this trade
          left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = tbs.secondary_exch_exec_id
---                                       and es.exec_date_id >= str.create_date_id
-             and es.exec_date_id >= tbs.exec_date_id)
+                                       and es.exec_date_id >= str.create_date_id
+             )
          left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
          left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, tbs.exec_id)
 
@@ -510,7 +518,9 @@ from t_base tbs
          left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
          left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
 --          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
-    left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id;
+    left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
+	where true
+	and es.exec_date_id >= tbs.exec_date_id;
 
 
   select
