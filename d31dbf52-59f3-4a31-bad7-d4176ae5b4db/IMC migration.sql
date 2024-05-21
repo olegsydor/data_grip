@@ -242,7 +242,9 @@ limit 100
 
     create index on t_alp (fix_connection_id);
 
-    
+select * from t_base;
+select * from t_main;
+
 create temp table t_main as
 with white as (select ss.symbol, clp.instrument_type_id
                from staging.symbol2lp_symbol_list ss
@@ -520,7 +522,8 @@ from t_base tbs
 --          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
     left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
 	where true
-	and es.exec_date_id >= tbs.exec_date_id;
+	and es.exec_date_id >= tbs.exec_date_id
+	limit 20000000;
 
 
   select
