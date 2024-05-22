@@ -157,9 +157,10 @@ where ex.exec_date_id = :in_date_id
   and cl.trans_type <> 'F'
   and tf.is_eligible4consolidator = 'Y'
   and fc.fix_comp_id <> 'IMCCONS'
+  and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
 limit 100
 ;
-
+select * from t_base
 -- 2. NON GTC orders
 insert into t_base
 select cl.order_id,
@@ -232,8 +233,11 @@ where ex.exec_date_id = :in_date_id
   and cl.trans_type <> 'F'
   and tf.is_eligible4consolidator = 'Y'
   and fc.fix_comp_id <> 'IMCCONS'
+and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
 limit 100
 ;
+
+	select * from t_base;
 
     drop table if exists t_alp;
     create temp table t_alp as
