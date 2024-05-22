@@ -4,7 +4,7 @@ create table if not exists trash.matched_cross_trades_pg_2
     contra_exec_id int8,
     constraint matched_cross_trades_pg_2_pk primary key (orig_exec_id, contra_exec_id)
 );
-call trash.match_cross_trades_pg(in_date_id := 20240513);
+call trash.match_cross_trades_pg(in_date_id := 20240423);
 
 CREATE OR REPLACE PROCEDURE trash.match_cross_trades_pg(in_date_id int4)
     language plpgsql
@@ -84,7 +84,6 @@ language plpgsql
 -- 	truncate table trash.cons_eod_permanent;
 
 
-
 -- 1. GTC orders
 drop table if exists t_base;
 create temp table t_base as
@@ -142,7 +141,8 @@ select cl.order_id,
        ac.opt_customer_or_firm,
        ac.account_id,
        opx.opt_exec_broker,
-       ex.exec_date_id
+       ex.exec_date_id,
+       ex.fix_message_id
 from dwh.execution ex
          inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
          inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
@@ -216,7 +216,8 @@ select cl.order_id,
        ac.opt_customer_or_firm,
        ac.account_id,
        opx.opt_exec_broker,
-       ex.exec_date_id
+       ex.exec_date_id,
+       ex.fix_message_id
 from dwh.execution ex
          inner join dwh.client_order cl on cl.order_id = ex.order_id
          inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
@@ -242,8 +243,6 @@ limit 100
 
     create index on t_alp (fix_connection_id);
 
-select * from t_base;
-select * from t_main;
 
 create temp table t_main as
 with white as (select ss.symbol, clp.instrument_type_id
@@ -278,7 +277,7 @@ select tbs.transaction_id,
        case oc.put_call when '0' then 'P' when '1' then 'C' else 'S' end                                             as type_code,
        case tbs.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SS' end as SIDE,
 -- 		NVL((select CO_NO_LEGS from CLIENT_ORDER where ORDER_ID = tbs.CO_MULTILEG_ORDER_ID),1), --LEG_COUNT
---        tbs.no_legs, --LEG_COUNT ???
+       tbs.no_legs, --LEG_COUNT ???
 --        ln.leg_number,
        case
            when tbs.exec_type = '4' then 'Canceled'
@@ -487,6 +486,7 @@ select tbs.transaction_id,
            end as CONTRA_CROSS_LP_ID,
         coalesce(tbs.strtg_decision_reason_code, STR.strtg_decision_reason_code) as STRATEGY_DECISION_REASON_CODE,
         cro.CROSS_TYPE,
+        tbs.fix_message_id as parent_fix_message_id, -- ex.fix_message_id parent order
         es.FIX_MESSAGE_ID,
         tbs.ex_exchange_id
 from t_base tbs
@@ -523,13 +523,14 @@ from t_base tbs
     left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
 	where true
 	and es.exec_date_id >= tbs.exec_date_id
-	limit 20000000;
+	;
 
+	select * from t_main;
 
+	    return query
   select
-
 -- 	    cl.transaction_id,
-        cl.rec_type, cl.order_status,
+--         cl.rec_type, cl.order_id,
 		cl.trading_firm_id||','|| --EntityCode
 		to_char(cl.create_time,'YYYYMMDD')||','|| --CreateDate
 		to_char(cl.create_time,'HH24MISSFF3')||','|| --CreateTime
@@ -544,8 +545,8 @@ from t_base tbs
 		coalesce(staging.trailing_dot(cl.strike_price), '')||','||
 		coalesce(cl.type_code, '')||','|| -- (S - stock)
 		coalesce(cl.side, '')||','||
-		coalesce(cl.leg_count::text, '')||','||  --LegCount
-		coalesce(cl.leg_number::text, '')||','||  --LegNumber
+		coalesce(cl.no_legs::text, '')||','||  --LegCount
+-- 		coalesce(cl.leg_number::text, '')||','||  --LegNumber
 		''||','||  --OrderType
 		coalesce(cl.ord_status, '')||','||
 		coalesce(to_char(cl.price, 'FM999990D0099'), '')||','||
@@ -571,9 +572,9 @@ from t_base tbs
 		--EX.CONTRA_ACCOUNT_CAPACITY
 --		coalesce(cl.counterparty_range, '')||','||
 		coalesce(case ascii(cl.counterparty_range) when 0 then repeat(' ', 1) else cl.counterparty_range end, '')||','||
-		coalesce(cl.order_type, '')||','|| --PriceQualifier
-		coalesce(cl.time_in_force, '')||','|| --TimeQualifier
-		coalesce(cl.exec_inst, '')||','|| --ExecInst
+		coalesce(cl.order_type_short_name, '')||','|| --PriceQualifier
+		coalesce(cl.tif_short_name, '')||','|| --TimeQualifier
+		coalesce(cl.exec_instruction, '')||','|| --ExecInst
         -- The next row was changed within https://dashfinancial.atlassian.net/browse/DEVREQ-3278
         coalesce(staging.get_trade_liquidity_indicator(cl.trade_liquidity_indicator), '') || ',' || --Maker/Take
 		coalesce(cl.exch_exec_id, '')||','|| --ExchangeTransactionID
@@ -852,7 +853,7 @@ from t_main cl
                                   and ls.exchange_id = 'MXOP'
                                   and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
                                 limit 1
-        ) mxop on true
+        ) mxop on true;
 
 
 	$$
