@@ -863,6 +863,18 @@ from t_main cl
 	$$
 
 
+with recursive total (order_id, parent_order_id) as
+                   (select order_id, parent_order_id
+                    from dwh.client_order co
+                    where orig_order_id is not null
+                      and order_id = :in_order_id
+                    union all
+                    select co.order_id, co.orig_order_id
+                    from dwh.client_order co
+                             join total on co.order_id = total.parent_order_id)
+select order_id
+from total
+where parent_order_id is null;
 
 
 /*
