@@ -1049,4 +1049,7 @@ select tbs.parent_order_id,
 	  and FC.FIX_COMP_ID <> 'IMCCONS'
 	  and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
 --      and CL.EXCH_ORDER_ID in ('7500054522512')
-and cl.create_date_id = 20240423
+and cl.create_date_id = 20240423;
+
+select * from dwh.d_account
+where is_active 36310 vs 12752
