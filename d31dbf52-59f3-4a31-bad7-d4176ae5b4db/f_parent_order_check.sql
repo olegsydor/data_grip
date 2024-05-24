@@ -139,10 +139,12 @@ order by 1, 2;
 select distinct cl.parent_order_id, ex.dataset_id--, instrument_id, order_create_date_id, is_busted, *
 from dwh.execution ex
          join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
-where cl.parent_order_id = any ('{15612386971,13187087931,13732271060,13931084228,15612178004,15612257823,15612352582}')
-  and ex.exec_date_id = 20240517
+where cl.parent_order_id = any ('{15661367123}')
+  and ex.exec_date_id = 20240522
   and exec_type = 'F'
 order by 1, 2;
+
+
 
 select parent_order_id,
        create_date_id,
@@ -158,7 +160,18 @@ select parent_order_id,
        street_order_qty,
        last_qty,
        amount
-from staging.load_parent_order_track(in_parent_order_ids := '{15612178004}',
-                                     in_date_id := 20240517,
-                                     in_dataset_ids := '{208823406}');
+from staging.load_parent_order_track(in_parent_order_ids := '{15661367123}',
+                                     in_date_id := 20240522,
+                                     in_dataset_ids := '{209159174}');
 
+209159097
+209159174
+
+select last_qty--ex.exec_type, ex.*
+from dwh.execution ex
+         join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+where cl.parent_order_id = any ('{15661367123}')
+  and ex.exec_date_id = 20240522
+  and exec_type = 'F'
+and ex.dataset_id in (209159174)--, 209159174)
+order by ex.exec_id
