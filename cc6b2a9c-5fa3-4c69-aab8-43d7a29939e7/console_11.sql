@@ -1,23 +1,8 @@
-CREATE TABLE trash.account_to_delete (
-	"Trading Firm ID" varchar(50) NULL,
-	"Trading Firm" varchar(50) NULL,
-	"Account Name" varchar(50) NULL,
-	"Create Date" varchar(50) NULL,
-	"First Trade Date" varchar(50) NULL,
-	"Last Trade Date" varchar(50) NULL
-);
-
-select * from trash.account_to_delete --12752;
-
-select account_id, account_name, trading_firm_id
--- into trash.account_to_delete_ora
-from dwh.d_account ac
-         join trash.account_to_delete ad
-              on ad."Account Name" = ac.account_name and ad."Trading Firm ID" = ac.trading_firm_id
-                  and ac.is_active
-
-
-select * from dwh.d_account
+-- update account
+-- set is_deleted  = 'Y',
+--     DELETE_TIME = current_timestamp
+select *
+from account
 where account_id in
       (422, 648, 676, 684, 694, 697, 707, 708, 709, 710, 711, 712, 713, 714, 715, 716, 1456, 2345, 3041, 3042, 4501,
        5465, 7311, 7313, 7427, 7571, 7588, 7589, 7590, 7591, 8152, 8176, 8372, 8912, 9139, 9140, 9142, 9794, 9974, 9975,
@@ -816,4 +801,4 @@ where account_id in
        58029, 58150, 58151, 58152, 58511, 58570, 60045, 60046, 60094, 60095, 62344, 62382, 62383, 62384, 62385, 62386,
        62387, 62391, 62413, 62475, 62651, 62747, 63529, 63530, 63531, 63532, 63675, 63844, 67922, 68307, 69937, 69938,
        69939, 69940, 69941, 69942, 69943, 69944, 69945, 69948)
-  
+  and is_deleted = 'N';
