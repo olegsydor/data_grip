@@ -119,6 +119,7 @@ begin
            cl.clearing_account,
            cl.sub_account,
            cl.open_close,
+           cl.customer_or_firm_id,
            cl.opt_customer_firm_street,
            cl.eq_order_capacity,
            cl.exec_instruction,
@@ -170,7 +171,8 @@ begin
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
-    limit 10000;
+--     limit 10000
+    ;
 
     get  diagnostics  l_row_cnt  =  row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: GTC orders added',
@@ -199,6 +201,7 @@ begin
            cl.clearing_account,
            cl.sub_account,
            cl.open_close,
+           cl.customer_or_firm_id,
            cl.opt_customer_firm_street,
            cl.eq_order_capacity,
            cl.exec_instruction,
@@ -250,7 +253,8 @@ begin
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
-    limit 10000;
+--     limit 10000
+    ;
 
     get  diagnostics  l_row_cnt  =  row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: Non GTC orders added',
@@ -266,6 +270,7 @@ begin
 
     create index on t_alp (fix_connection_id);
 
+    drop table if exists t_main;
     create temp table t_main as
     with white as (select ss.symbol, clp.instrument_type_id
                    from staging.symbol2lp_symbol_list ss
@@ -390,8 +395,8 @@ begin
            tbs.sub_account,
            tbs.open_close,
            case
-               when (tbs.parent_order_id is null or tbs.opt_customer_firm_street is not null)
-                   then case coalesce(tbs.opt_customer_firm_street, tbs.opt_customer_or_firm)
+               when (tbs.parent_order_id is null or tbs.customer_or_firm_id is not null)
+                   then case coalesce(tbs.customer_or_firm_id, tbs.opt_customer_or_firm)
                             when '0' then 'CUST'
                             when '1' then 'FIRM'
                             when '2' then 'BD'
@@ -401,7 +406,7 @@ begin
                             when '7' then 'BD-FIRM'
                             when '8' then 'CUST-PRO'
                             when 'J' then 'JBO' end
-               else coalesce(tbs.opt_customer_firm_street, tbs.eq_order_capacity, tbs.opt_customer_firm_street)
+               else coalesce(tbs.customer_or_firm_id, tbs.eq_order_capacity, tbs.opt_customer_firm_street)
                end                                                                                     as RANGE,
            case
                when tbs.EXEC_TYPE = 'F' then
@@ -520,6 +525,7 @@ begin
            tbs.fix_message_id                                                                          as parent_fix_message_id, -- ex.fix_message_id parent order
            es.FIX_MESSAGE_ID,
            tbs.ex_exchange_id
+--     select tbs.transaction_id, es.exec_date_id, tbs.exec_date_id
     from t_base tbs
              inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
              left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
@@ -538,7 +544,7 @@ begin
              left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
              left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, tbs.exec_id)
 
-             left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id
+             left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
              left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
              left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
              left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
@@ -554,7 +560,7 @@ begin
 --          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
              left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
     where true
-      and es.exec_date_id >= tbs.exec_date_id;
+      ;
     get  diagnostics  l_row_cnt  =  row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: main table created',
@@ -901,11 +907,11 @@ coalesce(dc.account_demo_mnemonic, '')
                            l_row_cnt, 'O')
     into l_step_id;
 end;
-$$
+$$;
 
 
 select * from trash.get_consolidator_eod_pg(in_date_id := 20240423);
-
+select * from t_main cl
 
 
 /*
@@ -919,3 +925,128 @@ select * from staging.get_multileg_leg_number(in_order_id := 496627958)
             when co.multileg_reporting_type = '2'
               then dense_rank() over (partition by co.multileg_order_id order by gtc.order_id) -- leg_number
           end as order_leg_id
+
+
+
+*/
+
+case
+			  when (CL.PARENT_ORDER_ID is null or CL.OPT_CUSTOMER_FIRM is not null)
+				then decode(NVL(CL.OPT_CUSTOMER_FIRM, AC.OPT_CUSTOMER_OR_FIRM)
+				 , '0' , 'CUST'
+				 , '1' , 'FIRM'
+				 , '2' , 'BD'
+				 , '3' , 'BD-CUST'
+				 , '4' , 'MM'
+				 , '5' , 'AMM'
+				 , '7' , 'BD-FIRM'
+				 , '8' , 'CUST-PRO'
+				 , 'J' , 'JBO')
+			  else coalesce(CL.OPT_CUSTOMER_FIRM,CL.EQ_ORDER_CAPACITY,cl.OPT_CUSTOMER_FIRM_STREET)
+		end, --RANGE
+
+select tbs.parent_order_id,
+       tbs.opt_customer_firm_street,
+       coalesce(tbs.opt_customer_firm_street, tbs.opt_customer_or_firm),
+       tbs.opt_customer_firm_street, tbs.eq_order_capacity, tbs.opt_customer_firm_street,
+           case
+               when (tbs.parent_order_id is null or tbs.opt_customer_firm_street is not null)
+                   then case coalesce(tbs.opt_customer_firm_street, tbs.opt_customer_or_firm)
+                            when '0' then 'CUST'
+                            when '1' then 'FIRM'
+                            when '2' then 'BD'
+                            when '3' then 'BD-CUST'
+                            when '4' then 'MM'
+                            when '5' then 'AMM'
+                            when '7' then 'BD-FIRM'
+                            when '8' then 'CUST-PRO'
+                            when 'J' then 'JBO' end
+               else coalesce(tbs.opt_customer_firm_street, tbs.eq_order_capacity, tbs.opt_customer_firm_street)
+               end                                                                                     as RANGE
+ from t_base tbs
+             inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
+             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                                from dwh.client_order pro
+                                where tbs.parent_order_id = pro.order_id
+                                  and pro.create_date_id >= tbs.create_date_id
+                                limit 1) pro on true
+             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
+             left join dwh.client_order str
+                       on (tbs.order_id = str.parent_order_id and tbs.secondary_order_id = str.client_order_id and
+                           tbs.exec_type = 'F' and
+                           str.create_date_id >= tbs.create_date_id) --street order for this trade
+             left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = tbs.secondary_exch_exec_id
+        and es.exec_date_id >= str.create_date_id
+        )
+             left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, tbs.exec_id)
+
+             left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
+             left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
+             left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+             left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
+
+
+             left join dwh.d_clearing_account ca
+                       on (tbs.account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and
+                           ca.market_type = 'O' and ca.clearing_account_type = '1')
+             left join dwh.d_opt_exec_broker opx
+                       on (opx.account_id = tbs.account_id and opx.is_default = 'Y' and opx.is_active)
+             left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
+             left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
+--          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
+             left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id;
+
+
+	select
+	CL.PARENT_ORDER_ID,
+	cl.*,
+	CL.EQ_ORDER_CAPACITY,cl.OPT_CUSTOMER_FIRM_STREET,
+-- 	case
+-- 			  when (CL.PARENT_ORDER_ID is null or CL.OPT_CUSTOMER_FIRM is not null)
+-- 				then decode(NVL(CL.OPT_CUSTOMER_FIRM, AC.OPT_CUSTOMER_OR_FIRM)
+-- 				 , '0' , 'CUST'
+-- 				 , '1' , 'FIRM'
+-- 				 , '2' , 'BD'
+-- 				 , '3' , 'BD-CUST'
+-- 				 , '4' , 'MM'
+-- 				 , '5' , 'AMM'
+-- 				 , '7' , 'BD-FIRM'
+-- 				 , '8' , 'CUST-PRO'
+-- 				 , 'J' , 'JBO')
+-- 			  else coalesce(CL.OPT_CUSTOMER_FIRM,CL.EQ_ORDER_CAPACITY,cl.OPT_CUSTOMER_FIRM_STREET)
+-- 		end, --RANGE
+''
+	  from dwh.CLIENT_ORDER CL
+	  inner join dwh.d_INSTRUMENT I on I.INSTRUMENT_ID = CL.INSTRUMENT_ID
+	  left join dwh.CLIENT_ORDER PRO on (CL.PARENT_ORDER_ID = PRO.ORDER_ID)
+	  inner join dwh.d_FIX_CONNECTION FC on (FC.FIX_CONNECTION_ID = CL.FIX_CONNECTION_ID)
+	  inner join dwh.EXECUTION EX on CL.ORDER_ID = EX.ORDER_ID
+      left join dwh.CLIENT_ORDER STR on (CL.ORDER_ID = STR.PARENT_ORDER_ID and EX.SECONDARY_ORDER_ID = STR.CLIENT_ORDER_ID and EX.EXEC_TYPE = 'F') --street order for this trade
+	  left join dwh.EXECUTION ES on (ES.ORDER_ID = STR.ORDER_ID and ES.EXCH_EXEC_ID = EX.SECONDARY_EXCH_EXEC_ID)
+	  left join dwh.CROSS_ORDER CRO on CRO.CROSS_ORDER_ID = CL.CROSS_ORDER_ID
+-- 	  left join MATCHED_CROSS_TRADES_PG MCT on NVL(ES.EXEC_ID, EX.EXEC_ID) = MCT.ORIG_EXEC_ID
+
+	  left join dwh.d_EXCHANGE EXC on EXC.EXCHANGE_ID = CL.EXCHANGE_ID
+	  left join dwh.d_OPTION_CONTRACT OC on (OC.INSTRUMENT_ID = CL.INSTRUMENT_ID)
+	  left join dwh.d_OPTION_SERIES OS on (OC.OPTION_SERIES_ID = OS.OPTION_SERIES_ID)
+	  left join dwh.d_INSTRUMENT UI on UI.INSTRUMENT_ID = OS.UNDERLYING_INSTRUMENT_ID
+	  inner join dwh.d_ACCOUNT AC on AC.ACCOUNT_ID = CL.ACCOUNT_ID
+
+	  inner join dwh.d_TRADING_FIRM TF on TF.TRADING_FIRM_ID = AC.TRADING_FIRM_ID
+-- 	  left join dwh.d_CLEARING_ACCOUNT CA on (CL.ACCOUNT_ID = CA.ACCOUNT_ID and CA.IS_DEFAULT = 'Y' and CA.IS_DELETED <> 'Y' and CA.MARKET_TYPE = 'O' and CA.CLEARING_ACCOUNT_TYPE = '1')
+-- 	  left join dwh.d_OPT_EXEC_BROKER OPX on (OPX.ACCOUNT_ID = AC.ACCOUNT_ID and OPX.IS_DEFAULT = 'Y' and OPX.IS_DELETED <>'Y')
+-- 	  left join dwh.d_ORDER_TYPE OT on OT.ORDER_TYPE_ID = CL.ORDER_TYPE
+-- 	  left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE
+-- 	  left join CLIENT_ORDER_LEG_NUM LN on LN.ORDER_ID = CL.ORDER_ID
+
+      where ex.exec_date_id = 20240423
+      and CL.MULTILEG_REPORTING_TYPE in ('1','2')
+      and EX.IS_BUSTED = 'N'
+      and EX.EXEC_TYPE not in ('E','S','D','y')
+      and CL.TRANS_TYPE <> 'F'
+      and TF.IS_ELIGIBLE4CONSOLIDATOR = 'Y'
+	  and FC.FIX_COMP_ID <> 'IMCCONS'
+	  and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
+--      and CL.EXCH_ORDER_ID in ('7500054522512')
+and cl.create_date_id = 20240423
