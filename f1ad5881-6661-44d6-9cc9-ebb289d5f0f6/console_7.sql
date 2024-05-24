@@ -133,7 +133,7 @@ begin
            tp.instrument_id,
            tp.instrument_type_id,
            tp.side,
-           md5(row (:l_date_id, tp.max_exec_id, tp.street_count,tp.trade_count,tp.last_qty,tp.amount,tp.street_order_qty,tp.parent_order_qty,tp.instrument_id)::text) as check_sum
+           md5(row (:l_date_id, tp.max_exec_id, tp.street_count, tp.create_date_id, tp.trade_count, tp.last_qty, tp.amount, tp.street_order_qty, tp.parent_order_qty, tp.instrument_id)::text) as check_sum
     from t_parent_orders tp
              left join data_marts.f_parent_order fp
                        on fp.parent_order_id = tp.parent_order_id and fp.status_date_id = :l_date_id
