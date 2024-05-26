@@ -39,3 +39,5 @@ insert into data_marts.f_parent_order (parent_order_id, last_exec_id, create_dat
             pg_db_update_time = clock_timestamp(),
             instrument_id     = excluded.instrument_id
 where check_sum <> excluded.check_sum;
+
+select * from dwh.d_account
