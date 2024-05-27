@@ -90,7 +90,7 @@ begin
     into l_step_id;
 
     -- Matching orders
---     call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -164,7 +164,7 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
-    where ex.exec_date_id = :in_date_id
+    where ex.exec_date_id = in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
@@ -246,8 +246,8 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
-    where ex.exec_date_id = :in_date_id
-      and cl.create_date_id = :in_date_id
+    where ex.exec_date_id = in_date_id
+      and cl.create_date_id = in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
@@ -447,7 +447,7 @@ begin
                                when coalesce(PRO.ORDER_TYPE_id, tbs.ORDER_TYPE_id) in ('3', '4', '5', 'B') or
                                     coalesce(PRO.time_in_force_id, tbs.time_in_force_id) in ('2', '7')
                                    then 'Exhaust_IMC'
-                               when (staging.get_lp_list(tbs.ACCOUNT_ID, I.SYMBOL, :in_date_id::text::date) is null and
+                               when (staging.get_lp_list(tbs.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
                                      staging.get_lp_list_lite(tbs.ACCOUNT_ID, OS.ROOT_SYMBOL,
                                                               case tbs.MULTILEG_REPORTING_TYPE
                                                                   when '1' then 'O'
@@ -463,13 +463,13 @@ begin
            case
                when tbs.EXEC_TYPE = 'F' then
                    case
-                       when tbs.PARENT_ORDER_ID is not null then case
-                                                                     when tbs.ex_exchange_id = 'CBOE'
-                                                                         then ltrim(tbs.CONTRA_BROKER, 'CBOE:')
-                                                                     else tbs.CONTRA_BROKER end
-                       else coalesce(es.exchange_id, 'CBOE', ltrim(ES.CONTRA_BROKER, 'CBOE:'), ES.CONTRA_BROKER)
-                       end
-               end                                                                                     as CONTRA_BROKER,
+                       when tbs.PARENT_ORDER_ID is not null and tbs.ex_exchange_id = 'CBOE'
+                           then ltrim(tbs.CONTRA_BROKER, 'CBOE:')
+                       when tbs.PARENT_ORDER_ID is not null then tbs.CONTRA_BROKER
+                       when tbs.PARENT_ORDER_ID is null and es.exchange_id = 'CBOE'
+                           then ltrim(ES.CONTRA_BROKER, 'CBOE:')
+                       when tbs.PARENT_ORDER_ID is null then ES.CONTRA_BROKER end
+               end as CONTRA_BROKER,
            case
                when tbs.EXEC_TYPE = 'F' then
                    case
@@ -508,9 +508,9 @@ begin
            --getContraCrossLPID(NVL(STR.ORDER_ID,CL.ORDER_ID))-- ALP.LP_DEMO_MNEMONIC
            case
                when tbs.PARENT_ORDER_ID is null and STR.CROSS_ORDER_ID is not null
-                   then staging.get_contra_cross_lpid2(STR.ORDER_ID, STR.CROSS_ORDER_ID, :in_date_id)
+                   then staging.get_contra_cross_lpid2(STR.ORDER_ID, STR.CROSS_ORDER_ID, in_date_id)
                when tbs.PARENT_ORDER_ID is not null and tbs.CROSS_ORDER_ID is not null
-                   then staging.get_contra_cross_lpid2(tbs.ORDER_ID, tbs.CROSS_ORDER_ID, :in_date_id)
+                   then staging.get_contra_cross_lpid2(tbs.ORDER_ID, tbs.CROSS_ORDER_ID, in_date_id)
                end                                                                                     as CONTRA_CROSS_LP_ID,
            coalesce(tbs.strtg_decision_reason_code,
                     STR.strtg_decision_reason_code)                                                    as STRATEGY_DECISION_REASON_CODE,
@@ -710,7 +710,7 @@ coalesce(cl.cross_order_id::text, '') || ',' || --CrossOrderID
 -- 		coalesce(cl.auction_type, '')||','|| --Auc.type
 		case
            when cl.STRATEGY_DECISION_REASON_CODE in ('74') and
-                cl.cl_exchange_id in ('AMEX', 'BOX', 'CBOE', 'EDGO', 'GEMINI', 'ISE', 'MCRY', 'MIAX', 'NQBXO', 'PHLX')
+                cl.ex_exchange_id in ('AMEX', 'BOX', 'CBOE', 'EDGO', 'GEMINI', 'ISE', 'MCRY', 'MIAX', 'NQBXO', 'PHLX')
                and exists (select upper(description)
                            from dwh.d_liquidity_indicator li
                            where (upper(description) like '%FLASH%'
@@ -900,7 +900,8 @@ coalesce(dc.account_demo_mnemonic, '')
                                       and ls.exchange_id = 'MXOP'
                                       and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
                                     limit 1
-            ) mxop on true;
+            ) mxop on true
+    order by cl.rec_type, cl.order_id;
 
     get  diagnostics  l_row_cnt  =  row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for  ' || in_date_id::text || ' FINISHED===',
@@ -913,56 +914,91 @@ $$;
 select * from trash.get_consolidator_eod_pg(in_date_id := 20240423);
 select * from t_main cl
 
-select
-    tbs.order_id,
-    tbs.EXEC_TYPE,
-    tbs.PARENT_ORDER_ID,
-    tbs.ex_exchange_id,
-    tbs.CONTRA_BROKER,
-    es.exchange_id,
-    ES.CONTRA_BROKER,
- case
-               when tbs.EXEC_TYPE = 'F' then
-                   case
-                       when tbs.PARENT_ORDER_ID is not null then case
-                                                                     when tbs.ex_exchange_id = 'CBOE'
-                                                                         then ltrim(tbs.CONTRA_BROKER, 'CBOE:')
-                                                                     else tbs.CONTRA_BROKER end
-                       else coalesce(es.exchange_id, 'CBOE', ltrim(ES.CONTRA_BROKER, 'CBOE:'), ES.CONTRA_BROKER)
-                       end
-               end                                                                                     as CONTRA_BROKER
-   from t_base tbs
-             inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
-             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
-                                from dwh.client_order pro
-                                where tbs.parent_order_id = pro.order_id
-                                  and pro.create_date_id >= tbs.create_date_id
-                                limit 1) pro on true
-             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
-             left join dwh.client_order str
-                       on (tbs.order_id = str.parent_order_id and tbs.secondary_order_id = str.client_order_id and
-                           tbs.exec_type = 'F' and
-                           str.create_date_id >= tbs.create_date_id) --street order for this trade
-             left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = tbs.secondary_exch_exec_id
-        and es.exec_date_id >= str.create_date_id
-        )
-             left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
-             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, tbs.exec_id)
+select tbs.order_id,
+       tbs.EXEC_TYPE,
+       tbs.PARENT_ORDER_ID,
+       tbs.ex_exchange_id,
+       tbs.CONTRA_BROKER,
+       es.exchange_id,
+       ES.CONTRA_BROKER,
+       case
+           when tbs.EXEC_TYPE = 'F' then
+               case
+                   when tbs.PARENT_ORDER_ID is not null and tbs.ex_exchange_id = 'CBOE'
+                       then ltrim(tbs.CONTRA_BROKER, 'CBOE:')
+                   when tbs.PARENT_ORDER_ID is not null then tbs.CONTRA_BROKER
+                   when tbs.PARENT_ORDER_ID is null and es.exchange_id = 'CBOE' then ltrim(ES.CONTRA_BROKER, 'CBOE:')
+                   when tbs.PARENT_ORDER_ID is null then ES.CONTRA_BROKER end
+           end as CONTRA_BROKER
+from t_base tbs
+         inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
+         left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                            from dwh.client_order pro
+                            where tbs.parent_order_id = pro.order_id
+                              and pro.create_date_id >= tbs.create_date_id
+                            limit 1) pro on true
+         inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
+         left join dwh.client_order str
+                   on (tbs.order_id = str.parent_order_id and tbs.secondary_order_id = str.client_order_id and
+                       tbs.exec_type = 'F' and
+                       str.create_date_id >= tbs.create_date_id) --street order for this trade
+         left join dwh.execution es on (es.order_id = str.order_id and es.exch_exec_id = tbs.secondary_exch_exec_id
+    and es.exec_date_id >= str.create_date_id
+    )
+         left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
+         left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, tbs.exec_id)
 
-             left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
-             left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
-             left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
-             left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
+         left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
+         left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
+         left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+         left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
 
 
-             left join dwh.d_clearing_account ca
-                       on (tbs.account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and
-                           ca.market_type = 'O' and ca.clearing_account_type = '1')
-             left join dwh.d_opt_exec_broker opx
-                       on (opx.account_id = tbs.account_id and opx.is_default = 'Y' and opx.is_active)
-             left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
-             left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
+         left join dwh.d_clearing_account ca
+                   on (tbs.account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and
+                       ca.market_type = 'O' and ca.clearing_account_type = '1')
+         left join dwh.d_opt_exec_broker opx
+                   on (opx.account_id = tbs.account_id and opx.is_default = 'Y' and opx.is_active)
+         left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
+         left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
 --          left join dwh.client_order_leg_num ln on ln.order_id = tbs.order_id -- very slow part (SO)
-             left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
-    where true
-and tbs.exch_exec_id = '7200286431833'
+         left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
+where true
+  and tbs.exch_exec_id = '7200286431837';
+
+select
+	case
+           when cl.STRATEGY_DECISION_REASON_CODE in ('74') and
+                cl.ex_exchange_id in ('AMEX', 'BOX', 'CBOE', 'EDGO', 'GEMINI', 'ISE', 'MCRY', 'MIAX', 'NQBXO', 'PHLX')
+               and exists (select upper(description)
+                           from dwh.d_liquidity_indicator li
+                           where (upper(description) like '%FLASH%'
+                               or upper(description) like '%EXPOSURE%')
+                             and li.trade_liquidity_indicator = cl.trade_liquidity_indicator)
+               then 'FLASH'
+            when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(fmj_p.t9730, 2, 1) in ('B','b','s') then 'FLASH'
+		    when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(fmj.t9730, 2, 1) in ('B','b','s') then 'FLASH'
+			when CL.STRATEGY_DECISION_REASON_CODE in ('32', '62', '96', '99') then 'FLASH'
+			when Cl.CROSS_TYPE = 'P' then 'PIM' when Cl.CROSS_TYPE = 'Q' then 'QCC'
+		    when Cl.CROSS_TYPE = 'F' then 'Facilitation'
+		    when Cl.CROSS_TYPE = 'S' then 'Solicitation'
+       else coalesce(CL.CROSS_TYPE, '') end
+ from t_main cl
+                 left join lateral (select account_demo_mnemonic
+                                    from dwh.client_order co
+                                             join dwh.d_account da using (account_id)
+                                    where cl.order_id = co.order_id
+                                      and co.create_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                    limit 1) dc on true
+                 left join lateral (select fix_message ->> '9730' as t9730
+                                    from fix_capture.fix_message_json fmj
+                                    where fmj.fix_message_id = cl.fix_message_id
+                                      and fmj.date_id = public.get_dateid(cl.exec_time::date)
+                                    limit 1) fmj on true
+         left join lateral (select fix_message ->> '9730' as t9730
+                            from fix_capture.fix_message_json fmj
+                            where fmj.fix_message_id = cl.parent_fix_message_id
+                              and fmj.date_id = public.get_dateid(cl.exec_time::date)
+                            limit 1) fmj_p on true
+where true
+  and exch_exec_id = '7200286431837';
