@@ -90,7 +90,7 @@ begin
     into l_step_id;
 
     -- Matching orders
-    call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(:in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -171,8 +171,8 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
---     limit 10000
+--       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
+     limit 100000
     ;
 
     get  diagnostics  l_row_cnt  =  row_count;
@@ -254,8 +254,8 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
---     limit 10000
+--       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
+      limit 1000000
     ;
 
     get  diagnostics  l_row_cnt  =  row_count;
