@@ -164,7 +164,7 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
-    where ex.exec_date_id = in_date_id
+    where ex.exec_date_id = :in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
