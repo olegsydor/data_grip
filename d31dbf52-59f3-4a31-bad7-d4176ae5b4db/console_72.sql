@@ -165,3 +165,91 @@ begin
 end;
 $function$
 ;
+
+
+
+DROP FUNCTION dash360.risk_management_get_requests(timestamp, timestamp, text, int8, text, int8, text, int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.risk_management_get_requests(in_from timestamp without time zone,
+                                                                in_to timestamp without time zone,
+                                                                in_scope text DEFAULT NULL::text,
+                                                                in_acc_id bigint DEFAULT NULL::bigint,
+                                                                in_tf_id text DEFAULT NULL::text,
+                                                                in_tr_id bigint DEFAULT NULL::bigint,
+                                                                in_status text DEFAULT NULL::text,
+                                                                in_risk_acc_group_id bigint DEFAULT NULL::bigint,
+                                                                in_risk_tf_group_id bigint DEFAULT NULL::bigint)
+    RETURNS TABLE
+            (
+                req_id              bigint,
+                status              character,
+                scope               character,
+                account_id          bigint,
+                trading_firm_id     character varying,
+                trader_id           bigint,
+                change_type         character,
+                change_reason       character,
+                created_date        timestamp without time zone,
+                created_by_user_id  bigint,
+                rejected_date       timestamp without time zone,
+                rejected_by_user_id bigint,
+                approved_date       timestamp without time zone,
+                approved_by_user_id bigint,
+                created_by_user     character varying,
+                approved_by_user    character varying,
+                rejected_by_user    character varying,
+                prm_id              bigint,
+                prm_code            character varying,
+                prm_value           character varying,
+                prm_current_value   character varying,
+                prm_type            character,
+                risk_acc_group_id   bigint,
+                risk_tf_group_id    bigint
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    # variable_conflict use_column
+begin
+    RETURN QUERY
+        SELECT r.req_id,
+               r.status,
+               r."scope",
+               r.account_id,
+               r.trading_firm_id,
+               r.trader_id,
+               r.change_type,
+               r.change_reason,
+               r.created_date,
+               r.created_by_user_id,
+               r.rejected_date,
+               r.rejected_by_user_id,
+               r.approved_date,
+               r.approved_by_user_id,
+               cu.user_name created_by_user,
+               au.user_name approved_by_user,
+               ru.user_name rejected_by_user,
+               re.prm_id,
+               re.prm_code,
+               re.prm_value,
+               re.prm_current_value,
+               re.prm_type,
+               r.risk_account_group_id,
+               r.risk_tf_group_id
+        FROM dash360.risk_management_modification_requests r
+                 join dash360.risk_management_modification_requests_entry re on re.req_id = r.req_id
+                 join genesis2.user_identifier cu on r.created_by_user_id = cu.user_id
+                 left join genesis2.user_identifier au on r.approved_by_user_id = au.user_id
+                 left join genesis2.user_identifier ru on r.rejected_by_user_id = ru.user_id
+        where (r.created_date between in_from and in_to)
+          and (in_scope is null or r."scope" = in_scope::bpchar)
+          and (in_acc_id is null or r.account_id = in_acc_id)
+          and (in_tr_id is null or r.trader_id = in_tr_id)
+          and (in_tf_id is null or r.trading_firm_id = in_tf_id::varchar)
+          and (in_status is null or r.status = in_status::bpchar)
+          and (in_risk_tf_group_id is null or r.risk_tf_group_id = in_risk_tf_group_id)
+          and (in_risk_acc_group_id is null or r.risk_account_group_id = in_risk_acc_group_id);
+end;
+$function$
+;
