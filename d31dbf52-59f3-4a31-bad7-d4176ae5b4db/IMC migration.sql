@@ -1093,19 +1093,33 @@ $function$
 ;
 -------
 create temp table t_liq_base as
-select al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id
+select distinct al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id, sl.symbol
                 from dwh.d_acc_allowed_liquidity_provider al
                          inner join dwh.d_ats_liquidity_provider atp on atp.liquidity_provider_id = al.liquidity_provider_id
-                left join lateral (select sl.lp_symbol_list_id
+                left join lateral (select sl.lp_symbol_list_id, sl.symbol
                                from t_symbol2lp_symbol_list sl
                                where sl.lp_symbol_list_id = atp.lp_symbol_list_id
-                                 and sl.symbol = :in_symbol limit 1) sl on true
+                    ) sl on true
                 where ((atp.lp_symbol_list_id is not null and sl.lp_symbol_list_id is not null)
                     or atp.lp_symbol_list_id is null)
                   and atp.is_active
                   and al.is_active
-                  and al.account_id = any(:in_account_id)
-        , grp as (
+                  ;
+
+select * from t_liq_base;
+
+select exists (select *
+               from t_liq_base tl
+                   left join t_lp_symbol_registration reg on tl.liquidity_provider_id = reg.liquidity_provider_id
+               where true
+                 and reg.create_time::date = :in_date
+                 and tl.account_id = :in_account_id
+                 and tl.symbol = :in_symbol
+                 and reg.lp_symbol_list_id is null
+               )
+
+
+
          select al.liquidity_provider_id
                       , r0.lp_symbol_list_id as r0
                      , r1.lp_symbol_list_id as r1
