@@ -174,7 +174,7 @@ begin
 --       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
      limit 100000
     ;
-
+create index on t_base (order_id);
     get  diagnostics  l_row_cnt  =  row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: GTC orders added',
                            l_row_cnt, 'O')
@@ -246,14 +246,15 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
-    where ex.exec_date_id = in_date_id
-      and cl.create_date_id = in_date_id
+    where ex.exec_date_id = :in_date_id
+      and cl.create_date_id = :in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
+    and not exists (select null from t_base where order_id = ex.order_id)
 --       and cl.CLIENT_ORDER_ID in ('EBAA8422-20240423', '13868295963', '13868304401', 'DRAB2344-20240423')
       limit 1000000
     ;
@@ -447,13 +448,13 @@ begin
                                when coalesce(PRO.ORDER_TYPE_id, tbs.ORDER_TYPE_id) in ('3', '4', '5', 'B') or
                                     coalesce(PRO.time_in_force_id, tbs.time_in_force_id) in ('2', '7')
                                    then 'Exhaust_IMC'
-                               when (staging.get_lp_list(tbs.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
-                                     staging.get_lp_list_lite(tbs.ACCOUNT_ID, OS.ROOT_SYMBOL,
-                                                              case tbs.MULTILEG_REPORTING_TYPE
-                                                                  when '1' then 'O'
-                                                                  when '2'
-                                                                      then 'M' end) is null)
-                                   then 'Exhaust_IMC'
+--                                when (staging.get_lp_list(tbs.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
+--                                      staging.get_lp_list_lite(tbs.ACCOUNT_ID, OS.ROOT_SYMBOL,
+--                                                               case tbs.MULTILEG_REPORTING_TYPE
+--                                                                   when '1' then 'O'
+--                                                                   when '2'
+--                                                                       then 'M' end) is null)
+--                                    then 'Exhaust_IMC'
                                else 'Exhaust'
                                end
                        else 'Other'
