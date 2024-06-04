@@ -737,7 +737,7 @@ coalesce(cl.contra_cross_exec_qty::text, '') || ',' ||
 coalesce(cl.contra_cross_lp_id, '') || ',' ||
 coalesce(dc.account_demo_mnemonic, '')
     as rec
-        from t_main cl
+        from trash.so_imc_main cl
                  left join lateral (select account_demo_mnemonic
                                     from dwh.client_order co
                                              join dwh.d_account da using (account_id)
@@ -746,7 +746,7 @@ coalesce(dc.account_demo_mnemonic, '')
                                     limit 1) dc on true
                  left join lateral (select fix_message ->> '9730' as t9730
                                     from fix_capture.fix_message_json fmj
-                                    where fmj.fix_message_id = cl.fix_message_id
+                                    where fmj.fix_message_id = cl.parent_fix_message_id
                                       and fmj.date_id = public.get_dateid(cl.exec_time::date)
                                     limit 1) fmj on true
          left join lateral (select fix_message ->> '9730' as t9730
@@ -984,7 +984,7 @@ select
 		    when Cl.CROSS_TYPE = 'F' then 'Facilitation'
 		    when Cl.CROSS_TYPE = 'S' then 'Solicitation'
        else coalesce(CL.CROSS_TYPE, '') end
- from t_main cl
+ from trash.so_imc_main cl
                  left join lateral (select account_demo_mnemonic
                                     from dwh.client_order co
                                              join dwh.d_account da using (account_id)
