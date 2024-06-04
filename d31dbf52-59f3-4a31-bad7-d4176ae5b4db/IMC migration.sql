@@ -1003,7 +1003,134 @@ select
 where true
   and exch_exec_id = '7200286431837';
 
+drop table if exists t_symbol2lp_symbol_list;
+create temp table t_symbol2lp_symbol_list
+as
+select *
+from staging.symbol2lp_symbol_list;
+create index on t_symbol2lp_symbol_list (lp_symbol_list_id, symbol);
+
+drop table if exists t_lp_symbol_registration;
+create temp table t_lp_symbol_registration
+as
+select *
+from staging.lp_symbol_registration;
+create index on t_lp_symbol_registration (create_time);
+create index on t_lp_symbol_registration (liquidity_provider_id);
+
+CREATE OR REPLACE FUNCTION staging.get_lp_list_smpl(in_account_id bigint, in_symbol character varying, in_date date)
+ RETURNS bool
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+
+--20220928 AK: Added distinct to string_agg(liquidity_provider_id, ',') to avoid dupes
+-- 20240604 OS: Simplified in order to return quick result - true or false as soon as possible as in the IMC report nobody cares about the list of provider but only yes or no
+
+declare
+    ret_text text;
+begin
+
+    select al.liquidity_provider_id, atp.lp_symbol_list_id
+    from dwh.d_acc_allowed_liquidity_provider al
+             inner join dwh.d_ats_liquidity_provider atp on atp.liquidity_provider_id = al.liquidity_provider_id
+    where (
+        atp.lp_symbol_list_id is not null and exists(select 1
+                                                     from t_symbol2lp_symbol_list sl
+                                                     where sl.lp_symbol_list_id = atp.lp_symbol_list_id
+                                                       and sl.symbol = :in_symbol)
+            or
+        atp.lp_symbol_list_id is null)
+      and atp.is_active
+      and al.is_active
+      and al.account_id = :in_account_id
 
 
+    select exists (select null
+                   from (select al.liquidity_provider_id, atp.lp_symbol_list_id
+                         from dwh.d_acc_allowed_liquidity_provider al
+                                  inner join dwh.d_ats_liquidity_provider atp
+                                             on atp.liquidity_provider_id = al.liquidity_provider_id
+                         where (
+                             atp.lp_symbol_list_id is not null and exists(select 1
+                                                                          from t_symbol2lp_symbol_list sl
+                                                                          where sl.lp_symbol_list_id = atp.lp_symbol_list_id
+                                                                            and sl.symbol = :in_symbol)
+                                 or
+                             atp.lp_symbol_list_id is null)
+                           and atp.is_active
+                           and al.is_active
+                           and al.account_id = :in_account_id) al
+                            left join lateral (
+                       select reg.lp_symbol_list_id as lp_symbol_list_id
+                       from t_lp_symbol_registration reg
+                       where create_time::date = :in_date
+                         and reg.liquidity_provider_id = al.liquidity_provider_id
+                       limit 1) r0 on true
+                   where r0 is null)
+
+
+
+
+
+                  left join lateral (select min(reg.lp_symbol_list_id) as lp_symbol_list_id
+                                             from t_lp_symbol_registration reg
+                                             where create_time::date = in_date
+                                               and reg.liquidity_provider_id = al.liquidity_provider_id
+                                             limit 1) r1 on --true and
+                     exists(select 1
+                            from t_symbol2lp_symbol_list sl
+                            where sl.lp_symbol_list_id = r1.lp_symbol_list_id
+                              and sl.symbol = in_symbol))
+    select string_agg(distinct liquidity_provider_id, ',')
+    into ret_text
+    from grp
+    where r0 is null
+       or (r0 is not null and r1 is not null);
+    return ret_text;
+end;
+$function$
+;
+-------
+create temp table t_liq_base as
+select al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id
+                from dwh.d_acc_allowed_liquidity_provider al
+                         inner join dwh.d_ats_liquidity_provider atp on atp.liquidity_provider_id = al.liquidity_provider_id
+                left join lateral (select sl.lp_symbol_list_id
+                               from t_symbol2lp_symbol_list sl
+                               where sl.lp_symbol_list_id = atp.lp_symbol_list_id
+                                 and sl.symbol = :in_symbol limit 1) sl on true
+                where ((atp.lp_symbol_list_id is not null and sl.lp_symbol_list_id is not null)
+                    or atp.lp_symbol_list_id is null)
+                  and atp.is_active
+                  and al.is_active
+                  and al.account_id = any(:in_account_id)
+        , grp as (
+         select al.liquidity_provider_id
+                      , r0.lp_symbol_list_id as r0
+                     , r1.lp_symbol_list_id as r1
+                 from al
+                          left join lateral (
+                     select reg.lp_symbol_list_id as lp_symbol_list_id
+                     from t_lp_symbol_registration reg
+                     where create_time::date = :in_date
+                       and reg.liquidity_provider_id = al.liquidity_provider_id
+                     limit 1) r0 on true
+                          left join lateral (select reg.lp_symbol_list_id as lp_symbol_list_id
+                                             from t_lp_symbol_registration reg
+                                             where create_time::date = :in_date
+                                               and reg.liquidity_provider_id = al.liquidity_provider_id
+                                             limit 1) r1 on --true and
+                     exists(select 1
+                            from t_symbol2lp_symbol_list sl
+                            where sl.lp_symbol_list_id = r1.lp_symbol_list_id
+                              and sl.symbol = :in_symbol)
+                              )
+    select string_agg(distinct liquidity_provider_id, ',')
+    from grp
+    where true
+     and (r0 is null
+       or
+ (r0 is not null and r1 is not null));
 
 
