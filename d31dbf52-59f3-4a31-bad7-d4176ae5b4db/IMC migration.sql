@@ -1031,69 +1031,41 @@ declare
     ret_text text;
 begin
 
-    select al.liquidity_provider_id, atp.lp_symbol_list_id
-    from dwh.d_acc_allowed_liquidity_provider al
-             inner join dwh.d_ats_liquidity_provider atp on atp.liquidity_provider_id = al.liquidity_provider_id
-    where (
-        atp.lp_symbol_list_id is not null and exists(select 1
-                                                     from t_symbol2lp_symbol_list sl
-                                                     where sl.lp_symbol_list_id = atp.lp_symbol_list_id
-                                                       and sl.symbol = :in_symbol)
-            or
-        atp.lp_symbol_list_id is null)
-      and atp.is_active
-      and al.is_active
-      and al.account_id = :in_account_id
+    if not exists (select null
+                   from t_liq_base tl
+                            left join t_lp_symbol_registration reg
+                                      on tl.liquidity_provider_id = reg.liquidity_provider_id
+                   where true
+                     and tl.account_id = :in_account_id
+                     and tl.symbol = :in_symbol
+                     and reg.create_time::date = :in_date) then
+        return true;
+    end if;
+
+    if exists (select *
+               from t_liq_base tl
+                        left join lateral (select lp_symbol_list_id as list_id
+                                           from t_lp_symbol_registration reg
+                                           where tl.liquidity_provider_id = reg.liquidity_provider_id
+                                             and reg.create_time::date = :in_date
+                                           limit 1) r1 on true
+                   and exists (select 1
+                               from t_symbol2lp_symbol_list sl
+                               where sl.lp_symbol_list_id = r1.list_id
+                                 and sl.symbol = :in_symbol)
+               where true
+                 and tl.account_id = :in_account_id
+                 and tl.symbol = :in_symbol
+                 and list_id is not null) then
+        return true;
 
 
-    select exists (select null
-                   from (select al.liquidity_provider_id, atp.lp_symbol_list_id
-                         from dwh.d_acc_allowed_liquidity_provider al
-                                  inner join dwh.d_ats_liquidity_provider atp
-                                             on atp.liquidity_provider_id = al.liquidity_provider_id
-                         where (
-                             atp.lp_symbol_list_id is not null and exists(select 1
-                                                                          from t_symbol2lp_symbol_list sl
-                                                                          where sl.lp_symbol_list_id = atp.lp_symbol_list_id
-                                                                            and sl.symbol = :in_symbol)
-                                 or
-                             atp.lp_symbol_list_id is null)
-                           and atp.is_active
-                           and al.is_active
-                           and al.account_id = :in_account_id) al
-                            left join lateral (
-                       select reg.lp_symbol_list_id as lp_symbol_list_id
-                       from t_lp_symbol_registration reg
-                       where create_time::date = :in_date
-                         and reg.liquidity_provider_id = al.liquidity_provider_id
-                       limit 1) r0 on true
-                   where r0 is null)
-
-
-
-
-
-                  left join lateral (select min(reg.lp_symbol_list_id) as lp_symbol_list_id
-                                             from t_lp_symbol_registration reg
-                                             where create_time::date = in_date
-                                               and reg.liquidity_provider_id = al.liquidity_provider_id
-                                             limit 1) r1 on --true and
-                     exists(select 1
-                            from t_symbol2lp_symbol_list sl
-                            where sl.lp_symbol_list_id = r1.lp_symbol_list_id
-                              and sl.symbol = in_symbol))
-    select string_agg(distinct liquidity_provider_id, ',')
-    into ret_text
-    from grp
-    where r0 is null
-       or (r0 is not null and r1 is not null);
-    return ret_text;
 end;
 $function$
 ;
 -------
 create temp table t_liq_base as
-select distinct al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id, sl.symbol
+select  al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id, sl.symbol
                 from dwh.d_acc_allowed_liquidity_provider al
                          inner join dwh.d_ats_liquidity_provider atp on atp.liquidity_provider_id = al.liquidity_provider_id
                 left join lateral (select sl.lp_symbol_list_id, sl.symbol
@@ -1105,19 +1077,18 @@ select distinct al.account_id, al.liquidity_provider_id, atp.lp_symbol_list_id, 
                   and atp.is_active
                   and al.is_active
                   ;
+create index on t_liq_base (account_id, symbol);
 
 select * from t_liq_base;
 
-select exists (select *
+select not exists (select *
                from t_liq_base tl
                    left join t_lp_symbol_registration reg on tl.liquidity_provider_id = reg.liquidity_provider_id
                where true
-                 and reg.create_time::date = :in_date
                  and tl.account_id = :in_account_id
                  and tl.symbol = :in_symbol
-                 and reg.lp_symbol_list_id is null
+               and reg.create_time::date = :in_date
                )
-
 
 
          select al.liquidity_provider_id
