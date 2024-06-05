@@ -1,4 +1,5 @@
-select * from trash.get_consolidator_eod_pg_2(in_date_id := 20240528);
+select *
+from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 
 
 create or replace function trash.get_consolidator_eod_pg_2(in_date_id int4)
@@ -780,8 +781,9 @@ where true;
 
     -- OUT
     return query
-        select 1 as rec_type,
-               0 as order_status,
+        select
+--             1 as rec_type,
+--                0 as order_status,
                'EntityCode,CreateDate,CreateTime,StatusDate,StatusTime,OSI,BaseCode,RootCode,BaseAssetType,ExpirationDate,Strike,TypeCode,BuySell,LegCount,LegNumber,OrderType,' ||
                'Status,EnteredPrice,StatusPrice,EnteredQty,StatusQty,RFRID,OrigRFRID,OrderID,ReplacedOrderID,CancelOrderID,ParentOrderID,SystemOrderID,ExchangeCode,ExConnection,GiveUpFirm,CMTAFirm,Account,SubAccount,' ||
                'OpenClose,Range,CounterpartyRange,PriceQualifier,TimeQualifier,ExecInst,LiquidityIndicator,ExchangeTransactionID,ExchangeOrderID,BidSzA,BidA,AskA,AskSzA,BidSzZ,BidZ,AskZ,AskSzZ,BidSzB,BidB,AskB,AskSzB,BidSzC,BidC,AskC,AskSzC,BidSzW,BidW,AskW,AskSzW,' ||
