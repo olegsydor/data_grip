@@ -2,6 +2,7 @@ select *
 into trash.so_imc_delete_later
 from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 -- 16340680 in Oracle
+-- 16349682
 
 
 create or replace function trash.get_consolidator_eod_pg_2(in_date_id int4)
@@ -21,7 +22,7 @@ begin
     into l_step_id;
 
     -- Matching orders
---     call trash.match_cross_trades_pg(in_date_id);
+--      call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -561,7 +562,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
---       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
 --     limit 5
     ;
       get diagnostics l_row_cnt = row_count;
@@ -786,8 +787,6 @@ where true;
     as
     select * from t_main;
 
-    create index on trash.so_imc_main (order_id);
-
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: main db is ready',
                            l_row_cnt, 'O')
     into l_step_id;
@@ -805,11 +804,13 @@ where true;
                'BidSzR,BidR,AskR,AskSzR,BidSzD,BidD,AskD,AskSzD,BidSzS,BidS,AskS,AskSzS,BidSzU,BidU,AskU,AskSzU,CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty,CrossLPID,demo_account_mnemonic'
                  as rec;
 
-    return query
+
+        drop table if exists t_ttt;
+        create temp table t_ttt as
         select
 --             cl.transaction_id,
 --                cl.rec_type,
---                cl.order_id,
+               cl.order_id,
                cl.trading_firm_id || ',' || --EntityCode
                to_char(cl.create_time, 'YYYYMMDD') || ',' || --CreateDate
                to_char(cl.create_time, 'HH24MISSFF3') || ',' || --CreateTime
@@ -1149,8 +1150,17 @@ where true;
                                       and ls.exchange_id = 'MXOP'
                                       and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
                                     limit 1
-            ) mxop on true
-        order by cl.order_id;
+            ) mxop on true;
+    get diagnostics l_row_cnt = row_count;
+    create index on t_ttt (order_id);
+
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: unordered csv is ready',
+                       l_row_cnt, 'O')
+    into l_step_id;
+
+        return query
+            select rec from t_ttt
+        order by order_id;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
