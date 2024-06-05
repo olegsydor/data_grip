@@ -1,4 +1,7 @@
-select *
+select rec from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
+
+
+select rec
 into trash.so_imc_delete_later
 from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 -- 16340680 in Oracle
