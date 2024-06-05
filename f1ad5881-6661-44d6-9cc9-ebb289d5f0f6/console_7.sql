@@ -166,3 +166,115 @@ $function$
 
 
 
+-- drop view data_marts.v_mon_dash_trade source
+
+CREATE OR REPLACE VIEW data_marts.v_mon_dash_trade
+AS SELECT trading_firm_id,
+          trading_firm_unq_id,
+    account_id,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN noorderssent
+            ELSE 0::bigint
+        END) AS eq_no_orders_sent,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN qtyopentobuy
+            ELSE 0::numeric
+        END) AS eq_qty_open_to_buy,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN qtybought
+            ELSE 0::numeric
+        END) AS eq_qty_bought,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN qtyopentosell
+            ELSE 0::numeric
+        END) AS eq_qty_open_to_sell,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN qtysold
+            ELSE 0::numeric
+        END) AS eq_qty_sold,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'E'::bpchar THEN streetorderssent
+            ELSE 0::bigint
+        END) AS eq_street_qty,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN noorderssent
+            ELSE 0::bigint
+        END) AS opt_no_orders_sent,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN qtyopentobuy
+            ELSE 0::numeric
+        END) AS opt_qty_open_to_buy,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN qtybought
+            ELSE 0::numeric
+        END) AS opt_qty_bought,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN qtyopentosell
+            ELSE 0::numeric
+        END) AS opt_qty_open_to_sell,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN qtysold
+            ELSE 0::numeric
+        END) AS opt_qty_sold,
+    sum(
+        CASE
+            WHEN instrument_type_id = 'O'::bpchar THEN streetorderssent
+            ELSE 0::bigint
+        END) AS opt_street_qty,
+    max(last_trade_time) AS last_trade_time
+   FROM ( SELECT t.account_id,
+            t.instrument_type_id,
+            t.trading_firm_id,
+            t.trading_firm_unq_id,
+            count(1) AS noorderssent,
+            sum(
+                CASE
+                    WHEN t.side = '1'::bpchar THEN t.leaves_qty
+                    ELSE 0::bigint
+                END) AS qtyopentobuy,
+            sum(
+                CASE
+                    WHEN t.side = '1'::bpchar THEN t.last_qty
+                    ELSE 0::bigint
+                END) AS qtybought,
+            sum(
+                CASE
+                    WHEN t.side <> '1'::bpchar THEN t.leaves_qty
+                    ELSE 0::bigint
+                END) AS qtyopentosell,
+            sum(
+                CASE
+                    WHEN t.side <> '1'::bpchar THEN t.last_qty
+                    ELSE 0::bigint
+                END) AS qtysold,
+            sum(t.street_count) AS streetorderssent,
+            max(COALESCE(t.pg_db_update_time, t.pg_db_create_time)) AS last_trade_time
+           FROM ( SELECT f_parent_order.account_id,
+                    f_parent_order.trading_firm_unq_id,
+                    f_parent_order.instrument_type_id,
+                    f_parent_order.street_count,
+                    f_parent_order.last_qty,
+                    f_parent_order.pg_db_create_time,
+                    f_parent_order.pg_db_update_time,
+                    f_parent_order.side,
+                    f_parent_order.leaves_qty,
+                    dtf.trading_firm_id
+                   FROM data_marts.f_parent_order
+                     JOIN d_trading_firm dtf USING (trading_firm_unq_id)
+                  WHERE f_parent_order.status_date_id = to_char(CURRENT_DATE::timestamp with time zone, 'YYYYMMDD'::text)::integer) t
+          GROUP BY t.account_id, t.instrument_type_id, t.trading_firm_id, trading_firm_unq_id) x
+  GROUP BY trading_firm_id, account_id, trading_firm_unq_id;
+
+
+

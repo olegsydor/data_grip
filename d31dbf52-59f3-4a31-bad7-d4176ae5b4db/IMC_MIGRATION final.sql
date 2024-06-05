@@ -1,4 +1,5 @@
 select *
+into trash.so_imc_delete_later
 from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 
 
@@ -35,6 +36,7 @@ begin
     create index on t_alp_agg (fix_connection_id);
 
 
+    drop table if exists t_clearing_account;
     create temp table t_clearing_account as
     select *
     from dwh.d_clearing_account ca
@@ -45,6 +47,7 @@ begin
     create index on t_clearing_account (account_id);
     analyze t_clearing_account;
 
+    drop table if exists t_opt_exec_broker;
     create temp table t_opt_exec_broker as
     select * from dwh.d_opt_exec_broker opx where opx.is_default = 'Y' and opx.is_active;
     create index on t_opt_exec_broker (account_id);
@@ -231,8 +234,6 @@ begin
              inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
              inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
-
-
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
@@ -300,7 +301,9 @@ begin
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
-      and fc.fix_comp_id <> 'IMCCONS';
+      and fc.fix_comp_id <> 'IMCCONS'
+--     limit 5
+    ;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: GTC orders were added',
@@ -557,7 +560,9 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id);
+      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+--     limit 5
+    ;
       get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: NON GTC orders were added',
@@ -570,6 +575,7 @@ begin
     from t_base_gtc;
 
     -- MAIN PART
+    drop table if exists t_main;
 create temp table t_main as
   with white as (select symbol, instrument_type_id from t_wht)
        , black as (select symbol, instrument_type_id from t_blk)
@@ -773,7 +779,14 @@ CONTRA_CROSS_LP_ID,
 where true;
     get diagnostics l_row_cnt = row_count;
 
-    create index on t_main (order_id);
+    drop table if exists trash.so_imc_main;
+
+    create table trash.so_imc_main
+    as
+    select * from t_main;
+
+    create index on trash.so_imc_main (order_id);
+
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: main db is ready',
                            l_row_cnt, 'O')
     into l_step_id;
@@ -792,9 +805,10 @@ where true;
                  as rec;
 
     return query
-        select cl.transaction_id,
-               cl.rec_type,
-               cl.order_id,
+        select
+--             cl.transaction_id,
+--                cl.rec_type,
+--                cl.order_id,
                cl.trading_firm_id || ',' || --EntityCode
                to_char(cl.create_time, 'YYYYMMDD') || ',' || --CreateDate
                to_char(cl.create_time, 'HH24MISSFF3') || ',' || --CreateTime
