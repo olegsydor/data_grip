@@ -1,6 +1,7 @@
 select *
 into trash.so_imc_delete_later
 from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
+-- 16340680 in Oracle
 
 
 create or replace function trash.get_consolidator_eod_pg_2(in_date_id int4)
@@ -20,7 +21,7 @@ begin
     into l_step_id;
 
     -- Matching orders
-    call trash.match_cross_trades_pg(in_date_id);
+--     call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -560,7 +561,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+--       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
 --     limit 5
     ;
       get diagnostics l_row_cnt = row_count;
