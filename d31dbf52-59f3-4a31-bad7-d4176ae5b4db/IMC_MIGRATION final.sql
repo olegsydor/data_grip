@@ -4,8 +4,7 @@ select array_agg(distinct client_order_id) from t_base_gtc;
 select *
 into trash.so_imc_delete_later
 from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
--- 16 340 680 in Oracle
--- 16 324 432 in PG
+
 
 
 create or replace function trash.get_consolidator_eod_pg_2(in_date_id int4)
@@ -30,7 +29,7 @@ begin
                            0, 'O')
     into l_step_id;
 
-
+/*
     -- temp tables
     drop table if exists t_alp_agg;
     create temp table t_alp_agg as
@@ -806,7 +805,7 @@ where true;
                'BidSzR,BidR,AskR,AskSzR,BidSzD,BidD,AskD,AskSzD,BidSzS,BidS,AskS,AskSzS,BidSzU,BidU,AskU,AskSzU,CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty,CrossLPID,demo_account_mnemonic'
                  as rec;
 
-
+*/
         drop table if exists trash.imc_pg_report;
         create table trash.imc_pg_report as
         select
@@ -1161,13 +1160,16 @@ where true;
 
         return query
             select rec from trash.imc_pg_report
-        order by order_id
+--         order by order_id
+    limit 1
     ;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
                            l_row_cnt, 'O')
     into l_step_id;
+
+
 end;
 $$
 
