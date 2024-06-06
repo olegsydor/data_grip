@@ -16,6 +16,8 @@ declare
     l_load_id int;
     l_row_cnt int;
     l_step_id int;
+    l_min_exec_time_id int4;
+    l_min_create_time_id int4;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -314,6 +316,9 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: GTC orders were added',
                            l_row_cnt, 'O')
     into l_step_id;
+
+    select to_char(min(create_time), 'YYYYMMDD')::int4 into l_min_create_time_id from t_base_gtc;
+    select to_char(min(exec_time), 'YYYYMMDD')::int4 into l_min_exec_time_id from t_base_gtc;
 
 -- NON GTC ORDERS
     create index on t_base_gtc (order_id);
@@ -796,7 +801,7 @@ where true;
                            l_row_cnt, 'O')
     into l_step_id;
 
-/*
+
     drop table if exists trash.imc_pg_report;
     create table trash.imc_pg_report as
     select cl.transaction_id,
@@ -977,23 +982,20 @@ where true;
            coalesce(cl.contra_cross_lp_id, '') || ',' ||
            coalesce(cl.account_demo_mnemonic, '')
                as rec
-    ;
-    */
-
-    select min(create_time) from trash.so_imc_main;
-    select *
     from trash.so_imc_main cl
              left join lateral (select fix_message ->> '9730' as t9730
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.es_fix_message_id
 --                                   and fmj.date_id = public.get_dateid(cl.exec_time::date)
                                   and fmj.date_id = to_char(cl.exec_time, 'YYYYMMDD')::int4
+                                and fmj.date_id >= l_min_exec_time_id
                                 limit 1) fmj on true
              left join lateral (select fix_message ->> '9730' as t9730
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.parent_fix_message_id
 --                                   and fmj.date_id = public.get_dateid(cl.exec_time::date)
                                   and fmj.date_id = to_char(cl.exec_time, 'YYYYMMDD')::int4
+                                and fmj.date_id >= l_min_exec_time_id
                                 limit 1) fmj_p on true
         -- amex
              left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
@@ -1149,7 +1151,7 @@ where true;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: unordered csv is ready',
                        l_row_cnt, 'O')
     into l_step_id;
-*/
+
         -- OUT
     return query
         select
