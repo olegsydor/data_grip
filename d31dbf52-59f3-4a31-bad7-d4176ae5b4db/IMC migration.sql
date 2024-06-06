@@ -1401,3 +1401,89 @@ dwh.execution ex
 limit 10;
 
 
+select gos.close_date_id, *
+from dwh.execution ex
+              inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and (gos.close_date_id is null or gos.close_date_id >= :in_date_id)
+             inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
+             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+
+             left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+
+             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                                from dwh.client_order pro
+                                where cl.parent_order_id = pro.order_id
+                                  and pro.create_date_id >= cl.create_date_id
+                                limit 1) pro on true
+             left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and
+                           ex.exec_type = 'F' and str.create_date_id >= cl.create_date_id)
+             left join dwh.execution es
+                       on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                           es.exec_date_id >= str.create_date_id)
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
+             left join lateral (select orig.client_order_id
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and ex.exec_type in ('S', 'W')
+                                limit 1) orig on true
+             left join lateral (select min(cxl.client_order_id) as client_order_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+                                  and ex.exec_type in ('b', '4')
+                                limit 1) cxl on true
+
+    where true
+        and ex.exec_date_id = :in_date_id
+      and cl.multileg_reporting_type in ('1', '2')
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E', 'S', 'D', 'y')
+      and cl.trans_type <> 'F'
+      and tf.is_eligible4consolidator = 'Y'
+      and fc.fix_comp_id <> 'IMCCONS'
+    and ex.exec_id = any('{0,52469985240,52469985262,52469985241,52469985271,52469985155,52469985130,52469985164,52469985132,52447600067,52447600070,52447600051,52447600053,52447611732,52447611727,52447604870,52447604859,52447604872,52447604860,52447604747}');
+
+select *
+from dwh.execution ex
+             inner join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+--              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+--              inner join dwh.d_account ac on ac.account_id = cl.account_id
+--              inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+/*             left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                                from dwh.client_order pro
+                                where cl.parent_order_id = pro.order_id
+                                  and pro.create_date_id = :in_date_id
+                                limit 1) pro on true
+             left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and
+                           ex.exec_type = 'F' and str.create_date_id >= cl.create_date_id
+                           and str.create_date_id = :in_date_id)
+             left join dwh.execution es
+                       on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                           es.exec_date_id >= str.create_date_id and es.exec_date_id = :in_date_id)
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
+             left join lateral (select orig.client_order_id
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and ex.exec_type in ('S', 'W')
+                                  and orig.create_date_id = :in_date_id
+                                limit 1) orig on true
+             left join lateral (select min(cxl.client_order_id) as client_order_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+                                  and ex.exec_type in ('b', '4')
+                                  and cxl.create_date_id = :in_date_id
+                                limit 1) cxl on true
+*/
+
+    where true
+--     and ex.exec_date_id = :in_date_id
+--       and cl.multileg_reporting_type in ('1', '2')
+--       and ex.is_busted = 'N'
+--       and ex.exec_type not in ('E', 'S', 'D', 'y')
+--       and cl.trans_type <> 'F'
+--       and tf.is_eligible4consolidator = 'Y'
+--       and fc.fix_comp_id <> 'IMCCONS'
+    and ex.exec_id = any('{0,52469985240,52469985262,52469985241,52469985271,52469985155,52469985130,52469985164,52469985132,52447600067,52447600070,52447600051,52447600053,52447611732,52447611727,52447604870,52447604859,52447604872,52447604860,52447604747}')

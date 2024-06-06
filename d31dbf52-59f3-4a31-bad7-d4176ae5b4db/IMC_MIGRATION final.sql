@@ -29,7 +29,7 @@ begin
                            0, 'O')
     into l_step_id;
 
-/*
+
     -- temp tables
     drop table if exists t_alp_agg;
     create temp table t_alp_agg as
@@ -236,7 +236,7 @@ begin
          es.exchange_id as es_exchange_id
 --     select array_agg(client_order_id) from (select cl.client_order_id
     from dwh.execution ex
-             inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
+             inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and (gos.close_date_id is null or gos.close_date_id >= in_date_id)
              inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
              inner join dwh.d_account ac on ac.account_id = cl.account_id
@@ -305,6 +305,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
+--     and es.exec_id = any('{0,52469985240,52469985262,52469985241,52469985271,52469985155,52469985130,52469985164,52469985132,52447600067,52447600070,52447600051,52447600053,52447611732,52447611727,52447604870,52447604859,52447604872,52447604860,52447604747}')
 --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
     ;
 
@@ -564,7 +565,7 @@ begin
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
 --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
-      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+--       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
     ;
       get diagnostics l_row_cnt = row_count;
 
@@ -805,12 +806,13 @@ where true;
                'BidSzR,BidR,AskR,AskSzR,BidSzD,BidD,AskD,AskSzD,BidSzS,BidS,AskS,AskSzS,BidSzU,BidU,AskU,AskSzU,CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty,CrossLPID,demo_account_mnemonic'
                  as rec;
 
-*/
+
         drop table if exists trash.imc_pg_report;
         create table trash.imc_pg_report as
         select
              cl.transaction_id,
                cl.order_id,
+               cl.exec_id,
                cl.trading_firm_id || ',' || --EntityCode
                to_char(cl.create_time, 'YYYYMMDD') || ',' || --CreateDate
                to_char(cl.create_time, 'HH24MISSFF3') || ',' || --CreateTime
@@ -1159,10 +1161,11 @@ where true;
     into l_step_id;
 
         return query
-            select rec from trash.imc_pg_report
+    select 'report finished';
+--             select rec from trash.imc_pg_report
 --         order by order_id
-    limit 1
-    ;
+--     limit 1
+
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
