@@ -7,7 +7,7 @@ from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 
 
 
-create or replace function trash.get_consolidator_eod_pg_2(in_date_id int4)
+create or replace function trash.get_consolidator_eod_pg_1(in_date_id int4)
     returns table (ret_row text)
         language plpgsql
 as
@@ -800,6 +800,16 @@ where true;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: main db is ready',
                            l_row_cnt, 'O')
     into l_step_id;
+
+    return query
+    select 'part 1 finished';
+
+
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
+                           l_row_cnt, 'O')
+    into l_step_id;
+end;
+$$
 
 
     drop table if exists trash.imc_pg_report;
