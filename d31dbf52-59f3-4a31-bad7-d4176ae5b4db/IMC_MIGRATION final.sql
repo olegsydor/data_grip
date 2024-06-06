@@ -25,7 +25,7 @@ begin
     into l_step_id;
 
     -- Matching orders
-    call trash.match_cross_trades_pg(in_date_id);
+--     call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -306,7 +306,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.client_order_id = any('{10Z2378338922248,9Z1278827287575,JZ/2731/413/241683/24017HNBLP ,JZ/0465/196/276642/24155JGEIA ,JZ/0496/Z06/496444/24156G0NZ4 ,JZ/3919/X63/097217/24080H1F5N ,JZ/0605/X78/262201/24123G0CVZ ,LV/3494/X20/549258/24068IRN1H ,JZ/6443/309/110400/24053HBK7Z ,JZ/3948/Z06/635197/24054HYLVV }')
+      and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
     ;
 
     get diagnostics l_row_cnt = row_count;
@@ -564,7 +564,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.client_order_id = any('{10Z2378338922248,9Z1278827287575,JZ/2731/413/241683/24017HNBLP ,JZ/0465/196/276642/24155JGEIA ,JZ/0496/Z06/496444/24156G0NZ4 ,JZ/3919/X63/097217/24080H1F5N ,JZ/0605/X78/262201/24123G0CVZ ,LV/3494/X20/549258/24068IRN1H ,JZ/6443/309/110400/24053HBK7Z ,JZ/3948/Z06/635197/24054HYLVV }')
+      and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
     ;
       get diagnostics l_row_cnt = row_count;

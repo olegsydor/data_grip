@@ -1120,3 +1120,284 @@ select not exists (select *
  (r0 is not null and r1 is not null));
 
 
+
+select cl.order_id,
+           cl.transaction_id,
+           cl.create_time,
+           cl.order_qty,
+           cl.price,
+           cl.parent_order_id,
+           cl.exch_order_id,
+           cl.cross_order_id,
+           cl.is_originator,
+           cl.orig_order_id,
+           cl.client_order_id,
+           cl.exchange_id                 as cl_exchange_id,
+           cl.sub_strategy_id,
+           cl.sub_strategy_desc,
+           cl.sub_system_unq_id,
+           cl.opt_exec_broker_id,
+           cl.clearing_firm_id,
+           cl.clearing_account,
+           cl.sub_account,
+           cl.open_close,
+           cl.customer_or_firm_id,
+           cl.opt_customer_firm_street,
+           cl.eq_order_capacity,
+           cl.exec_instruction,
+           cl.strtg_decision_reason_code,
+           cl.request_number,
+           cl.order_type_id,
+           cl.time_in_force_id,
+           cl.multileg_reporting_type,
+           cl.cons_payment_per_contract,
+           cl.instrument_id,
+           cl.create_date_id,
+           cl.fix_connection_id,
+           coalesce(cl.no_legs, 1)        as no_legs,
+           cl.co_client_leg_ref_id        as leg_number,
+           cl.side,
+           ex.exec_id,
+           ex.exec_time,
+           ex.exec_type,
+           ex.cum_qty,
+           ex.order_status,
+           ex.last_px,
+           ex.last_qty,
+           ex.contra_account_capacity,
+           ex.trade_liquidity_indicator,
+           ex.exch_exec_id,
+           ex.exchange_id                 as ex_exchange_id,
+           ex.contra_broker,
+           ex.contra_trader,
+           ex.secondary_order_id,
+           ex.secondary_exch_exec_id,
+           ac.trading_firm_id,
+           ac.opt_is_fix_clfirm_processed,
+           ac.opt_customer_or_firm,
+           ac.account_id,
+           opx.opt_exec_broker,
+           ex.exec_date_id,
+           ex.fix_message_id,
+           pro.sub_strategy_desc          as pro_sub_strategy_desc,
+           pro.client_order_id            as pro_client_order_id,
+           pro.order_type_id              as pro_order_type_id,
+           pro.time_in_force_id           as pro_time_in_force_id,
+           str.cons_payment_per_contract  as str_cons_payment_per_contract,
+           STR.ORDER_ID                   as STR_ORDER_ID,
+           STR.CROSS_ORDER_ID             as STR_CROSS_ORDER_ID,
+           STR.strtg_decision_reason_code as STR_strtg_decision_reason_code,
+           STR.request_number             as STR_request_number,
+           str.create_date_id             as str_create_date_id,
+           case
+               when cl.parent_order_id is null then cl.exch_order_id
+               when ac.trading_firm_id <> 'imc01' then (select exch_order_id
+                                                        from dwh.client_order
+                                                        where order_id = cl.parent_order_id)
+               else (select exch_order_id
+                     from dwh.client_order
+                     where order_id = (select max(parent_order_id)
+                                       from dwh.client_order
+                                       where cross_order_id = cl.cross_order_id
+                                         and is_originator <> cl.is_originator))
+               end                        as RFR_ID,--rfr_id
+           case
+               when cl.parent_order_id is null then (select orig.exch_order_id
+                                                     from dwh.client_order orig
+                                                     where orig.order_id = cl.orig_order_id
+                                                     limit 1)
+               when ac.trading_firm_id <> 'imc01' then (select orig.exch_order_id
+                                                        from dwh.client_order orig
+                                                                 join client_order co on co.orig_order_id = orig.order_id
+                                                        where co.order_id = cl.parent_order_id
+                                                        limit 1)
+               else (select orig.exch_order_id
+                     from dwh.client_order orig
+                              join dwh.client_order co on co.orig_order_id = orig.order_id
+                     where co.order_id = (select max(parent_order_id)
+                                          from dwh.client_order
+                                          where cross_order_id = cl.cross_order_id
+                                            and is_originator <> cl.is_originator))
+               end                        as ORIG_RFR_ID,--orig_rfr_id
+           case
+               when ex.exec_type in ('S', 'W') then orig.client_order_id
+--                   (select orig.client_order_id from client_order orig where orig.order_id = tbs.orig_order_id) -- SO MOVED TO LATERAL
+               end                        as REPLACED_ORDER_ID,
+           case
+               when ex.exec_type in ('b', '4') then cxl.client_order_id
+--                   (select min(cxl.client_order_id) from client_order cxl where cxl.orig_order_id = tbs.order_id) -- SO MOVED TO LATERAL
+               end                        as cancel_order_id,
+           case
+               when ex.EXEC_TYPE = 'F' then
+                       (select LAST_QTY from EXECUTION exc where EXEC_ID = MCT.CONTRA_EXEC_ID)
+               end                        as CONTRA_CROSS_EXEC_QTY,
+
+           case
+               when cl.PARENT_ORDER_ID is null and STR.CROSS_ORDER_ID is not null
+                   then cc_str.contr_str
+               when cl.PARENT_ORDER_ID is not null and cl.CROSS_ORDER_ID is not null
+                   then cc.contr
+               end                        as CONTRA_CROSS_LP_ID,
+           es.FIX_MESSAGE_ID              as es_fix_message_id,
+           es.exec_id                     as es_exec_id,
+           case
+               when ex.EXEC_TYPE = 'F' then
+                   case
+                       --
+                       when coalesce(pro.sub_strategy_desc, cl.sub_strategy_desc) = 'DMA' then 'DMA'
+                       when coalesce(pro.sub_strategy_desc, cl.sub_strategy_desc) in ('CSLDTR', 'RETAIL') and
+                            coalesce(cl.REQUEST_NUMBER, STR.request_number, -1) between 0 and 99 then 'IMC'
+                       when coalesce(pro.SUB_STRATEGY_desc, cl.SUB_STRATEGY_desc) in ('CSLDTR', 'RETAIL') and
+                            coalesce(cl.REQUEST_NUMBER, STR.REQUEST_NUMBER, -1) > 99 then 'Exhaust'
+                       when (
+                           coalesce(pro.SUB_STRATEGY_desc, cl.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
+                           coalesce(cl.request_number, STR.request_number, -1) = -1)
+                           then
+                           case
+                               when coalesce(pro.ORDER_TYPE_id, cl.ORDER_TYPE_id) in ('3', '4', '5', 'B')
+                                   then 'Exhaust_IMC'
+                               when coalesce(pro.time_in_force_id, cl.time_in_force_id) in ('2', '7')
+                                   then 'Exhaust_IMC'
+                               --                               when (staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
+--                                     staging.get_lp_list_lite_tmp(ac.ACCOUNT_ID, OS.ROOT_SYMBOL,
+--                                                              case cl.MULTILEG_REPORTING_TYPE
+--                                                                  when '1' then 'O'
+--                                                                  when '2' then 'M' end) is null)
+--                                   then 'Exhaust_IMC'
+                               else 'Exhaust'
+                               end
+                       else 'Other'
+                       --
+                       end
+               end                        as BILLING_CODE,
+         es.contra_broker as es_contra_broker,
+         es.contra_account_capacity as es_contra_account_capacity,
+         es.contra_trader as es_contra_trader,
+         es.exchange_id as es_exchange_id
+     select array_agg(client_order_id) from (
+     select cl.client_order_id
+    from dwh.execution ex
+             inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and gos.close_date_id is null
+             inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
+             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                                from dwh.client_order pro
+                                where cl.parent_order_id = pro.order_id
+                                  and pro.create_date_id >= cl.create_date_id
+                                limit 1) pro on true
+             left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and
+                           ex.exec_type = 'F' and str.create_date_id >= cl.create_date_id)
+             left join dwh.execution es
+                       on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                           es.exec_date_id >= str.create_date_id)
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
+             left join lateral (select orig.client_order_id
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and ex.exec_type in ('S', 'W')
+                                limit 1) orig on true
+             left join lateral (select min(cxl.client_order_id) as client_order_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+                                  and ex.exec_type in ('b', '4')
+                                limit 1) cxl on true
+
+    where ex.exec_date_id = :in_date_id
+      and cl.multileg_reporting_type in ('1', '2')
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E', 'S', 'D', 'y')
+      and cl.trans_type <> 'F'
+      and tf.is_eligible4consolidator = 'Y'
+      and fc.fix_comp_id <> 'IMCCONS'
+      and cl.client_order_id = any('{"10Z2378338922248","9Z1278827287575","JZ/2731/413/241683/24017HNBLP ","JZ/0465/196/276642/24155JGEIA ","JZ/0496/Z06/496444/24156G0NZ4 ","JZ/3919/X63/097217/24080H1F5N ","JZ/0605/X78/262201/24123G0CVZ ","LV/3494/X20/549258/24068IRN1H ","JZ/6443/309/110400/24053HBK7Z ","JZ/3948/Z06/635197/24054HYLVV "}')
+    ;
+
+
+
+select cl.client_order_id from
+dwh.execution ex
+             inner join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+
+
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             inner join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+             left join lateral (select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id
+                                from dwh.client_order pro
+                                where cl.parent_order_id = pro.order_id
+                                  and pro.create_date_id = :in_date_id
+                                limit 1) pro on true
+             left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id and ex.secondary_order_id = str.client_order_id and
+                           ex.exec_type = 'F' and str.create_date_id >= cl.create_date_id
+                           and str.create_date_id = :in_date_id)
+             left join dwh.execution es
+                       on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                           es.exec_date_id >= str.create_date_id and es.exec_date_id = :in_date_id)
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(es.exec_id, ex.exec_id)
+             left join lateral (select orig.client_order_id
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and ex.exec_type in ('S', 'W')
+                                  and orig.create_date_id = :in_date_id
+                                limit 1) orig on true
+             left join lateral (select min(cxl.client_order_id) as client_order_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+                                  and ex.exec_type in ('b', '4')
+                                  and cxl.create_date_id = :in_date_id
+                                limit 1) cxl on true
+
+             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr_str
+                                       t_alp.lp_demo_mnemonic as contr_str
+                                from dwh.client_order constr
+                                         inner join dwh.client_order pcon
+                                                    on constr.parent_order_id = pcon.order_id --contra parent
+                                         inner join t_alp_agg t_alp on t_alp.fix_connection_id = pcon.fix_connection_id
+                                where true
+                                  and cl.PARENT_ORDER_ID is null
+                                  and STR.CROSS_ORDER_ID is not null
+                                  and constr.cross_order_id = STR.CROSS_ORDER_ID
+                                  and constr.order_id <> STR.ORDER_ID
+                                  and constr.multileg_reporting_type in ('1', '3')
+                                  and constr.cross_order_id is not null
+                                  and constr.create_date_id = :in_date_id
+                                  and pcon.create_date_id = :in_date_id
+--                              group by pcon.fix_connection_id
+                                limit 1) cc_str on true
+
+             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr
+                                       t_alp.lp_demo_mnemonic as contr
+                                from dwh.client_order constr
+                                         inner join dwh.client_order pcon
+                                                    on constr.parent_order_id = pcon.order_id --contra parent
+                                         inner join t_alp_agg t_alp on t_alp.fix_connection_id = pcon.fix_connection_id
+                                where true
+                                  and cl.PARENT_ORDER_ID is not null
+                                  and cl.CROSS_ORDER_ID is not null
+                                  and constr.cross_order_id = cl.CROSS_ORDER_ID
+                                  and constr.order_id <> cl.ORDER_ID
+                                  and constr.multileg_reporting_type in ('1', '3')
+                                  and constr.cross_order_id is not null
+                                  and constr.create_date_id = :in_date_id
+                                  and pcon.create_date_id = :in_date_id
+--                              group by pcon.fix_connection_id
+                                limit 1) cc on true
+
+    where ex.exec_date_id = :in_date_id
+      and cl.multileg_reporting_type in ('1', '2')
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E', 'S', 'D', 'y')
+      and cl.trans_type <> 'F'
+      and tf.is_eligible4consolidator = 'Y'
+      and fc.fix_comp_id <> 'IMCCONS'
+--       and cl.client_order_id = any('{"10Z2378338922248","9Z1278827287575","JZ/2731/413/241683/24017HNBLP ","JZ/0465/196/276642/24155JGEIA ","JZ/0496/Z06/496444/24156G0NZ4 ","JZ/3919/X63/097217/24080H1F5N ","JZ/0605/X78/262201/24123G0CVZ ","LV/3494/X20/549258/24068IRN1H ","JZ/6443/309/110400/24053HBK7Z ","JZ/3948/Z06/635197/24054HYLVV "}')
+      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+limit 10;
+
+
