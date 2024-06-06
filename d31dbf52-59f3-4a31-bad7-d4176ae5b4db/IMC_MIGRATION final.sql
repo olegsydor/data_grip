@@ -306,7 +306,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
+--       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
     ;
 
     get diagnostics l_row_cnt = row_count;
@@ -564,7 +564,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
-      and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
+--       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
     ;
       get diagnostics l_row_cnt = row_count;
@@ -807,11 +807,10 @@ where true;
                  as rec;
 
 
-        drop table if exists t_ttt;
-        create temp table t_ttt as
+        drop table if exists trash.imc_pg_report;
+        create table trash.imc_pg_report as
         select
---             cl.transaction_id,
---                cl.rec_type,
+             cl.transaction_id,
                cl.order_id,
                cl.trading_firm_id || ',' || --EntityCode
                to_char(cl.create_time, 'YYYYMMDD') || ',' || --CreateDate
@@ -1154,14 +1153,14 @@ where true;
                                     limit 1
             ) mxop on true;
     get diagnostics l_row_cnt = row_count;
-    create index on t_ttt (order_id);
+    create index on trash.imc_pg_report (order_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: unordered csv is ready',
                        l_row_cnt, 'O')
     into l_step_id;
 
         return query
-            select rec from t_ttt
+            select rec from trash.imc_pg_report
         order by order_id
     ;
     get diagnostics l_row_cnt = row_count;
