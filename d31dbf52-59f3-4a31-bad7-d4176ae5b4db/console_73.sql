@@ -1,4 +1,5 @@
-select * from trash.get_consolidator_eod_pg_2(in_date_id := 20240606);
+select * from trash.get_consolidator_eod_pg_5(in_date_id := 20240606);
+select * from trash.get_consolidator_eod_pg_6(in_date_id := 20240606);
 select array_agg(distinct client_order_id) from t_base_gtc;
 
 select *
@@ -7,17 +8,16 @@ from trash.get_consolidator_eod_pg_2(in_date_id := 20240604);
 
 
 
-create or replace function trash.get_consolidator_eod_pg_3(in_date_id int4)
-      returns int4
-        language plpgsql
+create or replace function trash.get_consolidator_eod_pg_5(in_date_id int4)
+    returns int4
+    language plpgsql
 as
 $$
 declare
     l_load_id int;
     l_row_cnt int;
     l_step_id int;
-    l_min_exec_time_id int4;
-    l_min_create_time_id int4;
+
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -26,7 +26,7 @@ begin
     into l_step_id;
 
     -- Matching orders
-    call trash.match_cross_trades_pg(in_date_id);
+--     call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -83,7 +83,8 @@ begin
     -- GTC_ORDERS
 
     drop table if exists t_base_gtc;
-    create temp table t_base_gtc with (parallel_workers = 4) on commit drop as
+    create temp table t_base_gtc with (parallel_workers = 4)
+                                 on commit drop as
     select cl.order_id,
            cl.transaction_id,
            cl.create_time,
@@ -233,14 +234,106 @@ begin
                        --
                        end
                end                        as BILLING_CODE,
-         es.contra_broker as es_contra_broker,
-         es.contra_account_capacity as es_contra_account_capacity,
-         es.contra_trader as es_contra_trader,
-         es.exchange_id as es_exchange_id,
-         ac.account_demo_mnemonic
---     select array_agg(client_order_id) from (select cl.client_order_id
+           es.contra_broker               as es_contra_broker,
+           es.contra_account_capacity     as es_contra_account_capacity,
+           es.contra_trader               as es_contra_trader,
+           es.exchange_id                 as es_exchange_id,
+           ac.account_demo_mnemonic,
+           fc.acceptor_id,
+-- market_data
+           amex.bid_quantity              as BidSzA,
+           amex.bid_price                 as BidA,
+           amex.ask_price                 as AskA,
+           amex.ask_quantity              as AskSzA,
+
+           bato.bid_quantity              as BidSzZ,
+           bato.bid_price                 as BidZ,
+           bato.ask_price                 as AskZ,
+           bato.ask_quantity              as AskSzZ,
+
+           box.bid_quantity               as BidSzB,
+           box.bid_price                  as BidB,
+           box.ask_price                  as AskB,
+           box.ask_quantity               as AskSzB,
+--
+           cboe.bid_quantity              as BidSzC,
+           cboe.bid_price                 as BidC,
+           cboe.ask_price                 as AskC,
+           cboe.ask_quantity              as AskSzC,
+
+           c2ox.bid_quantity              as BidSzW,
+           c2ox.bid_price                 as BidW,
+           c2ox.ask_price                 as AskW,
+           c2ox.ask_quantity              as AskSzW,
+
+           nqbxo.bid_quantity             as BidSzT,
+           nqbxo.bid_price                as BidT,
+           nqbxo.ask_price                as AskT,
+           nqbxo.ask_quantity             as AskSzT,
+
+           ise.bid_quantity               as BidSzI,
+           ise.bid_price                  as BidI,
+           ise.ask_price                  as AskI,
+           ise.ask_quantity               as AskSzI,
+
+           arca.bid_quantity              as BidSzP,
+           arca.bid_price                 as BidP,
+           arca.ask_price                 as AskP,
+           arca.ask_quantity              as AskSzP,
+
+           miax.bid_quantity              as BidSzM,
+           miax.bid_price                 as BidM,
+           miax.ask_price                 as AskM,
+           miax.ask_quantity              as AskSzM,
+
+           gemini.bid_quantity            as BidSzH,
+           gemini.bid_price               as BidH,
+           gemini.ask_price               as AskH,
+           gemini.ask_quantity            as AskSzH,
+
+           nsdqo.bid_quantity             as BidSzQ,
+           nsdqo.bid_price                as BidQ,
+           nsdqo.ask_price                as AskQ,
+           nsdqo.ask_quantity             as AskSzQ,
+
+           phlx.bid_quantity              as BidSzX,
+           phlx.bid_price                 as BidX,
+           phlx.ask_price                 as AskX,
+           phlx.ask_quantity              as AskSzX,
+
+           edgo.bid_quantity              as BidSzE,
+           edgo.bid_price                 as BidE,
+           edgo.ask_price                 as AskE,
+           edgo.ask_quantity              as AskSzE,
+
+           mcry.bid_quantity              as BidSzJ,
+           mcry.bid_price                 as BidJ,
+           mcry.ask_price                 as AskJ,
+           mcry.ask_quantity              as AskSzJ,
+
+           mprl.bid_quantity              as BidSzR,
+           mprl.bid_price                 as BidR,
+           mprl.ask_price                 as AskR,
+           mprl.ask_quantity              as AskSzR,
+
+           emld.bid_quantity              as BidSzD,
+           emld.bid_price                 as BidD,
+           emld.ask_price                 as AskD,
+           emld.ask_quantity              as AskSzD,
+-----
+           sphr.bid_qty                   as BidSzS,
+           sphr.bid_price                 as BidS,
+           sphr.ask_price                 as AskS,
+           sphr.ask_qty                   as AskSzS,
+
+           mxop.bid_qty                   as BidSzU,
+           mxop.bid_price                 as BidU,
+           mxop.ask_price                 as AskU,
+           mxop.ask_qty                   as AskSzU
+
     from dwh.execution ex
-             inner join dwh.gtc_order_status gos on gos.order_id = ex.order_id and (gos.close_date_id is null or gos.close_date_id >= in_date_id)
+             inner join dwh.gtc_order_status gos
+                        on gos.order_id = ex.order_id and (gos.close_date_id is null or gos.close_date_id >= in_date_id)
              inner join dwh.client_order cl on gos.create_date_id = cl.create_date_id and gos.order_id = cl.order_id
              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
              inner join dwh.d_account ac on ac.account_id = cl.account_id
@@ -302,6 +395,156 @@ begin
                                   and constr.cross_order_id is not null
                                   and constr.create_date_id = in_date_id
                                 limit 1) cc on true
+
+        -- amex
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'AMEX'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) amex on true
+-- bato
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'BATO'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) bato on true
+-- box
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'BOX'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) box on true
+-- cboe
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'CBOE'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) cboe on true
+-- c2ox
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'C2OX'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) c2ox on true
+-- nqbxo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'NQBXO'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) nqbxo on true
+-- ise
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'ISE'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) ise on true
+-- arca
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'ARCA'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) arca on true
+-- miax
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MIAX'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) miax on true
+-- gemini
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'GEMINI'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) gemini on true
+-- nsdqo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'NSDQO'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) nsdqo on true
+-- phlx
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'PHLX'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) phlx on true
+-- edgo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'EDGO'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) edgo on true
+-- mcry
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MCRY'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) mcry on true
+-- mprl
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MPRL'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) mprl on true
+-- emld
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'EMLD'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) emld on true
+             left join lateral (select ls.ask_price,
+                                       ls.bid_price,
+                                       ls.ask_quantity as ask_qty,
+                                       ls.bid_quantity as bid_qty
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'SPHR'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) sphr on true
+             left join lateral (select ls.ask_price,
+                                       ls.bid_price,
+                                       ls.ask_quantity as ask_qty,
+                                       ls.bid_quantity as bid_qty
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MXOP'
+                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
+                                limit 1
+        ) mxop on true
+
     where ex.exec_date_id = in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
@@ -309,7 +552,7 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
---     and es.exec_id = any('{0,52469985240,52469985262,52469985241,52469985271,52469985155,52469985130,52469985164,52469985132,52447600067,52447600070,52447600051,52447600053,52447611732,52447611727,52447604870,52447604859,52447604872,52447604860,52447604747}')
+    --     and es.exec_id = any('{0,52469985240,52469985262,52469985241,52469985271,52469985155,52469985130,52469985164,52469985132,52447600067,52447600070,52447600051,52447600053,52447611732,52447611727,52447604870,52447604859,52447604872,52447604860,52447604747}')
 --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
     ;
 
@@ -318,14 +561,10 @@ begin
                            l_row_cnt, 'O')
     into l_step_id;
 
-    select to_char(min(create_time), 'YYYYMMDD')::int4 into l_min_create_time_id from t_base_gtc;
-    select to_char(min(exec_time), 'YYYYMMDD')::int4 into l_min_exec_time_id from t_base_gtc;
-
-    raise notice 'l_min_create_time_id - %, l_min_exec_time_id - %', l_min_create_time_id, l_min_exec_time_id;
-
 
     drop table if exists t_base;
-    create temp table t_base with (parallel_workers = 4) on commit drop as
+    create temp table t_base with (parallel_workers = 4)
+                             on commit drop as
     select cl.order_id,
            cl.transaction_id,
            cl.create_time,
@@ -490,11 +729,102 @@ begin
                        --
                        end
                end                        as BILLING_CODE,
-         es.contra_broker as es_contra_broker,
-         es.contra_account_capacity as es_contra_account_capacity,
-         es.contra_trader as es_contra_trader,
-         es.exchange_id as es_exchange_id,
-         ac.account_demo_mnemonic
+           es.contra_broker               as es_contra_broker,
+           es.contra_account_capacity     as es_contra_account_capacity,
+           es.contra_trader               as es_contra_trader,
+           es.exchange_id                 as es_exchange_id,
+           ac.account_demo_mnemonic,
+           fc.acceptor_id,
+
+           amex.bid_quantity              as BidSzA,
+           amex.bid_price                 as BidA,
+           amex.ask_price                 as AskA,
+           amex.ask_quantity              as AskSzA,
+
+           bato.bid_quantity              as BidSzZ,
+           bato.bid_price                 as BidZ,
+           bato.ask_price                 as AskZ,
+           bato.ask_quantity              as AskSzZ,
+
+           box.bid_quantity               as BidSzB,
+           box.bid_price                  as BidB,
+           box.ask_price                  as AskB,
+           box.ask_quantity               as AskSzB,
+--
+           cboe.bid_quantity              as BidSzC,
+           cboe.bid_price                 as BidC,
+           cboe.ask_price                 as AskC,
+           cboe.ask_quantity              as AskSzC,
+
+           c2ox.bid_quantity              as BidSzW,
+           c2ox.bid_price                 as BidW,
+           c2ox.ask_price                 as AskW,
+           c2ox.ask_quantity              as AskSzW,
+
+           nqbxo.bid_quantity             as BidSzT,
+           nqbxo.bid_price                as BidT,
+           nqbxo.ask_price                as AskT,
+           nqbxo.ask_quantity             as AskSzT,
+
+           ise.bid_quantity               as BidSzI,
+           ise.bid_price                  as BidI,
+           ise.ask_price                  as AskI,
+           ise.ask_quantity               as AskSzI,
+
+           arca.bid_quantity              as BidSzP,
+           arca.bid_price                 as BidP,
+           arca.ask_price                 as AskP,
+           arca.ask_quantity              as AskSzP,
+
+           miax.bid_quantity              as BidSzM,
+           miax.bid_price                 as BidM,
+           miax.ask_price                 as AskM,
+           miax.ask_quantity              as AskSzM,
+
+           gemini.bid_quantity            as BidSzH,
+           gemini.bid_price               as BidH,
+           gemini.ask_price               as AskH,
+           gemini.ask_quantity            as AskSzH,
+
+           nsdqo.bid_quantity             as BidSzQ,
+           nsdqo.bid_price                as BidQ,
+           nsdqo.ask_price                as AskQ,
+           nsdqo.ask_quantity             as AskSzQ,
+
+           phlx.bid_quantity              as BidSzX,
+           phlx.bid_price                 as BidX,
+           phlx.ask_price                 as AskX,
+           phlx.ask_quantity              as AskSzX,
+
+           edgo.bid_quantity              as BidSzE,
+           edgo.bid_price                 as BidE,
+           edgo.ask_price                 as AskE,
+           edgo.ask_quantity              as AskSzE,
+
+           mcry.bid_quantity              as BidSzJ,
+           mcry.bid_price                 as BidJ,
+           mcry.ask_price                 as AskJ,
+           mcry.ask_quantity              as AskSzJ,
+
+           mprl.bid_quantity              as BidSzR,
+           mprl.bid_price                 as BidR,
+           mprl.ask_price                 as AskR,
+           mprl.ask_quantity              as AskSzR,
+
+           emld.bid_quantity              as BidSzD,
+           emld.bid_price                 as BidD,
+           emld.ask_price                 as AskD,
+           emld.ask_quantity              as AskSzD,
+-----
+           sphr.bid_qty                   as BidSzS,
+           sphr.bid_price                 as BidS,
+           sphr.ask_price                 as AskS,
+           sphr.ask_qty                   as AskSzS,
+
+           mxop.bid_qty                   as BidSzU,
+           mxop.bid_price                 as BidU,
+           mxop.ask_price                 as AskU,
+           mxop.ask_qty                   as AskSzU
     from dwh.execution ex
              inner join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = in_date_id
              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
@@ -564,7 +894,136 @@ begin
                                   and pcon.create_date_id = in_date_id
 --                              group by pcon.fix_connection_id
                                 limit 1) cc on true
-
+        -- amex
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'AMEX'
+                                  and ls.start_date_id = in_date_id
+        ) amex on true
+-- bato
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'BATO'
+                                  and ls.start_date_id = in_date_id
+        ) bato on true
+-- box
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'BOX'
+                                  and ls.start_date_id = in_date_id
+        ) box on true
+-- cboe
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'CBOE'
+                                  and ls.start_date_id = in_date_id
+        ) cboe on true
+-- c2ox
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'C2OX'
+                                  and ls.start_date_id = in_date_id
+        ) c2ox on true
+-- nqbxo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'NQBXO'
+                                  and ls.start_date_id = in_date_id
+        ) nqbxo on true
+-- ise
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'ISE'
+                                  and ls.start_date_id = in_date_id
+        ) ise on true
+-- arca
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'ARCA'
+                                  and ls.start_date_id = in_date_id
+        ) arca on true
+-- miax
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MIAX'
+                                  and ls.start_date_id = in_date_id
+        ) miax on true
+-- gemini
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'GEMINI'
+                                  and ls.start_date_id = in_date_id
+        ) gemini on true
+-- nsdqo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'NSDQO'
+                                  and ls.start_date_id = in_date_id
+        ) nsdqo on true
+-- phlx
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'PHLX'
+                                  and ls.start_date_id = in_date_id
+        ) phlx on true
+-- edgo
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'EDGO'
+                                  and ls.start_date_id = in_date_id
+        ) edgo on true
+-- mcry
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MCRY'
+                                  and ls.start_date_id = in_date_id
+        ) mcry on true
+-- mprl
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MPRL'
+                                  and ls.start_date_id = in_date_id
+        ) mprl on true
+-- emld
+             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'EMLD'
+                                  and ls.start_date_id = in_date_id
+        ) emld on true
+             left join lateral (select ls.ask_price,
+                                       ls.bid_price,
+                                       ls.ask_quantity as ask_qty,
+                                       ls.bid_quantity as bid_qty
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'SPHR'
+                                  and ls.start_date_id = in_date_id
+        ) sphr on true
+             left join lateral (select ls.ask_price,
+                                       ls.bid_price,
+                                       ls.ask_quantity as ask_qty,
+                                       ls.bid_quantity as bid_qty
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = cl.transaction_id
+                                  and ls.exchange_id = 'MXOP'
+                                  and ls.start_date_id = in_date_id
+        ) mxop on true
     where ex.exec_date_id = in_date_id
       and cl.multileg_reporting_type in ('1', '2')
       and ex.is_busted = 'N'
@@ -572,10 +1031,10 @@ begin
       and cl.trans_type <> 'F'
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
---       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
+    --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
 --       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
     ;
-      get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: NON GTC orders were added',
                            l_row_cnt, 'O')
@@ -667,7 +1126,80 @@ begin
            es_contra_account_capacity,
            es_contra_trader,
            es_exchange_id,
-           account_demo_mnemonic
+           account_demo_mnemonic,
+           acceptor_id,
+           bidsza,
+           bida,
+           aska,
+           asksza,
+           bidszz,
+           bidz,
+           askz,
+           askszz,
+           bidszb,
+           bidb,
+           askb,
+           askszb,
+           bidszc,
+           bidc,
+           askc,
+           askszc,
+           bidszw,
+           bidw,
+           askw,
+           askszw,
+           bidszt,
+           bidt,
+           askt,
+           askszt,
+           bidszi,
+           bidi,
+           aski,
+           askszi,
+           bidszp,
+           bidp,
+           askp,
+           askszp,
+           bidszm,
+           bidm,
+           askm,
+           askszm,
+           bidszh,
+           bidh,
+           askh,
+           askszh,
+           bidszq,
+           bidq,
+           askq,
+           askszq,
+           bidszx,
+           bidx,
+           askx,
+           askszx,
+           bidsze,
+           bide,
+           aske,
+           asksze,
+           bidszj,
+           bidj,
+           askj,
+           askszj,
+           bidszr,
+           bidr,
+           askr,
+           askszr,
+           bidszd,
+           bidd,
+           askd,
+           askszd,
+           bidszs,
+           bids,
+           asks,
+           askszs,
+           bidszu,
+           bidu,
+           asku,
+           askszu
     from t_base_gtc;
 
     insert into trash.so_imc_base
@@ -752,12 +1284,87 @@ begin
            es_contra_account_capacity,
            es_contra_trader,
            es_exchange_id,
-           account_demo_mnemonic
+           account_demo_mnemonic,
+           acceptor_id,
+           bidsza,
+           bida,
+           aska,
+           asksza,
+           bidszz,
+           bidz,
+           askz,
+           askszz,
+           bidszb,
+           bidb,
+           askb,
+           askszb,
+           bidszc,
+           bidc,
+           askc,
+           askszc,
+           bidszw,
+           bidw,
+           askw,
+           askszw,
+           bidszt,
+           bidt,
+           askt,
+           askszt,
+           bidszi,
+           bidi,
+           aski,
+           askszi,
+           bidszp,
+           bidp,
+           askp,
+           askszp,
+           bidszm,
+           bidm,
+           askm,
+           askszm,
+           bidszh,
+           bidh,
+           askh,
+           askszh,
+           bidszq,
+           bidq,
+           askq,
+           askszq,
+           bidszx,
+           bidx,
+           askx,
+           askszx,
+           bidsze,
+           bide,
+           aske,
+           asksze,
+           bidszj,
+           bidj,
+           askj,
+           askszj,
+           bidszr,
+           bidr,
+           askr,
+           askszr,
+           bidszd,
+           bidd,
+           askd,
+           askszd,
+           bidszs,
+           bids,
+           asks,
+           askszs,
+           bidszu,
+           bidu,
+           asku,
+           askszu
     from t_base;
     analyze trash.so_imc_base;
 
+    select count(*) into l_row_cnt from trash.so_imc_base;
+
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: imc_base is ready',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
     -- MAIN PART
@@ -828,7 +1435,7 @@ begin
                end                                                                                     as exchange_code,
 
            case
-               when tbs.parent_order_id is null then fc.acceptor_id
+               when tbs.parent_order_id is null then tbs.acceptor_id
                when dss.sub_system_id like '%CONS%' then 'CONS'
                when dss.sub_system_id like '%OSR%' then 'SOR'
                when dss.sub_system_id like '%ATLAS%' or dss.sub_system_id like '%ATS%' then 'ATS'
@@ -947,10 +1554,82 @@ begin
                when '2'
                    then 'M' end                                                                        as instrument_type,
            tbs.BILLING_CODE,
-           tbs.account_demo_mnemonic
+           tbs.account_demo_mnemonic,
+           bidsza,
+           bida,
+           aska,
+           asksza,
+           bidszz,
+           bidz,
+           askz,
+           askszz,
+           bidszb,
+           bidb,
+           askb,
+           askszb,
+           bidszc,
+           bidc,
+           askc,
+           askszc,
+           bidszw,
+           bidw,
+           askw,
+           askszw,
+           bidszt,
+           bidt,
+           askt,
+           askszt,
+           bidszi,
+           bidi,
+           aski,
+           askszi,
+           bidszp,
+           bidp,
+           askp,
+           askszp,
+           bidszm,
+           bidm,
+           askm,
+           askszm,
+           bidszh,
+           bidh,
+           askh,
+           askszh,
+           bidszq,
+           bidq,
+           askq,
+           askszq,
+           bidszx,
+           bidx,
+           askx,
+           askszx,
+           bidsze,
+           bide,
+           aske,
+           asksze,
+           bidszj,
+           bidj,
+           askj,
+           askszj,
+           bidszr,
+           bidr,
+           askr,
+           askszr,
+           bidszd,
+           bidd,
+           askd,
+           askszd,
+           bidszs,
+           bids,
+           asks,
+           askszs,
+           bidszu,
+           bidu,
+           asku,
+           askszu
     from t_base tbs
              inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
-             inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
+--              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
              left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
              left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
              left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
@@ -974,11 +1653,11 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
                            l_row_cnt, 'O')
     into l_step_id;
-    return 1;
+    return l_row_cnt;
 end;
 $$;
 
-create or replace function trash.get_consolidator_eod_pg_4(in_date_id int4)
+create or replace function trash.get_consolidator_eod_pg_6(in_date_id int4)
     returns int4
     language plpgsql
 as
@@ -987,8 +1666,7 @@ declare
     l_load_id            int;
     l_row_cnt            int;
     l_step_id            int;
-    l_min_exec_time_id   int4 := 20240606;
-    l_min_create_time_id int4 := 20231215;
+
 
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -1054,95 +1732,95 @@ begin
            coalesce(cl.exch_exec_id, '') || ',' || --ExchangeTransactionID
            coalesce(cl.exch_order_id, '') || ',' || --ExchangeOrderID
 
-           coalesce(amex.bid_quantity::text, '') || ',' || --BidSzA
-           coalesce(to_char(amex.bid_price, 'FM999999.0099'), '') || ',' || --BidA
-           coalesce(to_char(amex.ask_price, 'FM999999.0099'), '') || ',' || --AskA
-           coalesce(amex.ask_quantity::text, '') || ',' || --AskSzA
+           coalesce(BidSzA::text, '') || ',' || --BidSzA
+           coalesce(to_char(BidA, 'FM999999.0099'), '') || ',' || --BidA
+           coalesce(to_char(AskA, 'FM999999.0099'), '') || ',' || --AskA
+           coalesce(AskSzA::text, '') || ',' || --AskSzA
 
-           coalesce(bato.bid_quantity::text, '') || ',' || --BidSzZ
-           coalesce(to_char(bato.bid_price, 'FM999999.0099'), '') || ',' || --BidZ
-           coalesce(to_char(bato.ask_price, 'FM999999.0099'), '') || ',' || --AskZ
-           coalesce(bato.ask_quantity::text, '') || ',' || --AskSzZ
+           coalesce(BidSzZ::text, '') || ',' || --BidSzZ
+           coalesce(to_char(BidZ, 'FM999999.0099'), '') || ',' || --BidZ
+           coalesce(to_char(AskZ, 'FM999999.0099'), '') || ',' || --AskZ
+           coalesce(AskSzZ::text, '') || ',' || --AskSzZ
 
-           coalesce(box.bid_quantity::text, '') || ',' || --BidSzB
-           coalesce(to_char(box.bid_price, 'FM999999.0099'), '') || ',' || --BidB
-           coalesce(to_char(box.ask_price, 'FM999999.0099'), '') || ',' || --AskB
-           coalesce(box.ask_quantity::text, '') || ',' || --AskSzB
+           coalesce(BidSzB::text, '') || ',' || --BidSzB
+           coalesce(to_char(BidB, 'FM999999.0099'), '') || ',' || --BidB
+           coalesce(to_char(AskB, 'FM999999.0099'), '') || ',' || --AskB
+           coalesce(AskSzB::text, '') || ',' || --AskSzB
 --
-           coalesce(cboe.bid_quantity::text, '') || ',' || --BidSzC
-           coalesce(to_char(cboe.bid_price, 'FM999999.0099'), '') || ',' || --BidC
-           coalesce(to_char(cboe.ask_price, 'FM999999.0099'), '') || ',' || --AskC
-           coalesce(cboe.ask_quantity::text, '') || ',' || --AskSzC
+           coalesce(BidSzC::text, '') || ',' || --BidSzC
+           coalesce(to_char(BidC, 'FM999999.0099'), '') || ',' || --BidC
+           coalesce(to_char(AskC, 'FM999999.0099'), '') || ',' || --AskC
+           coalesce(AskSzC::text, '') || ',' || --AskSzC
 
-           coalesce(c2ox.bid_quantity::text, '') || ',' || --BidSzW
-           coalesce(to_char(c2ox.bid_price, 'FM999999.0099'), '') || ',' || --BidW
-           coalesce(to_char(c2ox.ask_price, 'FM999999.0099'), '') || ',' || --AskW
-           coalesce(c2ox.ask_quantity::text, '') || ',' || --AskSzW
+           coalesce(BidSzW::text, '') || ',' || --BidSzW
+           coalesce(to_char(BidW, 'FM999999.0099'), '') || ',' || --BidW
+           coalesce(to_char(AskW, 'FM999999.0099'), '') || ',' || --AskW
+           coalesce(AskSzW::text, '') || ',' || --AskSzW
 
-           coalesce(nqbxo.bid_quantity::text, '') || ',' || --BidSzT
-           coalesce(to_char(nqbxo.bid_price, 'FM999999.0099'), '') || ',' || --BidT
-           coalesce(to_char(nqbxo.ask_price, 'FM999999.0099'), '') || ',' || --AskT
-           coalesce(nqbxo.ask_quantity::text, '') || ',' || --AskSzT
+           coalesce(BidSzT::text, '') || ',' || --BidSzT
+           coalesce(to_char(BidT, 'FM999999.0099'), '') || ',' || --BidT
+           coalesce(to_char(AskT, 'FM999999.0099'), '') || ',' || --AskT
+           coalesce(AskSzT::text, '') || ',' || --AskSzT
 
-           coalesce(ise.bid_quantity::text, '') || ',' || --BidSzI
-           coalesce(to_char(ise.bid_price, 'FM999999.0099'), '') || ',' || --BidI
-           coalesce(to_char(ise.ask_price, 'FM999999.0099'), '') || ',' || --AskI
-           coalesce(ise.ask_quantity::text, '') || ',' || --AskSzI
+           coalesce(BidSzI::text, '') || ',' || --BidSzI
+           coalesce(to_char(BidI, 'FM999999.0099'), '') || ',' || --BidI
+           coalesce(to_char(AskI, 'FM999999.0099'), '') || ',' || --AskI
+           coalesce(AskSzI::text, '') || ',' || --AskSzI
 
-           coalesce(arca.bid_quantity::text, '') || ',' || --BidSzP
-           coalesce(to_char(arca.bid_price, 'FM999999.0099'), '') || ',' || --BidP
-           coalesce(to_char(arca.ask_price, 'FM999999.0099'), '') || ',' || --AskP
-           coalesce(arca.ask_quantity::text, '') || ',' || --AskSzP
+           coalesce(BidSzP::text, '') || ',' || --BidSzP
+           coalesce(to_char(BidP, 'FM999999.0099'), '') || ',' || --BidP
+           coalesce(to_char(AskP, 'FM999999.0099'), '') || ',' || --AskP
+           coalesce(AskSzP::text, '') || ',' || --AskSzP
 
-           coalesce(miax.bid_quantity::text, '') || ',' || --BidSzM
-           coalesce(to_char(miax.bid_price, 'FM999999.0099'), '') || ',' || --BidM
-           coalesce(to_char(miax.ask_price, 'FM999999.0099'), '') || ',' || --AskM
-           coalesce(miax.ask_quantity::text, '') || ',' || --AskSzM
+           coalesce(BidSzM::text, '') || ',' || --BidSzM
+           coalesce(to_char(BidM, 'FM999999.0099'), '') || ',' || --BidM
+           coalesce(to_char(AskM, 'FM999999.0099'), '') || ',' || --AskM
+           coalesce(AskSzM::text, '') || ',' || --AskSzM
 
-           coalesce(gemini.bid_quantity::text, '') || ',' || --BidSzH
-           coalesce(to_char(gemini.bid_price, 'FM999999.0099'), '') || ',' || --BidH
-           coalesce(to_char(gemini.ask_price, 'FM999999.0099'), '') || ',' || --AskH
-           coalesce(gemini.ask_quantity::text, '') || ',' || --AskSzH
+           coalesce(BidSzH::text, '') || ',' || --BidSzH
+           coalesce(to_char(BidH, 'FM999999.0099'), '') || ',' || --BidH
+           coalesce(to_char(AskH, 'FM999999.0099'), '') || ',' || --AskH
+           coalesce(AskSzH::text, '') || ',' || --AskSzH
 
-           coalesce(nsdqo.bid_quantity::text, '') || ',' || --BidSzQ
-           coalesce(to_char(nsdqo.bid_price, 'FM999999.0099'), '') || ',' || --BidQ
-           coalesce(to_char(nsdqo.ask_price, 'FM999999.0099'), '') || ',' || --AskQ
-           coalesce(nsdqo.ask_quantity::text, '') || ',' || --AskSzQ
+           coalesce(BidSzQ::text, '') || ',' || --BidSzQ
+           coalesce(to_char(BidQ, 'FM999999.0099'), '') || ',' || --BidQ
+           coalesce(to_char(AskQ, 'FM999999.0099'), '') || ',' || --AskQ
+           coalesce(AskSzQ::text, '') || ',' || --AskSzQ
 
-           coalesce(phlx.bid_quantity::text, '') || ',' || --BidSzX
-           coalesce(to_char(phlx.bid_price, 'FM999999.0099'), '') || ',' || --BidX
-           coalesce(to_char(phlx.ask_price, 'FM999999.0099'), '') || ',' || --AskX
-           coalesce(phlx.ask_quantity::text, '') || ',' || --AskSzX
+           coalesce(BidSzX::text, '') || ',' || --BidSzX
+           coalesce(to_char(BidX, 'FM999999.0099'), '') || ',' || --BidX
+           coalesce(to_char(AskX, 'FM999999.0099'), '') || ',' || --AskX
+           coalesce(AskSzX::text, '') || ',' || --AskSzX
 
-           coalesce(edgo.bid_quantity::text, '') || ',' || --BidSzE
-           coalesce(to_char(edgo.bid_price, 'FM999999.0099'), '') || ',' || --BidE
-           coalesce(to_char(edgo.ask_price, 'FM999999.0099'), '') || ',' || --AskE
-           coalesce(edgo.ask_quantity::text, '') || ',' || --AskSzE
+           coalesce(BidSzE::text, '') || ',' || --BidSzE
+           coalesce(to_char(BidE, 'FM999999.0099'), '') || ',' || --BidE
+           coalesce(to_char(AskE, 'FM999999.0099'), '') || ',' || --AskE
+           coalesce(AskSzE::text, '') || ',' || --AskSzE
 
-           coalesce(mcry.bid_quantity::text, '') || ',' || --BidSzJ
-           coalesce(to_char(mcry.bid_price, 'FM999999.0099'), '') || ',' || --BidJ
-           coalesce(to_char(mcry.ask_price, 'FM999999.0099'), '') || ',' || --AskJ
-           coalesce(mcry.ask_quantity::text, '') || ',' || --AskSzJ
+           coalesce(BidSzJ::text, '') || ',' || --BidSzJ
+           coalesce(to_char(BidJ, 'FM999999.0099'), '') || ',' || --BidJ
+           coalesce(to_char(AskJ, 'FM999999.0099'), '') || ',' || --AskJ
+           coalesce(AskSzJ::text, '') || ',' || --AskSzJ
 
-           coalesce(mprl.bid_quantity::text, '') || ',' || --BidSzR
-           coalesce(to_char(mprl.bid_price, 'FM999999.0099'), '') || ',' || --BidR
-           coalesce(to_char(mprl.ask_price, 'FM999999.0099'), '') || ',' || --AskR
-           coalesce(mprl.ask_quantity::text, '') || ',' || --AskSzR
+           coalesce(BidSzR::text, '') || ',' || --BidSzR
+           coalesce(to_char(BidR, 'FM999999.0099'), '') || ',' || --BidR
+           coalesce(to_char(AskR, 'FM999999.0099'), '') || ',' || --AskR
+           coalesce(AskSzR::text, '') || ',' || --AskSzR
 
-           coalesce(emld.bid_quantity::text, '') || ',' || --BidSzD
-           coalesce(to_char(emld.bid_price, 'FM999999.0099'), '') || ',' || --BidD
-           coalesce(to_char(emld.ask_price, 'FM999999.0099'), '') || ',' || --AskD
-           coalesce(emld.ask_quantity::text, '') || ',' || --AskSzD
+           coalesce(BidSzD::text, '') || ',' || --BidSzD
+           coalesce(to_char(BidD, 'FM999999.0099'), '') || ',' || --BidD
+           coalesce(to_char(AskD, 'FM999999.0099'), '') || ',' || --AskD
+           coalesce(AskSzD::text, '') || ',' || --AskSzD
 -----
-           coalesce(sphr.bid_qty::text, '') || ',' || --BidSzS
-           coalesce(to_char(sphr.bid_price, 'FM999999.0099'), '') || ',' || --BidS
-           coalesce(to_char(sphr.ask_price, 'FM999999.0099'), '') || ',' || --AskS
-           coalesce(sphr.ask_qty::text, '') || ',' || --AskSzS
+           coalesce(BidSzS::text, '') || ',' || --BidSzS
+           coalesce(to_char(BidS, 'FM999999.0099'), '') || ',' || --BidS
+           coalesce(to_char(AskS, 'FM999999.0099'), '') || ',' || --AskS
+           coalesce(AskSzS::text, '') || ',' || --AskSzS
 
-           coalesce(mxop.bid_qty::text, '') || ',' || --BidSzU
-           coalesce(to_char(mxop.bid_price, 'FM999999.0099'), '') || ',' || --BidU
-           coalesce(to_char(mxop.ask_price, 'FM999999.0099'), '') || ',' || --AskU
-           coalesce(mxop.ask_qty::text, '') || ',' || --AskSzU
+           coalesce(BidSzU::text, '') || ',' || --BidSzU
+           coalesce(to_char(BidU, 'FM999999.0099'), '') || ',' || --BidU
+           coalesce(to_char(AskU, 'FM999999.0099'), '') || ',' || --AskU
+           coalesce(AskSzU::text, '') || ',' || --AskSzU
 -----
 --CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty
            coalesce(cl.cross_order_id::text, '') || ',' || --CrossOrderID
@@ -1185,204 +1863,22 @@ begin
                                 where fmj.fix_message_id = cl.es_fix_message_id
 --                                   and fmj.date_id = public.get_dateid(cl.exec_time::date)
                                   and fmj.date_id = to_char(cl.exec_time, 'YYYYMMDD')::int4
-                                  and fmj.date_id >= l_min_exec_time_id
+                                  and fmj.date_id >= 20240606
                                 limit 1) fmj on true
              left join lateral (select fix_message ->> '9730' as t9730
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.parent_fix_message_id
 --                                   and fmj.date_id = public.get_dateid(cl.exec_time::date)
                                   and fmj.date_id = to_char(cl.exec_time, 'YYYYMMDD')::int4
-                                  and fmj.date_id >= l_min_exec_time_id
-                                limit 1) fmj_p on true
-        -- amex
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'AMEX'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) amex on true
--- bato
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'BATO'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) bato on true
--- box
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'BOX'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) box on true
--- cboe
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'CBOE'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) cboe on true
--- c2ox
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'C2OX'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) c2ox on true
--- nqbxo
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'NQBXO'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) nqbxo on true
--- ise
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'ISE'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) ise on true
--- arca
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'ARCA'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) arca on true
--- miax
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'MIAX'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) miax on true
--- gemini
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'GEMINI'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) gemini on true
--- nsdqo
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'NSDQO'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) nsdqo on true
--- phlx
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'PHLX'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) phlx on true
--- edgo
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'EDGO'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) edgo on true
--- mcry
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'MCRY'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) mcry on true
--- mprl
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'MPRL'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) mprl on true
--- emld
-             left join lateral (select ls.ask_price, ls.bid_price, ls.ask_quantity, ls.bid_quantity
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'EMLD'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) emld on true
-             left join lateral (select ls.ask_price,
-                                       ls.bid_price,
-                                       ls.ask_quantity as ask_qty,
-                                       ls.bid_quantity as bid_qty
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'SPHR'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) sphr on true
-             left join lateral (select ls.ask_price,
-                                       ls.bid_price,
-                                       ls.ask_quantity as ask_qty,
-                                       ls.bid_quantity as bid_qty
-                                from dwh.l1_snapshot ls
-                                where ls.transaction_id = cl.transaction_id
-                                  and ls.exchange_id = 'MXOP'
-                                  and ls.start_date_id = to_char(cl.create_time, 'YYYYMMDD')::int4
-                                  and ls.start_date_id >= l_min_create_time_id
-                                limit 1
-        ) mxop on true;
+                                  and fmj.date_id >= 20240606
+                                limit 1) fmj_p on true;
+
     get diagnostics l_row_cnt = row_count;
     create index on trash.imc_pg_report (order_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: unordered csv is ready',
                            l_row_cnt, 'O')
     into l_step_id;
-
-    /*
---             1 as rec_type,
---                0 as order_status,
-'EntityCode,CreateDate,CreateTime,StatusDate,StatusTime,OSI,BaseCode,RootCode,BaseAssetType,ExpirationDate,Strike,TypeCode,BuySell,LegCount,LegNumber,OrderType,' ||
-'Status,EnteredPrice,StatusPrice,EnteredQty,StatusQty,RFRID,OrigRFRID,OrderID,ReplacedOrderID,CancelOrderID,ParentOrderID,SystemOrderID,ExchangeCode,ExConnection,GiveUpFirm,CMTAFirm,Account,SubAccount,' ||
-'OpenClose,Range,CounterpartyRange,PriceQualifier,TimeQualifier,ExecInst,LiquidityIndicator,ExchangeTransactionID,ExchangeOrderID,BidSzA,BidA,AskA,AskSzA,BidSzZ,BidZ,AskZ,AskSzZ,BidSzB,BidB,AskB,AskSzB,BidSzC,BidC,AskC,AskSzC,BidSzW,BidW,AskW,AskSzW,' ||
-'BidSzT,BidT,AskT,AskSzT,BidSzI,BidI,AskI,AskSzI,BidSzP,BidP,AskP,AskSzP,BidSzM,BidM,AskM,AskSzM,BidSzH,BidH,AskH,AskSzH,BidSzQ,BidQ,AskQ,AskSzQ,BidSzX,BidX,AskX,AskSzX,BidSzE,BidE,AskE,AskSzE,BidSzJ,BidJ,AskJ,AskSzJ,' ||
-'BidSzR,BidR,AskR,AskSzR,BidSzD,BidD,AskD,AskSzD,BidSzS,BidS,AskS,AskSzS,BidSzU,BidU,AskU,AskSzU,CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty,CrossLPID,demo_account_mnemonic'
-    as rec;
-
-return query
-select 'report finished';
---             select rec from trash.imc_pg_report
---         order by order_id
---     limit 1
-*/
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
                            l_row_cnt, 'O')
