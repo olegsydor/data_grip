@@ -1627,7 +1627,7 @@ begin
            bidu,
            asku,
            askszu
-    from t_base tbs
+    from trash.so_imc_base tbs
              inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
 --              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
              left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
