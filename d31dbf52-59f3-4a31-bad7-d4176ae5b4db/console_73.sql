@@ -26,7 +26,7 @@ begin
     into l_step_id;
 
     -- Matching orders
---     call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(in_date_id);
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
@@ -362,8 +362,8 @@ begin
                                   and ex.exec_type in ('b', '4')
                                 limit 1) cxl on true
 
-             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr_str
-                                       t_alp.lp_demo_mnemonic as contr_str
+             left join lateral (select string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr_str
+--                                        t_alp.lp_demo_mnemonic as contr_str
                                 from dwh.client_order constr
                                          inner join dwh.client_order pcon
                                                     on constr.parent_order_id = pcon.order_id --contra parent
@@ -380,8 +380,8 @@ begin
 --                              group by pcon.fix_connection_id
                                 limit 1) cc_str on true
 
-             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr
-                                       t_alp.lp_demo_mnemonic as contr
+             left join lateral (select string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr
+--                                        t_alp.lp_demo_mnemonic as contr
                                 from dwh.client_order constr
                                          inner join dwh.client_order pcon
                                                     on constr.parent_order_id = pcon.order_id --contra parent
@@ -556,6 +556,7 @@ begin
 --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
     ;
 
+    create index on t_base_gtc (order_id);
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: GTC orders were added',
                            l_row_cnt, 'O')
@@ -859,8 +860,8 @@ begin
                                   and cxl.create_date_id = in_date_id
                                 limit 1) cxl on true
 
-             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr_str
-                                       t_alp.lp_demo_mnemonic as contr_str
+             left join lateral (select string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr_str
+--                                        t_alp.lp_demo_mnemonic as contr_str
                                 from dwh.client_order constr
                                          inner join dwh.client_order pcon
                                                     on constr.parent_order_id = pcon.order_id --contra parent
@@ -877,8 +878,8 @@ begin
 --                              group by pcon.fix_connection_id
                                 limit 1) cc_str on true
 
-             left join lateral (select --string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr
-                                       t_alp.lp_demo_mnemonic as contr
+             left join lateral (select string_agg(distinct t_alp.lp_demo_mnemonic, ' ') as contr
+--                                        t_alp.lp_demo_mnemonic as contr
                                 from dwh.client_order constr
                                          inner join dwh.client_order pcon
                                                     on constr.parent_order_id = pcon.order_id --contra parent
