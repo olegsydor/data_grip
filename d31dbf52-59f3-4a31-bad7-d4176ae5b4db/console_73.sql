@@ -1,6 +1,6 @@
 select * from trash.get_consolidator_eod_pg_5(in_date_id := 20240606);
 select * from trash.get_consolidator_eod_pg_6(in_date_id := 20240606);
-select array_agg(distinct client_order_id) from t_base_gtc;
+
 
 select *
 into trash.so_imc_delete_later
@@ -1032,7 +1032,7 @@ begin
       and tf.is_eligible4consolidator = 'Y'
       and fc.fix_comp_id <> 'IMCCONS'
     --       and cl.client_order_id = any('{"JZ/0605/X78/262201/24123G0CVZ","JZ/3919/X63/097217/24080H1F5N ","LV/3494/X20/549258/24068IRN1H ","JZ/2731/413/241683/24017HNBLP ","JZ/3948/Z06/635197/24054HYLVV ","JZ/6443/309/110400/24053HBK7Z ","10Z2378338922248","9Z1278827287575","JZ/0465/196/276642/24155JGEIA","JZ/0496/Z06/496444/24156G0NZ4 "}')
---       and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id)
+      and not exists (select null from t_base_gtc gtc where gtc.order_id = ex.order_id and gtc.exec_id = ex.exec_id)
     ;
     get diagnostics l_row_cnt = row_count;
 
