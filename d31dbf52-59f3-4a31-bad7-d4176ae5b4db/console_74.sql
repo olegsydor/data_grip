@@ -1076,6 +1076,71 @@ begin
 $$;
 
 
+create or replace procedure trash.get_consolidator_eod_pg_9(in_date_id int4)
+--     returns int4
+    language plpgsql
+as
+$$
+declare
+    l_load_id int;
+    l_row_cnt int;
+    l_step_id int;
+
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for  ' || in_date_id::text || ' STARTED===',
+                           0, 'O')
+    into l_step_id;
+
+    -- Matching orders
+--     call trash.match_cross_trades_pg(in_date_id);
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
+                           0, 'O')
+    into l_step_id;
+
+
+    -- temp tables
+
+
+    drop table if exists t_clearing_account;
+    create temp table t_clearing_account as
+    select *
+    from dwh.d_clearing_account ca
+    where ca.is_default = 'Y'
+      and ca.is_active
+      and ca.market_type = 'O'
+      and ca.clearing_account_type = '1';
+    create index on t_clearing_account (account_id);
+    analyze t_clearing_account;
+
+    drop table if exists t_opt_exec_broker;
+    create temp table t_opt_exec_broker as
+    select * from dwh.d_opt_exec_broker opx where opx.is_default = 'Y' and opx.is_active;
+    create index on t_opt_exec_broker (account_id);
+    analyze t_opt_exec_broker;
+
+    drop table if exists t_wht;
+    create temp table t_wht as (select ss.symbol, clp.instrument_type_id
+                                from staging.symbol2lp_symbol_list ss
+                                         inner join staging.cons_lp_symbol_list clp
+                                                    on clp.lp_symbol_list_id = ss.lp_symbol_list_id
+                                where clp.liquidity_provider_id = 'IMC');
+
+    drop table if exists t_blk;
+    create temp table t_blk as
+        (select ss.symbol, clp.instrument_type_id
+         from staging.symbol2lp_symbol_list ss
+                  inner join staging.cons_lp_symbol_black_list clp
+                             on clp.lp_symbol_list_id = ss.lp_symbol_list_id
+         where clp.liquidity_provider_id = 'IMC');
+    analyze t_wht;
+    analyze t_blk;
+
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: temp tables have been created',
+                           0, 'O')
+    into l_step_id;
+
     drop table if exists trash.so_imc_base;
     create table trash.so_imc_base as
     select order_id,
@@ -1233,7 +1298,7 @@ $$;
            bidu,
            asku,
            askszu
-    from t_base_gtc;
+    from trash.t_base_gtc;
 
     insert into trash.so_imc_base
     select order_id,
@@ -1391,7 +1456,7 @@ $$;
            bidu,
            asku,
            askszu
-    from t_base;
+    from trash.t_base;
     analyze trash.so_imc_base;
 
     select count(*) into l_row_cnt from trash.so_imc_base;
@@ -1686,7 +1751,7 @@ $$;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: COMPLETED===',
                            l_row_cnt, 'O')
     into l_step_id;
-    return l_row_cnt;
+--     return l_row_cnt;
 end;
 $$;
 
