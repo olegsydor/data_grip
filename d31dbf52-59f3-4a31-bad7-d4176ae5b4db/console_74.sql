@@ -1986,4 +1986,33 @@ begin
 end;
 $$
 
+select multileg_order_id,
+       cl.no_legs,
+       staging.get_multileg_leg_number(cl.order_id)::text as leg_number,
+       (select cnl.no_legs::text
+        from dwh.client_order cnl
+        where cnl.order_id = cl.multileg_order_id
+        limit 1)                                          as leg_count,
+    co_client_leg_ref_id,
+       *
+from dwh.client_order cl
+where cl.order_id in (15793807813, 15793807811);
 
+
+create or replace function trash.get_multileg_leg_number(in_order_id int8, in_multileg_order_id int8)
+ returns integer
+ language plpgsql
+as $function$
+    declare
+        ret_leg_num int4;
+    begin
+with bs as (select order_id, dense_rank() over (partition by multileg_order_id order by order_id) leg_number
+            from dwh.client_order_leg leg
+            where multileg_order_id = in_multileg_order_id)
+select leg_number
+into ret_leg_num
+from bs where order_id = in_order_id;
+return ret_leg_num;
+end;
+$function$
+;
