@@ -17,5 +17,5 @@ comment on column monitoring.error_tracking.error_text is 'Text of error';
 comment on column monitoring.error_tracking.db_create_time is 'timestamp of creation event';
 comment on column monitoring.error_tracking.db_process_time is 'timestamp where error was processed';
 
-
+-- select 1/0;
 select * from monitoring.error_tracking
