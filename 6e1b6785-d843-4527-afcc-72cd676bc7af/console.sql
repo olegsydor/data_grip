@@ -1130,7 +1130,15 @@ CREATE UNIQUE INDEX trade_record_missed_lp_exec_id_idx ON staging.trade_record_m
 COMMENT ON COLUMN staging.trade_record_missed_lp.commision_rate_unit IS 'Commission rate per unit for balze originated trades. Based on [LiquidPoint_EDW].[dbo].[AcctComm] field';
 COMMENT ON COLUMN staging.trade_record_missed_lp.is_sor_routed IS 'true if order was routd to sor, false - not routed or manula fill';
 
-
+create table genesis2.fact_last_load_id
+(
+    value_name text
+        constraint fact_last_load_id_table_name_pk primary key,
+    last_id    int8
+);
+comment on table genesis2.fact_last_load_id is 'the table the last values for etl-s can be stored in';
+comment on column genesis2.fact_last_load_id.value_name is 'the unique value we use the table for';
+comment on column genesis2.fact_last_load_id.last_id is 'the value';
 
 CREATE FUNCTION genesis2.load_trade_record_inc(in_exec_id numeric DEFAULT NULL::numeric,
                                                in_orig_trade_record_id bigint DEFAULT NULL::bigint,
