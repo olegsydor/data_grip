@@ -19,3 +19,34 @@ comment on column monitoring.error_tracking.db_process_time is 'timestamp where 
 
 -- select 1/0;
 select * from monitoring.error_tracking
+
+with locks as (select pid,
+                      locktype,
+                      mode,
+                      granted,
+                      transactionid tid,
+                      relation,
+                      page,
+                      tuple
+               from pg_locks),
+     conflict as (select *
+                  from (values ('AccessShareLock', 'AccessExclusiveLock', 1),
+                               ('RowShareLock', 'ExclusiveLock', 1),
+                               ('RowShareLock', 'AccessExclusiveLock', 2),
+                               ('RowExclusiveLock', 'ShareLock', 1),
+                               ('RowExclusiveLock', 'ShareRowExclusiveLock', 2),
+                               ('RowExclusiveLock', 'ExclusiveLock', 3),
+                               ('RowExclusiveLock', 'AccessExclusiveLock', 4),
+                               ('ShareUpdateExclusiveLock', 'ShareUpdateExclusiveLock', 1),
+                               ('ShareUpdateExclusiveLock', 'ShareLock', 2),
+                               ('ShareUpdateExclusiveLock', 'ShareRowExclusiveLock', 3),
+                               ('ShareUpdateExclusiveLock', 'ExclusiveLock', 4),
+                               ('ShareUpdateExclusiveLock', 'AccessExclusiveLock', 5),
+                               ('ShareLock', 'RowExclusiveLock', 1),
+                               ('ShareLock', 'ShareUpdateExclusiveLock', 2),
+                               ('ShareLock', 'ShareRowExclusiveLock', 3),
+                               ('ShareLock', 'ExclusiveLock', 4),
+                               ('ShareLock', 'AccessExclusiveLock', 5),
+                               ('ShareRowExclusiveLock', 'RowExclusiveLock', 1),
+                               ('ShareRowExclusiveLock', 'ShareUpdateExclusiveLock', 2),
+                               ('Sha
