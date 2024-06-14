@@ -20,7 +20,14 @@ comment on column monitoring.error_tracking.db_create_time is 'timestamp of crea
 comment on column monitoring.error_tracking.db_process_time is 'timestamp where error was processed';
 
 select * from monitoring.error_tracking
-order by error_tracking_id;
+order by error_tracking_id desc;
 
 create index error_tracking_db_process_time_idx on monitoring.error_tracking (db_process_time);
 create index error_tracking_db_host_idx on monitoring.error_tracking (db_host);
+
+alter table monitoring.error_tracking add column db_type text;
+select distinct(db_type) from monitoring.error_tracking;
+update monitoring.error_tracking
+set db_type = 'PROD'
+where db_host != 'pgtest1.uat.dashops.net'
+and db_type is null
