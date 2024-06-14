@@ -25,7 +25,9 @@ order by error_tracking_id desc;
 create index error_tracking_db_process_time_idx on monitoring.error_tracking (db_process_time);
 create index error_tracking_db_host_idx on monitoring.error_tracking (db_host);
 
+
 alter table monitoring.error_tracking add column db_type text;
+create index error_tracking_db_type_idx on monitoring.error_tracking (db_type);
 select distinct(db_type) from monitoring.error_tracking;
 update monitoring.error_tracking
 set db_type = 'PROD'
