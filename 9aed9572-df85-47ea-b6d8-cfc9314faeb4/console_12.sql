@@ -75,6 +75,16 @@ CREATE TABLE staging.dash_exchange_names
     is_exchange_active       int            NULL
 );
 
+CREATE TABLE staging.dBlazeExchangeCodes
+(
+    ID             bigint       NOT NULL,
+    mic_code       varchar(50)  NOT NULL,
+    security_type  varchar(50)  NOT NULL,
+    venue_exchange varchar(50)  NOT NULL,
+    business_name  varchar(128) NOT NULL,
+    ex_destination varchar(50)  NOT NULL,
+    last_mkt       varchar(50)  NULL
+);
 
 create function staging.get_status(in_exec_type bpchar,
                                    in_child_exec_ref_id text,
@@ -128,7 +138,10 @@ select rep.payload ->> 'TransactTime'                                         AS
             ELSE NULL::text
         END AS liquidityindicator,
     null::text as secondary_order_id,
-    
+            CASE
+            WHEN rep.exec_type = ANY (ARRAY['1'::bpchar, '2'::bpchar, 'r'::bpchar]) THEN x.rep_payload ->> 'LastMkt'::text
+            ELSE NULL::text
+        END AS exdestination,
 
        *
 from blaze7.order_report rep
@@ -139,6 +152,8 @@ from blaze7.order_report rep
          LEFT JOIN blaze7.client_order_leg leg
                    ON leg.order_id = co.order_id AND leg.chain_id = co.chain_id and leg.leg_ref_id = rep.leg_ref_id
          left join staging.TUsers u on u.ID = co.user_id
+LEft join staging.dBlazeExchangeCodes lm
+on rep.ExDestination = ISNULL(lm.last_mkt,lm.ex_destination) and CASE WHEN r.SecurityType = 1 THEN 'O' WHEN r.SecurityType= '2' THEN 'E' ELSE r.SecurityType END = lm.Security_Type
 left join staging.dash_exchange_names den on den.mic_code = 
 where rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
