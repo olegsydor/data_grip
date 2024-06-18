@@ -4,6 +4,42 @@ inner join  [LiquidPoint_EDW].[dbo].[TOrder_EDW_daily] tor with (nolock)   on to
 inner join [LiquidPoint_EDW].[dbo].[TOrderMisc1_EDW_daily] torm with (nolock) on tor.[OrderID]=torm.[OrderID] and tor.[SystemID]=torm.[SystemID]
 left join [LiquidPoint_EDW].[dbo].[TLegs_EDW_daily] tl with (nolock) on tl.[OrderID]=tr.[OrderID] and tl.[LegNumber]=tr.[LegNumber]
   */
+CREATE TABLE staging.TUsers
+(
+    ID                     int           NOT NULL,
+    UserId                 int           NULL,
+    CompanyID              int           NULL,
+    Login                  varchar(128)  NULL,
+    Password               varchar(300)  NULL,
+    PasswordHint           varchar(128)  NULL,
+    Status                 int           NULL,
+    ActiveDate             timestamp     NULL,
+    PersonId               int           NULL,
+    CreateDate             timestamp     NULL,
+    UpdateDate             timestamp     NULL,
+    LoginNum               int           NULL,
+    ExpirationDate         timestamp     NULL,
+    ProductID              int           NULL,
+    LoginCount             int           NULL,
+    LoginTimestamp         timestamp     NULL,
+    PwdTimestamp           timestamp     NULL,
+    DisableLogin           int           NULL,
+    AutoExpirePwd          int           NULL,
+    PwdReset               bit           NULL,
+    InactivityCount        int           NULL,
+    UserFixRemoteCompID    varchar(128)  NULL,
+    IsManualCancelReplace  bit           NULL,
+    SymbolType             int           NULL,
+    BBSupressNew           bit           NULL,
+    SessionID              text          NULL,
+    AORSUsername           varchar(128)  NULL,
+    PasswordChangeRequired bit           NULL,
+    Description            varchar(256)  NULL,
+    SystemID               int           NULL,
+    EDWActive              bit DEFAULT 0 NULL,
+    EDWUserID              int           NULL
+);
+
 
 create function staging.get_status(in_exec_type bpchar,
                                    in_child_exec_ref_id text,
