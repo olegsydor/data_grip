@@ -108,14 +108,13 @@ select case
            end
 $$;
 
-
-select rep.payload ->> 'TransactTime'                                         AS transactiondatetime,
-       to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4 AS transactiondatetime,
+select rep.payload ->> 'TransactTime'                                                    AS transactiondatetime,
+       to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4            AS transactiondatetime,
        'is_busted!!!',
-       'LPEDW'                                                                as subsystem_id,
+       'LPEDW'                                                                           as subsystem_id,
        case
            when coalesce(u.AORSUsername, u.Login) = 'BBNTRST' then 'NTRSCBOE'
-           else coalesce(u.AORSUsername, Login) end                           as account_name,
+           else coalesce(u.AORSUsername, Login) end                                      as account_name,
        co.cl_ord_id,
        'instrument_id',
        CASE
@@ -123,37 +122,100 @@ select rep.payload ->> 'TransactTime'                                         AS
            WHEN co.crossing_side IS NULL THEN co.payload ->> 'Side'
            WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,Side}'
            WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,Side}'
-           END                                                                AS side,
-            CASE
-            WHEN co.instrument_type = 'M' THEN leg.payload ->> 'PositionEffect'
-            WHEN co.crossing_side IS NULL THEN co.payload ->> 'PositionEffect'
-            WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,PositionEffect}'
-            WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,PositionEffect}'
-            ELSE NULL::text
-        END AS openclose,
-    -1 as exec_id, -- identity
-    '???' as exchange_id,
-            CASE
-            WHEN rep.exec_type in ('1', '2') THEN rep.payload ->> 'TradeLiquidityIndicator'::text
-            ELSE NULL::text
-        END AS liquidityindicator,
-    null::text as secondary_order_id,
-            CASE
-            WHEN rep.exec_type = ANY (ARRAY['1'::bpchar, '2'::bpchar, 'r'::bpchar]) THEN x.rep_payload ->> 'LastMkt'::text
-            ELSE NULL::text
-        END AS exdestination,
+           END                                                                           AS side,
+       CASE
+           WHEN co.instrument_type = 'M' THEN leg.payload ->> 'PositionEffect'
+           WHEN co.crossing_side IS NULL THEN co.payload ->> 'PositionEffect'
+           WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,PositionEffect}'
+           WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,PositionEffect}'
+           ELSE NULL::text
+           END                                                                           AS openclose,
+       'exec_id'                                                                                as exec_id, -- identity
+       '???'                                                                             as exchange_id,
+       CASE
+           WHEN rep.exec_type in ('1', '2') THEN rep.payload ->> 'TradeLiquidityIndicator'::text
+           ELSE NULL::text
+           END                                                                           AS liquidityindicator,
+       null::text                                                                        as secondary_order_id,
+       '0'                                                                               as exch_exec_id,
+       CASE
+           WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' THEN 'Manual Report'
+           ELSE rep.payload ->> 'RouterExecId' END                                       as secondary_exch_exec_id,
+
+       case
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
+                ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('XPAR', 'PLAK', 'PARL')
+               then 'LQPT'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
+                ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
+               then 'ECUT'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('FOGS', 'MID') then 'XCHI'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('C2', 'CBOE2') then 'C2OX'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) = 'SMARTR' then 'COWEN'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
+                ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
+               then 'BRKPT'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('XPSE') then 'N'
+           when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('TO') then '1'
+           else nullif(coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination), '') end as last_mkt,
+(rep.payload ->> 'TransactQty')::int8 AS lastshares,
+       case
+           when rep.exec_type in ('1', '2', 'r')
+               then round(coalesce(((rep.payload ->> 'LastPx2')::bigint)::numeric / 10000.0,
+                                   ((rep.payload ->> 'LastPx')::bigint)::numeric) / 10000.0, 8)
+           else '0'::numeric
+           end as last_px,
+
+       rp.ex_destination,
+       'sub_strategy',
+       'order_id',
+       case
+           when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
+               then 'XCBO'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
+               then 'ECUT'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('FOGS', 'MID') then 'XCHI'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('C2', 'CBOE2') then 'C2OX'
+           when coalesce(den1.mic_code, rp.ex_destination) = 'SMARTR' then 'COWEN'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
+               then 'BRKPT'
+           when coalesce(den1.mic_code, rp.ex_destination) in ('XPSE') then 'ARCO'
+           when coalesce(den1.mic_code, rp.ex_destination) = 'TO' then 'AMXO'
+           else coalesce(den1.mic_code, rp.ex_destination) end                           as mic_code,
+
 
        *
 from blaze7.order_report rep
          join lateral (select *
                        from blaze7.client_order co
-                       where co.order_id = rep.order_id AND co.chain_id = rep.chain_id
+                       where co.order_id = rep.order_id
+                         AND co.chain_id = rep.chain_id
                        limit 1) co on true
          LEFT JOIN blaze7.client_order_leg leg
-                   ON leg.order_id = co.order_id AND leg.chain_id = co.chain_id and leg.leg_ref_id = rep.leg_ref_id
+                   ON leg.order_id = co.order_id AND leg.chain_id = co.chain_id and
+                      leg.leg_ref_id = rep.leg_ref_id
          left join staging.TUsers u on u.ID = co.user_id
-LEft join staging.dBlazeExchangeCodes lm
-on rep.ExDestination = ISNULL(lm.last_mkt,lm.ex_destination) and CASE WHEN r.SecurityType = 1 THEN 'O' WHEN r.SecurityType= '2' THEN 'E' ELSE r.SecurityType END = lm.Security_Type
-left join staging.dash_exchange_names den on den.mic_code = 
+         left join lateral (select regexp_replace(rep.payload ->> 'LastMkt', 'DIRECT-| Printer', '', 'g') as ex_destination
+                            from blaze7.order_report rp
+                            where rp.exec_id = rep.exec_id
+                            limit 1) rp on true
+         left join lateral (select last_mkt
+                            from staging.dash_exchange_names den
+                            where den.mic_code = rp.ex_destination
+                              and rep.exec_type in ('1', '2', 'r')
+                              and den.real_exchange_id = den.exchange_id
+                              and den.mic_code != ''
+                              and den.is_active = 1
+                            limit 1) den on true
+         left join lateral (select last_mkt, mic_code
+                            from staging.dash_exchange_names den
+                            where den.exchange_id = rp.ex_destination
+                              and rep.exec_type in ('1', '2', 'r')
+                              and den.real_exchange_id = den.exchange_id
+                              and den.mic_code != ''
+                              and den.is_active = 1
+                            limit 1) den1 on true
 where rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
