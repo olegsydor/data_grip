@@ -160,18 +160,10 @@ create function staging.get_status(in_exec_type bpchar,
 as
 $$
 
-select case
-           when in_exec_type in ('e', 'd') then
-               (select case
-                           when rp.exec_type = '4' and (rp.payload ->> 'OriginatedBy') = 'E' then 'F'
-                           else rp.exec_type
-                           end as exec_type
-                from blaze7.order_report rp
-                where rp.exec_id::text = in_child_exec_ref_id)
-           when in_exec_type = '4'::bpchar and in_originated_by = 'e'
-               then 'F'::bpchar
-           else in_exec_type
-           end
+ Left Outer join Blaze7.dbo.[dBlazeOrderStatus] bos with(nolock)
+  on r.[Status] COLLATE SQL_Latin1_General_CP1_CS_AS = bos.enum and bos.[Order_or_Report_status] = 2
+                                                     LEft Outer join [Liquidpoint_EDW].[dbo].[LOrderStatus] los  WITH(NOLOCK)
+on bos.ID = los.StatusCode and los.SystemID = 8
 $$;
 
 create or replace function staging.get_order_qty(in_co_instrument_type bpchar, in_co_dashsecurity_id text,
@@ -217,18 +209,43 @@ return ret_val;
 
 end;
 $fx$;
+select CASE
+           WHEN x.exec_type = ANY (ARRAY ['e'::bpchar, 'd'::bpchar])
+               THEN (SELECT CASE
+                                WHEN
+                                    rp.exec_type = '4'::bpchar AND
+                                    (rp.payload ->> 'OriginatedBy'::text) =
+                                    'E'::text THEN 'F'::bpchar
+                                ELSE rp.exec_type
+                                END AS exec_type
+                     FROM blaze7.order_report rp
+                     WHERE rp.exec_id::text = (x.rep_payload ->> 'ChildExecRefId'::text))
+           WHEN x.exec_type = '4'::bpchar AND (x.rep_payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
+           ELSE x.exec_type
+           END AS status
+from
 
 
-
+;
 select
     rep.payload ->> 'TransactTime'                                                    AS transactiondatetime,
        to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4            AS transactiondatetime,
-case when exists (select null
-                    From blaze7.order_report r
-                             inner join blaze7.order_report r2
-                                        on r2.payload ->> 'BustExecRefId' = r.exec_id
-                                            and ((r.cl_ord_id = r2.cl_ord_id and r2.status in (149, 194, 152)))
-                                                and r.id = rep.id
+       case when exists (select null
+                    From blaze7.order_report r2
+                                        where r2.payload ->> 'BustExecRefId' = rep.exec_id
+                                            and rep.cl_ord_id = r2.cl_ord_id
+                                            and
+                                             CASE
+            WHEN rep.exec_type = ANY (ARRAY['e'::bpchar, 'd'::bpchar]) THEN ( SELECT
+                    CASE
+                        WHEN rp.exec_type = '4'::bpchar AND (rp.payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
+                        ELSE rp.exec_type
+                    END
+               FROM blaze7.order_report rp
+              WHERE rp.exec_id::text = rep.payload ->> 'ChildExecRefId'::text)
+            WHEN rep.exec_type = '4'::bpchar AND (rep.payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
+            ELSE rep.exec_type
+        END in (149, 194, 152)
                                                 ) then 'Y' else 'N' end as is_busted,
 
        'LPEDW'                                                                           as subsystem_id,
