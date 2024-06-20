@@ -152,18 +152,70 @@ CREATE TABLE staging.TCompany
     RoutingGroupID       int           NULL
 );
 
+CREATE TABLE staging.dBlazeOrderStatus
+(
+    ID                     bigint       NOT NULL
+        CONSTRAINT PK_dBlazeOrderStatus PRIMARY KEY,
+    enum                   varchar(50)  NOT NULL,
+    enumname               varchar(128) NULL,
+    name                   varchar(128) NULL,
+    groupStatus            varchar(128) NULL,
+    blazeStatusCode        varchar(128) NULL,
+    Order_or_Report_status int          NULL
+);
+
+
+CREATE TABLE staging.LOrderStatus
+(
+    ID          int         NOT NULL
+        CONSTRAINT PK_LOrderStatus PRIMARY KEY,
+    StatusCode  int         NOT NULL,
+    StatusDesc  varchar(64) NOT NULL,
+    UpdateDate  timestamp   NULL,
+    IsCompleted int         NULL,
+    SystemID    int         NOT NULL,
+    EDWID       int         NULL
+);
+
+drop function if exists staging.get_status;
 create function staging.get_status(in_exec_type bpchar,
                                    in_child_exec_ref_id text,
-                                   in_originated_by text)
-    returns bpchar
-    language sql
+                                   in_originated_by text,
+                                   in_orderreportspecialtype text)
+    returns int
+    language plpgsql
 as
 $$
 
- Left Outer join Blaze7.dbo.[dBlazeOrderStatus] bos with(nolock)
-  on r.[Status] COLLATE SQL_Latin1_General_CP1_CS_AS = bos.enum and bos.[Order_or_Report_status] = 2
-                                                     LEft Outer join [Liquidpoint_EDW].[dbo].[LOrderStatus] los  WITH(NOLOCK)
-on bos.ID = los.StatusCode and los.SystemID = 8
+declare
+    l_status_id text;
+    l_ret_value int;
+begin
+    select case
+               when in_exec_type in ('e', 'd')
+                   then (select case
+                                    when rp.exec_type = '4' and rp.payload ->> 'OriginatedBy' = 'E' then 'F'
+                                    else rp.exec_type end
+                         from blaze7.order_report rp
+                         where rp.exec_id = in_child_exec_ref_id)
+               when in_exec_type = '4' and in_originated_by = 'E' then 'F'
+               else in_exec_type
+               end
+    into l_status_id;
+
+    select case
+               when coalesce(los.edwid, bos.id, 0) = 151 and in_orderreportspecialtype = 'M' then 156
+               else coalesce(los.edwid, bos.id, 0) end
+    from staging.dblazeorderstatus bos
+             left join staging.lorderstatus los
+                       on bos.id = los.statuscode and los.systemid = 8
+    where bos.enum = l_status_id
+      and bos.order_or_report_status = 2
+    into l_ret_value;
+
+    return l_ret_value;
+
+end;
 $$;
 
 create or replace function staging.get_order_qty(in_co_instrument_type bpchar, in_co_dashsecurity_id text,
@@ -235,17 +287,7 @@ select
                                         where r2.payload ->> 'BustExecRefId' = rep.exec_id
                                             and rep.cl_ord_id = r2.cl_ord_id
                                             and
-                                             CASE
-            WHEN rep.exec_type = ANY (ARRAY['e'::bpchar, 'd'::bpchar]) THEN ( SELECT
-                    CASE
-                        WHEN rp.exec_type = '4'::bpchar AND (rp.payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
-                        ELSE rp.exec_type
-                    END
-               FROM blaze7.order_report rp
-              WHERE rp.exec_id::text = rep.payload ->> 'ChildExecRefId'::text)
-            WHEN rep.exec_type = '4'::bpchar AND (rep.payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
-            ELSE rep.exec_type
-        END in (149, 194, 152)
+                                             staging.get_status() in (149, 194, 152)
                                                 ) then 'Y' else 'N' end as is_busted,
 
        'LPEDW'                                                                           as subsystem_id,
