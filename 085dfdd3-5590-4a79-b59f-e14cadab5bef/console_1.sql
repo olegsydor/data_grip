@@ -255,7 +255,10 @@ where tr.Status in (151, 156, 239)
     /*and bust.ID is null*/
   and tr.TransactionDateTime >= @start_date
   and tr.TransactionDateTime < @end_date
-  and tor.SystemOrderTypeID <> 87
+  and tor.SystemOrderTypeID <> 87;
 
 select nullif('a', 'a');
 select isnull(null, 'a')
+
+
+select replace(replace('.....------jk', '.', '/'), '-', '/')

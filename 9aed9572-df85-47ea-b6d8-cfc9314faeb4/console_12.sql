@@ -221,10 +221,16 @@ $fx$;
 
 
 select
-    comp.*,
     rep.payload ->> 'TransactTime'                                                    AS transactiondatetime,
        to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4            AS transactiondatetime,
-       'is_busted!!!',
+case when exists (select null
+                    From blaze7.order_report r
+                             inner join blaze7.order_report r2
+                                        on r2.payload ->> 'BustExecRefId' = r.exec_id
+                                            and ((r.cl_ord_id = r2.cl_ord_id and r2.status in (149, 194, 152)))
+                                                and r.id = rep.id
+                                                ) then 'Y' else 'N' end as is_busted,
+
        'LPEDW'                                                                           as subsystem_id,
        case
            when coalesce(u.AORSUsername, u.Login) = 'BBNTRST' then 'NTRSCBOE'
@@ -442,7 +448,15 @@ rep.payload ->> 'LeavesQty',
            ELSE 50 end as strategy_decision_reason_code,
     case when co.parent_order_id is null then 'Y' else 'N' end as is_parent,
 
-
+    regexp_replace(COALESCE("substring"(
+        CASE co.instrument_type
+            WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+            ELSE co.payload ->> 'DashSecurityId'::text
+        END, 'US:EQ:(.+)'::text), "substring"(
+        CASE co.instrument_type
+            WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+            ELSE co.payload ->> 'DashSecurityId'::text
+        END, 'US:[FO|OP]{2}:(.+)_'::text)), '\.|-', '/', 'g') as symbol,
 
 
        case
