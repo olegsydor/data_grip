@@ -220,7 +220,9 @@ $fx$;
 
 
 
-select rep.payload ->> 'TransactTime'                                                    AS transactiondatetime,
+select
+    comp.*,
+    rep.payload ->> 'TransactTime'                                                    AS transactiondatetime,
        to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4            AS transactiondatetime,
        'is_busted!!!',
        'LPEDW'                                                                           as subsystem_id,
@@ -363,7 +365,7 @@ select rep.payload ->> 'TransactTime'                                           
            END as is_cross_order,
        -- street_is_cross_order is as same as is_cross_order
        COALESCE(co.payload ->> 'OwnerUserName', co.payload ->> 'InitiatorUserName') as contra_broker,
-       coalesce(comp.CompanyCode, u.Login) as client_id,
+--        coalesce(comp.CompanyCode, u.Login) as client_id,
         CASE
             WHEN co.instrument_type <> 'M'::bpchar THEN co.payload ->> 'Price'::text
             WHEN (leg.payload ->> 'LegPrice'::text) IS NOT NULL THEN leg.payload ->> 'LegPrice'::text
@@ -380,13 +382,69 @@ rep.payload ->> 'LeavesQty',
             WHEN 'M' THEN leg.payload ->> 'LegSeqNumber'
             ELSE '1'
         END AS leg_ref_id,
-CASEcx
-           WHEN tor.ORIGOrderID <> '00000000-0000-0000-0000-000000000000' or
-                tor.ContraOrderID <> '00000000-0000-0000-0000-000000000000' then 26
-           WHEN tor.ParentOrderID <> '00000000-0000-0000-0000-000000000000' or
-                (tor.ParentOrderID = '00000000-0000-0000-0000-000000000000' and tor.ChildOrders != 0) then 10
-           WHEN tor.COMMENT like '%OVR%' then 4
-           ELSE 50 end                                                                       as strategy_decision_reason_code,
+       CASE
+           -- ORIGOrderID <> '00000000-0000-0000-0000-000000000000'
+           WHEN CASE co.crossing_side
+                    WHEN 'C'::bpchar THEN (SELECT co2.cl_ord_id
+                                           FROM blaze7.client_order co2
+                                           WHERE co2.cross_order_id = co.cross_order_id
+                                             AND co2.crossing_side = 'O'::bpchar
+                                           ORDER BY co2.chain_id DESC
+                                           LIMIT 1)
+                    ELSE (SELECT co2.cl_ord_id
+                          FROM blaze7.client_order co2
+                          WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId'::text)::bigint)
+                          ORDER BY co2.chain_id DESC
+                          LIMIT 1)
+               END is not null then 26
+--                 tor.ContraOrderID <> '00000000-0000-0000-0000-000000000000' then 26
+           when CASE co.crossing_side
+                    WHEN 'O'::bpchar THEN (SELECT co2.cl_ord_id
+                                           FROM blaze7.client_order co2
+                                           WHERE co2.cross_order_id = co.cross_order_id
+                                             AND co2.crossing_side = 'C'::bpchar
+                                           ORDER BY co2.chain_id DESC
+                                           LIMIT 1)
+                    ELSE (SELECT co2.cl_ord_id
+                          FROM blaze7.client_order co2
+                          WHERE ((co2.payload ->> 'OriginatorOrderRefId'::text)::bigint) = co.order_id
+                            AND co2.record_type = '0'::bpchar
+                            AND co2.chain_id = 0
+                            AND co2.db_create_time >= co.db_create_time::date
+                            AND co2.db_create_time <= (co.db_create_time::date + '1 day'::interval)
+                          ORDER BY co2.chain_id DESC
+                          LIMIT 1)
+               END is not null then 26
+-- tor.ParentOrderID <> '00000000-0000-0000-0000-000000000000'
+           WHEN CASE
+                    WHEN co.parent_order_id IS NOT NULL THEN (SELECT co2.cl_ord_id
+                                                              FROM blaze7.client_order co2
+                                                              WHERE co2.order_id = co.parent_order_id
+                                                              ORDER BY co2.chain_id DESC
+                                                              LIMIT 1)
+                    ELSE NULL::character varying
+               END is not null then 10
+           when
+               -- (tor.ParentOrderID = '00000000-0000-0000-0000-000000000000' and tor.ChildOrders != 0)
+               (CASE
+                    WHEN co.parent_order_id IS NOT NULL THEN (SELECT co2.cl_ord_id
+                                                              FROM blaze7.client_order co2
+                                                              WHERE co2.order_id = co.parent_order_id
+                                                              ORDER BY co2.chain_id DESC
+                                                              LIMIT 1)
+                    ELSE NULL::character varying
+                    END is null
+                   and exists (SELECT rep.payload ->> 'NoChildren'::text
+                               FROM blaze7.order_report rep
+                               WHERE rep.cl_ord_id::text = co.cl_ord_id::text
+                               ORDER BY rep.exec_id DESC)) then 10
+           WHEN co.payload ->> 'OrderTextComment' like '%OVR%' then 4
+           ELSE 50 end as strategy_decision_reason_code,
+    case when co.parent_order_id is null then 'Y' else 'N' end as is_parent,
+
+
+
+
        case
            when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
                then 'XCBO'
@@ -464,12 +522,15 @@ LEFT JOIN staging.LForWhom lfw on lfw.ShortDesc = CASE
             ELSE NULL::text
         END
         and lfw.SystemID = 4
-left join staging.TCompany comp on comp.ID = CASE
+--     left join staging.TCompany tc on tc.CompanyID = u.CompanyID and tc.SystemID = u.SystemID and tc.EDWActive = 1
+    left join staging.TCompany comp on u.CompanyID = (CASE
             WHEN co.order_class = 'F' THEN co.payload ->> 'InitiatorEntityId'
             WHEN co.crossing_side IS NULL THEN co.payload ->> 'ClientEntityId'
             WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,ClientEntityId}'
             WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,ClientEntityId}'
-        END
+        END)::int4
 
-where rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
+where rep.multileg_reporting_type <> '3'
+  AND co.record_type in ('0', '2') AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
+    and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
