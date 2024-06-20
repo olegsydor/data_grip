@@ -371,6 +371,22 @@ select rep.payload ->> 'TransactTime'                                           
             WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,Price}'::text[]
             ELSE co.payload ->> 'Price'::text
         END AS order_price,
+    '???' as order_process_time,
+    '???' as remarks,
+null       as street_client_order_id,
+'LPEDWCOMPID' as fix_comp_id,
+rep.payload ->> 'LeavesQty',
+        CASE co.instrument_type
+            WHEN 'M' THEN leg.payload ->> 'LegSeqNumber'
+            ELSE '1'
+        END AS leg_ref_id,
+CASEcx
+           WHEN tor.ORIGOrderID <> '00000000-0000-0000-0000-000000000000' or
+                tor.ContraOrderID <> '00000000-0000-0000-0000-000000000000' then 26
+           WHEN tor.ParentOrderID <> '00000000-0000-0000-0000-000000000000' or
+                (tor.ParentOrderID = '00000000-0000-0000-0000-000000000000' and tor.ChildOrders != 0) then 10
+           WHEN tor.COMMENT like '%OVR%' then 4
+           ELSE 50 end                                                                       as strategy_decision_reason_code,
        case
            when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
                then 'XCBO'
