@@ -1,4 +1,7 @@
 select dateadd(hour, 1, tr.TransactionDateTime)                                              as trade_record_time,
+select dateadd(hour, 1, tr.TransactionDateTime)                                              as trade_record_time,
+select dateadd(hour, 1, tr.TransactionDateTime)                                              as trade_record_time,
+select dateadd(hour, 1, tr.TransactionDateTime)                                              as trade_record_time,
        cast(convert(char(8), tr.TransactionDateTime, 112) as int)                            as date_id,
        case when tor.SystemID = 8 then 'OMS_EDW' else 'LPEDW' end                            as subsystem_id,
        coalesce(nullif(torm.[DashAlias], ''),
