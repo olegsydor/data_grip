@@ -2016,3 +2016,27 @@ return ret_leg_num;
 end;
 $function$
 ;
+
+
+-- You have two tables: DDL
+create table staging.users
+(
+    user_id serial primary key,
+    name    text
+);
+
+create table staging.orders
+(
+    order_id     serial primary key,
+    user_id      integer references staging.users (user_id),
+    order_date   timestamp,
+    total_amount numeric
+);
+
+
+/*
+There are 50 records in users and 30 million records - in orders - over a period of 10 years.
+Describe what you are going to do to get:
+- the user_id and sum of total_amount orders for user_id = 2
+- the user_name and sum of total_amount for user_id 2 and 3 over a period of one month of 2023
+ */

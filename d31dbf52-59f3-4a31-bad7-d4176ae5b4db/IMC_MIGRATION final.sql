@@ -1393,3 +1393,172 @@ end;
 $$
 
 
+-----------------------------------
+select case
+           when ex.EXEC_TYPE = 'F' then
+               case
+                   --
+                   when coalesce(pro.sub_strategy_desc, cl.sub_strategy_desc) = 'DMA' then 'DMA'
+                   when coalesce(pro.sub_strategy_desc, cl.sub_strategy_desc) in ('CSLDTR', 'RETAIL') and
+                        coalesce(cl.REQUEST_NUMBER, STR.request_number, -1) between 0 and 99 then 'IMC'
+                   when coalesce(pro.SUB_STRATEGY_desc, cl.SUB_STRATEGY_desc) in ('CSLDTR', 'RETAIL') and
+                        coalesce(cl.REQUEST_NUMBER, STR.REQUEST_NUMBER, -1) > 99 then 'Exhaust'
+                   when (
+                       coalesce(pro.SUB_STRATEGY_desc, cl.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
+                       coalesce(cl.request_number, STR.request_number, -1) = -1)
+                       then
+                       case
+                           when coalesce(pro.ORDER_TYPE_id, cl.ORDER_TYPE_id) in ('3', '4', '5', 'B')
+                               then 'Exhaust_IMC'
+                           when coalesce(pro.time_in_force_id, cl.time_in_force_id) in ('2', '7')
+                               then 'Exhaust_IMC'
+                                                    when (staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
+--                                     staging.get_lp_list_lite_tmp(ac.ACCOUNT_ID, OS.ROOT_SYMBOL,
+--                                                              case cl.MULTILEG_REPORTING_TYPE
+--                                                                  when '1' then 'O'
+--                                                                  when '2' then 'M' end) is null)
+--                                   then 'Exhaust_IMC'
+--                               else 'Exhaust'
+                           end
+                   else 'Other'
+                   --
+                   end
+           end as BILLING_CODE,
+from c;
+
+
+with al as (select al.liquidity_provider_id, atp.lp_symbol_list_id
+            from dwh.d_acc_allowed_liquidity_provider al
+                     inner join dwh.d_ats_liquidity_provider atp
+                                on atp.liquidity_provider_id = al.liquidity_provider_id
+            where ((atp.lp_symbol_list_id is not null
+                and exists(select 1
+                           from staging.symbol2lp_symbol_list sl
+                           where sl.lp_symbol_list_id = atp.lp_symbol_list_id
+                             and sl.symbol = :in_symbol))
+                or
+                   atp.lp_symbol_list_id is null)
+              and atp.is_active
+              and al.is_active
+              and al.account_id = :in_account_id),
+     grp as (select al.liquidity_provider_id
+                  , r0.lp_symbol_list_id as r0
+                  , r1.lp_symbol_list_id as r1
+             from al
+                      left join lateral (
+                 select min(reg.lp_symbol_list_id) as lp_symbol_list_id
+                 from staging.lp_symbol_registration reg
+                 where create_time::date = :in_date
+                   and reg.liquidity_provider_id = al.liquidity_provider_id
+                 limit 1) r0 on true
+                      left join lateral (select min(reg.lp_symbol_list_id) as lp_symbol_list_id
+                                         from staging.lp_symbol_registration reg
+                                         where create_time::date = :in_date
+                                           and reg.liquidity_provider_id = al.liquidity_provider_id
+                                         limit 1) r1 on --true and
+                 exists(select 1
+                        from staging.symbol2lp_symbol_list sl
+                        where sl.lp_symbol_list_id = r1.lp_symbol_list_id
+                          and sl.symbol = :in_symbol))
+select string_agg(distinct liquidity_provider_id, ',')
+into ret_text
+from grp
+where r0 is null
+   or (r0 is not null and r1 is not null);
+
+
+if not exists (select null from al join staging.lp_symbol_registration)
+
+create temp table t_providers as
+select al.liquidity_provider_id, atp.lp_symbol_list_id, al.account_id, sl.symbol
+            from dwh.d_acc_allowed_liquidity_provider al
+                     inner join dwh.d_ats_liquidity_provider atp
+                                on atp.liquidity_provider_id = al.liquidity_provider_id
+join lateral(select sl.symbol from staging.symbol2lp_symbol_list sl
+                           where sl.lp_symbol_list_id = atp.lp_symbol_list_id limit 1) sl on true
+--                              and sl.symbol = :in_symbol
+where atp.lp_symbol_list_id is not null
+and atp.is_active
+              and al.is_active
+union
+select al.liquidity_provider_id, atp.lp_symbol_list_id, al.account_id, null
+            from dwh.d_acc_allowed_liquidity_provider al
+                     inner join dwh.d_ats_liquidity_provider atp
+                                on atp.liquidity_provider_id = al.liquidity_provider_id
+where atp.lp_symbol_list_id is null
+and atp.is_active
+              and al.is_active;
+
+select * from t_providers
+
+
+
+
+create index on t_providers(account_id)
+
+create function trash.get_lp_list_tmp(in_account_id bigint, in_symbol character varying, in_date date)
+    RETURNS bool
+    LANGUAGE plpgsql
+    STABLE
+AS
+$function$
+declare
+    l_ret_val bool;
+begin
+    select case
+               when exists (select null
+                            from t_providers al
+                                     left join lateral (select '1' as ret
+                                                        from staging.lp_symbol_registration reg
+                                                        where reg.liquidity_provider_id = al.liquidity_provider_id
+                                                          and create_time::date = in_date
+                                                        limit 1) a1 on true
+                            where a1.ret is null
+                              and al.account_id = in_account_id) then true
+               when exists (select null
+                            from t_providers al
+                                     left join lateral (select lp_symbol_list_id, '1' as ret
+                                                        from staging.lp_symbol_registration reg
+                                                        where reg.liquidity_provider_id = al.liquidity_provider_id
+                                                          and create_time::date = in_date
+                                                        limit 1) a1 on true
+                                     left join lateral (select 1 as ret
+                                                        from staging.lp_symbol_registration reg
+                                                        where create_time::date = in_date
+                                                          and reg.liquidity_provider_id = al.liquidity_provider_id
+                                                        limit 1) a2 on exists (select null
+                                                                               from staging.symbol2lp_symbol_list sl
+                                                                               where sl.lp_symbol_list_id = a1.lp_symbol_list_id
+                                                                                 and sl.symbol = in_symbol)
+                            where al.account_id = in_account_id
+                              and a1.ret is not null
+                              and a2.ret is not null)
+                   then true
+               else false
+               end
+    into l_ret_val;
+    return l_ret_val;
+end;
+$function$;
+
+select tbs.order_id,
+       account_id,
+       trash.get_lp_list_tmp(tbs.account_id, symbol, create_time::date),
+       staging.get_lp_list(tbs.account_id, symbol, create_time::date),
+
+       ''
+from trash.t_base_gtc tbs
+         inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
+--              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
+         left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
+         left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
+         left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
+         left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+where true
+--   and order_id in (16000549929, 15991082826, 16000549930, 15990981896)
+  and trash.get_lp_list_tmp(tbs.account_id, symbol, create_time::date) <>
+      case when staging.get_lp_list(tbs.account_id, symbol, create_time::date) is null then false else true
+    end
+limit 5
+--not trash.get_lp_list_tmp(tbs.account_id, symbol, create_time::date)
+-- if not empty
