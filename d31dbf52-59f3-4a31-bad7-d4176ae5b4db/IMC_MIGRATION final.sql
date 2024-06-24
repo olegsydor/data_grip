@@ -1562,3 +1562,38 @@ where true
 limit 5
 --not trash.get_lp_list_tmp(tbs.account_id, symbol, create_time::date)
 -- if not empty
+
+
+
+ with grp as (select ac.account_id,
+                        al.liquidity_provider_id,
+                        sl.lp_symbol_list_id as white_list_id,
+                        bl.lp_symbol_list_id as black_list_id
+                 from staging.cons_lp_allowed_tf al
+                          left join staging.cons_lp_symbol_list sl
+                                    on sl.liquidity_provider_id = al.liquidity_provider_id and
+                                       sl.instrument_type_id = in_instrument_type_id
+                          left join staging.cons_lp_symbol_black_list bl
+                                    on bl.liquidity_provider_id = sl.liquidity_provider_id and
+                                       bl.instrument_type_id = in_instrument_type_id
+                          inner join dwh.d_account ac on ac.trading_firm_id = al.trading_firm_id
+                 where ac.account_id = in_account_id
+                   and al.lp_priority > 1
+                   and (sl.lp_symbol_list_id is not null
+                            and exists(select 1
+                                       from staging.symbol2lp_symbol_list ssl
+                                       where sl.lp_symbol_list_id = ssl.lp_symbol_list_id
+                                         and ssl.symbol = in_symbol)
+                     or
+                        sl.lp_symbol_list_id is null)
+                   and (bl.lp_symbol_list_id is not null
+                            and not exists(select 1
+                                           from staging.symbol2lp_symbol_list ssl
+                                           where bl.lp_symbol_list_id = ssl.lp_symbol_list_id
+                                             and ssl.symbol = in_symbol)
+                     or
+                        bl.lp_symbol_list_id is null))
+    select string_agg(liquidity_provider_id, ', ')
+    into ret_text
+    from grp;
+    return ret_text;
