@@ -599,7 +599,7 @@ begin
                when tbs.EXEC_TYPE = 'F' and
                     (coalesce(tbs.pro_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
                      coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
-                   and trash.get_lp_list_tmp(tbs.account_id, symbol, create_time::date) -- equal staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is NOT null
+                   and trash.get_lp_list_tmp(tbs.account_id, i.symbol, tbs.create_time::date) -- equal staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is NOT null
                    then 'Exhaust'
                when tbs.EXEC_TYPE = 'F' and
                     (coalesce(tbs.pro_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
