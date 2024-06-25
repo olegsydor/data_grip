@@ -752,3 +752,33 @@ $procedure$
 ;
 
 
+
+select ls.bid_price, ls.ask_price, ls.bid_quantity, ls.ask_quantity, ls1.*
+from dwh.client_order co
+         left join dwh.l1_snapshot ls
+                   on ls.transaction_id = co.transaction_id and ls.start_date_id = co.create_date_id and
+                      ls.exchange_id = 'MXOP'
+         left join lateral (select *
+                            from dwh.get_routing_market_data(
+                                    in_transaction_id := co.transaction_id,
+                                    in_exchange_id := 'MXOP',
+                                    in_multileg_reporting_type := co.multileg_reporting_type,
+                                    in_instrument_id := co.instrument_id,
+                                    in_date_id := co.create_date_id)
+                            limit 1) ls1 on true
+where order_id = 16020056517
+
+select ls.ask_price, ls.bid_price, ls.ask_quantity as ask_qty, ls.bid_quantity as bid_qty, *
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = 7700152882257
+                                  and ls.exchange_id = 'MXOP'
+                                  and ls.start_date_id = to_char('2024-06-21 15:16:43.704'::timestamp, 'YYYYMMDD')::int4;
+
+
+select ask_price, bid_price, ask_qty as ask_quantity, bid_qty as bid_quantity
+                                from dwh.get_routing_market_data(
+                                in_transaction_id := 7700152882257,
+                                in_exchange_id := 'MXOP',
+                                in_multileg_reporting_type := '2',
+                                in_instrument_id := 123985905,
+                                in_date_id := 20240621)
