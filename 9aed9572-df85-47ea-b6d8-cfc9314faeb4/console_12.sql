@@ -177,6 +177,16 @@ CREATE TABLE staging.LOrderStatus
     EDWID       int         NULL
 );
 
+CREATE TABLE staging.dLiquidityType
+(
+    ID       bigint       NOT NULL,
+    enum     varchar(50)  NOT NULL,
+    enumname varchar(128) NULL,
+    name     varchar(128) NULL
+);
+
+
+
 drop function if exists staging.get_status;
 create function staging.get_status(in_exec_type bpchar,
                                    in_child_exec_ref_id text,
@@ -546,6 +556,75 @@ with ct as (select rep.payload ->> 'TransactTime'                               
                                                        ELSE co.payload ->> 'DashSecurityId'::text
                                                        END, 'US:[FO|OP]{2}:(.+)_'::text)), '\.|-', '/', 'g') as symbol,
 
+        round((CASE
+            WHEN "substring"(
+            CASE co.instrument_type
+                WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'
+                ELSE co.payload ->> 'DashSecurityId'
+            END, 'US:([FO|OP|EQ]{2})') = ANY (ARRAY['FO', 'OP']) THEN "substring"(
+            CASE co.instrument_type
+                WHEN 'M' THEN leg.payload ->> 'DashSecurityId'
+                ELSE co.payload ->> 'DashSecurityId'
+            END, '[0-9]{6}.(.+)$'::text)::numeric
+        END)::numeric, 6) AS strike_price,
+
+	case (CASE
+            WHEN "substring"(
+            CASE co.instrument_type
+                WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                ELSE co.payload ->> 'DashSecurityId'::text
+            END, 'US:([FO|OP|EQ]{2})'::text) = 'EQ'::text THEN 'S'::text
+            WHEN "substring"(
+            CASE co.instrument_type
+                WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                ELSE co.payload ->> 'DashSecurityId'::text
+            END, 'US:([FO|OP|EQ]{2})'::text) = ANY (ARRAY['FO'::text, 'OP'::text]) THEN "substring"(
+            CASE co.instrument_type
+                WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                ELSE co.payload ->> 'DashSecurityId'::text
+            END, '[0-9]{6}(.)'::text)
+            ELSE NULL::text
+        END)
+		when 'P' then '0'
+		when 'C' then '1'
+	end as put_or_call,
+
+                   CASE
+                       WHEN "substring"(
+                                    CASE co.instrument_type
+                                        WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                                        ELSE co.payload ->> 'DashSecurityId'::text
+                                        END, 'US:([FO|OP|EQ]{2})'::text) = ANY (ARRAY ['FO'::text, 'OP'::text])
+                           THEN to_date("substring"(
+                                                CASE co.instrument_type
+                                                    WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
+                                                    ELSE co.payload ->> 'DashSecurityId'::text
+                                                    END, '([0-9]{6})'::text), 'YYMMDD'::text)
+                       ELSE NULL::date
+                       END as expiration_date,                                                                           -- will be transformed into maturity_year\month\day
+                   CASE
+                       WHEN rep.leg_ref_id IS NOT NULL THEN (SELECT leg.payload ->> 'LegInstrumentType'::text
+                                                             FROM blaze7.client_order_leg leg
+                                                             WHERE leg.order_id = rep.order_id
+                                                               AND leg.chain_id = rep.chain_id
+                                                               AND leg.leg_ref_id::text = rep.leg_ref_id::text)
+                       ELSE rep.payload ->> 'InstrumentType'::text
+                       END AS securitytype,
+
+( SELECT rep.payload ->> 'NoChildren'::text
+           FROM blaze7.order_report rep
+          WHERE rep.cl_ord_id::text = co.cl_ord_id::text
+          ORDER BY rep.exec_id DESC
+         LIMIT 1) as child_orders,
+-- ISNULL(CASE WHEN r.OrderReportSpecialType = 'M' then lt.ID ELSE r.[Handling] END,0) [Handling]
+ CASE
+            WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' then lt.ID
+            ELSE null
+        END AS Handling,
+                0 as secondary_order_id2,
+
+
+
 
                    case
                        when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -636,6 +715,7 @@ with ct as (select rep.payload ->> 'TransactTime'                               
                                                                            WHEN co.crossing_side = 'C'
                                                                                THEN co.payload #>> '{ContraOrder,ClientEntityId}'
                 END)::int4
+            LEft join staging.dLiquidityType lt on rep.payload ->> 'LiquidityType' = lt.enum
             where rep.multileg_reporting_type <> '3'
               AND co.record_type in ('0', '2')
               AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
