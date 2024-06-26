@@ -289,7 +289,8 @@ from
 
 
 ;
-with ct as (select rep.payload ->> 'TransactTime'                                                            AS transactiondatetime,
+with ct as (
+select rep.payload ->> 'TransactTime'                                                            AS transactiondatetime,
                    to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                    AS transactiondatetime,
                    case
                        when exists (select null
@@ -367,27 +368,13 @@ with ct as (select rep.payload ->> 'TransactTime'                               
                                when
                                    -- [ExpirationDate] <> '1900-01-01'
                                    case
-                                       when "substring"(case co.instrument_type
-                                                            when 'M' then leg.payload ->> 'DashSecurityId'
-                                                            else co.payload ->> 'DashSecurityId' end,
-                                                        'US:([FO|OP|EQ]{2})') in ('FO', 'OP')
-                                           then to_date("substring"(case co.instrument_type
-                                                                        when 'M' then leg.payload ->> 'DashSecurityId'
-                                                                        else co.payload ->> 'DashSecurityId' end,
-                                                                    '([0-9]{6})'), 'YYMMDD')
-                                       end <> '1900-01-01'::date
+                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                           then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
                                        and
                                        -- tl.[Strike] <> 0.00
                                    case
-                                       when "substring"(case co.instrument_type
-                                                            when 'M'::bpchar then leg.payload ->> 'DashSecurityId'
-                                                            else co.payload ->> 'DashSecurityId' end,
-                                                        'US:([FO|OP|EQ]{2})') in ('FO', 'OP')
-                                           then "substring"(case co.instrument_type
-                                                                when 'M' then leg.payload ->> 'DashSecurityId'
-                                                                else co.payload ->> 'DashSecurityId' end,
-                                                            '[0-9]{6}.(.+)$')::numeric
-                                       end <> 0.00
+                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                           then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00
                                    then
                                    -- tl.OptionQuantity
                                    case
@@ -546,15 +533,7 @@ with ct as (select rep.payload ->> 'TransactTime'                               
                        ELSE 50 end                                                                           as strategy_decision_reason_code,
                    case when co.parent_order_id is null then 'Y' else 'N' end                                as is_parent,
 
-                   regexp_replace(COALESCE("substring"(
-                                                   CASE co.instrument_type
-                                                       WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
-                                                       ELSE co.payload ->> 'DashSecurityId'::text
-                                                       END, 'US:EQ:(.+)'::text), "substring"(
-                                                   CASE co.instrument_type
-                                                       WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
-                                                       ELSE co.payload ->> 'DashSecurityId'::text
-                                                       END, 'US:[FO|OP]{2}:(.+)_'::text)), '\.|-', '/', 'g') as symbol,
+                   regexp_replace(COALESCE(leg.ds_id_2, co.ds_id_2, leg.ds_id_3, co.ds_id_3), '\.|-', '/', 'g') as symbol,
 
         round((CASE
             WHEN "substring"(
@@ -623,8 +602,21 @@ with ct as (select rep.payload ->> 'TransactTime'                               
         END AS Handling,
                 0 as secondary_order_id2,
 
-
-
+/*	   case
+			when nullif(tl.[ExpirationDate],'1900-01-01 00:00:00.000') is not null and nullif(tl.[Strike],0.00) is not null
+				then  replace(isnull(replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')+ ' '
+						+ RIGHT('0' +cast(datepart(day, tl.[ExpirationDate] ) as varchar ), 2)
+						+ left(datename(month,tl.[ExpirationDate]),3)
+						+ right(datename(year,tl.[ExpirationDate]),2)+' '
+						+ case
+								when charindex('0.',cast(cast(tl.[Strike] as float) as varchar(8)))=1
+									then right(cast(cast(tl.[Strike] as float) as varchar(8)), len(cast(cast(tl.[Strike] as float) as varchar(8)))-1)
+									else cast(cast(tl.[Strike] as float) as varchar(8))
+							end
+ 						+ cast(tl.TypeCode as varchar(8)), ContractDesc) ,'/','')
+				else replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')
+		end as display_instrument_id,
+*/
 
                    case
                        when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -642,14 +634,23 @@ with ct as (select rep.payload ->> 'TransactTime'                               
                        else coalesce(den1.mic_code, rp.ex_destination) end                                   as mic_code
 --             , *
             from blaze7.order_report rep
-                     join lateral (select *
+                     join lateral (select *, case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end as ds_id_1,
+                                          case when co.instrument_type <> 'M' then to_date("substring"(co.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
+                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
+                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
+                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3
                                    from blaze7.client_order co
                                    where co.order_id = rep.order_id
                                      AND co.chain_id = rep.chain_id
                                    limit 1) co on true
-                     LEFT JOIN blaze7.client_order_leg leg
-                               ON leg.order_id = co.order_id AND leg.chain_id = co.chain_id and
-                                  leg.leg_ref_id = rep.leg_ref_id
+                     LEFT JOIN lateral (select *, case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end as ds_id_1,
+                                               case when co.instrument_type = 'M' then to_date("substring"(leg.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
+                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
+                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
+                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3
+                                        from blaze7.client_order_leg leg
+                               where leg.order_id = co.order_id AND leg.chain_id = co.chain_id and
+                                  leg.leg_ref_id = rep.leg_ref_id) leg on true
                      left join staging.TUsers u on u.ID = co.user_id
                      left join lateral (select regexp_replace(rep.payload ->> 'LastMkt', 'DIRECT-| Printer', '', 'g') as ex_destination
                                         from blaze7.order_report rp
