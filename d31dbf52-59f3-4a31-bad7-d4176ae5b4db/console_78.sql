@@ -31,6 +31,14 @@ from consolidator.routing_instruction_message ri
 where ri.date_id between 20230902 and 20230929
   and ri.route_type in (10, 11, 3);
 
+create table trash.so_cons_pre
+as
+select *
+from consolidator.consolidator_message cm
+where cm.message_type = 8
+  and cm.date_id between 20230902 and 20230929;
+
+create index on trash.so_cons_pre (cons_message_id);
 
 create table trash.so_consolidator_message as
 select ri.date_id
@@ -42,13 +50,13 @@ select ri.date_id
      , cm.rfr_id
      , cm.request_number
 from trash.so_routing_instruction ri
-         join consolidator.consolidator_message cm
+         join trash.so_cons_pre cm
               on cm.cons_message_id = ri.cons_message_id and cm.message_type = 8
                   and cm.date_id between 20230902 and 20230929
 where ri.date_id between 20230902 and 20230929;
 
 
-create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 as
+create table trash.so_main_1 as
 -- explain
 select cm_base.date_id
      , cm_base.route_type
@@ -104,8 +112,7 @@ from trash.so_consolidator_message cm_base
     limit 1
     ) cm_lat on true and cm_lat.dedup = 1
 where cm_base.date_id between 20230902 and 20230929 -- 20230101 and 20230930 -- = 20231108 --
-  and (
-    (cm_base.route_type = 10) --(Post then Cross) -- var SA_RR_PC_POST_ORDER = 94 // Post order as part of Post then cross
+  and ((cm_base.route_type = 10) --(Post then Cross) -- var SA_RR_PC_POST_ORDER = 94 // Post order as part of Post then cross
         or
     (cm_base.route_type = 11) --(Flash)           -- var SA_RR_FLASH_ORDER = 96    // Flash order
         or
