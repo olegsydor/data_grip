@@ -176,24 +176,32 @@ select co.*
      , main.* --t.reason_code, count(1)
 from trash.so_main main
          join lateral
-    (select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.order_status
-     from dwh.client_order co
---               left join dwh.execution ec on ec.exec_date_id = co.create_date_id and ec.order_id = co.order_id and (ec.exec_type = 'F')
-     where co.create_date_id = main.date_id
-       and co.create_date_id between 20230902 and 20230929
-       and co.parent_order_id is not null -- street level
-       and ec.exec_date_id between 20230902 and 20230929
-       and co.dash_rfr_id = main.rfr_id
-       and co.order_qty = main.routed_volume
-       and co.side = main.side
-       and co.request_number = main.request_number
-       --and co.exchange_id ilike t.exch_beg||'%'
-       and co.trans_type <> 'F'           -- co.trans_type = 'F' --
-       and co.multileg_reporting_type in ('1', '2')
-       and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
-       and ec.order_id is not null
---      limit 1
-             ) co on true
+    (
+    select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr
+    from dwh.client_order co
+             left join lateral (select ec.order_id, count(*) as cnt, array_agg(exec_id order by exec_id) as exec_id_arr
+                                from dwh.execution ec
+                                where ec.exec_date_id = co.create_date_id
+                                  and ec.exec_date_id between 20230902 and 20230929
+                                  and ec.order_id = co.order_id
+                                  and ec.exec_type = 'F'
+                                group by ec.order_id
+                                limit 1) ec on true
+    where co.create_date_id = main.date_id
+      and co.create_date_id between 20230902 and 20230929
+      and co.parent_order_id is not null -- street level
+
+      and co.dash_rfr_id = main.rfr_id
+      and co.order_qty = main.routed_volume
+      and co.side = main.side
+      and co.request_number = main.request_number
+      --and co.exchange_id ilike t.exch_beg||'%'
+      and co.trans_type <> 'F'           -- co.trans_type = 'F' --
+      and co.multileg_reporting_type in ('1', '2')
+      and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
+      and ec.order_id is not null
+      limit 1
+    ) co on true
 where true;
 
 select * from trash.mes_orders;
