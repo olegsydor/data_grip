@@ -214,6 +214,14 @@ group by route_type;
 
 
 select * from trash.mes_orders_full
-where cnt is null
+where mes_orders_full.request_number > 0
+
+select order_id, first_value(order_id) over (partition by rfr_id, side, date_id order by request_number) as first_order_id
+from trash.mes_orders_full
+
+
+
+
+    cnt > 1
 
 select
