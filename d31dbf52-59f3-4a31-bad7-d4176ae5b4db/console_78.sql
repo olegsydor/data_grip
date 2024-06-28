@@ -208,20 +208,71 @@ select * from trash.mes_orders;
 
 -- 2
 select route_type, count(*)
-from trash.mes_orders_full
+from trash.mes_orders
  where cnt is not null
 group by route_type;
 
+create index on trash.mes_orders (rfr_id, side, date_id, route_type);
 
-select * from trash.mes_orders_full
-where mes_orders_full.request_number > 0
+create temp table t_grp as
+with grp as (select rfr_id,
+                    coalesce(order_id, 0)                                                         as order_id,
+                    first_value(order_id)
+                    over (partition by rfr_id, side, date_id, route_type order by request_number) as first_order_id_in_this_route,
+                    first_value(order_id)
+                    over (partition by rfr_id, side, date_id order by request_number)             as first_order_id
+             from trash.mes_orders)
+select rfr_id,
+       order_id,
+       first_order_id_in_this_route,
+       first_order_id,
+       -- aggregations
+       case
+           when order_id is not distinct from first_order_id_in_this_route and order_id <> 0 then 'case a'
+           when order_id is not distinct from first_order_id_in_this_route and order_id = 0 then 'case b'
+           when order_id is not distinct from first_order_id and order_id <> 0 then 'case c'
+           when order_id is not distinct from first_order_id and order_id = 0 then 'case d'
+           else 'case d'
+           end as group_of
+from grp
+where true;
 
-select order_id, first_value(order_id) over (partition by rfr_id, side, date_id order by request_number) as first_order_id
-from trash.mes_orders_full
+drop table t_grp_full;
+create temp table t_grp_full as
+with grp as (select rfr_id,
+                    coalesce(order_id, 0)                                                         as order_id,
+                    request_number,
+                    first_value(order_id)
+                    over (partition by rfr_id, side, date_id, route_type order by request_number, order_id) as first_order_id_in_this_route,
+                    first_value(order_id)
+                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as first_order_id
+             from trash.mes_orders_full)
+select rfr_id,
+       order_id,
+       first_order_id_in_this_route,
+       first_order_id,
+       request_number,
+       -- aggregations
+       case
+           when order_id is not distinct from first_order_id_in_this_route and order_id <> 0 then 'case a'
+           when order_id is not distinct from first_order_id_in_this_route and order_id = 0 then 'case b'
+           when order_id is distinct from first_order_id and order_id <> 0 then 'case c'
+           when order_id is distinct from first_order_id and order_id = 0 then 'case d'
+--            else 'case d'
+           end as group_of
+from grp
+where true;
 
 
+select * from t_grp_full
+where group_of <> 'case a'
+
+select group_of, count(*) from t_grp_full
+group by group_of;
+
+select 44+1437180+24493 --1461717
+select 324211+165054+972452
 
 
-    cnt > 1
-
-select
+select rfr_id, request_number, * from trash.mes_orders_full
+    where mes_orders_full.rfr_id = '100284620356'
