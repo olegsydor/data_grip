@@ -160,9 +160,6 @@ from trash.so_main main
 where true
   and co.order_id is not null;
 
-select * from d_exec_type
-drop table trash.mes_orders_full;
-
 
 drop table if exists trash.mes_orders;
 create table trash.mes_orders as
@@ -208,49 +205,6 @@ group by route_type;
 
 create index on trash.mes_orders (rfr_id, side, date_id, route_type);
 
-select *
-from trash.mes_orders;
-
-drop table if exists t_grp;
-create temp table t_grp as
-with grp as (select rfr_id,
-                    order_id,
-                    cnt,
-                    first_value(order_id)
-                    over (partition by rfr_id, side, date_id, route_type order by request_number, order_id) as first_order_id_in_this_route,
-                    last_value(order_id)
-                    over (partition by rfr_id, side, date_id, route_type order by request_number, order_id) as last_order_id_in_this_route,
-                    first_value(order_id)
-                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as first_order_id,
-                    last_value(order_id)
-                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as last_order_id
-             from trash.mes_orders)
-select rfr_id,
-       order_id,
-       first_order_id_in_this_route,
-       last_order_id_in_this_route,
-       first_order_id,
-       last_order_id,
-       cnt,
-       -- aggregations
-       case
-           -- when it is the first order and cnt of trades is > 0
-           when order_id = first_order_id_in_this_route and cnt > 0 then 'case a'
-           -- when it is not the first case but it is the first order and cnt of trades is > 0
-           when order_id = first_order_id_in_this_route
---                and first_order_id_in_this_route <> last_order_id_in_this_route
-               and (cnt is null or cnt = 0) then 'case b'
-
-           when order_id = first_order_id and cnt > 0 then 'case c'
-           --
-           --
-           when order_id <> first_order_id
---                and first_order_id <> last_order_id
-               and (cnt is null or cnt = 0) then 'case d'
-           end as group_of
-from grp
-where true;
-
 
 drop table if exists t_grp;
 create temp table t_grp as
@@ -285,27 +239,6 @@ select grp.*,
 from grp
 where true;
 
-
-select * from t_grp
-where group_of is null;
-
 select group_of, count(*) from t_grp
 group by group_of;
 
-select * from t_grp
-where group_of is null
-
-select group_of, count(*) from t_grp
-group by group_of;
-
-select 324286+187757+972452 = 59+1435825+24377+24234
-
-
-
-select rfr_id, request_number, * from trash.mes_orders_full
-    where mes_orders_full.rfr_id = '100284620356'
-
-
-
-select min(create_time) from client_order
-where dash_rfr_id is not null
