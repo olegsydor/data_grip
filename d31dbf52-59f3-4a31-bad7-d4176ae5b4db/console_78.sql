@@ -58,10 +58,6 @@ from trash.so_routing_instruction ri
                   and cm.date_id between 20230902 and 20230929
 where ri.date_id between 20230902 and 20230929;
 
-select * from trash.so_main -- old version
-except
-select * from trash.so_main_1;
-
 
 create table trash.roinformation as
 select * from consolidator.routed_order_information
@@ -123,7 +119,7 @@ from trash.so_consolidator_message cm_base
           and cm_base.exchange = roi.exchange           -- important, as it can be in several exchanges for different RouteTypes for one side, so having just a side is not enough.
           and roi.accepted_or_rejected = 1
         --and roi.executed_volume > 0 -- !!! WTF!!!???
-        limit 1
+        limit 10
     ) cm_lat on true and cm_lat.dedup = 1
 where cm_base.date_id between 20230902 and 20230929 -- 20230101 and 20230930 -- = 20231108 --
   and ((cm_base.route_type = 10) --(Post then Cross) -- var SA_RR_PC_POST_ORDER = 94 // Post order as part of Post then cross
@@ -182,8 +178,7 @@ from trash.so_main main
          join lateral
     (select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.order_status
      from dwh.client_order co
-              join dwh.execution ec on ec.exec_date_id = co.create_date_id and ec.order_id = co.order_id and
-                                       (ec.exec_type = '4' or ec.order_status = '4')
+--               left join dwh.execution ec on ec.exec_date_id = co.create_date_id and ec.order_id = co.order_id and (ec.exec_type = 'F')
      where co.create_date_id = main.date_id
        and co.create_date_id between 20230902 and 20230929
        and co.parent_order_id is not null -- street level
@@ -197,7 +192,8 @@ from trash.so_main main
        and co.multileg_reporting_type in ('1', '2')
        and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
        and ec.order_id is not null
-     limit 1) co on true
+--      limit 1
+             ) co on true
 where true;
 
 select * from trash.mes_orders;
