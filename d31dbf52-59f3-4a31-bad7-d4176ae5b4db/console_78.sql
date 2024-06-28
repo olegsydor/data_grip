@@ -171,13 +171,13 @@ where true
 
 
 
-create table trash.mes_orders as
+create table trash.mes_orders_full as
 select co.*
      , main.* --t.reason_code, count(1)
 from trash.so_main main
-         join lateral
+         left join lateral
     (
-    select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr
+    select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr, cnt
     from dwh.client_order co
              left join lateral (select ec.order_id, count(*) as cnt, array_agg(exec_id order by exec_id) as exec_id_arr
                                 from dwh.execution ec
@@ -207,6 +207,13 @@ where true;
 select * from trash.mes_orders;
 
 -- 2
-select route_type, count(distinct order_id)
-from trash.mes_orders
+select route_type, count(*)
+from trash.mes_orders_full
+ where cnt is not null
 group by route_type;
+
+
+select * from trash.mes_orders_full
+where cnt is null
+
+select
