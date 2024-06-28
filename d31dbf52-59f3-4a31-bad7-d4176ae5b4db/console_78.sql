@@ -169,13 +169,16 @@ from trash.so_main main
 where true
   and co.order_id is not null;
 
+select * from d_exec_type
+drop table trash.mes_orders_full;
 
 
-create table trash.mes_orders_full as
+drop table if exists trash.mes_orders;
+create table trash.mes_orders as
 select co.*
      , main.* --t.reason_code, count(1)
 from trash.so_main main
-         left join lateral
+         join lateral
     (
     select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr, cnt
     from dwh.client_order co
@@ -199,20 +202,21 @@ from trash.so_main main
       and co.trans_type <> 'F'           -- co.trans_type = 'F' --
       and co.multileg_reporting_type in ('1', '2')
       and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
-      and ec.order_id is not null
       limit 1
     ) co on true
 where true;
 
-select * from trash.mes_orders;
+select * from trash.mes_orders
+where order_id is not null
+and exec_id_arr is null;
 
 -- 2
 select route_type, count(*)
-from trash.mes_orders
- where cnt is not null
+from trash.mes_orders_full
+--  where cnt is not null
 group by route_type;
 
-create index on trash.mes_orders (rfr_id, side, date_id, route_type);
+create index on trash.mes_orders_full (rfr_id, side, date_id, route_type);
 
 create temp table t_grp as
 with grp as (select rfr_id,
@@ -221,7 +225,7 @@ with grp as (select rfr_id,
                     over (partition by rfr_id, side, date_id, route_type order by request_number) as first_order_id_in_this_route,
                     first_value(order_id)
                     over (partition by rfr_id, side, date_id order by request_number)             as first_order_id
-             from trash.mes_orders)
+             from trash.mes_orders_full)
 select rfr_id,
        order_id,
        first_order_id_in_this_route,
@@ -265,7 +269,7 @@ where true;
 
 
 select * from t_grp_full
-where group_of <> 'case a'
+where group_of <> 'case a';
 
 select group_of, count(*) from t_grp_full
 group by group_of;
@@ -276,3 +280,8 @@ select 324211+165054+972452
 
 select rfr_id, request_number, * from trash.mes_orders_full
     where mes_orders_full.rfr_id = '100284620356'
+
+
+
+select min(create_time) from client_order
+where dash_rfr_id is not null
