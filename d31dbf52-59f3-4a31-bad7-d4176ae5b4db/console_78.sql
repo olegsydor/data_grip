@@ -1,14 +1,5 @@
 -- 1
     select count(*)
---         cm.date_id
---       , cm.rfr_id  -- key first part
---       , cm.request_number -- key second part - need to aggregate for message_type: AuctionTrade (11)
---       , case cm.message_type
---           when 6 then '(6) RequestForRoutingInstructionsOpt'
---           when 7 then '(7) RequestForRoutingInstructionsComplex'
---           end as message_type_text
---       , cm.message
---       , cm.cons_message_id
     from consolidator.consolidator_message cm
     where cm.date_id between 20230902 and 20230929
     and cm.message ilike '%IMC%'
@@ -206,76 +197,109 @@ from trash.so_main main
     ) co on true
 where true;
 
-select * from trash.mes_orders
-where order_id is not null
-and exec_id_arr is null;
+select * from trash.mes_orders;
+-- and exec_id_arr is null;
 
 -- 2
 select route_type, count(*)
-from trash.mes_orders_full
+from trash.mes_orders
 --  where cnt is not null
 group by route_type;
 
-create index on trash.mes_orders_full (rfr_id, side, date_id, route_type);
+create index on trash.mes_orders (rfr_id, side, date_id, route_type);
 
+select *
+from trash.mes_orders;
+
+drop table if exists t_grp;
 create temp table t_grp as
 with grp as (select rfr_id,
-                    coalesce(order_id, 0)                                                         as order_id,
-                    first_value(order_id)
-                    over (partition by rfr_id, side, date_id, route_type order by request_number) as first_order_id_in_this_route,
-                    first_value(order_id)
-                    over (partition by rfr_id, side, date_id order by request_number)             as first_order_id
-             from trash.mes_orders_full)
-select rfr_id,
-       order_id,
-       first_order_id_in_this_route,
-       first_order_id,
-       -- aggregations
-       case
-           when order_id is not distinct from first_order_id_in_this_route and order_id <> 0 then 'case a'
-           when order_id is not distinct from first_order_id_in_this_route and order_id = 0 then 'case b'
-           when order_id is not distinct from first_order_id and order_id <> 0 then 'case c'
-           when order_id is not distinct from first_order_id and order_id = 0 then 'case d'
-           else 'case d'
-           end as group_of
-from grp
-where true;
-
-drop table t_grp_full;
-create temp table t_grp_full as
-with grp as (select rfr_id,
-                    coalesce(order_id, 0)                                                         as order_id,
-                    request_number,
+                    order_id,
+                    cnt,
                     first_value(order_id)
                     over (partition by rfr_id, side, date_id, route_type order by request_number, order_id) as first_order_id_in_this_route,
+                    last_value(order_id)
+                    over (partition by rfr_id, side, date_id, route_type order by request_number, order_id) as last_order_id_in_this_route,
                     first_value(order_id)
-                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as first_order_id
-             from trash.mes_orders_full)
+                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as first_order_id,
+                    last_value(order_id)
+                    over (partition by rfr_id, side, date_id order by request_number, order_id)             as last_order_id
+             from trash.mes_orders)
 select rfr_id,
        order_id,
        first_order_id_in_this_route,
+       last_order_id_in_this_route,
        first_order_id,
-       request_number,
+       last_order_id,
+       cnt,
        -- aggregations
        case
-           when order_id is not distinct from first_order_id_in_this_route and order_id <> 0 then 'case a'
-           when order_id is not distinct from first_order_id_in_this_route and order_id = 0 then 'case b'
-           when order_id is distinct from first_order_id and order_id <> 0 then 'case c'
-           when order_id is distinct from first_order_id and order_id = 0 then 'case d'
---            else 'case d'
+           -- when it is the first order and cnt of trades is > 0
+           when order_id = first_order_id_in_this_route and cnt > 0 then 'case a'
+           -- when it is not the first case but it is the first order and cnt of trades is > 0
+           when order_id = first_order_id_in_this_route
+--                and first_order_id_in_this_route <> last_order_id_in_this_route
+               and (cnt is null or cnt = 0) then 'case b'
+
+           when order_id = first_order_id and cnt > 0 then 'case c'
+           --
+           --
+           when order_id <> first_order_id
+--                and first_order_id <> last_order_id
+               and (cnt is null or cnt = 0) then 'case d'
            end as group_of
 from grp
 where true;
 
 
-select * from t_grp_full
-where group_of <> 'case a';
+drop table if exists t_grp;
+create temp table t_grp as
+with grp as (select rfr_id,
+                    order_id,
+                    cnt,
+                    orders_in_route,
+                    orders
+             from trash.mes_orders mor
+                      left join lateral (select array_agg(order_id order by mo.request_number, mo.order_id) as orders_in_route
+                                         from trash.mes_orders mo
+                                         where mo.rfr_id = mor.rfr_id
+                                           and mo.date_id = mor.date_id
+                                           and mo.side = mor.side
+                                           and mo.route_type = mor.route_type
+                                         limit 1) mo1 on true
+                      left join lateral (select array_agg(order_id order by mo.request_number, mo.order_id) as orders
+                                         from trash.mes_orders mo
+                                         where mo.rfr_id = mor.rfr_id
+                                           and mo.date_id = mor.date_id
+                                           and mo.side = mor.side
+                                         limit 1) mo2 on true)
+select grp.*,
+       -- aggregations
+       case
+           when order_id = orders_in_route[1] and cnt > 0 then 'case a'
+           when order_id = orders_in_route[1] and cnt is null then 'case b'
 
-select group_of, count(*) from t_grp_full
+           when order_id = any(orders) and cnt > 0 then 'case c'
+           when order_id = any(orders) and cnt is null then 'case d'
+           end as group_of
+from grp
+where true;
+
+
+select * from t_grp
+where group_of is null;
+
+select group_of, count(*) from t_grp
 group by group_of;
 
-select 44+1437180+24493 --1461717
-select 324211+165054+972452
+select * from t_grp
+where group_of is null
+
+select group_of, count(*) from t_grp
+group by group_of;
+
+select 324286+187757+972452 = 59+1435825+24377+24234
+
 
 
 select rfr_id, request_number, * from trash.mes_orders_full
