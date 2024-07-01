@@ -242,3 +242,5 @@ where true;
 select group_of, count(*) from t_grp
 group by group_of;
 
+select * from t_grp
+where orders_in_route <> t_grp.orders
