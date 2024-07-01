@@ -210,12 +210,12 @@ drop table if exists t_grp;
 create temp table t_grp as
 with grp as (select --parent_order_id,
                     rfr_id,
-                    request_number,
-                    route_type,
                     order_id,
-                    cnt,
-                    orders_in_route as street_ord_in_route_type,
-                    orders
+                    route_type,
+                    request_number,
+                    cnt             as count_of_trades,
+                    orders_in_route as street_orders_within_route_type,
+                    orders          as street_orders_within_rfrid
              from trash.mes_orders mor
                       left join lateral (select array_agg(order_id order by mo.request_number, mo.order_id) as orders_in_route
                                          from trash.mes_orders mo
@@ -233,11 +233,11 @@ with grp as (select --parent_order_id,
 select grp.*,
        -- aggregations
        case
-           when order_id = street_ord_in_route_type[1] and cnt > 0 then 'case a'
-           when order_id = street_ord_in_route_type[1] and cnt is null then 'case b'
+           when order_id = street_orders_within_route_type[1] and count_of_trades > 0 then 'case a'
+           when order_id = street_orders_within_route_type[1] and count_of_trades is null then 'case b'
 
-           when order_id = any(orders) and cnt > 0 then 'case c'
-           when order_id = any(orders) and cnt is null then 'case d'
+           when order_id = any (street_orders_within_rfrid) and count_of_trades > 0 then 'case c'
+           when order_id = any (street_orders_within_rfrid) and count_of_trades is null then 'case d'
            end as group_of
 from grp
 where true;
@@ -245,5 +245,23 @@ where true;
 select group_of, count(*) from t_grp
 group by group_of;
 
-select * from t_grp
-where orders_in_route <> t_grp.orders
+(select *
+ from t_grp
+ where group_of = 'case a'
+ limit 10)
+union all
+(select *
+ from t_grp
+ where group_of = 'case b'
+ limit 10)
+union all
+(select *
+ from t_grp
+ where group_of = 'case c'
+ limit 10)
+union all
+(select *
+ from t_grp
+ where group_of = 'case d'
+ limit 10)
+
