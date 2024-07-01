@@ -208,10 +208,13 @@ create index on trash.mes_orders (rfr_id, side, date_id, route_type);
 
 drop table if exists t_grp;
 create temp table t_grp as
-with grp as (select rfr_id,
+with grp as (select --parent_order_id,
+                    rfr_id,
+                    request_number,
+                    route_type,
                     order_id,
                     cnt,
-                    orders_in_route,
+                    orders_in_route as street_ord_in_route_type,
                     orders
              from trash.mes_orders mor
                       left join lateral (select array_agg(order_id order by mo.request_number, mo.order_id) as orders_in_route
@@ -230,8 +233,8 @@ with grp as (select rfr_id,
 select grp.*,
        -- aggregations
        case
-           when order_id = orders_in_route[1] and cnt > 0 then 'case a'
-           when order_id = orders_in_route[1] and cnt is null then 'case b'
+           when order_id = street_ord_in_route_type[1] and cnt > 0 then 'case a'
+           when order_id = street_ord_in_route_type[1] and cnt is null then 'case b'
 
            when order_id = any(orders) and cnt > 0 then 'case c'
            when order_id = any(orders) and cnt is null then 'case d'
