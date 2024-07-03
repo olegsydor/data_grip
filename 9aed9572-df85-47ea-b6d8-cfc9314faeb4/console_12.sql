@@ -602,21 +602,22 @@ select rep.payload ->> 'TransactTime'                                           
         END AS Handling,
                 0 as secondary_order_id2,
 
-   case
+   case when
 			case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
-      and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00
-				then  replace(isnull(replace(replace(coalesce(leg.ds_id_2, leg.ds_id_3),'.',''),'-','')+ ' '
-						+ RIGHT('0' +cast(datepart(day, tl.[ExpirationDate] ) as varchar ), 2)
-						+ left(datename(month,tl.[ExpirationDate]),3)
-						+ right(datename(year,tl.[ExpirationDate]),2)+' '
+      and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00 then
+replace(isnull(
+                         regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','') || ' '
+						|| staging.get_exp_date(in_date := :in_date) || ' '
 						+ case
-								when charindex('0.',cast(cast(tl.[Strike] as float) as varchar(8)))=1
-									then right(cast(cast(tl.[Strike] as float) as varchar(8)), len(cast(cast(tl.[Strike] as float) as varchar(8)))-1)
+								when case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
+								    and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
+									then to_char(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end,'FM999.999999')
 									else cast(cast(tl.[Strike] as float) as varchar(8))
 							end
- 						+ cast(tl.TypeCode as varchar(8)), ContractDesc) ,'/','')
-				else replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')
-		end as display_instrument_id,
+ 						+ cast(tl.TypeCode as varchar(8)),
+               ContractDesc) ,'/','')
+				else regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','')
+		end  as display_instrument_id,
 
 
                    case
@@ -729,4 +730,29 @@ select * from ct where is_busted = 'Y'
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
     and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
-select regexp_replace('abcd/\.-', '\.|-', '/', 'g') as symbol
+select regexp_replace('abcd/\.-', '\.|-', '/', 'g') as symbol;
+
+create function staging.get_exp_date(in_date date default null)
+    returns text
+    language plpgsql
+as
+$$
+declare
+begin
+    if in_date is null then
+        return null;
+    end if;
+    return lpad(extract(day from in_date)::text, 2, '0') ||
+           to_char(in_date, 'Mon') ||
+           to_char(in_date, 'YY');
+end;
+$$;
+
+select lpad(extract(day from :in_date)::text, 2, '0')
+select to_char(:in_date, 'Mon')
+select to_char(:in_date, 'YY')
+
+
+select * from staging.get_exp_date(in_date := :in_date)
+
+select to_char(:in_numb,'FM999999999'), to_char(:in_numb,'FM99999.999999')
