@@ -602,9 +602,10 @@ select rep.payload ->> 'TransactTime'                                           
         END AS Handling,
                 0 as secondary_order_id2,
 
-/*	   case
-			when nullif(tl.[ExpirationDate],'1900-01-01 00:00:00.000') is not null and nullif(tl.[Strike],0.00) is not null
-				then  replace(isnull(replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')+ ' '
+   case
+			case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
+      and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00
+				then  replace(isnull(replace(replace(coalesce(leg.ds_id_2, leg.ds_id_3),'.',''),'-','')+ ' '
 						+ RIGHT('0' +cast(datepart(day, tl.[ExpirationDate] ) as varchar ), 2)
 						+ left(datename(month,tl.[ExpirationDate]),3)
 						+ right(datename(year,tl.[ExpirationDate]),2)+' '
@@ -616,7 +617,7 @@ select rep.payload ->> 'TransactTime'                                           
  						+ cast(tl.TypeCode as varchar(8)), ContractDesc) ,'/','')
 				else replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')
 		end as display_instrument_id,
-*/
+
 
                    case
                        when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -728,3 +729,4 @@ select * from ct where is_busted = 'Y'
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
     and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
+select regexp_replace('abcd/\.-', '\.|-', '/', 'g') as symbol
