@@ -604,20 +604,21 @@ select rep.payload ->> 'TransactTime'                                           
 
    case when
 			case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
-      and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00 then
-replace(case when
-                         regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','') || ' '
-						|| staging.get_exp_date(in_date := :in_date) || ' '
-						|| case
-								when case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
-								    and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
-									then to_char(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end,'FM999.999999')
-									else staging.custom_format(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
-							end
- 						|| case when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S'
-                             when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
-                             = 'ContractDesc'
-    then null end ,'/','')
+            and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00 then
+
+       replace(case
+                        when
+                            regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') || ' '
+                                || staging.get_exp_date(in_date := :in_date) || ' '
+                                || case
+                                       when case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
+                                           and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
+                                           then to_char(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 'FM999.999999')
+                                       else staging.custom_format(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
+                                end
+                                || case when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S' when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
+                                = 'ContractDesc'
+                            then null end, '/', '')
 				else regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','')
 		end  as display_instrument_id,
 
