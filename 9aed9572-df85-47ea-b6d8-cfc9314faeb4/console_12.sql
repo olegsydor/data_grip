@@ -605,17 +605,19 @@ select rep.payload ->> 'TransactTime'                                           
    case when
 			case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
       and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00 then
-replace(isnull(
+replace(case when
                          regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','') || ' '
 						|| staging.get_exp_date(in_date := :in_date) || ' '
-						+ case
+						|| case
 								when case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
 								    and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
 									then to_char(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end,'FM999.999999')
-									else cast(cast(tl.[Strike] as float) as varchar(8))
+									else staging.custom_format(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
 							end
- 						+ cast(tl.TypeCode as varchar(8)),
-               ContractDesc) ,'/','')
+ 						|| case when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S'
+                             when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
+                             = 'ContractDesc'
+    then null end ,'/','')
 				else regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','')
 		end  as display_instrument_id,
 
@@ -748,6 +750,28 @@ begin
 end;
 $$;
 
+create or replace function staging.custom_format(in_numb numeric default null, in_len int default 8)
+    returns text
+    language plpgsql
+as
+$$
+    -- the function works like the select cast(cast(in_numb as float) as varchar(in_len)) in T-sql
+declare
+    l_int_part     int;
+    l_int_part_len int;
+
+begin
+    if in_numb is null then
+        return null;
+    end if;
+
+    select floor(in_numb) into l_int_part;
+    select char_length(l_int_part::text) into l_int_part_len;
+    return round(in_numb, in_len - l_int_part_len - 2);
+end;
+$$;
+
+
 select lpad(extract(day from :in_date)::text, 2, '0')
 select to_char(:in_date, 'Mon')
 select to_char(:in_date, 'YY')
@@ -755,4 +779,7 @@ select to_char(:in_date, 'YY')
 
 select * from staging.get_exp_date(in_date := :in_date)
 
-select to_char(:in_numb,'FM999999999'), to_char(:in_numb,'FM99999.999999')
+select to_char(:in_numb,'FM999999999'), to_char(:in_numb,'FM99999.99999999');
+select floor(:in_numb)
+
+select staging.custom_format(12.1239456789, 8)
