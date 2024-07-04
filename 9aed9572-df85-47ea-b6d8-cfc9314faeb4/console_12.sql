@@ -273,7 +273,8 @@ end;
 $fx$;
 
 with ct as (
-select rep.payload ->> 'TransactTime'                                                            AS trade_record_time,
+select rep.exec_type as exec_type,
+       rep.payload ->> 'TransactTime'                                                            AS trade_record_time,
                    to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                    AS date_id,
                    case
                        when exists (select null
@@ -326,41 +327,29 @@ select rep.payload ->> 'TransactTime'                                           
                        else '0'::numeric
                        end                                                                                   as last_px,
 
-                   rp.ex_destination,
+                   rp.ex_destination as ex_destination,
                    'sub_strategy' as sub_strategy,
                    'order_id' as order_id,
-                   coalesce(
-                           case
-                               when
-                                   -- [ExpirationDate] <> '1900-01-01'
-                                   case
-                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                           then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
-                                       and
-                                       -- tl.[Strike] <> 0.00
-                                   case
-                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                           then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00
-                                   then
-                                   -- tl.OptionQuantity
-                                   case
-                                       when co.instrument_type = 'O' then co.payload ->> 'OrderQty'
-                                       when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'O'
-                                           then leg.payload ->> 'LegQty' end
-                               else
-                                   -- tl.StockQuantity
-                                   case
-                                       when co.instrument_type = 'E' then co.payload ->> 'OrderQty'
-                                       when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
-                                           then leg.payload ->> 'LegQty'
-                                       end end,
-                       -- tl.Quantity
-                           case
-                               when co.instrument_type = 'E' then rep_last."LeavesQty"
-                               when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
-                                   then rep_last_exec."LeavesQty"
-                               end
-                   )                                                                                         as street_order_qty,
+       case
+           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+               then coalesce(leg.ds_id_date, co.ds_id_date) end as expiration_date,
+       case
+           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+               then coalesce(leg.ds_id_num, co.ds_id_num) end   as strike,
+       case
+           when co.instrument_type = 'O' then co.payload ->> 'OrderQty'
+           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'O'
+               then leg.payload ->> 'LegQty' end                as opt_qty,
+       case
+           when co.instrument_type = 'E' then co.payload ->> 'OrderQty'
+           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
+               then leg.payload ->> 'LegQty'
+           end                                                  as eq_qty,
+       case
+           when co.instrument_type = 'E' then rep_last."LeavesQty"
+           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
+               then rep_last_exec."LeavesQty"
+           end                                                  as eq_leaves_qty,
                    -- order_qty is as same as street_order_qty
                    case
                        when (coalesce(co.payload ->> 'NoLegs', '1'))::int > 1 then 2
@@ -378,19 +367,9 @@ select rep.payload ->> 'TransactTime'                                           
                        WHEN co.crossing_side IS NULL THEN co.payload #>> '{ClearingDetails,CMTA}'
                        WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,ClearingDetails,CMTA}'
                        WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,ClearingDetails,CMTA}'
-                       ELSE NULL::text
                        END                                                                                   AS cmtafirm,
+coalesce(ltf.EDWID, tif.ID) as tif,
 
-                   case
-                       when coalesce(ltf.EDWID, tif.ID) in (24, 17, 10, 1, 44) then 0
-                       when coalesce(ltf.EDWID, tif.ID) in (26, 18, 3, 45, 12) then 1
-                       when coalesce(ltf.EDWID, tif.ID) in (31, 8, 15, 46) then 2
-                       when coalesce(ltf.EDWID, tif.ID) in (47, 28, 11, 19, 5) then 3
-                       when coalesce(ltf.EDWID, tif.ID) in (48, 2, 13, 25, 20) then 4
-                       when coalesce(ltf.EDWID, tif.ID) in (36, 37, 38, 49) then 5
-                       when coalesce(ltf.EDWID, tif.ID) in (50, 14, 21, 33) then 6
-                       when coalesce(ltf.EDWID, tif.ID) in (32, 9, 16) then 7
-                       end                                                                                   as street_time_in_force,
 
                    case
                        when lfw.EDWID in (1, 25, 32, 78) then '0'
@@ -403,22 +382,18 @@ select rep.payload ->> 'TransactTime'                                           
                        when lfw.EDWID IN (31, 23, 41, 98) then '8'
                        when lfw.EDWID IN (9, 40, 50, 86) then 'J'
                        end                                                                                   as opt_customer_firm,
-
-
-                   CASE
-                       when co.crossing_side = 'C' and (SELECT co2.cl_ord_id
+co.crossing_side,
+(SELECT co2.cl_ord_id
                                                         FROM blaze7.client_order co2
                                                         WHERE co2.cross_order_id = co.cross_order_id
                                                           AND co2.crossing_side = 'O'
                                                         ORDER BY co2.chain_id DESC
-                                                        LIMIT 1) is not null then 'Y'
-                       when co.crossing_side <> 'C' and (SELECT co2.cl_ord_id
+                                                        LIMIT 1) as cross_cl_ord_id,
+(SELECT co2.cl_ord_id
                                                          FROM blaze7.client_order co2
                                                          WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId')::bigint)
                                                          ORDER BY co2.chain_id DESC
-                                                         LIMIT 1) is not null then 'Y'
-                       else 'N'
-                       END                                                                                   as is_cross_order,
+                                                         LIMIT 1) as orig_cl_ord_id,
                    -- street_is_cross_order is as same as is_cross_order
                    COALESCE(co.payload ->> 'OwnerUserName', co.payload ->>
                                                             'InitiatorUserName')                             as contra_broker,
@@ -434,11 +409,42 @@ select rep.payload ->> 'TransactTime'                                           
                    '???'                                                                                     as remarks,
                    null                                                                                      as street_client_order_id,
                    'LPEDWCOMPID'                                                                             as fix_comp_id,
-                   rep.payload ->> 'LeavesQty',
+                   rep.payload ->> 'LeavesQty' as leaves_qty,
                    CASE co.instrument_type
                        WHEN 'M' THEN leg.payload ->> 'LegSeqNumber'
                        ELSE '1'
                        END                                                                                   AS leg_ref_id,
+
+    CASE co.crossing_side
+                                WHEN 'C'::bpchar THEN (SELECT co2.cl_ord_id
+                                                       FROM blaze7.client_order co2
+                                                       WHERE co2.cross_order_id = co.cross_order_id
+                                                         AND co2.crossing_side = 'O'::bpchar
+                                                       ORDER BY co2.chain_id DESC
+                                                       LIMIT 1)
+                                ELSE (SELECT co2.cl_ord_id
+                                      FROM blaze7.client_order co2
+                                      WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId'::text)::bigint)
+                                      ORDER BY co2.chain_id DESC
+                                      LIMIT 1)
+                           END as orig_order_id,
+    CASE co.crossing_side
+                                WHEN 'O'::bpchar THEN (SELECT co2.cl_ord_id
+                                                       FROM blaze7.client_order co2
+                                                       WHERE co2.cross_order_id = co.cross_order_id
+                                                         AND co2.crossing_side = 'C'::bpchar
+                                                       ORDER BY co2.chain_id DESC
+                                                       LIMIT 1)
+                                ELSE (SELECT co2.cl_ord_id
+                                      FROM blaze7.client_order co2
+                                      WHERE ((co2.payload ->> 'OriginatorOrderRefId'::text)::bigint) = co.order_id
+                                        AND co2.record_type = '0'::bpchar
+                                        AND co2.chain_id = 0
+                                        AND co2.db_create_time >= co.db_create_time::date
+                                        AND co2.db_create_time <= (co.db_create_time::date + '1 day'::interval)
+                                      ORDER BY co2.chain_id DESC
+                                      LIMIT 1)
+                           END as contra_order_id,
                    CASE
                        -- ORIGOrderID <> '00000000-0000-0000-0000-000000000000'
                        WHEN CASE co.crossing_side
@@ -533,20 +539,7 @@ select rep.payload ->> 'TransactTime'                                           
 		when 'P' then '0'
 		when 'C' then '1'
 	end as put_or_call,
-
-                   CASE
-                       WHEN "substring"(
-                                    CASE co.instrument_type
-                                        WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
-                                        ELSE co.payload ->> 'DashSecurityId'::text
-                                        END, 'US:([FO|OP|EQ]{2})'::text) = ANY (ARRAY ['FO'::text, 'OP'::text])
-                           THEN to_date("substring"(
-                                                CASE co.instrument_type
-                                                    WHEN 'M'::bpchar THEN leg.payload ->> 'DashSecurityId'::text
-                                                    ELSE co.payload ->> 'DashSecurityId'::text
-                                                    END, '([0-9]{6})'::text), 'YYMMDD'::text)
-                       ELSE NULL::date
-                       END as expiration_date,                                                                           -- will be transformed into maturity_year\month\day
+                                                                        -- will be transformed into maturity_year\month\day
                    CASE
                        WHEN rep.leg_ref_id IS NOT NULL THEN (SELECT leg.payload ->> 'LegInstrumentType'::text
                                                              FROM blaze7.client_order_leg leg
@@ -707,8 +700,59 @@ select transactiondatetime,
        secondary_order_id,
        exch_exec_id,
        secondary_exch_exec_id,
+case
+                       when last_mkt in ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+                       when last_mkt in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+                       when last_mkt in ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
+                       when last_mkt in ('FOGS', 'MID') then 'XCHI'
+                       when last_mkt in ('C2', 'CBOE2') then 'C2OX'
+                       when last_mkt = 'SMARTR' then 'COWEN'
+                       when last_mkt in ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
+                       when last_mkt in ('XPSE') then 'N'
+                       when last_mkt in ('TO') then '1'
+                       else last_mkt end                     as last_mkt,
+    lastshares,
+    last_px,
+    ex_destination,
+    sub_strategy,
+    order_id,
 
-       is_busted
+       coalesce(
+               case
+                   when
+                       ct.expiration_date <> '1900-01-01'::date and ct.strike <> 0.00
+                       then ct.opt_qty
+                   else ct.eq_qty end,
+               ct.eq_leaves_qty
+       ) as street_order_qty,
+    multileg_reporting_type,
+    ct.exec_broker,
+       ct.cmtafirm,
+       case
+           when ct.tif in (24, 17, 10, 1, 44) then 0
+           when ct.tif in (26, 18, 3, 45, 12) then 1
+           when ct.tif in (31, 8, 15, 46) then 2
+           when ct.tif in (47, 28, 11, 19, 5) then 3
+           when ct.tif in (48, 2, 13, 25, 20) then 4
+           when ct.tif in (36, 37, 38, 49) then 5
+           when ct.tif in (50, 14, 21, 33) then 6
+           when ct.tif in (32, 9, 16) then 7
+           end as street_time_in_force,
+opt_customer_firm,
+CASE
+                       when ct.crossing_side = 'C' and ct.cross_cl_ord_id is not null then 'Y'
+                       when ct.crossing_side <> 'C' and ct.orig_cl_ord_id is not null then 'Y'
+                       else 'N'
+                       END                                                                                   as is_cross_order,
+    contra_broker,
+order_price,
+order_process_time,
+remarks,
+       is_busted,
+       street_client_order_id,
+       fix_comp_id,
+       leaves_qty,
+       leg_ref_id,
 
 
 
