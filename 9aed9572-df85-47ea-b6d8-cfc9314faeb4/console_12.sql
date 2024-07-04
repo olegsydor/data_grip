@@ -271,27 +271,10 @@ return ret_val;
 
 end;
 $fx$;
-select CASE
-           WHEN x.exec_type = ANY (ARRAY ['e'::bpchar, 'd'::bpchar])
-               THEN (SELECT CASE
-                                WHEN
-                                    rp.exec_type = '4'::bpchar AND
-                                    (rp.payload ->> 'OriginatedBy'::text) =
-                                    'E'::text THEN 'F'::bpchar
-                                ELSE rp.exec_type
-                                END AS exec_type
-                     FROM blaze7.order_report rp
-                     WHERE rp.exec_id::text = (x.rep_payload ->> 'ChildExecRefId'::text))
-           WHEN x.exec_type = '4'::bpchar AND (x.rep_payload ->> 'OriginatedBy'::text) = 'E'::text THEN 'F'::bpchar
-           ELSE x.exec_type
-           END AS status
-from
 
-
-;
 with ct as (
-select rep.payload ->> 'TransactTime'                                                            AS transactiondatetime,
-                   to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                    AS transactiondatetime,
+select rep.payload ->> 'TransactTime'                                                            AS trade_record_time,
+                   to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                    AS date_id,
                    case
                        when exists (select null
                                     From blaze7.order_report r2
@@ -308,7 +291,7 @@ select rep.payload ->> 'TransactTime'                                           
                        when coalesce(u.AORSUsername, u.Login) = 'BBNTRST' then 'NTRSCBOE'
                        else coalesce(u.AORSUsername, Login) end                                              as account_name,
                    co.cl_ord_id,
-                   'instrument_id',
+                   'instrument_id' as instrument_id,
                    CASE
                        WHEN co.instrument_type = 'M' THEN leg.payload ->> 'LegSide'
                        WHEN co.crossing_side IS NULL THEN co.payload ->> 'Side'
@@ -320,7 +303,6 @@ select rep.payload ->> 'TransactTime'                                           
                        WHEN co.crossing_side IS NULL THEN co.payload ->> 'PositionEffect'
                        WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,PositionEffect}'
                        WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,PositionEffect}'
-                       ELSE NULL::text
                        END                                                                                   AS openclose,
                    'exec_id'                                                                                 as exec_id, -- identity
                    '???'                                                                                     as exchange_id,
@@ -334,24 +316,8 @@ select rep.payload ->> 'TransactTime'                                           
                        WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' THEN 'Manual Report'
                        ELSE rep.payload ->> 'RouterExecId' END                                               as secondary_exch_exec_id,
 
-                   case
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
-                            ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('XPAR', 'PLAK', 'PARL')
-                           then 'LQPT'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
-                            ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
-                           then 'ECUT'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('FOGS', 'MID') then 'XCHI'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('C2', 'CBOE2') then 'C2OX'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) = 'SMARTR' then 'COWEN'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in
-                            ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
-                           then 'BRKPT'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('XPSE') then 'N'
-                       when coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) in ('TO') then '1'
-                       else nullif(coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination),
-                                   '') end                                                                   as last_mkt,
+    coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) as last_mkt,
+
                    (rep.payload ->> 'TransactQty')::int8                                                     AS lastshares,
                    case
                        when rep.exec_type in ('1', '2', 'r')
@@ -361,8 +327,8 @@ select rep.payload ->> 'TransactTime'                                           
                        end                                                                                   as last_px,
 
                    rp.ex_destination,
-                   'sub_strategy',
-                   'order_id',
+                   'sub_strategy' as sub_strategy,
+                   'order_id' as order_id,
                    coalesce(
                            case
                                when
@@ -727,7 +693,27 @@ select rep.payload ->> 'TransactTime'                                           
               AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
             and rep.db_create_time::date = '2024-06-10'::date
             )
-select * from ct where is_busted = 'Y'
+select transactiondatetime,
+       date_id,
+       subsystem_id,
+       account_name,
+       cl_ord_id,
+       instrument_id,
+       side,
+       openclose,
+       exec_id,
+       exchange_id,
+       liquidityindicator,
+       secondary_order_id,
+       exch_exec_id,
+       secondary_exch_exec_id,
+
+       is_busted
+
+
+
+
+from ct where is_busted = 'Y'
                    limit 5
 
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
