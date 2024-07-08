@@ -21,11 +21,13 @@ from trash.so_cons_req ri
   join consolidator.consolidator_message cm
     on cm.cons_message_id = ri.cons_message_id and cm.message_type in (8, 9)
     and cm.date_id between 20230902 and 20230929 -- = 20230731
-where ri.date_id between 20230902 and 20230929;
+where ri.date_id between 20230902 and 20230929
+and cm.rfr_id in ('760204378479', '740245810547', '710317275002', '780105394924');
 
 
 --3 Oct
-create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 as
+drop table if exists trash.so_cons_req_short_3;
+create table trash.so_cons_req_short_3 as
 -- explain
     select cm_8.date_id, cm_8.route_type
       , case cm_8.route_type
@@ -49,8 +51,8 @@ create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 a
             left join consolidator.routed_order_information roi
               on cm_9.cons_message_id = roi.cons_message_id and cm_9.date_id = roi.date_id
           where 1=1 and cm_9.message_type = 9 -- Routed Order Information
-            and cm_9.date_id between 20231001 and 20231031 -- 20230101 and 20230930 -- = 20231108 --
-            and roi.date_id between 20231001 and 20231031 -- 20230101 and 20230930 -- = 20231108 --
+            and cm_9.date_id between 20230902 and 20230929 -- 20230101 and 20230930 -- = 20231108 --
+            and roi.date_id between 20230902 and 20230929 -- 20230101 and 20230930 -- = 20231108 --
             and cm_8.rfr_id = cm_9.rfr_id
             and cm_8.request_number = cm_9.request_number
             and cm_8.date_id = cm_9.date_id
@@ -60,7 +62,7 @@ create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 a
             --and roi.executed_volume > 0 -- !!! WTF!!!???
           limit 2
         ) cm_9 on true and cm_9.dedup = 1
-    where cm_8.date_id between 20231001 and 20231031 -- 20230101 and 20230930 -- = 20231108 --
+    where cm_8.date_id between 20230902 and 20230929 -- 20230101 and 20230930 -- = 20231108 --
       and (
             (cm_8.route_type = 10) --(Post then Cross) -- var SA_RR_PC_POST_ORDER = 94 // Post order as part of Post then cross
             or
@@ -71,20 +73,20 @@ create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 a
             (cm_8.route_type = 12) --(Post as COA)     -- var SA_RR_POST_COA_ORDER = 98 // Post as COA order
           )
 ;
-
+--select * from trash.so_cons_req_short_4
 --4 Oct
---drop table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v3_canc;
-create table trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v3_canc as
+drop table if exists trash.so_cons_req_short_4;
+create table trash.so_cons_req_short_4 as
 select co.*
   , t.* --t.reason_code, count(1)
-from trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 t
+from trash.so_cons_req_short_3 t
   left join lateral
     ( select str.* , ec.order_status
       from
         (
           select co.order_id, co.exchange_id, co.strtg_decision_reason_code
           from dwh.client_order co
-          where co.create_date_id = t.date_id and co.create_date_id between 20231001 and 20231031
+          where co.create_date_id = t.date_id and co.create_date_id between 20230902 and 20230929
             and co.parent_order_id is not null  -- street level
             and co.dash_rfr_id = t.rfr_id
             and co.order_qty = t.routed_volume
@@ -101,7 +103,7 @@ from trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v2 t
         (
           select ec.order_id, ec.order_status
           from dwh.execution ec
-          where ec.exec_date_id = t.date_id and ec.exec_date_id between 20231001 and 20231031
+          where ec.exec_date_id = t.date_id and ec.exec_date_id between 20230902 and 20230929
             and ec.order_id = str.order_id
             and (ec.exec_type = '4' or ec.order_status = '4')
           limit 1
@@ -120,8 +122,8 @@ order by executed_volume
 
 
 -- 5 Oct + Nov
---drop table trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_3k_v33;
-create table trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_3k_v33 as
+drop table if exists trash.so_cons_req_short_5;
+create table trash.so_cons_req_short_5 as
 -- explain (30 min - WTF!!! so long...)
 with all_msg_cte as materialized
   (
@@ -136,10 +138,11 @@ with all_msg_cte as materialized
       (
         select date_id, route_type, reason_code, exchange, side, rfr_id, request_number, cancel_chaser, routed_date_id, routed_side, route_mechanism, routed_exchange, routed_volume, accepted_or_rejected, executed_volume
           , order_id, exchange_id, strtg_decision_reason_code
-        from trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_10v3_canc union all
-        select date_id, route_type, reason_code, exchange, side, rfr_id, request_number, cancel_chaser, routed_date_id, routed_side, route_mechanism, routed_exchange, routed_volume, accepted_or_rejected, executed_volume
-          , order_id, exchange_id, strtg_decision_reason_code
-        from trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_11v3_canc
+        from trash.so_cons_req_short_4
+--         union all
+--         select date_id, route_type, reason_code, exchange, side, rfr_id, request_number, cancel_chaser, routed_date_id, routed_side, route_mechanism, routed_exchange, routed_volume, accepted_or_rejected, executed_volume
+--           , order_id, exchange_id, strtg_decision_reason_code
+--         from trash.sdn_tmp_tim_miller_consolidator_request_20231111_4_roi_11v3_canc
       ) t
       left join
         (
@@ -157,7 +160,7 @@ with all_msg_cte as materialized
               and ex.is_active
               and ex.activ_exchange_code is not null
         ) ex on t.routed_exchange = ex.exchange_number
-    where t.date_id between 20231001 and 20231131 -- = 20231108 --
+    where t.date_id between 20230902 and 20230929 -- = 20231108 --
       and t.accepted_or_rejected = 1
       and t.exchange_id ilike ex.exch_beg||'%'
   )
@@ -168,9 +171,10 @@ with all_msg_cte as materialized
       and t.rn <= 3000
 ;
 
-
+select * from trash.so_cons_req_short_5;
 -- 6 Oct + Nov
-create table trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt_v33
+drop table if exists trash.so_cons_req_short_6;
+create table trash.so_cons_req_short_6
 as
 with all_msg_cte_canc as materialized
   ( -- EXPLAIN
@@ -179,7 +183,7 @@ with all_msg_cte_canc as materialized
       , t.order_id, t.exchange_id
       , t.rfr_id, t.request_number, t.routed_volume, t.exch_beg
     from --trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_3k t
-         trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_3k_v33 t
+         trash.so_cons_req_short_5 t
 --      left join lateral
 --        (
 --          select co.order_id, co.exchange_id
@@ -288,7 +292,7 @@ select t.trade_date as "Trade Date"
 from
   (
     --select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt t union all
-    select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt_v33 t
+    select * from trash.so_cons_req_short_6 t
   ) t
 where 1=1 and t.exchange_routed not in ('0')
   and reason_code_ ilike '94%'
@@ -309,7 +313,7 @@ select t.trade_date as "Trade Date"
 from
   (
     --select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt t union all
-    select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt_v33 t
+    select * from trash.so_cons_req_short_6 t
   ) t
 where 1=1 and t.exchange_routed not in ('0')
   and reason_code_ ilike '96%'
@@ -330,7 +334,7 @@ select t.trade_date as "Trade Date"
 from
   (
     --select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt t union all
-    select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt_v33 t
+    select * from trash.so_cons_req_short_6 t
   ) t
 where 1=1 and t.exchange_routed not in ('0')
   and reason_code_ ilike '97%'
@@ -351,7 +355,7 @@ select t.trade_date as "Trade Date"
 from
   (
     --select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt t union all
-    select * from trash.sdn_tmp_tim_miller_consolidator_request_20231113_4_30rprt_v33 t
+    select * from trash.so_cons_req_short_6 t
   ) t
 where 1=1 and t.exchange_routed not in ('0')
   and reason_code_ ilike '98%'

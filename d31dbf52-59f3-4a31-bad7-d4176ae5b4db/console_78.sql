@@ -33,7 +33,7 @@ create index on trash.so_cons_pre (cons_message_id);
 create index on trash.so_cons_pre (rfr_id, request_number);
 create index on trash.so_cons_pre (date_id);
 
-
+select * from trash.so_consolidator_message
 create table trash.so_consolidator_message as
 select ri.date_id
      , ri.route_type
@@ -329,9 +329,9 @@ select cm_base.date_id
      , cm_lat.exchange  as routed_exchange
      , cm_lat.volume    as routed_volume
      , cm_lat.accepted_or_rejected
-     , cm_lat.executed_volume, --, cm_9.message
+     , cm_lat.executed_volume --, cm_9.message
 --, row_number() over (partition by cm_8.route_type, cm_9.exchange order by random()) rn_random
-dedup
+     ,  dedup
 from trash.so_consolidator_message cm_base
          inner join lateral
     (
@@ -408,12 +408,12 @@ from trash.so_main_f main
       and co.parent_order_id is not null -- street level
 
       and co.dash_rfr_id = main.rfr_id
---       and co.order_qty = main.routed_volume
+      and co.order_qty = main.routed_volume
       and co.side = main.side
       and co.request_number = main.request_number
       --and co.exchange_id ilike t.exch_beg||'%'
 --       and co.trans_type <> 'F'           -- co.trans_type = 'F' --
---       and co.multileg_reporting_type in ('1', '2')
+      and co.multileg_reporting_type in ('1', '2')
       and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
       limit 1
     ) co on true
@@ -470,3 +470,17 @@ select grp.*,
            end as group_of
 from grp
 where true;
+
+
+select *
+from consolidator.consolidator_message cm
+         join trash.so_routing_instruction ri
+              on cm.cons_message_id = ri.cons_message_id and cm.message_type = 8
+                  and cm.date_id between 20230902 and 20230929
+where ri.date_id between 20230902 and 20230929
+  and cm.rfr_id = '760204378479'
+  and cm.message ilike '%IMC%'
+--     and cm.message_type = any('{6, 7}')
+  and message_type = 8--in (8, 9)
+  and cm.date_id between 20230901 and 20230930
+order by request_number
