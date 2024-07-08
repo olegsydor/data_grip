@@ -66,21 +66,13 @@ select cm.message_type,
        roi.exchange_error_message,
        roi.executed_volume,
        roi.pg_db_create_time
-        ,
-       crw.*--route_type
+--          ,
+--         crw.*--route_type
 from trash.so_consolidator_message cm
          left join trash.so_routed_order_information roi
                    on cm.date_id = roi.date_id and cm.cons_message_id = roi.cons_message_id
          join consolidator.cons_message_exchange cme on roi.exchange = cme.exchange_number
-         left join lateral (select *--route_type
-                            from trash.so_consolidator_message cmw
-                                     join trash.so_routing_instruction riw
-                                          on cmw.date_id = riw.date_id and cmw.cons_message_id = riw.cons_message_id
-                            where cmw.rfr_id = cm.rfr_id
-                              and cmw.request_number = cm.request_number
-                              and cmw.message_type = '8'
-                            and riw.route_type = 11
-                            limit 1) crw on true
+
 where true
   and cm.date_id between 20230902 and 20230929
   and roi.date_id between 20230902 and 20230929

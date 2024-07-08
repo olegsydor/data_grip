@@ -491,3 +491,17 @@ where ri.date_id between 20230902 and 20230929
   and message_type = 8--in (8, 9)
   and cm.date_id between 20230901 and 20230930
 order by request_number
+
+
+select cmw.date_id, cmw.rfr_id, cmw.request_number, riw.side, riw.exchange,
+    row_number() over (partition by cmw.date_id, cmw.rfr_id, cmw.request_number, riw.side--, riw.exchange
+--order by riw.executed_volume asc nulls first
+    ),
+       *
+from trash.so_consolidator_message cmw
+         join trash.so_routing_instruction riw
+              on cmw.date_id = riw.date_id and cmw.cons_message_id = riw.cons_message_id
+where cmw.rfr_id = '760204378479'
+  and cmw.request_number in (0, 1, 4, 5)
+  and cmw.message_type in (8)
+  and cmw.message ilike '%IMC%'
