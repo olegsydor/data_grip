@@ -749,8 +749,23 @@ select trade_record_time,
        ct.child_orders,
        ct.handling                                                                                as handling_id,
        ct.secondary_order_id2,
-/*
+
 -- display_instrument_id
+       ---
+ct.ord_ContractDesc not like ct.basecode || ' %',
+ct.ord_ContractDesc,
+ct.basecode,
+ct.legcount,
+ct.typecode,
+--        case
+--                                    when ct.ord_ContractDesc not like ct.basecode || ' %'
+--                                        then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
+--                                    when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
+--                                    when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc + ' '
+--                                    else ct.ord_ContractDesc end,
+/*
+       ---
+
        case
            when ct.expiration_date is null and ct.strike_price is not null then
                replace(coalesce(
@@ -759,9 +774,9 @@ select trade_record_time,
                                staging.custom_format(ct.strike_price) ||
                                left(ct.typecode, 8),
                                case
-                                   when ct.ord_ContractDesc not like ct.basecode || ' ' || '%'
+                                   when ct.ord_ContractDesc not like ct.basecode || ' %'
                                        then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
-                                   when ct.legcount = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
+                                   when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
                                    when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc + ' '
                                    else ct.ord_ContractDesc end
                        ), '/', '')
