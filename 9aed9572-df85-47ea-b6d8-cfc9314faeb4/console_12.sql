@@ -489,26 +489,46 @@ co.crossing_side,
             ELSE null
         END AS Handling,
                 0 as secondary_order_id2,
-
-   case when
-			case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_date, co.ds_id_date) end <> '1900-01-01'::date
-            and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end <> 0.00 then
+-- expiration_date,
+-- strike_price,
+-- tl.[RootCode]
+    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS rootcode,
+-- tl.BaseCode
+    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS rootcode,
+-- tl.TypeCode = ct.type_code
+       CASE
+           WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
+           WHEN coalesce(co.ds_id_1, leg.ds_id_1) = ANY (ARRAY ['FO', 'OP'])
+               THEN coalesce(co.ds_id_4, leg.ds_id_4)
+           END AS typecode,
+-- ContractDesc
 
        replace(case
-                        when
-                            regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') || ' '
-                                || staging.get_exp_date(in_date := :in_date) || ' '
-                                || case
-                                       when case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
-                                           and case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
-                                           then to_char(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 'FM999.999999')
-                                       else staging.custom_format(case when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
-                                end
-                                || case when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S' when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP') then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
-                                = 'ContractDesc'
-                            then null end, '/', '')
-				else regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3),'\.|-','')
-		end  as display_instrument_id,
+                   when
+                       regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') || ' ' ||
+                       staging.get_exp_date(in_date := :in_date) || ' '
+                           || case
+                                  when case
+                                           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                               then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
+                                      and case
+                                              when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                                  then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
+                                      then to_char(case
+                                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                                           then coalesce(leg.ds_id_num, co.ds_id_num) end,
+                                                   'FM999.999999')
+                                  else staging.custom_format(case
+                                                                 when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                                                     then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
+                           end
+                           || case
+                                  when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S'
+                                  when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                      then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
+                           = 'ContractDesc'
+                       then null end, '/', '')                        as display_instrument_id_1,
+       regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') as display_instrument_id_2,
 
 
                    case
@@ -542,7 +562,8 @@ co.crossing_side,
                                           case when co.instrument_type <> 'M' then to_date("substring"(co.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
                                           case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
                                           case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
-                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3
+                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
+                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end as ds_id_4
                                    from blaze7.client_order co
                                    where co.order_id = rep.order_id
                                      AND co.chain_id = rep.chain_id
@@ -551,7 +572,8 @@ co.crossing_side,
                                                case when co.instrument_type = 'M' then to_date("substring"(leg.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
                                                case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
                                                case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
-                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3
+                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
+                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end as ds_id_4
                                         from blaze7.client_order_leg leg
                                where leg.order_id = co.order_id AND leg.chain_id = co.chain_id and
                                   leg.leg_ref_id = rep.leg_ref_id) leg on true
@@ -626,7 +648,7 @@ co.crossing_side,
               AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
             and rep.db_create_time::date = '2024-06-10'::date
             )
-select transactiondatetime,
+select trade_record_time,
        date_id,
        subsystem_id,
        account_name,
@@ -702,10 +724,19 @@ remarks,
            else 50 end as strategy_decision_reason_code,
     is_parent,
     symbol,
+    strike_price,
 case ct.type_code
 		when 'P' then '0'
 		when 'C' then '1'
 	end as put_or_call,
+    extract(year from ct.expiration_date) as maturity_year,
+        extract(month from ct.expiration_date) as maturity_month,
+        extract(day from ct.expiration_date) as maturity_day,
+        ct.securitytype as security_type,
+        ct.child_orders,
+        ct.handling as handling_id,
+        ct.secondary_order_id2,
+        case when ct.expiration_date is not null and ct.strike_price is not null then
     ''
 
 

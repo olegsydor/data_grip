@@ -48,13 +48,7 @@ from trash.so_routing_instruction ri
               on cm.cons_message_id = ri.cons_message_id and cm.message_type = 8
                   and cm.date_id between 20230902 and 20230929
 where ri.date_id between 20230902 and 20230929
-and ri.cons_message_id in (
-    2356424961,
-2356424964,
-2356424985,
-2356424961,
-2356424964,
-2356424975);
+
 
 
 create table trash.roinformation as
