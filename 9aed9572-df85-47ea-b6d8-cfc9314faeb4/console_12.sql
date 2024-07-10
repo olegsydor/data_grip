@@ -272,10 +272,9 @@ return ret_val;
 end;
 $fx$;
 
-with ct as (
-select rep.exec_type as exec_type,
-       rep.payload ->> 'TransactTime'                                                            AS trade_record_time,
-                   to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                    AS date_id,
+with ct as (select rep.exec_type                                                                                as exec_type,
+                   rep.payload ->> 'TransactTime'                                                               AS trade_record_time,
+                   to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                       AS date_id,
                    case
                        when exists (select null
                                     From blaze7.order_report r2
@@ -285,75 +284,75 @@ select rep.exec_type as exec_type,
                                                              rep.payload ->> 'OriginatedBy',
                                                              rep.payload ->> 'OrderReportSpecialType') in
                                           (149, 194, 152)) then 'Y'
-                       else 'N' end                                                                          as is_busted,
+                       else 'N' end                                                                             as is_busted,
 
-                   'LPEDW'                                                                                   as subsystem_id,
+                   'LPEDW'                                                                                      as subsystem_id,
                    case
                        when coalesce(u.AORSUsername, u.Login) = 'BBNTRST' then 'NTRSCBOE'
-                       else coalesce(u.AORSUsername, Login) end                                              as account_name,
+                       else coalesce(u.AORSUsername, Login) end                                                 as account_name,
                    co.cl_ord_id,
-                   'instrument_id' as instrument_id,
+                   'instrument_id'                                                                              as instrument_id,
                    CASE
                        WHEN co.instrument_type = 'M' THEN leg.payload ->> 'LegSide'
                        WHEN co.crossing_side IS NULL THEN co.payload ->> 'Side'
                        WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,Side}'
                        WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,Side}'
-                       END                                                                                   AS side,
+                       END                                                                                      AS side,
                    CASE
                        WHEN co.instrument_type = 'M' THEN leg.payload ->> 'PositionEffect'
                        WHEN co.crossing_side IS NULL THEN co.payload ->> 'PositionEffect'
                        WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,PositionEffect}'
                        WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,PositionEffect}'
-                       END                                                                                   AS openclose,
-                   'exec_id'                                                                                 as exec_id, -- identity
-                   '???'                                                                                     as exchange_id,
+                       END                                                                                      AS openclose,
+                   'exec_id'                                                                                    as exec_id, -- identity
+                   '???'                                                                                        as exchange_id,
                    coalesce(case
                                 when rep.exec_type in ('1', '2') then rep.payload ->> 'TradeLiquidityIndicator'
                                 end,
-                            'R')                                                                             AS liquidityindicator,
-                   null::text                                                                                as secondary_order_id,
-                   '0'                                                                                       as exch_exec_id,
+                            'R')                                                                                AS liquidityindicator,
+                   null::text                                                                                   as secondary_order_id,
+                   '0'                                                                                          as exch_exec_id,
                    CASE
                        WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' THEN 'Manual Report'
-                       ELSE rep.payload ->> 'RouterExecId' END                                               as secondary_exch_exec_id,
+                       ELSE rep.payload ->> 'RouterExecId' END                                                  as secondary_exch_exec_id,
 
-    coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination) as last_mkt,
+                   coalesce(den.last_mkt, den1.last_mkt, rp.ex_destination)                                     as last_mkt,
 
-                   (rep.payload ->> 'TransactQty')::int8                                                     AS lastshares,
+                   (rep.payload ->> 'TransactQty')::int8                                                        AS lastshares,
                    case
                        when rep.exec_type in ('1', '2', 'r')
                            then round(coalesce(((rep.payload ->> 'LastPx2')::bigint)::numeric / 10000.0,
                                                ((rep.payload ->> 'LastPx')::bigint)::numeric) / 10000.0, 8)
                        else '0'::numeric
-                       end                                                                                   as last_px,
+                       end                                                                                      as last_px,
 
-                   rp.ex_destination as ex_destination,
-                   'sub_strategy' as sub_strategy,
-                   'order_id' as order_id,
-       case
-           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-               then coalesce(leg.ds_id_date, co.ds_id_date) end as expiration_date,
-       case
-           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-               then coalesce(leg.ds_id_num, co.ds_id_num) end   as strike,
-       case
-           when co.instrument_type = 'O' then co.payload ->> 'OrderQty'
-           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'O'
-               then leg.payload ->> 'LegQty' end                as opt_qty,
-       case
-           when co.instrument_type = 'E' then co.payload ->> 'OrderQty'
-           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
-               then leg.payload ->> 'LegQty'
-           end                                                  as eq_qty,
-       case
-           when co.instrument_type = 'E' then rep_last."LeavesQty"
-           when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
-               then rep_last_exec."LeavesQty"
-           end                                                  as eq_leaves_qty,
+                   rp.ex_destination                                                                            as ex_destination,
+                   'sub_strategy'                                                                               as sub_strategy,
+                   'order_id'                                                                                   as order_id,
+                   case
+                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                           then coalesce(leg.ds_id_date, co.ds_id_date) end                                     as expiration_date,
+                   case
+                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                           then (coalesce(leg.ds_id_num, co.ds_id_num))::numeric end                            as strike,
+                   case
+                       when co.instrument_type = 'O' then co.payload ->> 'OrderQty'
+                       when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'O'
+                           then leg.payload ->> 'LegQty' end                                                    as opt_qty,
+                   case
+                       when co.instrument_type = 'E' then co.payload ->> 'OrderQty'
+                       when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
+                           then leg.payload ->> 'LegQty'
+                       end                                                                                      as eq_qty,
+                   case
+                       when co.instrument_type = 'E' then rep_last."LeavesQty"
+                       when co.instrument_type = 'M' and leg.payload ->> 'LegInstrumentType' = 'E'
+                           then rep_last_exec."LeavesQty"
+                       end                                                                                      as eq_leaves_qty,
                    -- order_qty is as same as street_order_qty
                    case
                        when (coalesce(co.payload ->> 'NoLegs', '1'))::int > 1 then 2
-                       else 1 end                                                                            as multileg_reporting_type,
+                       else 1 end                                                                               as multileg_reporting_type,
                    coalesce(case
                                 when co.crossing_side is null then co.payload #>> '{ClearingDetails,GiveUp}'
                                 when co.crossing_side = 'O'
@@ -361,14 +360,14 @@ select rep.exec_type as exec_type,
                                 when co.crossing_side = 'C' then co.payload #>> '{ContraOrder,ClearingDetails,GiveUp}'
                                 else null::text
                                 end, rep.payload ->>
-                                     'ManualBroker')                                                         as exec_broker,
+                                     'ManualBroker')                                                            as exec_broker,
 
                    CASE
                        WHEN co.crossing_side IS NULL THEN co.payload #>> '{ClearingDetails,CMTA}'
                        WHEN co.crossing_side = 'O' THEN co.payload #>> '{OriginatorOrder,ClearingDetails,CMTA}'
                        WHEN co.crossing_side = 'C' THEN co.payload #>> '{ContraOrder,ClearingDetails,CMTA}'
-                       END                                                                                   AS cmtafirm,
-coalesce(ltf.EDWID, tif.ID) as tif,
+                       END                                                                                      AS cmtafirm,
+                   coalesce(ltf.EDWID, tif.ID)                                                                  as tif,
 
 
                    case
@@ -381,22 +380,22 @@ coalesce(ltf.EDWID, tif.ID) as tif,
                        when lfw.EDWID IN (21, 6, 83) then '7'
                        when lfw.EDWID IN (31, 23, 41, 98) then '8'
                        when lfw.EDWID IN (9, 40, 50, 86) then 'J'
-                       end                                                                                   as opt_customer_firm,
-co.crossing_side,
-(SELECT co2.cl_ord_id
-                                                        FROM blaze7.client_order co2
-                                                        WHERE co2.cross_order_id = co.cross_order_id
-                                                          AND co2.crossing_side = 'O'
-                                                        ORDER BY co2.chain_id DESC
-                                                        LIMIT 1) as cross_cl_ord_id,
-(SELECT co2.cl_ord_id
-                                                         FROM blaze7.client_order co2
-                                                         WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId')::bigint)
-                                                         ORDER BY co2.chain_id DESC
-                                                         LIMIT 1) as orig_cl_ord_id,
+                       end                                                                                      as opt_customer_firm,
+                   co.crossing_side,
+                   (SELECT co2.cl_ord_id
+                    FROM blaze7.client_order co2
+                    WHERE co2.cross_order_id = co.cross_order_id
+                      AND co2.crossing_side = 'O'
+                    ORDER BY co2.chain_id DESC
+                    LIMIT 1)                                                                                    as cross_cl_ord_id,
+                   (SELECT co2.cl_ord_id
+                    FROM blaze7.client_order co2
+                    WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId')::bigint)
+                    ORDER BY co2.chain_id DESC
+                    LIMIT 1)                                                                                    as orig_cl_ord_id,
                    -- street_is_cross_order is as same as is_cross_order
                    COALESCE(co.payload ->> 'OwnerUserName', co.payload ->>
-                                                            'InitiatorUserName')                             as contra_broker,
+                                                            'InitiatorUserName')                                as contra_broker,
 --        coalesce(comp.CompanyCode, u.Login) as client_id,
                    CASE
                        WHEN co.instrument_type <> 'M'::bpchar THEN co.payload ->> 'Price'::text
@@ -404,71 +403,77 @@ co.crossing_side,
                        WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,Price}'::text[]
                        WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,Price}'::text[]
                        ELSE co.payload ->> 'Price'::text
-                       END                                                                                   AS order_price,
-                   '???'                                                                                     as order_process_time,
-                   '???'                                                                                     as remarks,
-                   null                                                                                      as street_client_order_id,
-                   'LPEDWCOMPID'                                                                             as fix_comp_id,
-                   rep.payload ->> 'LeavesQty' as leaves_qty,
+                       END                                                                                      AS order_price,
+                   '???'                                                                                        as order_process_time,
+                   '???'                                                                                        as remarks,
+                   null                                                                                         as street_client_order_id,
+                   'LPEDWCOMPID'                                                                                as fix_comp_id,
+                   rep.payload ->> 'LeavesQty'                                                                  as leaves_qty,
                    CASE co.instrument_type
                        WHEN 'M' THEN leg.payload ->> 'LegSeqNumber'
                        ELSE '1'
-                       END                                                                                   AS leg_ref_id,
+                       END                                                                                      AS leg_ref_id,
 
-    CASE co.crossing_side
-                                WHEN 'C'::bpchar THEN (SELECT co2.cl_ord_id
-                                                       FROM blaze7.client_order co2
-                                                       WHERE co2.cross_order_id = co.cross_order_id
-                                                         AND co2.crossing_side = 'O'::bpchar
-                                                       ORDER BY co2.chain_id DESC
-                                                       LIMIT 1)
-                                ELSE (SELECT co2.cl_ord_id
-                                      FROM blaze7.client_order co2
-                                      WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId'::text)::bigint)
-                                      ORDER BY co2.chain_id DESC
-                                      LIMIT 1)
-                           END as orig_order_id,
-    CASE co.crossing_side
-                                WHEN 'O'::bpchar THEN (SELECT co2.cl_ord_id
-                                                       FROM blaze7.client_order co2
-                                                       WHERE co2.cross_order_id = co.cross_order_id
-                                                         AND co2.crossing_side = 'C'::bpchar
-                                                       ORDER BY co2.chain_id DESC
-                                                       LIMIT 1)
-                                ELSE (SELECT co2.cl_ord_id
-                                      FROM blaze7.client_order co2
-                                      WHERE ((co2.payload ->> 'OriginatorOrderRefId'::text)::bigint) = co.order_id
-                                        AND co2.record_type = '0'::bpchar
-                                        AND co2.chain_id = 0
-                                        AND co2.db_create_time >= co.db_create_time::date
-                                        AND co2.db_create_time <= (co.db_create_time::date + '1 day'::interval)
-                                      ORDER BY co2.chain_id DESC
-                                      LIMIT 1)
-                           END as contra_order_id,
-     CASE
-                                WHEN co.parent_order_id IS NOT NULL THEN (SELECT co2.cl_ord_id
-                                                                          FROM blaze7.client_order co2
-                                                                          WHERE co2.order_id = co.parent_order_id
-                                                                          ORDER BY co2.chain_id DESC
-                                                                          LIMIT 1)
-                                ELSE NULL::character varying
-                           END as parent_order_id,
-(SELECT rep.payload ->> 'NoChildren'::text
-                                           FROM blaze7.order_report rep
-                                           WHERE rep.cl_ord_id::text = co.cl_ord_id::text
-                                           ORDER BY rep.exec_id DESC limit 1) last_child_order,
-    co.payload ->> 'OrderTextComment' as rep_comment,
-                   case when co.parent_order_id is null then 'Y' else 'N' end                                as is_parent,
+                   CASE co.crossing_side
+                       WHEN 'C'::bpchar THEN (SELECT co2.cl_ord_id
+                                              FROM blaze7.client_order co2
+                                              WHERE co2.cross_order_id = co.cross_order_id
+                                                AND co2.crossing_side = 'O'::bpchar
+                                              ORDER BY co2.chain_id DESC
+                                              LIMIT 1)
+                       ELSE (SELECT co2.cl_ord_id
+                             FROM blaze7.client_order co2
+                             WHERE co2.order_id = ((co.payload ->> 'OriginatorOrderRefId'::text)::bigint)
+                             ORDER BY co2.chain_id DESC
+                             LIMIT 1)
+                       END                                                                                      as orig_order_id,
+                   CASE co.crossing_side
+                       WHEN 'O'::bpchar THEN (SELECT co2.cl_ord_id
+                                              FROM blaze7.client_order co2
+                                              WHERE co2.cross_order_id = co.cross_order_id
+                                                AND co2.crossing_side = 'C'::bpchar
+                                              ORDER BY co2.chain_id DESC
+                                              LIMIT 1)
+                       ELSE (SELECT co2.cl_ord_id
+                             FROM blaze7.client_order co2
+                             WHERE ((co2.payload ->> 'OriginatorOrderRefId'::text)::bigint) = co.order_id
+                               AND co2.record_type = '0'::bpchar
+                               AND co2.chain_id = 0
+                               AND co2.db_create_time >= co.db_create_time::date
+                               AND co2.db_create_time <= (co.db_create_time::date + '1 day'::interval)
+                             ORDER BY co2.chain_id DESC
+                             LIMIT 1)
+                       END                                                                                      as contra_order_id,
+                   CASE
+                       WHEN co.parent_order_id IS NOT NULL THEN (SELECT co2.cl_ord_id
+                                                                 FROM blaze7.client_order co2
+                                                                 WHERE co2.order_id = co.parent_order_id
+                                                                 ORDER BY co2.chain_id DESC
+                                                                 LIMIT 1)
+                       ELSE NULL::character varying
+                       END                                                                                      as parent_order_id,
+                   (SELECT rep.payload ->> 'NoChildren'::text
+                    FROM blaze7.order_report rep
+                    WHERE rep.cl_ord_id::text = co.cl_ord_id::text
+                    ORDER BY rep.exec_id DESC
+                    limit 1)                                                                                       last_child_order,
+                   co.payload ->> 'OrderTextComment'                                                            as rep_comment,
+                   case when co.parent_order_id is null then 'Y' else 'N' end                                   as is_parent,
 
-                   regexp_replace(COALESCE(leg.ds_id_2, co.ds_id_2, leg.ds_id_3, co.ds_id_3), '\.|-', '/', 'g') as symbol,
-        round((case when coalesce(co.ds_id_1, leg.ds_id_1) in ('FO', 'OP') THEN coalesce(co.ds_id_num,  leg.ds_id_num)::numeric  END)::numeric, 6) AS strike_price,
+                   regexp_replace(COALESCE(leg.ds_id_2, co.ds_id_2, leg.ds_id_3, co.ds_id_3), '\.|-', '/',
+                                  'g')                                                                          as symbol,
+                   round((case
+                              when coalesce(co.ds_id_1, leg.ds_id_1) in ('FO', 'OP')
+                                  THEN coalesce(co.ds_id_num, leg.ds_id_num)::numeric END)::numeric,
+                         6)                                                                                     AS strike_price,
 
-	CASE
-            WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
-            WHEN coalesce(co.ds_id_1, leg.ds_id_1) in ('FO', 'OP') THEN left(coalesce(co.ds_id_2, leg.ds_id_2), 1)
-        END as type_code,
+                   CASE
+                       WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
+                       WHEN coalesce(co.ds_id_1, leg.ds_id_1) in ('FO', 'OP')
+                           THEN left(coalesce(co.ds_id_2, leg.ds_id_2), 1)
+                       END                                                                                      as type_code,
 
-                                                                        -- will be transformed into maturity_year\month\day
+                   -- will be transformed into maturity_year\month\day
                    CASE
                        WHEN rep.leg_ref_id IS NOT NULL THEN (SELECT leg.payload ->> 'LegInstrumentType'::text
                                                              FROM blaze7.client_order_leg leg
@@ -476,39 +481,39 @@ co.crossing_side,
                                                                AND leg.chain_id = rep.chain_id
                                                                AND leg.leg_ref_id::text = rep.leg_ref_id::text)
                        ELSE rep.payload ->> 'InstrumentType'::text
-                       END AS securitytype,
+                       END                                                                                      AS securitytype,
 
-( SELECT rep.payload ->> 'NoChildren'::text
-           FROM blaze7.order_report rep
-          WHERE rep.cl_ord_id::text = co.cl_ord_id::text
-          ORDER BY rep.exec_id DESC
-         LIMIT 1) as child_orders,
+                   (SELECT rep.payload ->> 'NoChildren'::text
+                    FROM blaze7.order_report rep
+                    WHERE rep.cl_ord_id::text = co.cl_ord_id::text
+                    ORDER BY rep.exec_id DESC
+                    LIMIT 1)                                                                                    as child_orders,
 -- ISNULL(CASE WHEN r.OrderReportSpecialType = 'M' then lt.ID ELSE r.[Handling] END,0) [Handling]
- CASE
-            WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' then lt.ID
-            ELSE null
-        END AS Handling,
-                0 as secondary_order_id2,
+                   CASE
+                       WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' then lt.ID
+                       ELSE null
+                       END                                                                                      AS Handling,
+                   0                                                                                            as secondary_order_id2,
 -- expiration_date,
 -- strike_price,
 -- tl.[RootCode]
-    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS rootcode,
+                   coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3)                                   AS rootcode,
 -- tl.BaseCode
-    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS basecode,
+                   coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3)                                   AS basecode,
 -- tl.TypeCode = ct.type_code
-       CASE
-           WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
-           WHEN coalesce(co.ds_id_1, leg.ds_id_1) = ANY (ARRAY ['FO', 'OP'])
-               THEN coalesce(co.ds_id_4, leg.ds_id_4)
-           END AS typecode,
-       regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') as display_instrument_id_2,
+                   CASE
+                       WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
+                       WHEN coalesce(co.ds_id_1, leg.ds_id_1) = ANY (ARRAY ['FO', 'OP'])
+                           THEN coalesce(co.ds_id_4, leg.ds_id_4)
+                       END                                                                                      AS typecode,
+                   regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '')                               as display_instrument_id_2,
 -- ContractDesc
-  co.payload ->> 'ProductDescription' as ord_ContractDesc,
-  COALESCE(co.payload ->> 'NoLegs'::text, '1'::text) as legcount,
-        CASE
-            WHEN (rep.payload ->> 'OrderReportSpecialType'::text) = 'M'::text THEN 'M'::text
-            ELSE NULL::text
-        END AS orderreportspecialtype,
+                   co.payload ->> 'ProductDescription'                                                          as ord_ContractDesc,
+                   COALESCE(co.payload ->> 'NoLegs'::text, '1'::text)                                           as legcount,
+                   CASE
+                       WHEN (rep.payload ->> 'OrderReportSpecialType'::text) = 'M'::text THEN 'M'::text
+                       ELSE NULL::text
+                       END                                                                                      AS orderreportspecialtype,
 
                    case
                        when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -523,39 +528,68 @@ co.crossing_side,
                            then 'BRKPT'
                        when coalesce(den1.mic_code, rp.ex_destination) in ('XPSE') then 'ARCO'
                        when coalesce(den1.mic_code, rp.ex_destination) = 'TO' then 'AMXO'
-                       else coalesce(den1.mic_code, rp.ex_destination) end                                   as mic_code
-             ,
-    co.ds_id_1 as dash_sec_2,
-    co.ds_id_date as dase_sec_date,
-    co.ds_id_num as dash_sec_num,
-    co.ds_id_2 as dash_sec_eq,
-    co.ds_id_3 as dase_sec_op,
+                       else coalesce(den1.mic_code, rp.ex_destination) end                                      as mic_code
+                    ,
+                   co.ds_id_1                                                                                   as dash_sec_2,
+                   co.ds_id_date                                                                                as dase_sec_date,
+                   co.ds_id_num                                                                                 as dash_sec_num,
+                   co.ds_id_2                                                                                   as dash_sec_eq,
+                   co.ds_id_3                                                                                   as dase_sec_op,
 
-    leg.ds_id_1 as dash_sec_2,
-    leg.ds_id_date as dase_sec_date,
-    leg.ds_id_num as dash_sec_num,
-    leg.ds_id_2 as dash_sec_eq,
-    leg.ds_id_3 as dase_sec_op
+                   leg.ds_id_1                                                                                  as dash_sec_2,
+                   leg.ds_id_date                                                                               as dase_sec_date,
+                   leg.ds_id_num                                                                                as dash_sec_num,
+                   leg.ds_id_2                                                                                  as dash_sec_eq,
+                   leg.ds_id_3                                                                                  as dase_sec_op
             from blaze7.order_report rep
-                     join lateral (select *, case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end as ds_id_1,
-                                          case when co.instrument_type <> 'M' then to_date("substring"(co.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
-                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
-                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
-                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
-                                          case when co.instrument_type <> 'M' then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end as ds_id_4
+                     join lateral (select *,
+                                          case
+                                              when co.instrument_type <> 'M'
+                                                  then "substring"(co.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end  as ds_id_1,
+                                          case
+                                              when co.instrument_type <> 'M' then to_date(
+                                                      "substring"(co.payload ->> 'DashSecurityId', '([0-9]{6})'),
+                                                      'YYMMDD') end                                                            as ds_id_date,
+                                          case
+                                              when co.instrument_type <> 'M'
+                                                  then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end      as ds_id_num,
+                                          case
+                                              when co.instrument_type <> 'M'
+                                                  then "substring"(co.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end          as ds_id_2,
+                                          case
+                                              when co.instrument_type <> 'M'
+                                                  then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
+                                          case
+                                              when co.instrument_type <> 'M'
+                                                  then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end         as ds_id_4
                                    from blaze7.client_order co
                                    where co.order_id = rep.order_id
                                      AND co.chain_id = rep.chain_id
                                    limit 1) co on true
-                     LEFT JOIN lateral (select *, case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end as ds_id_1,
-                                               case when co.instrument_type = 'M' then to_date("substring"(leg.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') end as ds_id_date,
-                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end as ds_id_num,
-                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end as ds_id_2,
-                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
-                                               case when co.instrument_type = 'M' then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end as ds_id_4
+                     LEFT JOIN lateral (select *,
+                                               case
+                                                   when co.instrument_type = 'M'
+                                                       then "substring"(leg.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})') end  as ds_id_1,
+                                               case
+                                                   when co.instrument_type = 'M' then to_date(
+                                                           "substring"(leg.payload ->> 'DashSecurityId', '([0-9]{6})'),
+                                                           'YYMMDD') end                                                             as ds_id_date,
+                                               case
+                                                   when co.instrument_type = 'M'
+                                                       then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$') end      as ds_id_num,
+                                               case
+                                                   when co.instrument_type = 'M'
+                                                       then "substring"(leg.payload ->> 'DashSecurityId', 'US:EQ:(.+)') end          as ds_id_2,
+                                               case
+                                                   when co.instrument_type = 'M'
+                                                       then "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
+                                               case
+                                                   when co.instrument_type = 'M'
+                                                       then "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end         as ds_id_4
                                         from blaze7.client_order_leg leg
-                               where leg.order_id = co.order_id AND leg.chain_id = co.chain_id and
-                                  leg.leg_ref_id = rep.leg_ref_id) leg on true
+                                        where leg.order_id = co.order_id
+                                          AND leg.chain_id = co.chain_id
+                                          and leg.leg_ref_id = rep.leg_ref_id) leg on true
                      left join staging.TUsers u on u.ID = co.user_id
                      left join lateral (select regexp_replace(rep.payload ->> 'LastMkt', 'DIRECT-| Printer', '', 'g') as ex_destination
                                         from blaze7.order_report rp
@@ -621,12 +655,11 @@ co.crossing_side,
                                                                            WHEN co.crossing_side = 'C'
                                                                                THEN co.payload #>> '{ContraOrder,ClientEntityId}'
                 END)::int4
-            LEft join staging.dLiquidityType lt on rep.payload ->> 'LiquidityType' = lt.enum
+                     LEft join staging.dLiquidityType lt on rep.payload ->> 'LiquidityType' = lt.enum
             where rep.multileg_reporting_type <> '3'
               AND co.record_type in ('0', '2')
               AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
-            and rep.db_create_time::date = '2024-06-10'::date
-            )
+              and rep.db_create_time::date = '2024-06-10'::date)
 select trade_record_time,
        date_id,
        subsystem_id,
@@ -641,34 +674,35 @@ select trade_record_time,
        secondary_order_id,
        exch_exec_id,
        secondary_exch_exec_id,
-case
-                       when last_mkt in ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
-                       when last_mkt in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
-                       when last_mkt in ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
-                       when last_mkt in ('FOGS', 'MID') then 'XCHI'
-                       when last_mkt in ('C2', 'CBOE2') then 'C2OX'
-                       when last_mkt = 'SMARTR' then 'COWEN'
-                       when last_mkt in ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
-                       when last_mkt in ('XPSE') then 'N'
-                       when last_mkt in ('TO') then '1'
-                       else last_mkt end                     as last_mkt,
-    lastshares,
-    last_px,
-    ex_destination,
-    sub_strategy,
-    order_id,
+       case
+           when last_mkt in ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+           when last_mkt in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+           when last_mkt in ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
+           when last_mkt in ('FOGS', 'MID') then 'XCHI'
+           when last_mkt in ('C2', 'CBOE2') then 'C2OX'
+           when last_mkt = 'SMARTR' then 'COWEN'
+           when last_mkt in ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
+           when last_mkt in ('XPSE') then 'N'
+           when last_mkt in ('TO') then '1'
+           else last_mkt end                                                                      as last_mkt,
+       lastshares,
+       last_px,
+       ex_destination,
+       sub_strategy,
+       order_id,
 
        coalesce(
                case
                    when
                        ct.expiration_date <> '1900-01-01'::date and ct.strike <> 0.00
-                       then ct.opt_qty
-                   else ct.eq_qty end,
-               ct.eq_leaves_qty
-       ) as street_order_qty,
-    multileg_reporting_type,
-    ct.exec_broker,
+                       then ct.opt_qty::numeric
+                   else ct.eq_qty::numeric end,
+               ct.eq_leaves_qty::numeric
+       )                                                                                          as street_order_qty,
+       multileg_reporting_type,
+       ct.exec_broker,
        ct.cmtafirm,
+
        case
            when ct.tif in (24, 17, 10, 1, 44) then 0
            when ct.tif in (26, 18, 3, 45, 12) then 1
@@ -678,17 +712,17 @@ case
            when ct.tif in (36, 37, 38, 49) then 5
            when ct.tif in (50, 14, 21, 33) then 6
            when ct.tif in (32, 9, 16) then 7
-           end as street_time_in_force,
-opt_customer_firm,
-CASE
-                       when ct.crossing_side = 'C' and ct.cross_cl_ord_id is not null then 'Y'
-                       when ct.crossing_side <> 'C' and ct.orig_cl_ord_id is not null then 'Y'
-                       else 'N'
-                       END                                                                                   as is_cross_order,
-    contra_broker,
-order_price,
-order_process_time,
-remarks,
+           end                                                                                    as street_time_in_force,
+       opt_customer_firm,
+       CASE
+           when ct.crossing_side = 'C' and ct.cross_cl_ord_id is not null then 'Y'
+           when ct.crossing_side <> 'C' and ct.orig_cl_ord_id is not null then 'Y'
+           else 'N'
+           END                                                                                    as is_cross_order,
+       contra_broker,
+       order_price,
+       order_process_time,
+       remarks,
        is_busted,
        street_client_order_id,
        fix_comp_id,
@@ -700,21 +734,22 @@ remarks,
            when ct.parent_order_id is not null then 10
            when ct.parent_order_id is null and ct.last_child_order is not null then 10
            when rep_comment like '%OVR%' then 4
-           else 50 end as strategy_decision_reason_code,
-    is_parent,
-    symbol,
-    strike_price,
-case ct.type_code
-		when 'P' then '0'
-		when 'C' then '1'
-	end as put_or_call,
-    extract(year from ct.expiration_date) as maturity_year,
-        extract(month from ct.expiration_date) as maturity_month,
-        extract(day from ct.expiration_date) as maturity_day,
-        ct.securitytype as security_type,
-        ct.child_orders,
-        ct.handling as handling_id,
-        ct.secondary_order_id2,
+           else 50 end                                                                            as strategy_decision_reason_code,
+       is_parent,
+       symbol,
+       strike_price,
+       case ct.type_code
+           when 'P' then '0'
+           when 'C' then '1'
+           end                                                                                    as put_or_call,
+       extract(year from ct.expiration_date)                                                      as maturity_year,
+       extract(month from ct.expiration_date)                                                     as maturity_month,
+       extract(day from ct.expiration_date)                                                       as maturity_day,
+       ct.securitytype                                                                            as security_type,
+       ct.child_orders,
+       ct.handling                                                                                as handling_id,
+       ct.secondary_order_id2,
+/*
 -- display_instrument_id
        case
            when ct.expiration_date is null and ct.strike_price is not null then
@@ -732,15 +767,16 @@ case ct.type_code
                        ), '/', '')
            else
                regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g')
-           end asdisplay_instrument_id,
- case when ct.expiration_date is null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
-regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g') as activ_symbol,
-case when ct.orderreportspecialtype = 'M' then 
+           end                                                                                       asdisplay_instrument_id,
+*/
+       case when ct.expiration_date is null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
+       regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g')                                 as activ_symbol,
+       case when ct.orderreportspecialtype = 'M' then 1 else 0 end                                as is_sor_routed,
 
-
-''
-from ct where is_busted = 'Y'
-                   limit 5;
+       ''
+from ct
+where is_busted = 'Y'
+limit 5;
 
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
     and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
