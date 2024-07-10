@@ -494,7 +494,7 @@ co.crossing_side,
 -- tl.[RootCode]
     coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS rootcode,
 -- tl.BaseCode
-    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS rootcode,
+    coalesce(co.ds_id_2, leg.ds_id_2, co.ds_id_3, leg.ds_id_3) AS basecode,
 -- tl.TypeCode = ct.type_code
        CASE
            WHEN coalesce(co.ds_id_1, leg.ds_id_1) = 'EQ' THEN 'S'
@@ -505,7 +505,10 @@ co.crossing_side,
 -- ContractDesc
   co.payload ->> 'ProductDescription' as ord_ContractDesc,
   COALESCE(co.payload ->> 'NoLegs'::text, '1'::text) as legcount,
-
+        CASE
+            WHEN (rep.payload ->> 'OrderReportSpecialType'::text) = 'M'::text THEN 'M'::text
+            ELSE NULL::text
+        END AS orderreportspecialtype,
 
                    case
                        when coalesce(den1.mic_code, rp.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -713,30 +716,28 @@ case ct.type_code
         ct.handling as handling_id,
         ct.secondary_order_id2,
 -- display_instrument_id
-        case when ct.expiration_date is null and ct.strike_price is not null then
-            regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g') || ' ' ||
-                to_char(ct.expiration_date::date, 'DDMonYY') ||
-/*
-	   case
-			when nullif(tl.[ExpirationDate],'1900-01-01 00:00:00.000') is not null and nullif(tl.[Strike],0.00) is not null
-				then  replace(isnull(replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')+ ' '
-						+ RIGHT('0' +cast(datepart(day, tl.[ExpirationDate] ) as varchar ), 2)
-						+ left(datename(month,tl.[ExpirationDate]),3)
-						+ right(datename(year,tl.[ExpirationDate]),2)+' '
-						+ case
-								when charindex('0.',cast(cast(tl.[Strike] as float) as varchar(8)))=1
-									then right(cast(cast(tl.[Strike] as float) as varchar(8)), len(cast(cast(tl.[Strike] as float) as varchar(8)))-1)
-									else cast(cast(tl.[Strike] as float) as varchar(8))
-							end
- 						+ cast(tl.TypeCode as varchar(8)), ContractDesc) ,'/','')
-				else replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')
-		end as display_instrument_id,
-       CASE
-	        WHEN CHARINDEX(l.BaseCode + ' ',o.[ContractDesc]) < 1 THEN l.BaseCode + ' ' + REPLACE(o.[ContractDesc],l.BaseCode,'')
-		    WHEN o.LegCount = 1 and l.TypeCode = 'S' then ContractDesc + ' Stock'
-			WHEN CHARINDEX(' ',o.[ContractDesc]) <= 0 then ContractDesc + ' '
-	  ELSE o.[ContractDesc] END [ContractDesc]
-*/
+       case
+           when ct.expiration_date is null and ct.strike_price is not null then
+               replace(coalesce(
+                               regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g') || ' ' ||
+                               to_char(ct.expiration_date::date, 'DDMonYY') ||
+                               staging.custom_format(ct.strike_price) ||
+                               left(ct.typecode, 8),
+                               case
+                                   when ct.ord_ContractDesc not like ct.basecode || ' ' || '%'
+                                       then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
+                                   when ct.legcount = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
+                                   when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc + ' '
+                                   else ct.ord_ContractDesc end
+                       ), '/', '')
+           else
+               regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g')
+           end asdisplay_instrument_id,
+ case when ct.expiration_date is null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
+regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g') as activ_symbol,
+case when ct.orderreportspecialtype = 'M' then 
+
+
 ''
 from ct where is_busted = 'Y'
                    limit 5;
@@ -745,7 +746,7 @@ from ct where is_busted = 'Y'
     and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
 
 select regexp_replace('abcd/\.-', '\.|-', '/', 'g') as symbol;
-
+select ' abc def' like ' %' ||'%'
 create function staging.get_exp_date(in_date date default null)
     returns text
     language plpgsql
@@ -769,6 +770,7 @@ create or replace function staging.custom_format(in_numb numeric default null, i
 as
 $$
     -- the function works like the select cast(cast(in_numb as float) as varchar(in_len)) in T-sql
+    -- for numbers < 1 it returns .valuable_decimals_only like .123 without trailing zeros
 declare
     l_int_part     int;
     l_int_part_len int;
@@ -776,6 +778,9 @@ declare
 begin
     if in_numb is null then
         return null;
+    end if;
+    if in_numb < 1 then
+        return to_char(in_numb, 'FM999.999999');
     end if;
 
     select floor(in_numb) into l_int_part;
@@ -796,3 +801,8 @@ select to_char(:in_numb,'FM999999999'), to_char(:in_numb,'FM99999.99999999');
 select floor(:in_numb)
 
 select staging.custom_format(0.1239456789, 8)
+select staging.custom_format(:in_numb)
+select to_char(:in_numb, 'FM999.999999')
+                                  else staging.custom_format(case
+                                                                 when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
+                                                                     then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
