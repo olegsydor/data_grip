@@ -501,34 +501,10 @@ co.crossing_side,
            WHEN coalesce(co.ds_id_1, leg.ds_id_1) = ANY (ARRAY ['FO', 'OP'])
                THEN coalesce(co.ds_id_4, leg.ds_id_4)
            END AS typecode,
--- ContractDesc
-
-       replace(case
-                   when
-                       regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') || ' ' ||
-                       staging.get_exp_date(in_date := :in_date) || ' '
-                           || case
-                                  when case
-                                           when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                               then coalesce(leg.ds_id_num, co.ds_id_num) end > 0
-                                      and case
-                                              when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                                  then coalesce(leg.ds_id_num, co.ds_id_num) end < 1
-                                      then to_char(case
-                                                       when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                                           then coalesce(leg.ds_id_num, co.ds_id_num) end,
-                                                   'FM999.999999')
-                                  else staging.custom_format(case
-                                                                 when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                                                     then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
-                           end
-                           || case
-                                  when coalesce(leg.ds_id_1, co.ds_id_1) = 'EQ' then 'S'
-                                  when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
-                                      then left(coalesce(leg.ds_id_num, co.ds_id_num), 1) end
-                           = 'ContractDesc'
-                       then null end, '/', '')                        as display_instrument_id_1,
        regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '') as display_instrument_id_2,
+-- ContractDesc
+  co.payload ->> 'ProductDescription' as ord_ContractDesc,
+  COALESCE(co.payload ->> 'NoLegs'::text, '1'::text) as legcount,
 
 
                    case
@@ -736,15 +712,34 @@ case ct.type_code
         ct.child_orders,
         ct.handling as handling_id,
         ct.secondary_order_id2,
-        case when ct.expiration_date is not null and ct.strike_price is not null then
-    ''
-
-
-
-
-
+-- display_instrument_id
+        case when ct.expiration_date is null and ct.strike_price is not null then
+            regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g') || ' ' ||
+                to_char(ct.expiration_date::date, 'DDMonYY') ||
+/*
+	   case
+			when nullif(tl.[ExpirationDate],'1900-01-01 00:00:00.000') is not null and nullif(tl.[Strike],0.00) is not null
+				then  replace(isnull(replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')+ ' '
+						+ RIGHT('0' +cast(datepart(day, tl.[ExpirationDate] ) as varchar ), 2)
+						+ left(datename(month,tl.[ExpirationDate]),3)
+						+ right(datename(year,tl.[ExpirationDate]),2)+' '
+						+ case
+								when charindex('0.',cast(cast(tl.[Strike] as float) as varchar(8)))=1
+									then right(cast(cast(tl.[Strike] as float) as varchar(8)), len(cast(cast(tl.[Strike] as float) as varchar(8)))-1)
+									else cast(cast(tl.[Strike] as float) as varchar(8))
+							end
+ 						+ cast(tl.TypeCode as varchar(8)), ContractDesc) ,'/','')
+				else replace(replace(coalesce(nullif(tl.[RootCode],''),tl.BaseCode),'.',''),'-','')
+		end as display_instrument_id,
+       CASE
+	        WHEN CHARINDEX(l.BaseCode + ' ',o.[ContractDesc]) < 1 THEN l.BaseCode + ' ' + REPLACE(o.[ContractDesc],l.BaseCode,'')
+		    WHEN o.LegCount = 1 and l.TypeCode = 'S' then ContractDesc + ' Stock'
+			WHEN CHARINDEX(' ',o.[ContractDesc]) <= 0 then ContractDesc + ' '
+	  ELSE o.[ContractDesc] END [ContractDesc]
+*/
+''
 from ct where is_busted = 'Y'
-                   limit 5
+                   limit 5;
 
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
     and rep.exec_id in ('ert9gm9c0g00', 'ert9gnp80g00', 'ert9golg0g04', 'ert9gomk0g00', 'ert9goms0g02');
@@ -766,6 +761,7 @@ begin
            to_char(in_date, 'YY');
 end;
 $$;
+select
 
 create or replace function staging.custom_format(in_numb numeric default null, in_len int default 8)
     returns text
@@ -799,4 +795,4 @@ select * from staging.get_exp_date(in_date := :in_date)
 select to_char(:in_numb,'FM999999999'), to_char(:in_numb,'FM99999.99999999');
 select floor(:in_numb)
 
-select staging.custom_format(12.1239456789, 8)
+select staging.custom_format(0.1239456789, 8)
