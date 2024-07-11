@@ -110,7 +110,7 @@ from trash.so_base main
     (
     select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr, cnt
     from dwh.client_order co
-             left join lateral (select ec.order_id, count(*) as cnt, array_agg((exec_type, exec_id) order by exec_id) as exec_id_arr
+             left join lateral (select ec.order_id, count(*) as cnt, array_agg(exec_id order by exec_id) as exec_id_arr
                                 from dwh.execution ec
                                 where ec.exec_date_id >= co.create_date_id
                                   and ec.exec_date_id between 20230902 and 20230929
