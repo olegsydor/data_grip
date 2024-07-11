@@ -508,7 +508,7 @@ with ct as (select rep.exec_type                                                
                        END                                                                                      AS typecode,
                    regexp_replace(coalesce(leg.ds_id_2, leg.ds_id_3), '\.|-', '')                               as display_instrument_id_2,
 -- ContractDesc
-                   co.payload ->> 'ProductDescription'                                                          as ord_ContractDesc,
+                   coalesce(co.payload ->> 'ProductDescription', '')::text                                      as ord_ContractDesc,
                    COALESCE(co.payload ->> 'NoLegs'::text, '1'::text)                                           as legcount,
                    CASE
                        WHEN (rep.payload ->> 'OrderReportSpecialType'::text) = 'M'::text THEN 'M'::text
@@ -656,10 +656,13 @@ with ct as (select rep.exec_type                                                
                                                                                THEN co.payload #>> '{ContraOrder,ClientEntityId}'
                 END)::int4
                      LEft join staging.dLiquidityType lt on rep.payload ->> 'LiquidityType' = lt.enum
-            where rep.multileg_reporting_type <> '3'
+            where true
+                and rep.multileg_reporting_type <> '3'
               AND co.record_type in ('0', '2')
               AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
-              and rep.db_create_time::date = '2024-06-10'::date)
+              and rep.db_create_time::date = '2024-06-10'::date
+
+            )
 select trade_record_time,
        date_id,
        subsystem_id,
@@ -694,7 +697,7 @@ select trade_record_time,
        coalesce(
                case
                    when
-                       ct.expiration_date <> '1900-01-01'::date and ct.strike <> 0.00
+                       ct.expiration_date is not null and coalesce(ct.strike, 0.00) <> 0.00
                        then ct.opt_qty::numeric
                    else ct.eq_qty::numeric end,
                ct.eq_leaves_qty::numeric
@@ -752,39 +755,30 @@ select trade_record_time,
 
 -- display_instrument_id
        ---
-ct.ord_ContractDesc not like ct.basecode || ' %',
-ct.ord_ContractDesc,
-ct.basecode,
-ct.legcount,
-ct.typecode,
---        case
---                                    when ct.ord_ContractDesc not like ct.basecode || ' %'
---                                        then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
---                                    when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
---                                    when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc + ' '
---                                    else ct.ord_ContractDesc end,
-/*
-       ---
-
+       ct.rootcode,
+       ct.typecode,
+ct.expiration_date,
+ct.strike_price,
+regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g'),
+       --
        case
-           when ct.expiration_date is null and ct.strike_price is not null then
+           when ct.expiration_date is not null and ct.strike_price is not null then
                replace(coalesce(
                                regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g') || ' ' ||
-                               to_char(ct.expiration_date::date, 'DDMonYY') ||
+                               to_char(ct.expiration_date::date, 'DDMonYY') || ' ' ||
                                staging.custom_format(ct.strike_price) ||
                                left(ct.typecode, 8),
                                case
                                    when ct.ord_ContractDesc not like ct.basecode || ' %'
                                        then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
-                                   when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc + ' Stock'
-                                   when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc + ' '
+                                   when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc || ' Stock'
+                                   when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc || ' '
                                    else ct.ord_ContractDesc end
                        ), '/', '')
            else
                regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g')
-           end                                                                                       asdisplay_instrument_id,
-*/
-       case when ct.expiration_date is null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
+           end                                                                                    as display_instrument_id,
+       case when ct.expiration_date is not null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
        regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g')                                 as activ_symbol,
        case when ct.orderreportspecialtype = 'M' then 1 else 0 end                                as is_sor_routed,
 
