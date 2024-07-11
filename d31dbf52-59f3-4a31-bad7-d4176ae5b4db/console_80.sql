@@ -172,7 +172,7 @@ from trash.so_main_ext
 ;
 
 select * from trash.so_cons_prepared
-where rfr_id = '100284649835';
+where rfr_id = '740245810547';
 
 with al as (select rfr_id,
                    request_number,
@@ -187,21 +187,38 @@ with al as (select rfr_id,
                        when rn_total > 1 and nullif(executed_volume, 0) is null then 'd' end as routed_type
             from trash.so_cons_prepared
             where true
---             and rfr_id = '100284649835'
-            and executed_volume is not null)
+            and rfr_id = '760204378479'
+            and executed_volume is not null
+            )
 select
-routed_type, count(*)
+route_type, routed_type, count(*)
 from al
-group by routed_type;
-
-select 1103898+7519856+389567+2474165
-
+group by route_type, routed_type
+order by 1, 2;
 
 
-and rfr_id = '100284649835';
-
-select ex.last_qty, * from dwh.client_order co
-         join dwh.execution ex on ex.order_id = co.order_id and ex.exec_date_id >= co.create_date_id and ex.exec_type in ('0', 'A', '5', 'F')
-where dash_rfr_id = '100287978057'
-and create_date_id between 20230901 and 20230930
-and parent_order_id is not null
+with al as (select rfr_id,
+                   request_number,
+                   route_type,
+                   sum(executed_volume),
+                   min(rn) as rn,
+                   min(rn_total) as rn_total
+                   ,
+                   case
+                       when min(rn) = 1 and sum(executed_volume) > 0 then 'a'
+                       when min(rn) = 1 and sum(executed_volume)  = 0  then 'b'
+                       when min(rn_total) > 1 and sum(executed_volume) > 0 then 'c'
+                       when min(rn_total) > 1 and sum(executed_volume) = 0 then 'd' end as routed_type
+            from trash.so_cons_prepared
+            where true
+            and rfr_id = '100284649835'
+            and executed_volume is not null
+            group by rfr_id, request_number, route_type
+            )
+-- select
+-- route_type, routed_type, count(*)
+-- from al
+-- group by route_type, routed_type
+-- order by 1, 2;
+select rfr_id, request_number, route_type, routed_type
+from al
