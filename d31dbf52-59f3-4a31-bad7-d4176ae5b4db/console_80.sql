@@ -170,6 +170,10 @@ select rfr_id,
 from trash.so_main_ext
  where rfr_id = '100284649835'
 ;
+
+select * from trash.so_cons_prepared
+where rfr_id = '100284649835';
+
 with al as (select rfr_id,
                    request_number,
                    route_type,
@@ -177,12 +181,14 @@ with al as (select rfr_id,
                    exchange_routed,
                    cnt,
                    case
-                       when rn = 1 and executed_volume is not null then 'a'
-                       when rn = 1 and executed_volume is null then 'b'
-                       when rn_total > 1 and executed_volume is not null then 'c'
-                       when rn_total > 1 and executed_volume is null then 'd' end as routed_type
+                       when rn = 1 and nullif(executed_volume, 0) is not null then 'a'
+                       when rn = 1 and nullif(executed_volume, 0) is null then 'b'
+                       when rn_total > 1 and nullif(executed_volume, 0) is not null then 'c'
+                       when rn_total > 1 and nullif(executed_volume, 0) is null then 'd' end as routed_type
             from trash.so_cons_prepared
-            where true)
+            where true
+--             and rfr_id = '100284649835'
+            and executed_volume is not null)
 select
 routed_type, count(*)
 from al
