@@ -540,7 +540,14 @@ with ct as (select rep.exec_type                                                
                    leg.ds_id_date                                                                               as dase_sec_date,
                    leg.ds_id_num                                                                                as dash_sec_num,
                    leg.ds_id_2                                                                                  as dash_sec_eq,
-                   leg.ds_id_3                                                                                  as dase_sec_op
+                   leg.ds_id_3                                                                                  as dase_sec_op,
+                   CASE
+                       WHEN rep.payload ->> 'OrderReportSpecialType' = 'M' THEN 'Manual Report'
+                       ELSE rep.payload ->> 'RouterExecId' END ExchangeTransactionID,
+co.generation,
+comp.companyname as companyname,
+clordid_to_guid(rep.cl_ord_id) as orderid,
+co.parentorderid as parentorderid
             from blaze7.order_report rep
                      join lateral (select *,
                                           case
@@ -561,7 +568,17 @@ with ct as (select rep.exec_type                                                
                                                   then "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_') end as ds_id_3,
                                           case
                                               when co.instrument_type <> 'M'
-                                                  then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end         as ds_id_4
+                                                  then "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)') end         as ds_id_4,
+                                       CASE
+            WHEN co.crossing_side IS NULL THEN co.payload ->> 'Generation'::text
+            WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,Generation}'::text[]
+            WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,Generation}'::text[]
+        END AS generation,
+                                       case when co.parent_order_id is null then ( SELECT co2.cl_ord_id
+               FROM blaze7.client_order co2
+              WHERE co2.order_id = co.parent_order_id
+              ORDER BY co2.chain_id DESC
+             LIMIT 1) end as parentorderid
                                    from blaze7.client_order co
                                    where co.order_id = rep.order_id
                                      AND co.chain_id = rep.chain_id
@@ -781,10 +798,19 @@ regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g'),
        case when ct.expiration_date is not null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
        regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g')                                 as activ_symbol,
        case when ct.orderreportspecialtype = 'M' then 1 else 0 end                                as is_sor_routed,
-
+	(case
+        when lag(ct.companyname,1) over (partition by ct.ExchangeTransactionID order by ct.generation) <> ct.companyname
+         and lag(ct.OrderID,1) over (partition by ct.ExchangeTransactionID order by ct.generation) = ct.ParentORdeRID  then 1
+        else 0
+    end ) as is_company_name_changed,
+    ct.companyname,
+    ct.generation,
+    max(ct.generation) over (partition by ct.ExchangeTransactionID) mx_gen,
        ''
-from ct
-where is_busted = 'Y'
+from staging.v_away_trade_query ct
+where true
+--     and is_busted = 'Y'
+and db_create_time::date = '2024-06-10'::date
 limit 5;
 
   and co.cl_ord_id in ('1_kh240610','1_qv240610','b_1_qv240610')
