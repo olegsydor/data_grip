@@ -26,6 +26,7 @@ create table trash.so_routed_order_information as
         where date_id between 20230902 and 20230929;
 create index on trash.so_routed_order_information (cons_message_id, date_id);
 
+
 drop table if exists trash.so_base;
 create table trash.so_base as
 --explain
@@ -55,7 +56,6 @@ from trash.so_routing_instruction_message ri
          join trash.so_consolidator_message cm
               on cm.cons_message_id = ri.cons_message_id and cm.message_type = 8
                   and cm.date_id between 20230902 and 20230929
-
          left join lateral
     (
     select roi.date_id
@@ -82,11 +82,12 @@ from trash.so_routing_instruction_message ri
       and cm.date_id = cmi.date_id
       and ri.side = roi.side         -- get rid off roi side which is for another RouteType
       and ri.exchange = roi.exchange -- important, as it can be in several exchanges for different RouteTypes for one side, so having just a side is not enough.
-      and roi.accepted_or_rejected = 1
+--       and roi.accepted_or_rejected = 1
     limit 2
     ) cm_9 on true and cm_9.dedup = 1
 where ri.date_id between 20230902 and 20230929
   and cm.message ilike '%IMC%'
+--   and cm.rfr_id = '100284649835'
  and (
             (ri.route_type = 10) --(Post then Cross) -- var SA_RR_PC_POST_ORDER = 94 // Post order as part of Post then cross
             or
@@ -109,18 +110,17 @@ from trash.so_base main
     (
     select co.order_id, co.exchange_id, co.strtg_decision_reason_code, ec.exec_id_arr, cnt
     from dwh.client_order co
-             left join lateral (select ec.order_id, count(*) as cnt, array_agg(exec_id order by exec_id) as exec_id_arr
+             left join lateral (select ec.order_id, count(*) as cnt, array_agg((exec_type, exec_id) order by exec_id) as exec_id_arr
                                 from dwh.execution ec
                                 where ec.exec_date_id >= co.create_date_id
                                   and ec.exec_date_id between 20230902 and 20230929
                                   and ec.order_id = co.order_id
-                                  and ec.exec_type in ('A', 'O', '5')--= 'F'
+                                  and ec.exec_type in ('A', 'O', '5', 'F')--= 'F'
                                 group by ec.order_id
                                 limit 1) ec on true
     where co.create_date_id = main.date_id
       and co.create_date_id between 20230902 and 20230929
       and co.parent_order_id is not null -- street level
-
       and co.dash_rfr_id = main.rfr_id
       and co.order_qty = main.routed_volume
       and co.side = main.side
@@ -131,7 +131,8 @@ from trash.so_base main
       and co.strtg_decision_reason_code::varchar = left(reason_code, 2)
     limit 1
     ) co on true
-where true;
+where true
+and main.rfr_id = '100284649835';
 
 select * from trash.so_main_ext;
 create index on trash.so_main_ext (rfr_id, route_type, request_number);
