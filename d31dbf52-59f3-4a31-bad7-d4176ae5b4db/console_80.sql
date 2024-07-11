@@ -97,7 +97,8 @@ where ri.date_id between 20230902 and 20230929
 --             (ri.route_type = 12) --(Post as COA)     -- var SA_RR_POST_COA_ORDER = 98 // Post as COA order
           );
 
-select * from  trash.so_base;
+select * from  trash.so_base
+where rfr_id = '100284649835';
 
 drop table if exists trash.so_main_ext;
 create table trash.so_main_ext as
