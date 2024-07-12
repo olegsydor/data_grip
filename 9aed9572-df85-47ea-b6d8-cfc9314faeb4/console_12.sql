@@ -228,6 +228,7 @@ begin
 end;
 $$;
 
+/*
 create or replace function staging.get_order_qty(in_co_instrument_type bpchar, in_co_dashsecurity_id text,
                                       in_leg_dashsecurity_id text, in_leg_instrument_type bpchar, in_co_order_qty text,
                                       in_leg_qty text, in_rep_last_leaves_qty text, in_rep_exec_leaves_qty text)
@@ -271,7 +272,7 @@ return ret_val;
 
 end;
 $fx$;
-
+*/
 with ct as (select rep.exec_type                                                                                as exec_type,
                    rep.payload ->> 'TransactTime'                                                               AS trade_record_time,
                    to_char((rep.payload ->> 'TransactTime')::timestamp, 'YYYYMMDD')::int4                       AS date_id,

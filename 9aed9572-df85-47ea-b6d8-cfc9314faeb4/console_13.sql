@@ -1,3 +1,253 @@
+CREATE TABLE staging.TUsers
+(
+    ID                     int           NOT NULL,
+    UserId                 int           NULL,
+    CompanyID              int           NULL,
+    Login                  varchar(128)  NULL,
+    Password               varchar(300)  NULL,
+    PasswordHint           varchar(128)  NULL,
+    Status                 int           NULL,
+    ActiveDate             timestamp     NULL,
+    PersonId               int           NULL,
+    CreateDate             timestamp     NULL,
+    UpdateDate             timestamp     NULL,
+    LoginNum               int           NULL,
+    ExpirationDate         timestamp     NULL,
+    ProductID              int           NULL,
+    LoginCount             int           NULL,
+    LoginTimestamp         timestamp     NULL,
+    PwdTimestamp           timestamp     NULL,
+    DisableLogin           int           NULL,
+    AutoExpirePwd          int           NULL,
+    PwdReset               int           NULL,
+    InactivityCount        int           NULL,
+    UserFixRemoteCompID    varchar(128)  NULL,
+    IsManualCancelReplace  int           NULL,
+    SymbolType             int           NULL,
+    BBSupressNew           int           NULL,
+    SessionID              text          NULL,
+    AORSUsername           varchar(128)  NULL,
+    PasswordChangeRequired int           NULL,
+    Description            varchar(256)  NULL,
+    SystemID               int           NULL,
+    EDWActive              int DEFAULT 0 NULL,
+    EDWUserID              int           NULL
+);
+
+
+CREATE TABLE staging.dash_exchange_names
+(
+    exchange_unq_id          smallint       NOT NULL,
+    exchange_id              varchar(6)     NOT NULL,
+    exchange_name            varchar(256)   NULL,
+    activ_exchange_code      varchar(6)     NULL,
+    internalization_priority smallint       NULL,
+    eq_mpid                  varchar(4)     NULL,
+    is_activ_md_required     char(1)        NULL,
+    display_exchange_name    varchar(32)    NULL,
+    instrument_type_id       char(1)        NULL,
+    customer_or_firm_tag     smallint       NULL,
+    trading_venue_class      char(1)        NULL,
+    exch_rt_pref_code_tag    int            NULL,
+    is_rt_mngr_eligible      char(1)        NULL,
+    tcce_display_name        varchar(40)    NULL,
+    exegy_exchange_code      varchar(6)     NULL,
+    date_start               timestamp      NULL,
+    date_end                 timestamp      NULL,
+    real_exchange_id         varchar(6)     NULL,
+    may_street_exchange_code numeric(18, 0) NULL,
+    is_active                int            NULL,
+    mic_code                 varchar(4)     NULL,
+    last_mkt                 varchar(5)     NULL,
+    exec_broker_tag          numeric(5, 0)  NULL,
+    dark_venue_category_id   char(1)        NULL,
+    cat_exchange_id          varchar(9)     NULL,
+    cat_crd                  varchar(15)    NULL,
+    cat_is_exchange          char(1)        NULL,
+    cat_suppress             char(1)        NULL,
+    cat_collapse             char(1)        NULL,
+    is_exchange_active       int            NULL
+);
+
+CREATE TABLE staging.dBlazeExchangeCodes
+(
+    ID             bigint       NOT NULL,
+    mic_code       varchar(50)  NOT NULL,
+    security_type  varchar(50)  NOT NULL,
+    venue_exchange varchar(50)  NOT NULL,
+    business_name  varchar(128) NOT NULL,
+    ex_destination varchar(50)  NOT NULL,
+    last_mkt       varchar(50)  NULL
+);
+
+
+CREATE TABLE staging.dTimeInForce
+(
+    ID       bigint       NOT NULL,
+    enum     varchar(50)  NOT NULL,
+    enumname varchar(128) NULL,
+    name     varchar(128) NULL
+);
+
+CREATE TABLE staging.LTimeInForce
+(
+    ID          int         NOT NULL
+        constraint PK_LTimeInForce primary key,
+    Code        int2        NOT NULL,
+    Description varchar(16) NULL,
+    ShortDesc   varchar(16) NULL,
+    SystemID    int         NOT NULL,
+    EDWID       int         NULL
+);
+
+
+CREATE TABLE staging.LForWhom
+(
+    ID          int         NOT NULL
+        CONSTRAINT PK_LForWhom PRIMARY KEY,
+    Code        int2        NOT NULL,
+    Description varchar(64) NULL,
+    ShortDesc   varchar(64) NULL,
+    TypeCode    varchar(1)  NULL,
+    SystemID    int         NOT NULL,
+    EDWID       int         NULL
+);
+
+
+
+CREATE TABLE staging.TCompany
+(
+    ID                   int           NOT NULL,
+    CompanyID            int           NULL,
+    CompanyCode          varchar(64)   NULL,
+    CompanyName          varchar(64)   NULL,
+    CreateDate           timestamp     NULL,
+    UpdateDate           timestamp     NULL,
+    FIXRemoteCompID      varchar(64)   NULL,
+    Phone                varchar(20)   NULL,
+    IntroducingCompanyID int           NULL,
+    Alias                varchar(50)   NULL,
+    HomeExchange         char(1)       NULL,
+    IsPostTradeMod       int           NULL,
+    CBOESubsidyCode      varchar(8)    NULL,
+    AORSRemoteCompID     varchar(32)   NULL,
+    DefaultOwnerID       int           NULL,
+    IsFBW                int           NULL,
+    IsManualCancel       int           NULL,
+    IsFBWAmex            int           NULL,
+    BBSupressNew         int           NULL,
+    Type                 int           NULL,
+    SystemID             int           NULL,
+    EDWActive            int DEFAULT 0 NULL,
+    CESGCustID           int           NULL,
+    MPIDEntity           varchar(4)    NULL,
+    FirmBus              varchar(10)   NULL,
+    EDWCompanyID         int           NULL,
+    RoutingGroupID       int           NULL
+);
+
+CREATE TABLE staging.dBlazeOrderStatus
+(
+    ID                     bigint       NOT NULL
+        CONSTRAINT PK_dBlazeOrderStatus PRIMARY KEY,
+    enum                   varchar(50)  NOT NULL,
+    enumname               varchar(128) NULL,
+    name                   varchar(128) NULL,
+    groupStatus            varchar(128) NULL,
+    blazeStatusCode        varchar(128) NULL,
+    Order_or_Report_status int          NULL
+);
+
+
+CREATE TABLE staging.LOrderStatus
+(
+    ID          int         NOT NULL
+        CONSTRAINT PK_LOrderStatus PRIMARY KEY,
+    StatusCode  int         NOT NULL,
+    StatusDesc  varchar(64) NOT NULL,
+    UpdateDate  timestamp   NULL,
+    IsCompleted int         NULL,
+    SystemID    int         NOT NULL,
+    EDWID       int         NULL
+);
+
+CREATE TABLE staging.dLiquidityType
+(
+    ID       bigint       NOT NULL,
+    enum     varchar(50)  NOT NULL,
+    enumname varchar(128) NULL,
+    name     varchar(128) NULL
+);
+
+
+
+drop function if exists staging.get_status;
+create function staging.get_status(in_exec_type bpchar,
+                                   in_child_exec_ref_id text,
+                                   in_originated_by text,
+                                   in_orderreportspecialtype text)
+    returns int
+    language plpgsql
+as
+$$
+
+declare
+    l_status_id text;
+    l_ret_value int;
+begin
+    select case
+               when in_exec_type in ('e', 'd')
+                   then (select case
+                                    when rp.exec_type = '4' and rp.payload ->> 'OriginatedBy' = 'E' then 'F'
+                                    else rp.exec_type end
+                         from blaze7.order_report rp
+                         where rp.exec_id = in_child_exec_ref_id)
+               when in_exec_type = '4' and in_originated_by = 'E' then 'F'
+               else in_exec_type
+               end
+    into l_status_id;
+
+    select case
+               when coalesce(los.edwid, bos.id, 0) = 151 and in_orderreportspecialtype = 'M' then 156
+               else coalesce(los.edwid, bos.id, 0) end
+    from staging.dblazeorderstatus bos
+             left join staging.lorderstatus los
+                       on bos.id = los.statuscode and los.systemid = 8
+    where bos.enum = l_status_id
+      and bos.order_or_report_status = 2
+    into l_ret_value;
+
+    return l_ret_value;
+
+end;
+$$;
+
+create or replace function staging.custom_format(in_numb numeric default null, in_len int default 8)
+    returns text
+    language plpgsql
+as
+$$
+    -- the function works like the select cast(cast(in_numb as float) as varchar(in_len)) in T-sql
+    -- for numbers < 1 it returns .valuable_decimals_only like .123 without trailing zeros
+declare
+    l_int_part     int;
+    l_int_part_len int;
+    l_adj          int := 2; -- adjustment keeping in mind decimal point and\or something else
+begin
+    if in_numb is null then
+        return null;
+    end if;
+    if in_numb < 1 then
+        return to_char(in_numb, 'FM999.999999');
+    end if;
+
+    select floor(in_numb) into l_int_part;
+    select char_length(l_int_part::text) into l_int_part_len;
+    return round(in_numb, in_len - l_int_part_len - l_adj);
+end;
+$$;
+
+
 drop view if exists staging.v_away_trade_query;
 create or replace view staging.v_away_trade_query as
 select rep.exec_type                                                          as exec_type,
@@ -410,9 +660,134 @@ where true
   AND co.record_type in ('0', '2')
   AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
 
-select *
-from staging.v_away_trade_query
-where true
-  and db_create_time >= '2024-06-10'::date
-  and db_create_time < '2024-06-11'::date
-  and cl_ord_id = '3_32240610'
+
+
+select trade_record_time,
+       date_id,
+       subsystem_id,
+       account_name,
+       cl_ord_id,
+       instrument_id,
+       side,
+       openclose,
+       exec_id,
+       exchange_id,
+       liquidityindicator,
+       secondary_order_id,
+       exch_exec_id,
+       secondary_exch_exec_id,
+       case
+           when last_mkt in ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+           when last_mkt in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+           when last_mkt in ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
+           when last_mkt in ('FOGS', 'MID') then 'XCHI'
+           when last_mkt in ('C2', 'CBOE2') then 'C2OX'
+           when last_mkt = 'SMARTR' then 'COWEN'
+           when last_mkt in ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
+           when last_mkt in ('XPSE') then 'N'
+           when last_mkt in ('TO') then '1'
+           else last_mkt end                                                                      as last_mkt,
+       lastshares,
+       last_px,
+       ex_destination,
+       sub_strategy,
+       order_id,
+
+       coalesce(
+               case
+                   when
+                       ct.expiration_date is not null and coalesce(ct.strike, 0.00) <> 0.00
+                       then ct.opt_qty::numeric
+                   else ct.eq_qty::numeric end,
+               ct.eq_leaves_qty::numeric
+       )                                                                                          as street_order_qty,
+       multileg_reporting_type,
+       ct.exec_broker,
+       ct.cmtafirm,
+
+       case
+           when ct.tif in (24, 17, 10, 1, 44) then 0
+           when ct.tif in (26, 18, 3, 45, 12) then 1
+           when ct.tif in (31, 8, 15, 46) then 2
+           when ct.tif in (47, 28, 11, 19, 5) then 3
+           when ct.tif in (48, 2, 13, 25, 20) then 4
+           when ct.tif in (36, 37, 38, 49) then 5
+           when ct.tif in (50, 14, 21, 33) then 6
+           when ct.tif in (32, 9, 16) then 7
+           end                                                                                    as street_time_in_force,
+       opt_customer_firm,
+       CASE
+           when ct.crossing_side = 'C' and ct.cross_cl_ord_id is not null then 'Y'
+           when ct.crossing_side <> 'C' and ct.orig_cl_ord_id is not null then 'Y'
+           else 'N'
+           END                                                                                    as is_cross_order,
+       contra_broker,
+       order_price,
+       order_process_time,
+       remarks,
+       is_busted,
+       street_client_order_id,
+       fix_comp_id,
+       leaves_qty,
+       leg_ref_id,
+       case
+           when ct.orig_order_id is not null then 26
+           when ct.contra_order_id is not null then 26
+           when ct.parent_order_id is not null then 10
+           when ct.parent_order_id is null and ct.last_child_order is not null then 10
+           when rep_comment like '%OVR%' then 4
+           else 50 end                                                                            as strategy_decision_reason_code,
+       is_parent,
+       symbol,
+       strike_price,
+       case ct.type_code
+           when 'P' then '0'
+           when 'C' then '1'
+           end                                                                                    as put_or_call,
+       extract(year from ct.expiration_date)                                                      as maturity_year,
+       extract(month from ct.expiration_date)                                                     as maturity_month,
+       extract(day from ct.expiration_date)                                                       as maturity_day,
+       ct.securitytype                                                                            as security_type,
+       ct.child_orders,
+       ct.handling                                                                                as handling_id,
+       ct.secondary_order_id2,
+
+-- display_instrument_id
+       ---
+       ct.rootcode,
+       ct.typecode,
+ct.expiration_date,
+ct.strike_price,
+regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g'),
+       --
+       case
+           when ct.expiration_date is not null and ct.strike_price is not null then
+               replace(coalesce(
+                               regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g') || ' ' ||
+                               to_char(ct.expiration_date::date, 'DDMonYY') || ' ' ||
+                               staging.custom_format(ct.strike_price) ||
+                               left(ct.typecode, 8),
+                               case
+                                   when ct.ord_ContractDesc not like ct.basecode || ' %'
+                                       then ct.basecode || ' ' || REPLACE(ct.ord_ContractDesc, ct.BaseCode, '')
+                                   when ct.legcount::int = 1 and ct.typecode = 'S' then ct.ord_ContractDesc || ' Stock'
+                                   when ct.ord_ContractDesc not like ' %' then ct.ord_ContractDesc || ' '
+                                   else ct.ord_ContractDesc end
+                       ), '/', '')
+           else
+               regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g')
+           end                                                                                    as display_instrument_id,
+       case when ct.expiration_date is not null and ct.strike_price is not null then 'O' else 'E' end as instrument_type_id,
+       regexp_replace(coalesce(ct.basecode, ''), '\.|-', '', 'g')                                 as activ_symbol,
+       case when ct.orderreportspecialtype = 'M' then 1 else 0 end                                as is_sor_routed,
+	(case
+        when lag(ct.companyname,1) over (partition by ct.ExchangeTransactionID order by ct.generation) <> ct.companyname
+         and lag(ct.OrderID,1) over (partition by ct.ExchangeTransactionID order by ct.generation) = ct.ParentORdeRID  then 1
+        else 0
+    end ) as is_company_name_changed,
+    ct.companyname,
+    ct.generation,
+    max(ct.generation) over (partition by ct.ExchangeTransactionID) mx_gen,
+       ''
+from staging.v_away_trade_query ct;
+
