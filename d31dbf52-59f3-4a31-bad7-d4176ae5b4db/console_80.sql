@@ -1,3 +1,12 @@
+select 21117307
++ 8691883
+
+select cm.message_type, count(*)
+    from consolidator.consolidator_message cm
+    where cm.date_id between 20230902 and 20230929
+    and cm.message ilike '%IMC%'
+    and cm.message_type = any('{6, 7}')
+group by cm.message_type;
 --         and ri.rfr_id = '760204378479'
 
 drop table if exists trash.so_consolidator_message;
