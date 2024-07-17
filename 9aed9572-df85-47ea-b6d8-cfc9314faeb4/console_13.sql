@@ -306,7 +306,8 @@ select rep.exec_type                                                          as
 
        rp.ex_destination                                                      as ex_destination,
        'sub_strategy'                                                         as sub_strategy,
-       'order_id'                                                             as order_id,
+       rep.order_id                                                           as order_id,
+       rep.chain_id                                                           as chain_id,
        case
            when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
                then coalesce(leg.ds_id_date, co.ds_id_date) end               as expiration_date,
@@ -526,7 +527,20 @@ select rep.exec_type                                                          as
        comp.companyname                                                       as companyname,
        clordid_to_guid(rep.cl_ord_id)                                         as orderid,
        co.parentorderid                                                       as parentorderid,
-       rep.db_create_time
+       rep.db_create_time,
+       case
+           when lag(comp.companyname, 1) over (partition by CASE
+                                                                WHEN rep.payload ->> 'OrderReportSpecialType' = 'M'
+                                                                    THEN 'Manual Report'
+                                                                ELSE rep.payload ->> 'RouterExecId' END order by co.generation) <>
+                comp.companyname
+               and lag(clordid_to_guid(rep.cl_ord_id), 1) over (partition by CASE
+                                                                                 WHEN rep.payload ->> 'OrderReportSpecialType' = 'M'
+                                                                                     THEN 'Manual Report'
+                                                                                 ELSE rep.payload ->> 'RouterExecId' END order by co.generation) =
+                   co.parentorderid then 1
+           else 0
+           end as is_company_name_changed
 from blaze7.order_report rep
          join lateral (select *,
                               case
@@ -658,7 +672,7 @@ from blaze7.order_report rep
 where true
   and rep.multileg_reporting_type <> '3'
   AND co.record_type in ('0', '2')
-  AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i')
+  AND rep.exec_type not in ('f', 'w', 'W', 'g', 'G', 'I', 'i');
 
 
 
@@ -788,6 +802,9 @@ regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g'),
     ct.companyname,
     ct.generation,
     max(ct.generation) over (partition by ct.ExchangeTransactionID) mx_gen,
-       ''
-from staging.v_away_trade_query ct;
+    sum(ct.is_company_name_changed) over (partition by secondary_exch_exec_id) as num_firms
+--        ''
+from staging.v_away_trade_query ct
+where date_id = 20240611
+and cl_ord_id = '3_rl240611';
 
