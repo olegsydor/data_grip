@@ -237,3 +237,20 @@ select array_agg(x)
 from (select unnest(array ['10Z2388539337771',
     '10Z2388539337840',
     '10Z2388539337882']) x) y
+select pg_sleep(10);
+
+select pid,
+       state,
+       application_name,
+       query_start::timestamp              as query_start,
+       age(clock_timestamp(), query_start) as age,
+       usename,
+       query
+from pg_stat_activity
+where true
+  and state in ('active', 'idle in transaction')
+  and query ilike '%f_parent_order%'
+  and query not ilike '%pid, state, application_name%'
+
+
+select pg_cancel_backend(63226)
