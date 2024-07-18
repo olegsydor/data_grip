@@ -541,7 +541,8 @@ select rep.exec_type                                                          as
 --                    co.parentorderid then 1
 --            else 0
 --            end as is_company_name_changed
-''
+co.payload ->> 'DashSecurityId',
+leg.payload ->> 'DashSecurityId'
 from blaze7.order_report rep
          join lateral (select *,
                               case
