@@ -338,8 +338,7 @@ select rep.exec_type                                                          as
                         then co.payload #>> '{OriginatorOrder,ClearingDetails,GiveUp}'
                     when co.crossing_side = 'C' then co.payload #>> '{ContraOrder,ClearingDetails,GiveUp}'
                     else null::text
-                    end, rep.payload ->>
-                         'ManualBroker')                                      as exec_broker,
+                    end, rep.payload ->> 'ManualBroker')                                      as exec_broker,
 
        CASE
            WHEN co.crossing_side IS NULL THEN co.payload #>> '{ClearingDetails,CMTA}'
