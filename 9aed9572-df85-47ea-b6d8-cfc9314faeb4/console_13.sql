@@ -372,8 +372,7 @@ select rep.exec_type                                                          as
         ORDER BY co2.chain_id DESC
         LIMIT 1)                                                              as orig_cl_ord_id,
        -- street_is_cross_order is as same as is_cross_order
-       COALESCE(co.payload ->> 'OwnerUserName', co.payload ->>
-                                                'InitiatorUserName')          as contra_broker,
+       COALESCE(co.payload ->> 'OwnerUserName', co.payload ->> 'InitiatorUserName')          as contra_broker,
 --        coalesce(comp.CompanyCode, u.Login) as client_id,
        CASE
            WHEN co.instrument_type <> 'M'::bpchar THEN co.payload ->> 'Price'::text

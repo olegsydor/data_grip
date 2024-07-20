@@ -878,3 +878,41 @@ select to_char(:in_numb, 'FM999.999999')
                                   else staging.custom_format(case
                                                                  when coalesce(leg.ds_id_1, co.ds_id_1) in ('FO', 'OP')
                                                                      then coalesce(leg.ds_id_num, co.ds_id_num) end, 8)
+
+
+select char_length(leg.payload::text),
+    *,
+       "substring"(leg.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})')            as ds_id_1,    -- EQ\OP
+       to_date("substring"(leg.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') as ds_id_date, -- DATE
+       "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$')                as ds_id_num,  -- PRICE
+       "substring"(leg.payload ->> 'DashSecurityId', 'US:EQ:(.+)')                    as ds_id_2,    -- EQ_SYMBOL
+       "substring"(leg.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_')           as ds_id_3,    -- OP_SYMBOL
+       "substring"(leg.payload ->> 'DashSecurityId', '[0-9]{6}(.)')                   as ds_id_4     -- P/C
+from blaze7.client_order_leg leg;
+
+
+select char_length(co.payload::text),
+       *,
+       "substring"(co.payload ->> 'DashSecurityId', 'US:([FO|OP|EQ]{2})')            as ds_id_1,    -- EQ\OP
+       to_date("substring"(co.payload ->> 'DashSecurityId', '([0-9]{6})'), 'YYMMDD') as ds_id_date, -- DATE
+       "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}.(.+)$')                as ds_id_num,  -- PRICE
+       "substring"(co.payload ->> 'DashSecurityId', 'US:EQ:(.+)')                    as ds_id_2,    -- EQ_SYMBOL
+       "substring"(co.payload ->> 'DashSecurityId', 'US:[FO|OP]{2}:(.+)_')           as ds_id_3,    -- OP_SYMBOL
+       "substring"(co.payload ->> 'DashSecurityId', '[0-9]{6}(.)')                   as ds_id_4,    -- P/C
+       case
+           when co.crossing_side is null then co.payload ->> 'Generation'
+           when co.crossing_side = 'O'
+               then co.payload #>> '{OriginatorOrder,Generation}'
+           when co.crossing_side = 'C'
+               then co.payload #>> '{ContraOrder,Generation}'
+           end                                                                       as generation,
+
+       (select co2.cl_ord_id
+        from blaze7.client_order co2
+        where co2.order_id = co.parent_order_id
+          and co.parent_order_id is null
+        order by co2.chain_id desc
+        limit 1)                                                                     as parentorderid
+from blaze7.client_order co
+
+
