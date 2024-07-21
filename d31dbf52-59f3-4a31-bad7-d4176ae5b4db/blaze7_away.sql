@@ -157,7 +157,40 @@ regexp_replace(coalesce(ct.rootcode, ''), '\.|-', '', 'g'),
     sum(ct.is_company_name_changed) over (partition by secondary_exch_exec_id) as num_firms
 --        ''
 from staging.v_away_trade_query ct;
-
+CREATE TABLE LiquidPoint_EDW.dbo.TUsers (
+	ID int NOT NULL,
+	UserId int NULL,
+	CompanyID int NULL,
+	[Login] varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	Password varchar(300) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	PasswordHint varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	Status int NULL,
+	ActiveDate datetime NULL,
+	PersonId int NULL,
+	CreateDate datetime NULL,
+	UpdateDate datetime NULL,
+	LoginNum int NULL,
+	ExpirationDate datetime NULL,
+	ProductID int NULL,
+	LoginCount int NULL,
+	LoginTimestamp datetime NULL,
+	PwdTimestamp datetime NULL,
+	DisableLogin int NULL,
+	AutoExpirePwd int NULL,
+	PwdReset bit NULL,
+	InactivityCount int NULL,
+	UserFixRemoteCompID varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	IsManualCancelReplace bit NULL,
+	SymbolType int NULL,
+	BBSupressNew bit NULL,
+	SessionID uniqueidentifier NULL,
+	AORSUsername varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	PasswordChangeRequired bit NULL,
+	Description varchar(256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	SystemID int NULL,
+	EDWActive bit DEFAULT 0 NULL,
+	EDWUserID int NULL
+);
 
   select
       trade_record_time,
@@ -165,7 +198,7 @@ from staging.v_away_trade_query ct;
       date_id,
       'to perform' as is_busted,
       'LPEDW'                                                                as subsystem_id,
-      aw.user_id,
+      aw.userid,
        case
            when coalesce(us.AORS_Username, us.user_Login) = 'BBNTRST' then 'NTRSCBOE'
            else coalesce(us.AORS_Username, us.user_Login) end                           as account_name,
@@ -190,7 +223,7 @@ from staging.v_away_trade_query ct;
       ,
       aw.status,
       * from staging.v_away_trade aw
-        left join staging.T_Users us on us.user_id = aw.user_id
+        left join staging.T_Users us on us.user_id = aw.userid::int
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
