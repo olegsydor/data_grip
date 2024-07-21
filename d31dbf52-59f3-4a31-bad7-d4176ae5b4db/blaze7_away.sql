@@ -160,7 +160,16 @@ from staging.v_away_trade_query ct;
 
 
   select
-      aw.status,
+      trade_record_time,
+      db_create_time,
+      date_id,
+      'to perform' as is_busted,
+      'LPEDW'                                                                as subsystem_id,
+      aw.user_id,
+       case
+           when coalesce(us.AORS_Username, us.user_Login) = 'BBNTRST' then 'NTRSCBOE'
+           else coalesce(us.AORS_Username, us.user_Login) end                           as account_name,
+
              case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
@@ -178,7 +187,10 @@ from staging.v_away_trade_query ct;
            else
                regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g')
            end                                                                                    as display_instrument_id
-      ,* from staging.v_away_trade aw
+      ,
+      aw.status,
+      * from staging.v_away_trade aw
+        left join staging.T_Users us on us.user_id = aw.user_id
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
@@ -190,4 +202,5 @@ from staging.v_away_trade_query ct;
 )
     and status in ('1', '2')
 --   and order_id = 657302260082016256
-  and cl_ord_id in ('1_254240617')
+  and cl_ord_id in ('1_16o240626')
+

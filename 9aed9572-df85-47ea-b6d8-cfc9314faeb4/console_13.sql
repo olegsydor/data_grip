@@ -33,7 +33,7 @@ CREATE TABLE staging.TUsers
     EDWActive              int DEFAULT 0 NULL,
     EDWUserID              int           NULL
 );
-
+select * from staging.TUsers;
 
 CREATE TABLE staging.dash_exchange_names
 (
@@ -266,8 +266,8 @@ select rep.exec_type                                                          as
 
        'LPEDW'                                                                as subsystem_id,
        case
-           when coalesce(u.AORSUsername, u.Login) = 'BBNTRST' then 'NTRSCBOE'
-           else coalesce(u.AORSUsername, Login) end                           as account_name,
+           when coalesce(users.AORSUsername, users.Login) = 'BBNTRST' then 'NTRSCBOE'
+           else coalesce(users.AORSUsername, Login) end                           as account_name,
        co.cl_ord_id,
        'instrument_id'                                                        as instrument_id,
        CASE
@@ -603,7 +603,7 @@ from blaze7.order_report rep
                             where leg.order_id = co.order_id
                               AND leg.chain_id = co.chain_id
                               and leg.leg_ref_id = rep.leg_ref_id) leg on true
-         left join staging.TUsers u on u.ID = co.user_id
+         left join staging.TUsers users on users.ID = co.user_id
          left join lateral (select regexp_replace(rep.payload ->> 'LastMkt', 'DIRECT-| Printer', '', 'g') as ex_destination
                             from blaze7.order_report rp
                             where rp.exec_id = rep.exec_id
@@ -658,7 +658,7 @@ from blaze7.order_report rep
     END
     and lfw.SystemID = 4
 --     left join staging.TCompany tc on tc.CompanyID = u.CompanyID and tc.SystemID = u.SystemID and tc.EDWActive = 1
-         left join staging.TCompany comp on u.CompanyID = (CASE
+         left join staging.TCompany comp on users.CompanyID = (CASE
                                                                WHEN co.order_class = 'F'
                                                                    THEN co.payload ->> 'InitiatorEntityId'
                                                                WHEN co.crossing_side IS NULL
