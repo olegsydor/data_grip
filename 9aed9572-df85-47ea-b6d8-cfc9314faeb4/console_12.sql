@@ -85,7 +85,7 @@ CREATE TABLE staging.dBlazeExchangeCodes
     ex_destination varchar(50)  NOT NULL,
     last_mkt       varchar(50)  NULL
 );
-
+select * from staging.dBlazeExchangeCodes
 
 CREATE TABLE staging.dTimeInForce
 (
