@@ -388,7 +388,7 @@ aw.last_px,
 -- street_is_cross_order is as same as is_cross_order
 aw.contra_broker,
 coalesce(cmp.CompanyCode, us.user_login) as client_id,
-
+round(aw.order_price::bigint / 10000.0, 4) as order_price,
 
 
 	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
