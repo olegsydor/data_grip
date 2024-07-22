@@ -268,16 +268,16 @@ den.last_mkt,
 den1.last_mkt,
 aw.ex_destination,
 lm.last_mkt as a_last_mkt,
-case when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('FOGS','MID') then 'XCHI'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'')  in ('C2','CBOE2') then 'C2OX'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') = 'SMARTR' then 'COWEN'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('XPSE')  then 'N'
- 		 when nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') in ('TO')  then '1'
-		 else nullif(coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination),'') end as last_mkt,
+case when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('FOGS','MID') then 'XCHI'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) = 'SMARTR' then 'COWEN'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('XPSE')  then 'N'
+ 		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('TO')  then '1'
+		 else coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) end as last_mkt,
              case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
@@ -318,6 +318,7 @@ on aw.Ex_Destination = coalesce(lm.last_mkt,lm.ex_destination) and CASE WHEN aw.
                               and den.mic_code != ''
                               and den.is_active = 1
                             limit 1) den1 on true
+        left join lateral (select )
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
