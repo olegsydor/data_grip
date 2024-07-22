@@ -197,11 +197,7 @@ create table staging.t_users
 );
 
 
--- staging.dash_exchange_names definition
 
--- Drop table
-
--- DROP TABLE staging.dash_exchange_names;
 
 CREATE TABLE staging.dash_exchange_names
 (
@@ -249,6 +245,7 @@ CREATE TABLE staging.d_Blaze_Exchange_Codes
 );
 
   select
+      aw.ex_destination,
       trade_record_time,
       db_create_time,
       date_id,
@@ -265,32 +262,46 @@ aw.openclose,
 '0'                                                                    as exch_exec_id,
 aw.secondary_exch_exec_id,
 
-case when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'SMARTR' then 'COWEN'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPSE')  then 'N'
- 		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('TO')  then '1'
-		 else coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) end as last_mkt,
+case when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('XPSE')  then 'N'
+ 		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('TO')  then '1'
+		 else coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) end as last_mkt,
 aw.lastshares as last_qty,
 aw.last_px,
- coalesce(lm.last_mkt, aw.ex_destination) as ex_destination,
+ coalesce(lm.ex_destination, aw.ex_destination) as ex_destination,
  '???' as sub_strategy,
  '???' as order_id,
-when aw.expiration_date is not null and aw.strike_price is not null then
-	case when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
-	     when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('C2','CBOE2') then 'C2OX'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'SMARTR' then 'COWEN'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPSE')  then 'ARCO'
-		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'TO' then 'AMXO'
-		 else coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) end as mic_code,
+      coalesce(
+              case
+                  when aw.expiration_date is not null and aw.strike_price is not null then
+                      aw.opt_qty
+                  else
+                      aw.eq_qty end, eq_leaves_qty) as street_order_qty,
+      coalesce(
+              case
+                  when aw.expiration_date is not null and aw.strike_price is not null then
+                      aw.opt_qty
+                  else
+                      aw.eq_qty end, eq_leaves_qty) as order_qty,
+      aw.multileg_reporting_type,
+      aw.exec_broker,
+      aw.cmtafirm as cmta,
+	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
+	     when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('C2','CBOE2') then 'C2OX'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPSE')  then 'ARCO'
+		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
+		 else coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) end as mic_code,
 
              case
            when aw.expiration_date is not null and aw.strike_price is not null then
@@ -348,4 +359,3 @@ when aw.expiration_date is not null and aw.strike_price is not null then
     and aw.status in ('1', '2')
 --   and order_id = 657302260082016256
   and aw.cl_ord_id in ('1_16o240626')
-
