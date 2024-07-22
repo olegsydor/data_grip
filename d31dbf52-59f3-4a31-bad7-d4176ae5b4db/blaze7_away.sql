@@ -387,6 +387,10 @@ aw.last_px,
            END                                                                                    as is_cross_order,
 -- street_is_cross_order is as same as is_cross_order
 aw.contra_broker,
+coalesce(cmp.CompanyCode, us.user_login) as client_id,
+
+
+
 	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
 	     when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
 		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
@@ -398,7 +402,6 @@ aw.contra_broker,
 		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
 		 else coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) end as mic_code,
 
-      coalesce(comp.CompanyCode, us.user_login) as client_id,
 aw.option_range,
       aw.client_entity_id,
              case
@@ -449,9 +452,9 @@ aw.option_range,
                      left join staging.l_time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
  LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
 
-LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.System_ID and cmp.EDWActive = 1 -- Company
+LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and cmp.EDWActive = 1 -- Company
 
-        left join staging.T_Company comp on comp.id = aw.client_entity_id
+--         left join staging.T_Company comp on comp.id = aw.client_entity_id
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
@@ -463,6 +466,4 @@ LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.Sy
 )
     and aw.status in ('1', '2')
 --   and order_id = 657302260082016256
-  and aw.cl_ord_id in ('1_16o240626')
-
-  select * from staging.T_Company
+  and aw.cl_ord_id in ('1_16o240626');
