@@ -264,20 +264,34 @@ aw.openclose,
 '???' as exec_id,
 '0'                                                                    as exch_exec_id,
 aw.secondary_exch_exec_id,
-den.last_mkt,
-den1.last_mkt,
-aw.ex_destination,
-lm.last_mkt as a_last_mkt,
-case when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('FOGS','MID') then 'XCHI'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) = 'SMARTR' then 'COWEN'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('XPSE')  then 'N'
- 		 when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('TO')  then '1'
-		 else coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) end as last_mkt,
+
+case when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'SMARTR' then 'COWEN'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
+		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPSE')  then 'N'
+ 		 when coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('TO')  then '1'
+		 else coalesce(den.last_mkt,den1.last_mkt,lm.last_mkt, aw.ex_destination) end as last_mkt,
+aw.lastshares as last_qty,
+aw.last_px,
+ coalesce(lm.last_mkt, aw.ex_destination) as ex_destination,
+ '???' as sub_strategy,
+ '???' as order_id,
+when aw.expiration_date is not null and aw.strike_price is not null then
+	case when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
+	     when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('C2','CBOE2') then 'C2OX'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'SMARTR' then 'COWEN'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) in ('XPSE')  then 'ARCO'
+		 when coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) = 'TO' then 'AMXO'
+		 else coalesce(den1.last_mkt,lm.last_mkt, aw.ex_destination) end as mic_code,
+
              case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
@@ -298,27 +312,30 @@ case when coalesce(den.last_mkt,den1.last_mkt,aw.ex_destination) in ('CBOE-CRD N
       ,
       aw.status,
       * from staging.v_away_trade aw
-LEft join staging.d_Blaze_Exchange_Codes lm
-on aw.Ex_Destination = coalesce(lm.last_mkt,lm.ex_destination) and CASE WHEN aw.SecurityType = '1' THEN 'O' WHEN aw.SecurityType= '2' THEN 'E' ELSE aw.SecurityType END = lm.Security_Type
+                   LEft join staging.d_Blaze_Exchange_Codes lm
+                             on coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
+                                 and CASE
+                                         WHEN aw.SecurityType = '1' THEN 'O'
+                                         WHEN aw.SecurityType = '2' THEN 'E'
+                                         ELSE aw.SecurityType END = lm.Security_Type
 
         left join staging.T_Users us on us.user_id = aw.userid::int
         left join lateral (select last_mkt
                             from staging.dash_exchange_names den
-                            where den.mic_code = aw.ex_destination
-                              and aw.exec_type in ('1', '2', 'r')
+                            where den.mic_code = coalesce(lm.last_mkt, aw.ex_destination)
+--                               and aw.exec_type in ('1', '2', 'r')
                               and den.real_exchange_id = den.exchange_id
                               and den.mic_code != ''
                               and den.is_active = 1
                             limit 1) den on true
          left join lateral (select last_mkt, mic_code
-                            from staging.dash_exchange_names den
-                            where den.exchange_id = aw.ex_destination
-                              and aw.exec_type in ('1', '2', 'r')
-                              and den.real_exchange_id = den.exchange_id
-                              and den.mic_code != ''
-                              and den.is_active = 1
+                            from staging.dash_exchange_names den1
+                            where den1.exchange_id = coalesce(lm.last_mkt, aw.ex_destination)
+--                               and aw.exec_type in ('1', '2', 'r')
+                              and den1.real_exchange_id = den1.exchange_id
+                              and den1.mic_code != ''
+                              and den1.is_active = 1
                             limit 1) den1 on true
-        left join lateral (select )
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
