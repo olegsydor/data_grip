@@ -368,17 +368,17 @@ aw.last_px,
            when coalesce(ltf.EDWID, tif.ID) in (32, 9, 16) then 7
            end                                                                                    as street_time_in_force,
 
---                          case
---                        when lfw.EDWID in (1, 25, 32, 78) then '0'
---                        when lfw.EDWID in (33, 26, 79) then '1'
---                        when lfw.EDWID in (52, 103, 20, 97) then '2'
---                        when lfw.EDWID in (19, 30, 38, 96) then '3'
---                        when lfw.EDWID in (35, 28, 4, 81) then '4'
---                        when lfw.EDWID in (5, 29, 36, 82) then '5'
---                        when lfw.EDWID IN (21, 6, 83) then '7'
---                        when lfw.EDWID IN (31, 23, 41, 98) then '8'
---                        when lfw.EDWID IN (9, 40, 50, 86) then 'J'
---                        end                                                                                      as opt_customer_firm,
+                         case
+                       when lfw.EDWID in (1, 25, 32, 78) then '0'
+                       when lfw.EDWID in (33, 26, 79) then '1'
+                       when lfw.EDWID in (52, 103, 20, 97) then '2'
+                       when lfw.EDWID in (19, 30, 38, 96) then '3'
+                       when lfw.EDWID in (35, 28, 4, 81) then '4'
+                       when lfw.EDWID in (5, 29, 36, 82) then '5'
+                       when lfw.EDWID IN (21, 6, 83) then '7'
+                       when lfw.EDWID IN (31, 23, 41, 98) then '8'
+                       when lfw.EDWID IN (9, 40, 50, 86) then 'J'
+                       end                                                                                      as opt_customer_firm,
 
        CASE
            when aw.crossing_side = 'C' and aw.cross_cl_ord_id is not null then 'Y'
@@ -398,7 +398,7 @@ aw.contra_broker,
 		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
 		 else coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) end as mic_code,
 
---       coalesce(comp.CompanyCode, us.user_login) as client_id,
+      coalesce(comp.CompanyCode, us.user_login) as client_id,
 aw.option_range,
       aw.client_entity_id,
              case
@@ -447,8 +447,11 @@ aw.option_range,
                             limit 1) den1 on true
         left join staging.d_time_in_force tif on tif.enum = aw.co_time_in_force
                      left join staging.l_time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
--- LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range
---         left join staging.T_Company comp on us.company_id = aw.client_entity_id
+ LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
+
+LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.System_ID and cmp.EDWActive = 1 -- Company
+
+        left join staging.T_Company comp on comp.id = aw.client_entity_id
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
@@ -461,3 +464,5 @@ aw.option_range,
     and aw.status in ('1', '2')
 --   and order_id = 657302260082016256
   and aw.cl_ord_id in ('1_16o240626')
+
+  select * from staging.T_Company
