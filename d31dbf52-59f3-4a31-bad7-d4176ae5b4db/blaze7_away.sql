@@ -244,6 +244,70 @@ CREATE TABLE staging.d_Blaze_Exchange_Codes
     last_mkt       varchar(50)  NULL
 );
 
+
+create table staging.d_time_in_force
+(
+    id       int8 not null,
+    "enum"   text not null,
+    enumname text null,
+    "name"   text null
+);
+
+
+create table staging.l_time_in_force
+(
+    id          int4 not null
+        constraint l_time_in_force_pk primary key,
+    code        int2 not null,
+    description text null,
+    shortdesc   text null,
+    systemid    int4 not null,
+    edwid       int4 null
+);
+
+create table staging.l_for_whom
+(
+    id          int4        not null,
+    code        int2        not null,
+    description varchar(64) null,
+    shortdesc   varchar(64) null,
+    typecode    varchar(1)  null,
+    systemid    int4        not null,
+    edwid       int4        null,
+    constraint pk_lforwhom primary key (id)
+);
+
+
+CREATE TABLE staging.t_company (
+	id int4 NOT NULL,
+	companyid int4 NULL,
+	companycode varchar(64) NULL,
+	companyname varchar(64) NULL,
+	createdate timestamp NULL,
+	updatedate timestamp NULL,
+	fixremotecompid varchar(64) NULL,
+	phone varchar(20) NULL,
+	introducingcompanyid int4 NULL,
+	alias varchar(50) NULL,
+	homeexchange bpchar(1) NULL,
+	isposttrademod int4 NULL,
+	cboesubsidycode varchar(8) NULL,
+	aorsremotecompid varchar(32) NULL,
+	defaultownerid int4 NULL,
+	isfbw int4 NULL,
+	ismanualcancel int4 NULL,
+	isfbwamex int4 NULL,
+	bbsupressnew int4 NULL,
+	"type" int4 NULL,
+	systemid int4 NULL,
+	edwactive int4 DEFAULT 0 NULL,
+	cesgcustid int4 NULL,
+	mpidentity varchar(4) NULL,
+	firmbus varchar(10) NULL,
+	edwcompanyid int4 NULL,
+	routinggroupid int4 NULL
+);
+
   select
       aw.ex_destination,
       trade_record_time,
@@ -292,6 +356,37 @@ aw.last_px,
       aw.multileg_reporting_type,
       aw.exec_broker,
       aw.cmtafirm as cmta,
+      coalesce(ltf.EDWID, tif.ID)                                                                  as tif,
+             case
+           when coalesce(ltf.EDWID, tif.ID) in (24, 17, 10, 1, 44) then 0
+           when coalesce(ltf.EDWID, tif.ID) in (26, 18, 3, 45, 12) then 1
+           when coalesce(ltf.EDWID, tif.ID) in (31, 8, 15, 46) then 2
+           when coalesce(ltf.EDWID, tif.ID) in (47, 28, 11, 19, 5) then 3
+           when coalesce(ltf.EDWID, tif.ID) in (48, 2, 13, 25, 20) then 4
+           when coalesce(ltf.EDWID, tif.ID) in (36, 37, 38, 49) then 5
+           when coalesce(ltf.EDWID, tif.ID) in (50, 14, 21, 33) then 6
+           when coalesce(ltf.EDWID, tif.ID) in (32, 9, 16) then 7
+           end                                                                                    as street_time_in_force,
+
+--                          case
+--                        when lfw.EDWID in (1, 25, 32, 78) then '0'
+--                        when lfw.EDWID in (33, 26, 79) then '1'
+--                        when lfw.EDWID in (52, 103, 20, 97) then '2'
+--                        when lfw.EDWID in (19, 30, 38, 96) then '3'
+--                        when lfw.EDWID in (35, 28, 4, 81) then '4'
+--                        when lfw.EDWID in (5, 29, 36, 82) then '5'
+--                        when lfw.EDWID IN (21, 6, 83) then '7'
+--                        when lfw.EDWID IN (31, 23, 41, 98) then '8'
+--                        when lfw.EDWID IN (9, 40, 50, 86) then 'J'
+--                        end                                                                                      as opt_customer_firm,
+
+       CASE
+           when aw.crossing_side = 'C' and aw.cross_cl_ord_id is not null then 'Y'
+           when aw.crossing_side <> 'C' and aw.orig_cl_ord_id is not null then 'Y'
+           else 'N'
+           END                                                                                    as is_cross_order,
+-- street_is_cross_order is as same as is_cross_order
+aw.contra_broker,
 	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
 	     when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
 		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
@@ -303,6 +398,9 @@ aw.last_px,
 		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
 		 else coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) end as mic_code,
 
+--       coalesce(comp.CompanyCode, us.user_login) as client_id,
+aw.option_range,
+      aw.client_entity_id,
              case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
@@ -347,6 +445,10 @@ aw.last_px,
                               and den1.mic_code != ''
                               and den1.is_active = 1
                             limit 1) den1 on true
+        left join staging.d_time_in_force tif on tif.enum = aw.co_time_in_force
+                     left join staging.l_time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
+-- LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range
+--         left join staging.T_Company comp on us.company_id = aw.client_entity_id
   where true
   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
   and order_id in (652865815179165700,
