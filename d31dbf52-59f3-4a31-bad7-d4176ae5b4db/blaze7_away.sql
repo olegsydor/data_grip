@@ -1,4 +1,4 @@
-create
+/*create
      or replace
     drop function staging.custom_format(in_numb numeric default null, in_len int default 8)
     returns text
@@ -307,7 +307,7 @@ CREATE TABLE staging.t_company (
 	edwcompanyid int4 NULL,
 	routinggroupid int4 NULL
 );
-
+*/
 select order_id,
        aw.ex_destination as rep_ex_destination,
        trade_record_time,
@@ -502,3 +502,7 @@ where true
   and aw.status in ('1', '2')
   and order_id = 668903308055805952
   and aw.cl_ord_id in ('1_3vv240719');
+
+
+select * from staging.d_Blaze_Exchange_Codes lm
+where coalesce(lm.last_mkt, lm.ex_destination) = 'EMLD'
