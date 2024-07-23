@@ -307,6 +307,15 @@ CREATE TABLE staging.t_company (
 	edwcompanyid int4 NULL,
 	routinggroupid int4 NULL
 );
+
+CREATE TABLE staging.d_liquidity_type
+(
+    id       int8         NOT NULL,
+    "enum"   varchar(50)  NULL,
+    enumname varchar(128) NULL,
+    "name"   varchar(128) NULL
+);
+
 */
 select order_id,
        aw.ex_destination as rep_ex_destination,
@@ -423,7 +432,28 @@ den.last_mkt, den1.last_mkt,
 extract(year from aw.expiration_date::date) as maturuty_year,
 extract(month from aw.expiration_date::date) as maturuty_month,
     extract(day from aw.expiration_date::date) as maturuty_day,
-
+    coalesce(aw.SecurityType, '1') as SecurityType, --?????????????? null in securitytype = 'O'???
+    aw.child_orders,
+    coalesce(case when aw.orderreportspecialtype = 'M' then lt.id else null end, 0) as handling,
+0                                                                                            as secondary_order_id2,
+       case
+           when aw.expiration_date is not null and aw.strike_price is not null then
+               replace(coalesce(
+                               regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g') || ' ' ||
+                               to_char(aw.expiration_date::date, 'DDMonYY') || ' ' ||
+                               staging.trailing_dot(aw.strike_price) ||
+                               left(aw.typecode, 8),
+                               case
+                                   when aw.ord_ContractDesc not like aw.basecode || ' %'
+                                       then aw.basecode || ' ' || REPLACE(aw.ord_ContractDesc, aw.BaseCode, '')
+                                   when aw.legcount::int = 1 and aw.typecode = 'S' then aw.ord_ContractDesc || ' Stock'
+                                   when aw.ord_ContractDesc not like ' %' then aw.ord_ContractDesc || ' '
+                                   else aw.ord_ContractDesc end
+                       ), '/', '')
+           else
+               regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g')
+           end                                                                                  as display_instrument_id,
+    case when aw.expiration_date is not null and aw.strike_price is not null then 'O' else 'E' end as instrument_type_id,
        case
            when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
                then 'XCBO'
@@ -441,24 +471,6 @@ extract(month from aw.expiration_date::date) as maturuty_month,
 
        aw.option_range,
        aw.client_entity_id,
-       case
-           when aw.expiration_date is not null and aw.strike_price is not null then
-               replace(coalesce(
-                               regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g') || ' ' ||
-                               to_char(aw.expiration_date::date, 'DDMonYY') || ' ' ||
-                               staging.trailing_dot(aw.strike_price) ||
-                               left(aw.typecode, 8),
-                               case
-                                   when aw.ord_ContractDesc not like aw.basecode || ' %'
-                                       then aw.basecode || ' ' || REPLACE(aw.ord_ContractDesc, aw.BaseCode, '')
-                                   when aw.legcount::int = 1 and aw.typecode = 'S' then aw.ord_ContractDesc || ' Stock'
-                                   when aw.ord_ContractDesc not like ' %' then aw.ord_ContractDesc || ' '
-                                   else aw.ord_ContractDesc end
-                       ), '/', '')
-           else
-               regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g')
-           end                                                                                  as display_instrument_id
-        ,
        aw.status,
        *
 from staging.v_away_trade aw
@@ -494,8 +506,7 @@ from staging.v_away_trade aw
 
          LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
                                                   cmp.EDWActive = 1 -- Company
-
---         left join staging.T_Company comp on comp.id = aw.client_entity_id
+left  join staging.d_liquidity_type lt on aw.rep_liquidity_type = lt.enum
 where true
 --   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
 --   and order_id in (652865815179165700,
