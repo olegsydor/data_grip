@@ -326,6 +326,7 @@ select order_id,
        '0'                                                                                      as exch_exec_id,
        aw.secondary_exch_exec_id,
 aw.SecurityType,
+den.last_mkt, den1.last_mkt,
        case
            when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in
                 ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
@@ -419,6 +420,9 @@ aw.SecurityType,
            when 'P' then '0'
            when 'C' then '1'
            end                                                                                  as put_or_call,
+extract(year from aw.expiration_date::date) as maturuty_year,
+extract(month from aw.expiration_date::date) as maturuty_month,
+    extract(day from aw.expiration_date::date) as maturuty_day,
 
        case
            when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
@@ -470,7 +474,7 @@ from staging.v_away_trade aw
          left join staging.T_Users us on us.user_id = aw.userid::int
          left join lateral (select last_mkt
                             from staging.dash_exchange_names den
-                            where den.mic_code = coalesce(lm.last_mkt, aw.ex_destination)
+                            where den.mic_code = coalesce(lm.ex_destination, aw.ex_destination)
 --                               and aw.exec_type in ('1', '2', 'r')
                               and den.real_exchange_id = den.exchange_id
                               and den.mic_code != ''
@@ -478,7 +482,7 @@ from staging.v_away_trade aw
                             limit 1) den on true
          left join lateral (select last_mkt, mic_code
                             from staging.dash_exchange_names den1
-                            where den1.exchange_id = coalesce(lm.last_mkt, aw.ex_destination)
+                            where den1.exchange_id = coalesce(lm.ex_destination, aw.ex_destination)
 --                               and aw.exec_type in ('1', '2', 'r')
                               and den1.real_exchange_id = den1.exchange_id
                               and den1.mic_code != ''
