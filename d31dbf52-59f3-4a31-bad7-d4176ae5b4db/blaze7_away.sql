@@ -308,57 +308,63 @@ CREATE TABLE staging.t_company (
 	routinggroupid int4 NULL
 );
 
-  select
-      order_id,
-      aw.ex_destination,
-      trade_record_time,
-      db_create_time,
-      date_id,
-      'to perform' as is_busted,
-      'LPEDW'                                                                as subsystem_id,
+select order_id,
+       aw.ex_destination as rep_ex_destination,
+       trade_record_time,
+       db_create_time,
+       date_id,
+       'to perform'                                                                             as is_busted,
+       'LPEDW'                                                                                  as subsystem_id,
        case
            when coalesce(us.aors_user_name, us.user_Login) = 'BBNTRST' then 'NTRSCBOE'
-           else coalesce(us.aors_user_name, us.user_Login) end                           as account_name,
-aw.cl_ord_id as client_order_id,
-'???' as instrument_id,
-aw.side,
-aw.openclose,
-'???' as exec_id,
-'0'                                                                    as exch_exec_id,
-aw.secondary_exch_exec_id,
-
-case when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'W'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination)  in ('C2','CBOE2') then 'C2OX'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('XPSE')  then 'N'
- 		 when coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) in ('TO')  then '1'
-		 else coalesce(den.last_mkt,den1.last_mkt,lm.ex_destination, aw.ex_destination) end as last_mkt,
-aw.lastshares as last_qty,
-aw.last_px,
- coalesce(lm.ex_destination, aw.ex_destination) as ex_destination,
- '???' as sub_strategy,
- '???' as order_id,
-      coalesce(
-              case
-                  when aw.expiration_date is not null and aw.strike_price is not null then
-                      aw.opt_qty
-                  else
-                      aw.eq_qty end, eq_leaves_qty) as street_order_qty,
-      coalesce(
-              case
-                  when aw.expiration_date is not null and aw.strike_price is not null then
-                      aw.opt_qty
-                  else
-                      aw.eq_qty end, eq_leaves_qty) as order_qty,
-      aw.multileg_reporting_type,
-      aw.exec_broker,
-      aw.cmtafirm as cmta,
-      coalesce(ltf.EDWID, tif.ID)                                                                  as tif,
-             case
+           else coalesce(us.aors_user_name, us.user_Login) end                                  as account_name,
+       aw.cl_ord_id                                                                             as client_order_id,
+       '???'                                                                                    as instrument_id,
+       aw.side,
+       aw.openclose,
+       '???'                                                                                    as exec_id,
+       '0'                                                                                      as exch_exec_id,
+       aw.secondary_exch_exec_id,
+aw.SecurityType,
+       case
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in
+                ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('XPAR', 'PLAK', 'PARL')
+               then 'LQPT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in
+                ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('FOGS', 'MID')
+               then 'XCHI'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('C2', 'CBOE2')
+               then 'C2OX'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in
+                ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('XPSE') then 'N'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('TO') then '1'
+           else coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) end as last_mkt,
+       aw.lastshares                                                                            as last_qty,
+       aw.last_px,
+       coalesce(lm.ex_destination, aw.ex_destination)                                           as ex_destination,
+       '???'                                                                                    as sub_strategy,
+       '???'                                                                                    as order_id,
+       coalesce(
+               case
+                   when aw.expiration_date is not null and aw.strike_price is not null then
+                       aw.opt_qty
+                   else
+                       aw.eq_qty end, eq_leaves_qty)                                            as street_order_qty,
+       coalesce(
+               case
+                   when aw.expiration_date is not null and aw.strike_price is not null then
+                       aw.opt_qty
+                   else
+                       aw.eq_qty end, eq_leaves_qty)                                            as order_qty,
+       aw.multileg_reporting_type,
+       aw.exec_broker,
+       aw.cmtafirm                                                                              as cmta,
+       coalesce(ltf.EDWID, tif.ID)                                                              as tif,
+       case
            when coalesce(ltf.EDWID, tif.ID) in (24, 17, 10, 1, 44) then 0
            when coalesce(ltf.EDWID, tif.ID) in (26, 18, 3, 45, 12) then 1
            when coalesce(ltf.EDWID, tif.ID) in (31, 8, 15, 46) then 2
@@ -367,67 +373,71 @@ aw.last_px,
            when coalesce(ltf.EDWID, tif.ID) in (36, 37, 38, 49) then 5
            when coalesce(ltf.EDWID, tif.ID) in (50, 14, 21, 33) then 6
            when coalesce(ltf.EDWID, tif.ID) in (32, 9, 16) then 7
-           end                                                                                    as street_time_in_force,
+           end                                                                                  as street_time_in_force,
 
-                         case
-                       when lfw.EDWID in (1, 25, 32, 78) then '0'
-                       when lfw.EDWID in (33, 26, 79) then '1'
-                       when lfw.EDWID in (52, 103, 20, 97) then '2'
-                       when lfw.EDWID in (19, 30, 38, 96) then '3'
-                       when lfw.EDWID in (35, 28, 4, 81) then '4'
-                       when lfw.EDWID in (5, 29, 36, 82) then '5'
-                       when lfw.EDWID IN (21, 6, 83) then '7'
-                       when lfw.EDWID IN (31, 23, 41, 98) then '8'
-                       when lfw.EDWID IN (9, 40, 50, 86) then 'J'
-                       end                                                                                      as opt_customer_firm,
+       case
+           when lfw.EDWID in (1, 25, 32, 78) then '0'
+           when lfw.EDWID in (33, 26, 79) then '1'
+           when lfw.EDWID in (52, 103, 20, 97) then '2'
+           when lfw.EDWID in (19, 30, 38, 96) then '3'
+           when lfw.EDWID in (35, 28, 4, 81) then '4'
+           when lfw.EDWID in (5, 29, 36, 82) then '5'
+           when lfw.EDWID IN (21, 6, 83) then '7'
+           when lfw.EDWID IN (31, 23, 41, 98) then '8'
+           when lfw.EDWID IN (9, 40, 50, 86) then 'J'
+           end                                                                                  as opt_customer_firm,
 
        CASE
            when aw.crossing_side = 'C' and aw.cross_cl_ord_id is not null then 'Y'
            when aw.crossing_side <> 'C' and aw.orig_cl_ord_id is not null then 'Y'
            else 'N'
-           END                                                                                    as is_cross_order,
+           END                                                                                  as is_cross_order,
 -- street_is_cross_order is as same as is_cross_order
-aw.contra_broker,
-coalesce(cmp.CompanyCode, us.user_login) as client_id,
-round(aw.order_price::bigint / 10000.0, 4) as order_price,
-'???' as order_process_time,
-'???' as remarks,
-null                                                                                         as street_client_order_id,
-'LPEDWCOMPID'                                                                                as fix_comp_id,
-aw.leaves_qty,
-aw.leg_ref_id,
-'???' as load_batch_id,
+       aw.contra_broker,
+       coalesce(cmp.CompanyCode, us.user_login)                                                 as client_id,
+       round(aw.order_price::bigint / 10000.0, 4)                                               as order_price,
+       '???'                                                                                    as order_process_time,
+       '???'                                                                                    as remarks,
+       null                                                                                     as street_client_order_id,
+       'LPEDWCOMPID'                                                                            as fix_comp_id,
+       aw.leaves_qty,
+       aw.leg_ref_id,
+       '???'                                                                                    as load_batch_id,
 
-case
+       case
            when aw.orig_order_id is not null then 26
            when aw.contra_order_id is not null then 26
            when aw.parent_order_id is not null then 10
            when aw.parent_order_id is null and aw.last_child_order != '0' then 10
            when rep_comment like '%OVR%' then 4
-           else 50 end                                                                            as strategy_decision_reason_code,
-      aw.is_parent,
-aw.symbol,
-coalesce(aw.strike_price, 0) as strike_price,
-aw.type_code,
-case aw.type_code
+           else 50 end                                                                          as strategy_decision_reason_code,
+       aw.is_parent,
+       aw.symbol,
+       coalesce(aw.strike_price, 0)                                                             as strike_price,
+       aw.type_code,
+       case aw.type_code
            when 'P' then '0'
            when 'C' then '1'
-           end                                                                                    as put_or_call,
+           end                                                                                  as put_or_call,
 
-	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
-	     when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('SOHO','KNIGHT','LSCI','NOM') then 'ECUT'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('FOGS','MID') then 'XCHI'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('C2','CBOE2') then 'C2OX'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('ACT','BOE','OTC','lp','VOL')  then 'BRKPT'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPSE')  then 'ARCO'
-		 when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
-		 else coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) end as mic_code,
+       case
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
+               then 'XCBO'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
+               then 'ECUT'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('FOGS', 'MID') then 'XCHI'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('C2', 'CBOE2') then 'C2OX'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) = 'SMARTR' then 'COWEN'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
+               then 'BRKPT'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('XPSE') then 'ARCO'
+           when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
+           else coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) end               as mic_code,
 
-aw.option_range,
-      aw.client_entity_id,
-             case
+       aw.option_range,
+       aw.client_entity_id,
+       case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
                                regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g') || ' ' ||
@@ -443,19 +453,20 @@ aw.option_range,
                        ), '/', '')
            else
                regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g')
-           end                                                                                    as display_instrument_id
-      ,
-      aw.status,
-      * from staging.v_away_trade aw
-                   LEft join staging.d_Blaze_Exchange_Codes lm
-                             on coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
-                                 and CASE
-                                         WHEN aw.SecurityType = '1' THEN 'O'
-                                         WHEN aw.SecurityType = '2' THEN 'E'
-                                         ELSE aw.SecurityType END = lm.Security_Type
+           end                                                                                  as display_instrument_id
+        ,
+       aw.status,
+       *
+from staging.v_away_trade aw
+         LEft join staging.d_Blaze_Exchange_Codes lm
+                   on coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
+                       and CASE
+                               WHEN aw.SecurityType = '1' THEN 'O'
+                               WHEN aw.SecurityType = '2' THEN 'E'
+                               ELSE aw.SecurityType END = lm.Security_Type
 
-        left join staging.T_Users us on us.user_id = aw.userid::int
-        left join lateral (select last_mkt
+         left join staging.T_Users us on us.user_id = aw.userid::int
+         left join lateral (select last_mkt
                             from staging.dash_exchange_names den
                             where den.mic_code = coalesce(lm.last_mkt, aw.ex_destination)
 --                               and aw.exec_type in ('1', '2', 'r')
@@ -471,14 +482,15 @@ aw.option_range,
                               and den1.mic_code != ''
                               and den1.is_active = 1
                             limit 1) den1 on true
-        left join staging.d_time_in_force tif on tif.enum = aw.co_time_in_force
-                     left join staging.l_time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
- LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
+         left join staging.d_time_in_force tif on tif.enum = aw.co_time_in_force
+         left join staging.l_time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
+         LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
 
-LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and cmp.EDWActive = 1 -- Company
+         LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
+                                                  cmp.EDWActive = 1 -- Company
 
 --         left join staging.T_Company comp on comp.id = aw.client_entity_id
-  where true
+where true
 --   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
 --   and order_id in (652865815179165700,
 -- 652934019335323648,
@@ -487,6 +499,6 @@ LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.Sy
 -- 657302260082016256,
 -- 660511556445929472
 -- )
-    and aw.status in ('1', '2')
-   and order_id = 668903308055805952
+  and aw.status in ('1', '2')
+  and order_id = 668903308055805952
   and aw.cl_ord_id in ('1_3vv240719');
