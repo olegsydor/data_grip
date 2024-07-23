@@ -309,6 +309,7 @@ CREATE TABLE staging.t_company (
 );
 
   select
+      order_id,
       aw.ex_destination,
       trade_record_time,
       db_create_time,
@@ -389,7 +390,29 @@ aw.last_px,
 aw.contra_broker,
 coalesce(cmp.CompanyCode, us.user_login) as client_id,
 round(aw.order_price::bigint / 10000.0, 4) as order_price,
+'???' as order_process_time,
+'???' as remarks,
+null                                                                                         as street_client_order_id,
+'LPEDWCOMPID'                                                                                as fix_comp_id,
+aw.leaves_qty,
+aw.leg_ref_id,
+'???' as load_batch_id,
 
+case
+           when aw.orig_order_id is not null then 26
+           when aw.contra_order_id is not null then 26
+           when aw.parent_order_id is not null then 10
+           when aw.parent_order_id is null and aw.last_child_order != '0' then 10
+           when rep_comment like '%OVR%' then 4
+           else 50 end                                                                            as strategy_decision_reason_code,
+      aw.is_parent,
+aw.symbol,
+coalesce(aw.strike_price, 0) as strike_price,
+aw.type_code,
+case aw.type_code
+           when 'P' then '0'
+           when 'C' then '1'
+           end                                                                                    as put_or_call,
 
 	case when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('CBOE-CRD NO BK','PAR','CBOIE') then 'XCBO'
 	     when coalesce(den1.mic_code,lm.ex_destination, aw.ex_destination) in ('XPAR','PLAK','PARL') then 'LQPT'
@@ -456,14 +479,14 @@ LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.Sy
 
 --         left join staging.T_Company comp on comp.id = aw.client_entity_id
   where true
-  and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
-  and order_id in (652865815179165700,
-652934019335323648,
-657283755907481600,
-657302344068759552,
-657302260082016256,
-660511556445929472
-)
+--   and cl_ord_id in ('1_65240605','1_2b8240605','1_254240617','1_3c6240617','1_16o240626')
+--   and order_id in (652865815179165700,
+-- 652934019335323648,
+-- 657283755907481600,
+-- 657302344068759552,
+-- 657302260082016256,
+-- 660511556445929472
+-- )
     and aw.status in ('1', '2')
---   and order_id = 657302260082016256
-  and aw.cl_ord_id in ('1_16o240626');
+   and order_id = 668903308055805952
+  and aw.cl_ord_id in ('1_3vv240719');
