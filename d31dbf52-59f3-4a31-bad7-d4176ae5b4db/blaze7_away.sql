@@ -458,12 +458,14 @@ aw.SecurityType,
        aw.status,
        *
 from staging.v_away_trade aw
-         LEft join staging.d_Blaze_Exchange_Codes lm
-                   on coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
+         LEft join lateral(select * from staging.d_Blaze_Exchange_Codes lm
+                   where coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
                        and CASE
                                WHEN aw.SecurityType = '1' THEN 'O'
+                               WHEN aw.SecurityType is null THEN 'O' ---- ????
                                WHEN aw.SecurityType = '2' THEN 'E'
                                ELSE aw.SecurityType END = lm.Security_Type
+    limit 1) lm on true
 
          left join staging.T_Users us on us.user_id = aw.userid::int
          left join lateral (select last_mkt
