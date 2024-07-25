@@ -916,3 +916,8 @@ select char_length(co.payload::text),
 from blaze7.client_order co
 
 
+select r.ID
+			From [LiquidPoint_EDW].dbo.TReports_EDW_Daily r with (nolock)
+			inner join [LiquidPoint_EDW].dbo.TReports_EDW_Daily r2 with (nolock)
+			on convert(varchar(255),r2.TradeCancelledReportID) = r.ReportID
+			and ((r.OrderID = r2.OrderID and r2.status in (149,194,152)))

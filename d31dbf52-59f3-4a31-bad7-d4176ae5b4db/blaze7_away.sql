@@ -318,25 +318,25 @@ CREATE TABLE staging.d_liquidity_type
 
 */
 select order_id,
-       aw.ex_destination                                                                              as rep_ex_destination,
+       aw.ex_destination                                                                        as rep_ex_destination,
        trade_record_time,
        db_create_time,
        date_id,
-       'to perform'                                                                                   as is_busted,
-       'LPEDW'                                                                                        as subsystem_id,
-       case
-           when coalesce(us.aors_user_name, us.user_Login) = 'BBNTRST' then 'NTRSCBOE'
-           else coalesce(us.aors_user_name, us.user_Login) end                                        as account_name,
-       aw.cl_ord_id                                                                                   as client_order_id,
-       '???'                                                                                          as instrument_id,
+       aw.is_busted                                                                             as is_busted,     -- I have a faint hope that this can be solved in another way used in the originl script
+       'LPEDW'                                                                                  as subsystem_id,
+       coalesce(aw.dashaliasid, case
+                                    when coalesce(us.aors_user_name, us.user_Login) = 'BBNTRST' then 'NTRSCBOE'
+                                    else coalesce(us.aors_user_name, us.user_Login) end)        as account_name,
+       aw.cl_ord_id                                                                             as client_order_id,
+       '???'                                                                                    as instrument_id,
        aw.side,
        aw.openclose,
-       '???'                                                                                          as exec_id,
-       '0'                                                                                            as exch_exec_id,
+       '???'                                                                                    as exec_id,
+       '0'                                                                                      as exch_exec_id,
        aw.secondary_exch_exec_id,
-       aw.SecurityType,
-       den.last_mkt,
-       den1.last_mkt,
+--        aw.SecurityType,
+--        den.last_mkt,
+--        den1.last_mkt,
        case
            when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in
                 ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
@@ -353,29 +353,29 @@ select order_id,
                 ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
            when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('XPSE') then 'N'
            when coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) in ('TO') then '1'
-           else coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) end       as last_mkt,
-       aw.lastshares                                                                                  as last_qty,
+           else coalesce(den.last_mkt, den1.last_mkt, lm.ex_destination, aw.ex_destination) end as last_mkt,
+       aw.lastshares                                                                            as last_qty,
        aw.last_px,
-       coalesce(lm.ex_destination, aw.ex_destination)                                                 as ex_destination,
-       '???'                                                                                          as sub_strategy,
-       '???'                                                                                          as order_id,
+       coalesce(lm.ex_destination, aw.ex_destination)                                           as ex_destination,
+       '???'                                                                                    as sub_strategy,
+       '???'                                                                                    as order_id,
        coalesce(
                case
                    when aw.expiration_date is not null and aw.strike_price is not null then
                        aw.opt_qty
                    else
                        aw.eq_qty end,
-               eq_leaves_qty)                                                                         as street_order_qty,
+               eq_leaves_qty)                                                                   as street_order_qty,
        coalesce(
                case
                    when aw.expiration_date is not null and aw.strike_price is not null then
                        aw.opt_qty
                    else
-                       aw.eq_qty end, eq_leaves_qty)                                                  as order_qty,
+                       aw.eq_qty end, eq_leaves_qty)                                            as order_qty,
        aw.multileg_reporting_type,
        aw.exec_broker,
-       aw.cmtafirm                                                                                    as cmta,
-       coalesce(ltf.EDWID, tif.ID)                                                                    as tif,
+       aw.cmtafirm                                                                              as cmta,
+       coalesce(ltf.EDWID, tif.ID)                                                              as tif,
        case
            when coalesce(ltf.EDWID, tif.ID) in (24, 17, 10, 1, 44) then 0
            when coalesce(ltf.EDWID, tif.ID) in (26, 18, 3, 45, 12) then 1
@@ -385,7 +385,7 @@ select order_id,
            when coalesce(ltf.EDWID, tif.ID) in (36, 37, 38, 49) then 5
            when coalesce(ltf.EDWID, tif.ID) in (50, 14, 21, 33) then 6
            when coalesce(ltf.EDWID, tif.ID) in (32, 9, 16) then 7
-           end                                                                                        as street_time_in_force,
+           end                                                                                  as street_time_in_force,
 
        case
            when lfw.EDWID in (1, 25, 32, 78) then '0'
@@ -397,24 +397,24 @@ select order_id,
            when lfw.EDWID IN (21, 6, 83) then '7'
            when lfw.EDWID IN (31, 23, 41, 98) then '8'
            when lfw.EDWID IN (9, 40, 50, 86) then 'J'
-           end                                                                                        as opt_customer_firm,
+           end                                                                                  as opt_customer_firm,
 
        CASE
            when aw.crossing_side = 'C' and aw.cross_cl_ord_id is not null then 'Y'
            when aw.crossing_side <> 'C' and aw.orig_cl_ord_id is not null then 'Y'
            else 'N'
-           END                                                                                        as is_cross_order,
+           END                                                                                  as is_cross_order,
 -- street_is_cross_order is as same as is_cross_order
        aw.contra_broker,
-       coalesce(cmp.CompanyCode, us.user_login)                                                       as client_id,
-       round(aw.order_price::bigint / 10000.0, 4)                                                     as order_price,
-       '???'                                                                                          as order_process_time,
-       '???'                                                                                          as remarks,
-       null                                                                                           as street_client_order_id,
-       'LPEDWCOMPID'                                                                                  as fix_comp_id,
+       coalesce(cmp.CompanyCode, us.user_login)                                                 as client_id,
+       round(aw.order_price::bigint / 10000.0, 4)                                               as order_price,
+       '???'                                                                                    as order_process_time,
+       '???'                                                                                    as remarks,
+       null                                                                                     as street_client_order_id,
+       'LPEDWCOMPID'                                                                            as fix_comp_id,
        aw.leaves_qty,
        aw.leg_ref_id,
-       '???'                                                                                          as load_batch_id,
+       '???'                                                                                    as load_batch_id,
 
        case
            when aw.orig_order_id is not null then 26
@@ -422,22 +422,22 @@ select order_id,
            when aw.parent_order_id is not null then 10
            when aw.parent_order_id is null and aw.last_child_order != '0' then 10
            when rep_comment like '%OVR%' then 4
-           else 50 end                                                                                as strategy_decision_reason_code,
+           else 50 end                                                                          as strategy_decision_reason_code,
        aw.is_parent,
        aw.symbol,
-       coalesce(aw.strike_price, 0)                                                                   as strike_price,
+       coalesce(aw.strike_price, 0)                                                             as strike_price,
        aw.type_code,
        case aw.type_code
            when 'P' then '0'
            when 'C' then '1'
-           end                                                                                        as put_or_call,
-       extract(year from aw.expiration_date::date)                                                    as maturuty_year,
-       extract(month from aw.expiration_date::date)                                                   as maturuty_month,
-       extract(day from aw.expiration_date::date)                                                     as maturuty_day,
-       coalesce(aw.SecurityType, '1')                                                                 as SecurityType,  --?????????????? null in securitytype = 'O'???
+           end                                                                                  as put_or_call,
+       extract(year from aw.expiration_date::date)                                              as maturuty_year,
+       extract(month from aw.expiration_date::date)                                             as maturuty_month,
+       extract(day from aw.expiration_date::date)                                               as maturuty_day,
+       coalesce(aw.SecurityType, '1')                                                           as SecurityType,  --?????????????? null in securitytype = 'O'???
        aw.child_orders,
-       coalesce(case when aw.orderreportspecialtype = 'M' then lt.id else null end, 0)                as handling,
-       0                                                                                              as secondary_order_id2,
+       coalesce(case when aw.orderreportspecialtype = 'M' then lt.id else null end, 0)          as handling,
+       0                                                                                        as secondary_order_id2,
        case
            when aw.expiration_date is not null and aw.strike_price is not null then
                replace(coalesce(
@@ -454,25 +454,25 @@ select order_id,
                        ), '/', '')
            else
                regexp_replace(coalesce(aw.rootcode, ''), '\.|-', '', 'g')
-           end                                                                                        as display_instrument_id,
+           end                                                                                  as display_instrument_id,
        case
            when aw.expiration_date is not null and aw.strike_price is not null then 'O'
-           else 'E' end                                                                               as instrument_type_id,
-       regexp_replace(coalesce(aw.basecode, ''), '\.|-', '', 'g')                                     as activ_symbol,
-       '???'                                                                                          as mapping_logic,
-       '???'                                                                                          as commision_rate_unit,
-       '???'                                                                                          as blaze_account_alias,
-       case when aw.orderreportspecialtype = 'M' then 1 else 0 end                                    as is_sor_routed, -- it is assumption
+           else 'E' end                                                                         as instrument_type_id,
+       regexp_replace(coalesce(aw.basecode, ''), '\.|-', '', 'g')                               as activ_symbol,
+       '???'                                                                                    as mapping_logic,
+       '???'                                                                                    as commision_rate_unit,
+       '???'                                                                                    as blaze_account_alias,
+       case when aw.orderreportspecialtype = 'M' then 1 else 0 end                              as is_sor_routed, -- it is assumption
        case
            when lag(cmp.companyname, 1) over (partition by aw.ExchangeTransactionID order by aw.generation) <>
                 cmp.companyname
                and lag(aw.OrderID, 1) over (partition by aw.ExchangeTransactionID order by aw.generation) =
                    aw.ParentORdeRID then 1
            else 0
-           end                                                                                        as is_company_name_changed,
+           end                                                                                  as is_company_name_changed,
        cmp.companyname,
        aw.generation,
-       max(aw.generation) over (partition by aw.ExchangeTransactionID)                                   mx_gen,
+       max(aw.generation) over (partition by aw.ExchangeTransactionID)                             mx_gen,
        aw.order_id,
        aw.parent_order_id,
        case
@@ -488,7 +488,7 @@ select order_id,
                then 'BRKPT'
            when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) in ('XPSE') then 'ARCO'
            when coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) = 'TO' then 'AMXO'
-           else coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) end                     as mic_code,
+           else coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) end               as mic_code,
        aw.option_range,
        aw.client_entity_id,
        aw.status
@@ -537,9 +537,17 @@ where true
 -- 660511556445929472
 -- )
   and aw.status in ('1', '2')
-  and order_id = 668903308055805952
-  and aw.cl_ord_id in ('1_3vv240719');
+  and order_id = 668484731167309824
+  and aw.cl_ord_id in ('1_1q3240718');
 
 
 select * from staging.d_Blaze_Exchange_Codes lm
-where coalesce(lm.last_mkt, lm.ex_destination) = 'EMLD'
+where coalesce(lm.last_mkt, lm.ex_destination) = 'EMLD';
+
+drop foreign table if exists staging.v_away_trade;
+
+import foreign schema blaze7 limit to (v_away_trade)
+from server postgres_blaze7_prod1
+into staging;
+
+select * from staging.v_away_trade
