@@ -27,4 +27,10 @@ select
 select * from dwh.d_opt_exec_broker
 where account_id = 68488;
 
-select * from t_opt_exec_broker
+select * from t_opt_exec_broker;
+
+select * from dwh.gtc_order_status
+    where order_id = 16280266243
+
+select * from dwh.client_order cl
+where cl.order_id in (16280266243, 16219389154)
