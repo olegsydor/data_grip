@@ -33,4 +33,4 @@ select * from dwh.gtc_order_status
     where order_id = 16280266243
 
 select * from dwh.client_order cl
-where cl.order_id in (16280266243, 16219389154)
+where cl.order_id in (16280266243, 16219389154, 16280481389)
