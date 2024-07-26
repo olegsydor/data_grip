@@ -462,7 +462,7 @@ select order_id,
        '???'                                                                                    as mapping_logic,
        '???'                                                                                    as commision_rate_unit,
        '???'                                                                                    as blaze_account_alias,
-       case when aw.orderreportspecialtype = 'M' then 1 else 0 end                              as is_sor_routed, -- it is assumption
+       case when aw.orderreportspecialtype = 'M' then 0 else 1 end                              as is_sor_routed, -- it is assumption
        case
            when lag(cmp.companyname, 1) over (partition by aw.ExchangeTransactionID order by aw.generation) <>
                 cmp.companyname
@@ -537,8 +537,8 @@ where true
 -- 660511556445929472
 -- )
   and aw.status in ('1', '2')
-  and order_id = 668484731167309824
-  and aw.cl_ord_id in ('1_1q3240718');
+  and order_id = 671291192792580096
+  and aw.cl_ord_id in ('1_2240726');
 
 
 select * from staging.d_Blaze_Exchange_Codes lm
