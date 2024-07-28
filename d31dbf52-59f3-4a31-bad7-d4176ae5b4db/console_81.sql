@@ -34,3 +34,22 @@ select * from dwh.gtc_order_status
 
 select * from dwh.client_order cl
 where cl.order_id in (16280266243, 16219389154, 16280481389)
+
+create temp table t_so_gtc as
+select distinct on (e.order_id) e.order_id, co.date_id
+from dwh.execution e
+         join lateral (select get_dateid(co.parent_order_process_time) as date_id
+                       from dwh.client_order co
+                       where e.order_id = co.order_id
+                         and co.parent_order_id is not null
+                         and co.parent_order_process_time < '2024-07-16'::timestamp
+                       limit 1) co on true
+where true
+--and e.order_id = 16174742575
+  and e.exec_date_id = 20240716
+  and e.exec_type not in ('E', 'S', 'D', 'y')
+  and not e.is_parent_level
+
+
+select order_id, create_date_id, parent_order_id, parent_order_process_time, * from dwh.client_order
+where order_id in (16174742575, 16156679190)
