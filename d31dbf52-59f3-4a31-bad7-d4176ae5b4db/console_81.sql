@@ -53,3 +53,28 @@ where true
 
 select order_id, create_date_id, parent_order_id, parent_order_process_time, * from dwh.client_order
 where order_id in (16174742575, 16156679190)
+
+create temp table t_so as
+select distinct on (e.order_id) e.order_id, co.parent_order_process_time
+from dwh.execution e
+         join dwh.client_order co
+              on e.order_id = co.order_id
+                  and co.parent_order_id is not null
+                  and co.parent_order_process_time < '2024-07-16'::timestamp
+                  and e.exec_date_id = 20240716
+                  and e.exec_type not in ('E', 'S', 'D', 'y')
+                  and not e.is_parent_level;
+
+
+create temp table t_so as
+select e.order_id, min(co.parent_order_process_time)
+from dwh.execution e
+         join dwh.client_order co
+              on e.order_id = co.order_id
+                  and co.parent_order_id is not null
+                  and co.parent_order_process_time < '2024-07-16'::timestamp
+                  and e.exec_date_id = 20240716
+                  and e.exec_type not in ('E', 'S', 'D', 'y')
+                  and not e.is_parent_level
+group by e.order_id;
+
