@@ -18,21 +18,29 @@ declare
     l_accounts int4[];
     l_min_time_id int4;
     l_max_time_id int4;
-
+    l_load_id int;
+    l_row_cnt int;
+    l_step_id int;
 begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' STARTED===',
+                           0, 'O')
+    into l_step_id;
+
     select array_agg(account_id)
     into l_accounts
     from dwh.d_account ac
              join dwh.d_trading_firm tf using (trading_firm_id)
     where true
-      and (AC.ACCOUNT_NAME in
+      and (ac.account_name in
            ('JPMONYX', 'LEKOFP', 'BLJPMPC2352', 'BLJPMPC3352', 'BLJPMPC5352', 'BLJPMPC6352', 'BLJPMPC8352',
-            'BLJPMPC1352',
-            'BLJPMPC4352', 'BLJPMPC9352') OR TF.TRADING_FIRM_ID = 'OFP0017');
+            'BLJPMPC1352', 'BLJPMPC4352', 'BLJPMPC9352') OR TF.TRADING_FIRM_ID = 'OFP0017');
 
     drop table if exists t_s3;
 
-    create temp table t_s3 as
+    create temp table t_s3 on commit drop as
     select 'NO'                                      as RECORD_TYPE,
            coalesce(CL.PARENT_ORDER_ID, CL.ORDER_ID) as ORDER_ID,
            to_char(CL.PROCESS_TIME, 'HH24MISSFF3')   as TIME_ID,
@@ -150,6 +158,12 @@ begin
       and CL.TRANS_TYPE <> 'F'
       and CL.MULTILEG_REPORTING_TYPE = '1';
 
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' Parent/Street orders',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
     insert into t_s3
     select 'A'                                       as RECORD_TYPE,
            coalesce(CL.PARENT_ORDER_ID, CL.ORDER_ID) as ORDER_ID,
@@ -192,7 +206,10 @@ begin
     where true
       and EX.exec_date_id = in_date_id
       and EX.EXEC_TYPE in ('4', '8');
-
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' order activity: cancel',
+                           l_row_cnt, 'O')
+    into l_step_id;
 
     insert into t_s3
     select 'T'                                       as RECORD_TYPE,
@@ -248,6 +265,11 @@ begin
     where true
       and EX.exec_date_id = in_date_id
       and EX.EXEC_TYPE in ('F');
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' trade: street level only',
+                           l_row_cnt, 'O')
+    into l_step_id;
 
     select into l_min_time_id, l_max_time_id min(TIME_ID) over (),
                                              max(TIME_ID) over ()
@@ -264,8 +286,13 @@ begin
     return query
         select rec from t_s3
     order by order_id, time_id, record_id, record_type_id;
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' COMPLETED===',
+                           l_row_cnt, 'O')
+    into l_step_id;
 end;
-$$
+$$;
 
 
 select 'H|V2.0.4|'||
