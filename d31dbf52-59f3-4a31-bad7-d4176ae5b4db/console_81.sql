@@ -78,3 +78,40 @@ from dwh.execution e
                   and not e.is_parent_level
 group by e.order_id;
 
+
+
+create or replace function trash.f_get_parent_order_attr(in_parent_order_id int8, in_create_date_id int4,
+                                              in_retention_date_id int4 default 20230901)
+    returns table
+            (
+                sub_strategy_desc varchar(128),
+                client_order_id   varchar(256),
+                order_type_id     char,
+                time_in_force_id  char,
+                exch_order_id     varchar(128)
+            )
+    language plpgsql
+    immutable
+as
+$$
+begin
+    return query select pro.sub_strategy_desc, pro.client_order_id, pro.order_type_id, pro.time_in_force_id, pro.exch_order_id
+                 from dwh.client_order pro
+                 where pro.order_id = in_parent_order_id
+                   and pro.create_date_id = in_create_date_id
+                   and create_date_id = in_create_date_id
+                   and pro.parent_order_id is null
+                   and pro.create_date_id >= in_retention_date_id
+                 limit 1;
+end;
+$$;
+
+select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id, exch_order_id
+                                from trash.f_get_parent_order_attr(16280080016, get_dateid('2024-07-16 09:23:54.177922'::date));
+
+select sub_strategy_desc, client_order_id, order_type_id, time_in_force_id, exch_order_id
+                                from trash.f_get_parent_order_attr(16280080016, 20240716);
+
+select get_dateid('2024-07-16 09:23:54.177922')
+select parent_order_id, parent_order_process_time from dwh.client_order where create_date_id = 20240716
+and parent_order_id is not null
