@@ -1,6 +1,12 @@
-select * from trash.so_s3(in_date_id := 20240729)
+    		select min(TIME_ID) over() as MIN_TIME,
+			   max(TIME_ID) over() as MAX_TIME,
+			   RECORD_TYPE,
+			   REC from t_s3
+where order_id = 16453703876;
 
-create function trash.so_s3(in_date_id int4)
+select * from trash.so_s3(in_date_id := 20240729);
+
+create or replace function trash.so_s3(in_date_id int4)
     returns table
             (
                 ret_row text
@@ -10,6 +16,8 @@ as
 $$
 declare
     l_accounts int4[];
+    l_min_time_id int4;
+    l_max_time_id int4;
 
 begin
     select array_agg(account_id)
@@ -21,6 +29,8 @@ begin
            ('JPMONYX', 'LEKOFP', 'BLJPMPC2352', 'BLJPMPC3352', 'BLJPMPC5352', 'BLJPMPC6352', 'BLJPMPC8352',
             'BLJPMPC1352',
             'BLJPMPC4352', 'BLJPMPC9352') OR TF.TRADING_FIRM_ID = 'OFP0017');
+
+    drop table if exists t_s3;
 
     create temp table t_s3 as
     select 'NO'                                      as RECORD_TYPE,
@@ -192,7 +202,7 @@ begin
            2                                         as RECORD_TYPE_ID,
            array_to_string(array [
                                'T',
-                               CL.ORDER_ID,
+                               CL.ORDER_ID::text,
                                CL.ORDER_ID || '_' || EX.EXEC_ID,
                                '',
                                '',
@@ -203,7 +213,7 @@ begin
                                '', --SYMBOL_EXCHANGE
                                to_char(EX.EXEC_TIME, 'YYYYMMDD') || 'T' ||
                                to_char(EX.EXEC_TIME, 'HH24MISSFF3'), --ACTION_DATETIME
-                               EX.LAST_QTY,
+                               EX.LAST_QTY::text,
                                to_char(EX.LAST_PX, 'FM99990D0099'),
                                EX.EXCHANGE_ID,
                                '', --[12]
@@ -239,7 +249,28 @@ begin
       and EX.exec_date_id = in_date_id
       and EX.EXEC_TYPE in ('F');
 
+    select into l_min_time_id, l_max_time_id min(TIME_ID) over (),
+                                             max(TIME_ID) over ()
+    from t_s3;
+
     return query
-        select rec from t_s3;
+    select 'H|V2.0.4|'||
+				to_char(clock_timestamp(),'YYYYMMDD')||'T'||to_char(clock_timestamp(),'HH24MISSFF3') ||'|'||
+    in_date_id::text ||'T'||l_min_time_id ||'|'||
+    in_date_id::text ||'T'||l_max_time_id ||'|'||
+    'DFIN|DAIN|tradedesk@dashfinancial.com|'
+    ;
+
+    return query
+        select rec from t_s3
+    order by order_id, time_id, record_id, record_type_id;
 end;
 $$
+
+
+select 'H|V2.0.4|'||
+				to_char(clock_timestamp(),'YYYYMMDD')||'T'||to_char(clock_timestamp(),'HH24MISSFF3') ||'|'||
+    :in_date_id::text ||'T'||:l_min_time_id ||'|'||
+    :in_date_id::text ||'T'||:l_max_time_id ||'|'||
+    'DFIN|DAIN|tradedesk@dashfinancial.com|'
+    ;
