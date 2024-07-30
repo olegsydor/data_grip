@@ -4,7 +4,7 @@
 			   REC from t_s3
 where order_id = 16453703876;
 
-select * from trash.so_s3(in_date_id := 20240729);
+select * from trash.so_s3(in_date_id := 20240607);
 
 create or replace function trash.so_s3(in_date_id int4)
     returns table
