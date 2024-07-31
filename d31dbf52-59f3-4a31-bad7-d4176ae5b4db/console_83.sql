@@ -1,14 +1,16 @@
+create function dash360.report_fintech_adh_symbol_multiplier(in_date_id int4, in_all_multipliers)
+;
 with cte_symbol as
 (
-	select
+	select distinct
 		sm.option_symbol as "Root Symbol",
 		sm.delivered_equity as "Equity Symbol",
 		coalesce(sm.delivered_value, 100) as "Multiplier",
 		sm.component_id as "Component ID"
 	from external_data.symbolmaster sm
 	where sm.delivered_equity not like '$%CASH%'
-	group by "Root Symbol", "Equity Symbol", "Multiplier", "Component ID"
-	order by "Root Symbol", "Component ID"
+-- 	group by "Root Symbol", "Equity Symbol", "Multiplier", "Component ID"
+-- 	order by "Root Symbol", "Component ID"
 )
 select cs.*
 from cte_symbol as cs
