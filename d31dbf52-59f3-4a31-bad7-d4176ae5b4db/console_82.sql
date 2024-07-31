@@ -4,7 +4,9 @@
 			   REC from t_s3
 where order_id = 16453703876;
 
-select * from trash.so_s3(in_date_id := 20240607);
+select * from dash360.report_s3_ofp1(in_date_id := 20240607);
+alter function trash.so_s3 rename to report_s3_ofp1;
+alter function trash.report_s3_ofp1 set schema dash360;
 
 create or replace function trash.so_s3(in_date_id int4)
     returns table
