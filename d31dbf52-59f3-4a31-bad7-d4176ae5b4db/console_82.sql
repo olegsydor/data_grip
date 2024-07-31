@@ -8,13 +8,14 @@ select * from dash360.report_s3_ofp1(in_date_id := 20240607);
 alter function trash.so_s3 rename to report_s3_ofp1;
 alter function trash.report_s3_ofp1 set schema dash360;
 
-create or replace function trash.so_s3(in_date_id int4)
+create or replace dash360.report_s3_ofp1(in_date_id int4)
     returns table
             (
                 ret_row text
             )
     language plpgsql
 as
+            -- 2024-07-30 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4621
 $$
 declare
     l_accounts int4[];
