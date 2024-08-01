@@ -328,11 +328,12 @@ where true
   and order_id = 671291192792580096
   and aw.cl_ord_id in ('1_2240726');
 
-select * from staging.v_away_trade aw
+select *
+into trash.so_away_trade
+from staging.v_away_trade aw
 where true
-and v_away_trade.date_id = 20240801order_id >= 552194668457099264
-    and chain_id >= 0
-    and exec_id > 'fa2m0md80000';
+and aw.client_order_db_create_time >= 20240801::text::date
+limit 0
 
 
 
