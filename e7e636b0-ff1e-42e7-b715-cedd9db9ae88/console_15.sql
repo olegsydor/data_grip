@@ -332,8 +332,61 @@ select *
 into trash.so_away_trade
 from staging.v_away_trade aw
 where true
-and aw.client_order_db_create_time >= 20240801::text::date
-limit 0
+-- and aw.client_order_db_create_time >= 20240801::text::date
+-- and exec_id >= 'im46j6vc0002'
+and order_id >= 673436139176067072;
+
+create index away_trade_exec_id_idx on trash.so_away_trade (exec_id);
+create index away_trade_order_id_chain_id_idx on trash.so_away_trade (order_id, chain_id);
+
+select order_id, chain_id, exec_id, count(*)
+from trash.so_away_trade
+group by order_id, chain_id, exec_id
+having count(*) > 1
+
+create or replace function trash.so_load_away_trade()
+    returns int4
+    language plpgsql
+as
+$fx$
+declare
+    l_last_loaded_exec_id  text;
+    l_last_loaded_order_id int8;
+    l_row_cnt              int4;
+    l_load_id              int;
+    l_step_id              int;
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select into l_last_loaded_order_id, l_last_loaded_exec_id coalesce(order_id, 0),
+                                                              coalesce(exec_id, '')
+    from trash.so_away_trade
+    order by exec_id desc
+    limit 1;
+
+    select public.load_log(l_load_id, l_step_id, 'load_away_trade for order_id >= ' || l_last_loaded_order_id::text ||
+                                                 ' and exec_id > ' || l_last_loaded_exec_id ||
+                                                 ' STARTED===',
+                           0, 'O')
+    into l_step_id;
+
+    insert into trash.so_away_trade
+    select *
+    from staging.v_away_trade
+    where order_id >= l_last_loaded_order_id
+      and exec_id > l_last_loaded_exec_id;
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'load_away_trade COMPLETED ===',
+                           l_row_cnt, 'O')
+    into l_step_id;
+    return l_row_cnt;
+
+end;
+$fx$;
+
+select from trash.so_load_away_trade()
 
 
-
+select * from trash.so_away_trade

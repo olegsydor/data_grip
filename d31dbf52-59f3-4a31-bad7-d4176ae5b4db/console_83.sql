@@ -14,7 +14,16 @@ create function dash360.report_fintech_adh_symbol_multiplier(in_all_multipliers 
 as
 $fx$
     -- 2024-07-30 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4428
+declare
+    l_load_id int;
+    l_row_cnt int;
+    l_step_id int;
 begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, 'report_fintech_adh_symbol_multiplier STARTED===',
+                           0, 'O')
+    into l_step_id;
 
     return query
         select 'Root Symbol,Equity Symbol,Multiplier,Component ID';
@@ -41,6 +50,12 @@ begin
                   else
                       not (cs."Multiplier" = 100 and cs."Total Non-Cash Component" = 1) end--If in_all_multipliers = 'N' else include everything;
         order by "Root Symbol", "Component ID";
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'report_fintech_adh_symbol_multiplier COMPLETED===',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
 end ;
 $fx$
 
