@@ -327,3 +327,9 @@ where true
   and aw.status in ('1', '2')
   and order_id = 671291192792580096
   and aw.cl_ord_id in ('1_2240726');
+
+select * from staging.v_away_trade aw
+where true
+and order_id >= 552194668457099264
+    and chain_id >= 0
+    and exec_id > 'fa2m0md80000'
