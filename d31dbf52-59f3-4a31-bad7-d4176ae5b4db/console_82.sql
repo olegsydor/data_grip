@@ -4,19 +4,19 @@
 			   REC from t_s3
 where order_id = 16453703876;
 
-select * from dash360.report_s3_ofp1(in_date_id := 20240607);
+select * from dash360.report_s3_ofp1(20240607);
+select * from dash360.report_s3_ofp1(20240607, 20240608);
 alter function trash.so_s3 rename to report_s3_ofp1;
 alter function trash.report_s3_ofp1 set schema dash360;
 
-create or replace dash360.report_s3_ofp1(in_date_id int4)
-    returns table
-            (
-                ret_row text
-            )
-    language plpgsql
-as
-            -- 2024-07-30 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4621
-$$
+-- DROP FUNCTION dash360.report_s3_ofp1(int4);
+
+CREATE OR REPLACE FUNCTION dash360.report_s3_ofp1(in_start_date_id int4, in_end_date_id int4 default null)
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
+-- 2024-07-30 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4621
+-- 2024-08-01 SO in_date_id -> in_start_date_id, in_end_date_id int4
 declare
     l_accounts int4[];
     l_min_time_id int4;
@@ -24,11 +24,17 @@ declare
     l_load_id int;
     l_row_cnt int;
     l_step_id int;
+    l_start_date_id int4;
+    l_end_date_id int4;
 begin
+
+    l_start_date_id = in_start_date_id;
+    l_end_date_id = coalesce(in_end_date_id, in_start_date_id);
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' STARTED===',
+    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' ||
+                                                 l_start_date_id::text || '-'|| l_end_date_id::text || ' STARTED===',
                            0, 'O')
     into l_step_id;
 
@@ -103,7 +109,7 @@ begin
                                        (select coalesce(fix_message ->> '432', '') || 'T235959000'
                                         from fix_capture.fix_message_json fmj
                                         where fmj.fix_message_id = CL.FIX_MESSAGE_ID
-                                          and fmj.date_id = in_date_id)
+                                          and fmj.date_id = cl.create_date_id)
                                    end, --22
                                '0', --PRE_MARKET_IND
                                '',
@@ -157,13 +163,15 @@ begin
              left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE_id
     where true
       and cl.account_id = any (l_accounts)
-      and CL.CREATE_date_id = in_date_id
+      and CL.CREATE_date_id between l_start_date_id and l_end_date_id
       and CL.TRANS_TYPE <> 'F'
       and CL.MULTILEG_REPORTING_TYPE = '1';
 
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' Parent/Street orders',
+    select public.load_log(l_load_id, l_step_id,
+                           'get_S3_OFP1 for ' || l_start_date_id::text || '-' || l_end_date_id::text ||
+                           ' Parent/Street orders',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -207,10 +215,11 @@ begin
              left join dwh.d_OPTION_CONTRACT OC on OC.INSTRUMENT_ID = I.INSTRUMENT_ID
              left join dwh.d_OPTION_SERIES OS on OS.OPTION_SERIES_ID = OC.OPTION_SERIES_ID
     where true
-      and EX.exec_date_id = in_date_id
+      and EX.exec_date_id between l_start_date_id and l_end_date_id
       and EX.EXEC_TYPE in ('4', '8');
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' order activity: cancel',
+    select public.load_log(l_load_id, l_step_id,
+                           'get_S3_OFP1 for ' || l_start_date_id::text || '-' || l_end_date_id::text || ' order activity: cancel',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -266,14 +275,14 @@ begin
              left join dwh.d_OPTION_CONTRACT OC on OC.INSTRUMENT_ID = I.INSTRUMENT_ID
              left join dwh.d_OPTION_SERIES OS on OS.OPTION_SERIES_ID = OC.OPTION_SERIES_ID
     where true
-      and EX.exec_date_id = in_date_id
+      and EX.exec_date_id between l_start_date_id and l_end_date_id
       and EX.EXEC_TYPE in ('F');
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' trade: street level only',
+    select public.load_log(l_load_id, l_step_id,
+                           'get_S3_OFP1 for ' || l_start_date_id::text || '-' || l_end_date_id::text || ' trade: street level only',
                            l_row_cnt, 'O')
     into l_step_id;
-
     select into l_min_time_id, l_max_time_id min(TIME_ID) over (),
                                              max(TIME_ID) over ()
     from t_s3;
@@ -281,8 +290,8 @@ begin
     return query
     select 'H|V2.0.4|'||
 				to_char(clock_timestamp(),'YYYYMMDD')||'T'||to_char(clock_timestamp(),'HH24MISSFF3') ||'|'||
-    in_date_id::text ||'T'||l_min_time_id ||'|'||
-    in_date_id::text ||'T'||l_max_time_id ||'|'||
+    l_start_date_id::text ||'T'||l_min_time_id ||'|'||
+    l_end_date_id::text ||'T'||l_max_time_id ||'|'||
     'DFIN|DAIN|tradedesk@dashfinancial.com|'
     ;
 
@@ -291,16 +300,10 @@ begin
     order by order_id, time_id, record_id, record_type_id;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_S3_OFP1 for ' || in_date_id::text || ' COMPLETED===',
+    select public.load_log(l_load_id, l_step_id,
+                           'get_S3_OFP1 for ' || l_start_date_id::text || '-' || l_end_date_id::text || ' COMPLETED===',
                            l_row_cnt, 'O')
     into l_step_id;
 end;
-$$;
-
-
-select 'H|V2.0.4|'||
-				to_char(clock_timestamp(),'YYYYMMDD')||'T'||to_char(clock_timestamp(),'HH24MISSFF3') ||'|'||
-    :in_date_id::text ||'T'||:l_min_time_id ||'|'||
-    :in_date_id::text ||'T'||:l_max_time_id ||'|'||
-    'DFIN|DAIN|tradedesk@dashfinancial.com|'
-    ;
+$function$
+;

@@ -60,9 +60,11 @@ end ;
 $fx$
 
 
-select * from dash360.report_fintech_adh_symbol_multiplier();
-select * from dash360.report_fintech_adh_symbol_multiplier('N');
-select * from dash360.report_fintech_adh_symbol_multiplier('Y');
+select * from dash360.report_adh_symbol_multiplier();
+select * from dash360.report_adh_symbol_multiplier('N');
+select * from dash360.report_adh_symbol_multiplier('Y');
+
+alter function dash360.report_fintech_adh_symbol_multiplier rename to report_adh_symbol_multiplier
 
 
 ;
