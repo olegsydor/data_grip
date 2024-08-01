@@ -4,20 +4,20 @@ analyze external_data.symbolmaster;
 select * from external_data.symbolmaster
 where effective_date::date <= :in_date_id::text::date;
 
-
-create function dash360.report_fintech_adh_symbol_multiplier(in_date_id int4, in_all_multipliers char default 'N')
+drop function dash360.report_fintech_adh_symbol_multiplier;
+create function dash360.report_fintech_adh_symbol_multiplier(in_all_multipliers char default 'N')
     returns table
             (
-                "Root Symbol"   varchar(50),
-                "Equity Symbol" varchar(50),
-                "Multiplier"    numeric,
-                "Component ID"  integer
+                ret_row text
             )
     language plpgsql
 as
 $fx$
     -- 2024-07-30 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4428
 begin
+
+    return query
+        select 'Root Symbol,Equity Symbol,Multiplier,Component ID';
 
     return query
         with cte_symbol as
@@ -29,7 +29,12 @@ begin
                   from external_data.symbolmaster sm
                   where sm.delivered_equity not like '$%CASH%'
                   group by "Root Symbol", "Equity Symbol", "Multiplier", "Component ID")
-        select cs."Root Symbol", cs."Equity Symbol", cs."Multiplier", cs."Component ID"
+        select array_to_string(ARRAY [
+                                   cs."Root Symbol",
+                                   cs."Equity Symbol",
+                                   cs."Multiplier"::text,
+                                   cs."Component ID"::text
+                                   ], ',', '')
         from cte_symbol as cs
         where case
                   when in_all_multipliers = 'Y' then true
@@ -39,7 +44,10 @@ begin
 end ;
 $fx$
 
-select * from dash360.report_fintech_adh_symbol_multiplier(20240715, 'Y')
+
+select * from dash360.report_fintech_adh_symbol_multiplier();
+select * from dash360.report_fintech_adh_symbol_multiplier('N');
+select * from dash360.report_fintech_adh_symbol_multiplier('Y');
 
 
 ;
