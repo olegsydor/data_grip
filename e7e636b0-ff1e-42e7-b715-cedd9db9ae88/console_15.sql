@@ -330,6 +330,9 @@ where true
 
 select * from staging.v_away_trade aw
 where true
-and order_id >= 552194668457099264
+and v_away_trade.date_id = 20240801order_id >= 552194668457099264
     and chain_id >= 0
-    and exec_id > 'fa2m0md80000'
+    and exec_id > 'fa2m0md80000';
+
+
+
