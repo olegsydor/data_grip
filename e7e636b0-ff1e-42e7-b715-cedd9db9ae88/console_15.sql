@@ -389,4 +389,5 @@ $fx$;
 select from trash.so_load_away_trade()
 
 
-select * from trash.so_away_trade
+select * from trash.so_away_trade;
+SELECT x.* FROM trash.so_away_trade x
