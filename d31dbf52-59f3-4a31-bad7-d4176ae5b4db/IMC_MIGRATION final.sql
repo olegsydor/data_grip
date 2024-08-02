@@ -568,3 +568,43 @@ create index on t_alp (CROSS_ORDER_ID, ORDER_ID);
         end;
 $procedure$
 ;
+
+
+------------
+create temp table all_orders as
+select cl.order_id,
+       cl.create_date_id,
+       cl.client_order_id,
+       par.order_id        as parent_order_id,
+       par.client_order_id as parent_client_order_id,
+       par.create_date_id  as parent_create_date_id
+from dwh.client_order cl
+         inner join dwh.execution ex on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+         inner join dwh.d_fix_connection fc
+                    on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
+         inner join dwh.d_account ac on ac.account_id = cl.account_id
+         inner join dwh.d_trading_firm tf                     on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
+         left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+         left join lateral (select order_id, client_order_id, create_date_id
+                            from dwh.client_order pro
+                            where cl.parent_order_id = pro.order_id
+--                               and pro.create_date_id = :in_date_id
+                              and pro.parent_order_id is null
+                              and cl.parent_order_id is not null
+                              and pro.create_date_id >= :l_retention_date_id
+                            order by create_date_id
+                            limit 1) par on true
+where ex.exec_date_id = :in_date_id
+--   and cl.create_date_id = :in_date_id
+  and cl.multileg_reporting_type in ('1', '2')
+  and ex.is_busted = 'N'
+  and ex.exec_type not in ('E', 'S', 'D', 'y')
+  and cl.trans_type <> 'F'
+  and cl.create_date_id > :l_retention_date_id;
+
+select * --avg(case when parent_create_date_id = 20240716 then 1 else 0 end)
+from all_orders
+where parent_order_id is not null
+and parent_create_date_id != 20240716
+
+
