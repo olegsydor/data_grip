@@ -574,18 +574,79 @@ $procedure$
 create temp table all_orders as
 select cl.order_id,
        cl.create_date_id,
+       cl.transaction_id,
+       cl.create_time,
+       cl.order_qty,
+       cl.price,
+       cl.exch_order_id,
+       cl.cross_order_id,
+       cl.is_originator,
+       cl.orig_order_id,
        cl.client_order_id,
-       par.order_id        as parent_order_id,
+       cl.exchange_id as cl_exchange_id,
+       cl.sub_strategy_id,
+       cl.sub_strategy_desc,
+       cl.sub_system_unq_id,
+       cl.opt_exec_broker_id,
+       cl.clearing_firm_id,
+       cl.clearing_account,
+       cl.sub_account,
+       cl.open_close,
+       cl.customer_or_firm_id,
+       cl.opt_customer_firm_street,
+       cl.eq_order_capacity,
+       cl.exec_instruction,
+       cl.strtg_decision_reason_code,
+       cl.request_number,
+       cl.order_type_id,
+       cl.time_in_force_id,
+       cl.multileg_reporting_type,
+       cl.cons_payment_per_contract,
+       cl.instrument_id,
+       cl.fix_connection_id,
+       cl.side,
+       ex.exec_id,
+       ex.exec_time,
+       ex.exec_type,
+       ex.cum_qty,
+       ex.order_status,
+       ex.last_px,
+       ex.last_qty,
+       ex.contra_account_capacity,
+       ex.trade_liquidity_indicator,
+       ex.exch_exec_id,
+       ex.exchange_id as ex_exchange_id,
+       ex.contra_broker,
+       ex.contra_trader,
+       ex.secondary_order_id,
+       ex.secondary_exch_exec_id,
+       ex.exec_date_id,
+       ex.fix_message_id,
+       ac.trading_firm_id,
+       ac.opt_is_fix_clfirm_processed,
+       ac.opt_customer_or_firm,
+       ac.account_id,
+       opx.opt_exec_broker,
+       par.order_id as parent_order_id,
        par.client_order_id as parent_client_order_id,
-       par.create_date_id  as parent_create_date_id
+       par.create_date_id as parent_create_date_id,
+       par.sub_strategy_desc as parent_sub_strategy_desc,
+       par.order_type_id as parent_order_type_id,
+       par.time_in_force_id as parent_time_in_force_id
 from dwh.client_order cl
          inner join dwh.execution ex on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
          inner join dwh.d_fix_connection fc
                     on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
          inner join dwh.d_account ac on ac.account_id = cl.account_id
-         inner join dwh.d_trading_firm tf                     on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
+         inner join dwh.d_trading_firm tf
+                    on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
          left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
-         left join lateral (select order_id, client_order_id, create_date_id
+         left join lateral (select order_id,
+                                   client_order_id,
+                                   create_date_id,
+                                   sub_strategy_desc,
+                                   ORDER_TYPE_id,
+                                   time_in_force_id
                             from dwh.client_order pro
                             where cl.parent_order_id = pro.order_id
 --                               and pro.create_date_id = :in_date_id
