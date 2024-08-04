@@ -276,22 +276,28 @@ create table trash.so_imc_transf as
            cl.fc_acceptor_id,
            fmj.t9730                      as str_t9730,
            fmj_p.t9730                    as par_t9730
-   select *
-    from trash.so_imc cl
---              left join dwh.client_order str
+create temp table t_01 as
+select cl.order_id, cl.create_date_id, clstr.order_id as str_order_id, clstr.client_order_id, clstr.exec_id
+from trash.so_imc cl
+--                       left join dwh.client_order str
 --                        on (cl.order_id = str.parent_order_id and cl.ex_secondary_order_id = str.client_order_id and
 --                            cl.ex_exec_type = 'F' and str.create_date_id >= cl.create_date_id and str.parent_order_id is not null)
 --              left join lateral(select * from dwh.execution es
 --                        where (es.order_id = STR.ORDER_ID and es.exch_exec_id = cl.ex_secondary_exch_exec_id and
 --                            es.exec_date_id >= cl.create_date_id) limit 1) es on true
 
-left join lateral (select * from dwh.client_order str
-                           join dwh.execution es on es.order_id = STR.ORDER_ID
-                           where cl.order_id = str.parent_order_id and cl.ex_secondary_order_id = str.client_order_id and
-                           cl.ex_exec_type = 'F' and str.create_date_id >= cl.create_date_id and str.parent_order_id is not null
-                           and es.exch_exec_id = cl.ex_secondary_exch_exec_id
-                           limit 1
-                           ) clstr on true
+         left join lateral (select str.order_id, str.client_order_id, es.exec_id
+                            from dwh.client_order str
+                                     join dwh.execution es on es.order_id = STR.ORDER_ID
+                            where cl.order_id = str.parent_order_id
+                              and cl.ex_secondary_order_id = str.client_order_id
+                              and cl.ex_exec_type = 'F'
+                              and str.create_date_id >= cl.create_date_id
+                              and str.parent_order_id is not null
+                              and es.exch_exec_id = cl.ex_secondary_exch_exec_id
+                              and str.create_date_id >= :l_retention_date_id
+                            limit 1
+    ) clstr on true
 
              left join lateral (select fix_message ->> '9730' as t9730
                                 from fix_capture.fix_message_json fmj
@@ -332,4 +338,12 @@ left join lateral (select * from dwh.client_order str
                                   and cl.CROSS_ORDER_ID is not null
                                   group by cc.cross_order_id
                                   limit 1) cc on true
-order by random()
+order by random();
+
+
+select str.* from dwh.client_order cl
+          left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id --and cl.ex_secondary_order_id = str.client_order_id and
+--                            and cl.ex_exec_type = 'F'
+                               and str.create_date_id >= cl.create_date_id and str.parent_order_id is not null)
+where cl.order_id = 16280308769
