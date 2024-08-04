@@ -571,7 +571,7 @@ $procedure$
 
 
 ------------
-create temp table all_orders as
+create temp table t_all_orders_n as
 select cl.order_id,
        cl.create_date_id,
        cl.transaction_id,
@@ -583,7 +583,7 @@ select cl.order_id,
        cl.is_originator,
        cl.orig_order_id,
        cl.client_order_id,
-       cl.exchange_id as cl_exchange_id,
+       cl.exchange_id        as cl_exchange_id,
        cl.sub_strategy_id,
        cl.sub_strategy_desc,
        cl.sub_system_unq_id,
@@ -615,7 +615,7 @@ select cl.order_id,
        ex.contra_account_capacity,
        ex.trade_liquidity_indicator,
        ex.exch_exec_id,
-       ex.exchange_id as ex_exchange_id,
+       ex.exchange_id        as ex_exchange_id,
        ex.contra_broker,
        ex.contra_trader,
        ex.secondary_order_id,
@@ -627,14 +627,14 @@ select cl.order_id,
        ac.opt_customer_or_firm,
        ac.account_id,
        opx.opt_exec_broker,
-       par.order_id as parent_order_id,
-       par.client_order_id as parent_client_order_id,
-       par.create_date_id as parent_create_date_id,
+       par.order_id          as parent_order_id,
+       par.client_order_id   as parent_client_order_id,
+       par.create_date_id    as parent_create_date_id,
        par.sub_strategy_desc as parent_sub_strategy_desc,
-       par.order_type_id as parent_order_type_id,
-       par.time_in_force_id as parent_time_in_force_id
-from dwh.client_order cl
-         inner join dwh.execution ex on cl.order_id = ex.order_id and cl.create_date_id = :in_date_id
+       par.order_type_id     as parent_order_type_id,
+       par.time_in_force_id  as parent_time_in_force_id
+from dwh.execution ex
+         inner join lateral (select * from dwh.client_order cl where cl.order_id = ex.order_id and cl.create_date_id < :in_date_id order by create_date_id desc limit 1) cl on true
          inner join dwh.d_fix_connection fc
                     on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
          inner join dwh.d_account ac on ac.account_id = cl.account_id
@@ -649,23 +649,31 @@ from dwh.client_order cl
                                    time_in_force_id
                             from dwh.client_order pro
                             where cl.parent_order_id = pro.order_id
---                               and pro.create_date_id = :in_date_id
+                              and pro.create_date_id = get_dateid(cl.parent_order_process_time::date)
                               and pro.parent_order_id is null
                               and cl.parent_order_id is not null
                               and pro.create_date_id >= :l_retention_date_id
-                            order by create_date_id
+                            order by create_date_id desc
                             limit 1) par on true
-where ex.exec_date_id = :in_date_id
---   and cl.create_date_id = :in_date_id
+where true
+  and ex.exec_date_id = :in_date_id
+--   and cl.create_date_id < :in_date_id
   and cl.multileg_reporting_type in ('1', '2')
   and ex.is_busted = 'N'
   and ex.exec_type not in ('E', 'S', 'D', 'y')
   and cl.trans_type <> 'F'
-  and cl.create_date_id > :l_retention_date_id;
+  and cl.create_date_id > :l_retention_date_id
+and not exists (select null from t_all_orders tao where  tao.order_id = ex.order_id)
+-- and cl.order_id = 14386720503
+;
+create index on t_all_orders (order_id, exec_id);
 
-select * --avg(case when parent_create_date_id = 20240716 then 1 else 0 end)
-from all_orders
-where parent_order_id is not null
-and parent_create_date_id != 20240716
+
+
+select order_id, exec_id from trash.imc_oracle_report
+except
+select order_id, exec_id from all_orders
+except
+select order_id, exec_id from trash.imc_oracle_report
 
 
