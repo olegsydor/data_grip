@@ -666,14 +666,20 @@ where true
 and not exists (select null from t_all_orders tao where  tao.order_id = ex.order_id)
 -- and cl.order_id = 14386720503
 ;
-create index on t_all_orders (order_id, exec_id);
-
-
+create index on trash.so_imc (order_id, exec_id);
+create table trash.so_imc as
+select *
+from t_all_orders
+union all
+select *
+from t_all_orders_n
 
 select order_id, exec_id from trash.imc_oracle_report
 except
-select order_id, exec_id from all_orders
+select order_id, exec_id from trash.so_imc
 except
 select order_id, exec_id from trash.imc_oracle_report
 
 
+select * from trash.so_imc
+where order_id = 14386720503
