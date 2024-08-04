@@ -682,4 +682,104 @@ select order_id, exec_id from trash.imc_oracle_report
 
 
 select * from trash.so_imc
-where order_id = 14386720503
+where order_id = 14386720503;
+
+select *
+from trash.so_imc cl
+         left join lateral (select
+                                -- AMEX
+                                max(case when ls.exchange_id = 'AMEX' then ls.ask_price end)      as amex_ask_price,
+                                max(case when ls.exchange_id = 'AMEX' then ls.bid_price end)      as amex_bid_peice,
+                                max(case when ls.exchange_id = 'AMEX' then ls.ask_quantity end)   as amex_ask_quantity,
+                                max(case when ls.exchange_id = 'AMEX' then ls.bid_quantity end)   as amex_bid_quantity,
+                                -- BATO
+                                max(case when ls.exchange_id = 'BATO' then ls.ask_price end)      as bato_ask_price,
+                                max(case when ls.exchange_id = 'BATO' then ls.bid_price end)      as bato_bid_peice,
+                                max(case when ls.exchange_id = 'BATO' then ls.ask_quantity end)   as bato_ask_quantity,
+                                max(case when ls.exchange_id = 'BATO' then ls.bid_quantity end)   as bato_bid_quantity,
+                                -- BOX
+                                max(case when ls.exchange_id = 'BOX' then ls.ask_price end)       as box_ask_price,
+                                max(case when ls.exchange_id = 'BOX' then ls.bid_price end)       as box_bid_peice,
+                                max(case when ls.exchange_id = 'BOX' then ls.ask_quantity end)    as box_ask_quantity,
+                                max(case when ls.exchange_id = 'BOX' then ls.bid_quantity end)    as box_bid_quantity,
+                                -- CBOE
+                                max(case when ls.exchange_id = 'CBOE' then ls.ask_price end)      as cboe_ask_price,
+                                max(case when ls.exchange_id = 'CBOE' then ls.bid_price end)      as cboe_bid_peice,
+                                max(case when ls.exchange_id = 'CBOE' then ls.ask_quantity end)   as cboe_ask_quantity,
+                                max(case when ls.exchange_id = 'CBOE' then ls.bid_quantity end)   as cboe_bid_quantity,
+                                -- C2OX
+                                max(case when ls.exchange_id = 'C2OX' then ls.ask_price end)      as c2ox_ask_price,
+                                max(case when ls.exchange_id = 'C2OX' then ls.bid_price end)      as c2ox_bid_peice,
+                                max(case when ls.exchange_id = 'C2OX' then ls.ask_quantity end)   as c2ox_ask_quantity,
+                                max(case when ls.exchange_id = 'C2OX' then ls.bid_quantity end)   as c2ox_bid_quantity,
+                                -- NQBXO
+                                max(case when ls.exchange_id = 'NQBXO' then ls.ask_price end)     as nqbxo_ask_price,
+                                max(case when ls.exchange_id = 'NQBXO' then ls.bid_price end)     as nqbxo_bid_peice,
+                                max(case when ls.exchange_id = 'NQBXO' then ls.ask_quantity end)  as nqbxo_ask_quantity,
+                                max(case when ls.exchange_id = 'NQBXO' then ls.bid_quantity end)  as nqbxo_bid_quantity,
+                                -- ISE
+                                max(case when ls.exchange_id = 'ISE' then ls.ask_price end)       as ise_ask_price,
+                                max(case when ls.exchange_id = 'ISE' then ls.bid_price end)       as ise_bid_peice,
+                                max(case when ls.exchange_id = 'ISE' then ls.ask_quantity end)    as ise_ask_quantity,
+                                max(case when ls.exchange_id = 'ISE' then ls.bid_quantity end)    as ise_bid_quantity,
+                                -- ARCA
+                                max(case when ls.exchange_id = 'ARCA' then ls.ask_price end)      as arca_ask_price,
+                                max(case when ls.exchange_id = 'ARCA' then ls.bid_price end)      as arca_bid_peice,
+                                max(case when ls.exchange_id = 'ARCA' then ls.ask_quantity end)   as arca_ask_quantity,
+                                max(case when ls.exchange_id = 'ARCA' then ls.bid_quantity end)   as arca_bid_quantity,
+                                -- MIAX
+                                max(case when ls.exchange_id = 'MIAX' then ls.ask_price end)      as miax_ask_price,
+                                max(case when ls.exchange_id = 'MIAX' then ls.bid_price end)      as miax_bid_peice,
+                                max(case when ls.exchange_id = 'MIAX' then ls.ask_quantity end)   as miax_ask_quantity,
+                                max(case when ls.exchange_id = 'MIAX' then ls.bid_quantity end)   as miax_bid_quantity,
+                                -- GEMINI
+                                max(case when ls.exchange_id = 'GEMINI' then ls.ask_price end)    as gemini_ask_price,
+                                max(case when ls.exchange_id = 'GEMINI' then ls.bid_price end)    as gemini_bid_peice,
+                                max(case when ls.exchange_id = 'GEMINI' then ls.ask_quantity end) as gemini_ask_quantity,
+                                max(case when ls.exchange_id = 'GEMINI' then ls.bid_quantity end) as gemini_bid_quantity,
+                                -- NSDQO
+                                max(case when ls.exchange_id = 'NSDQO' then ls.ask_price end)     as nsdqo_ask_price,
+                                max(case when ls.exchange_id = 'NSDQO' then ls.bid_price end)     as nsdqo_bid_peice,
+                                max(case when ls.exchange_id = 'NSDQO' then ls.ask_quantity end)  as nsdqo_ask_quantity,
+                                max(case when ls.exchange_id = 'NSDQO' then ls.bid_quantity end)  as nsdqo_bid_quantity,
+                                -- PHLX
+                                max(case when ls.exchange_id = 'PHLX' then ls.ask_price end)      as phlx_ask_price,
+                                max(case when ls.exchange_id = 'PHLX' then ls.bid_price end)      as phlx_bid_peice,
+                                max(case when ls.exchange_id = 'PHLX' then ls.ask_quantity end)   as phlx_ask_quantity,
+                                max(case when ls.exchange_id = 'PHLX' then ls.bid_quantity end)   as phlx_bid_quantity,
+                                -- EDGO
+                                max(case when ls.exchange_id = 'EDGO' then ls.ask_price end)      as edgo_ask_price,
+                                max(case when ls.exchange_id = 'EDGO' then ls.bid_price end)      as edgo_bid_peice,
+                                max(case when ls.exchange_id = 'EDGO' then ls.ask_quantity end)   as edgo_ask_quantity,
+                                max(case when ls.exchange_id = 'EDGO' then ls.bid_quantity end)   as edgo_bid_quantity,
+                                -- MCRY
+                                max(case when ls.exchange_id = 'MCRY' then ls.ask_price end)      as mcry_ask_price,
+                                max(case when ls.exchange_id = 'MCRY' then ls.bid_price end)      as mcry_bid_peice,
+                                max(case when ls.exchange_id = 'MCRY' then ls.ask_quantity end)   as mcry_ask_quantity,
+                                max(case when ls.exchange_id = 'MCRY' then ls.bid_quantity end)   as mcry_bid_quantity,
+                                -- MPRL
+                                max(case when ls.exchange_id = 'MPRL' then ls.ask_price end)      as mprl_ask_price,
+                                max(case when ls.exchange_id = 'MPRL' then ls.bid_price end)      as mprl_bid_peice,
+                                max(case when ls.exchange_id = 'MPRL' then ls.ask_quantity end)   as mprl_ask_quantity,
+                                max(case when ls.exchange_id = 'MPRL' then ls.bid_quantity end)   as mprl_bid_quantity,
+                                -- EMLD
+                                max(case when ls.exchange_id = 'EMLD' then ls.ask_price end)      as emld_ask_price,
+                                max(case when ls.exchange_id = 'EMLD' then ls.bid_price end)      as emld_bid_peice,
+                                max(case when ls.exchange_id = 'EMLD' then ls.ask_quantity end)   as emld_ask_quantity,
+                                max(case when ls.exchange_id = 'EMLD' then ls.bid_quantity end)   as emld_bid_quantity,
+                                -- SPHR
+                                max(case when ls.exchange_id = 'SPHR' then ls.ask_price end)      as sphr_ask_price,
+                                max(case when ls.exchange_id = 'SPHR' then ls.bid_price end)      as sphr_bid_peice,
+                                max(case when ls.exchange_id = 'SPHR' then ls.ask_quantity end)   as sphr_ask_quantity,
+                                max(case when ls.exchange_id = 'SPHR' then ls.bid_quantity end)   as sphr_bid_quantity,
+                                -- MXOP
+                                max(case when ls.exchange_id = 'MXOP' then ls.ask_price end)      as mxop_ask_price,
+                                max(case when ls.exchange_id = 'MXOP' then ls.bid_price end)      as mxop_bid_peice,
+                                max(case when ls.exchange_id = 'MXOP' then ls.ask_quantity end)   as mxop_ask_quantity,
+                                max(case when ls.exchange_id = 'MXOP' then ls.bid_quantity end)   as mxop_bid_quantity
+                            from dwh.l1_snapshot ls
+                            where ls.transaction_id = cl.transaction_id
+                              and ls.start_date_id = :in_date_id
+                            group by ls.transaction_id
+                            limit 1
+    ) md on true;
