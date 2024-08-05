@@ -134,6 +134,23 @@ where true
   and cl.create_date_id > :l_retention_date_id;
 create index on trash.so_imc (order_id, ex_exec_id);
 
+create temp table t_left_orders as
+select order_id
+from dwh.execution
+where exec_date_id = :in_date_id
+  and is_busted = 'N'
+  and exec_type not in ('E', 'S', 'D', 'y')
+except
+select order_id
+from trash.so_imc;
+create index on t_left_orders (order_id);
+
+select order_id, count(*)
+    from t_left_orders
+        group by order_id
+having count(*)  > 1
+
+analyze t_left_orders;
 
 insert into trash.so_imc
 select cl.order_id,
@@ -212,8 +229,9 @@ select cl.order_id,
        es.contra_account_capacity     as es_contra_account_capacity,
        es.contra_trader               as es_contra_trader,
        es.exchange_id                 as es_exchange_id
-from dwh.client_order cl
-         inner join dwh.execution ex on ex.order_id = cl.order_id
+from dwh.execution ex
+    join t_left_orders tlo on ex.order_id = tlo.order_id
+         inner join dwh.client_order cl on ex.order_id = cl.order_id
          inner join dwh.d_fix_connection fc
                     on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
          inner join dwh.d_account ac on ac.account_id = cl.account_id
@@ -235,15 +253,22 @@ from dwh.client_order cl
                             order by create_date_id desc
                             limit 1) par on true
 
-         left join dwh.client_order str
-                   on (cl.order_id = str.parent_order_id
-                       and ex.secondary_order_id = str.client_order_id
-                       and ex.exec_type = 'F'
-                       and str.create_date_id >= cl.create_date_id
-                       and str.parent_order_id is not null)
-         left join dwh.execution es
-                   on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
-                       es.exec_date_id >= cl.create_date_id)
+         left join lateral (select *
+                            from dwh.client_order str
+                            where (cl.order_id = str.parent_order_id
+                                and ex.secondary_order_id = str.client_order_id
+                                and ex.exec_type = 'F'
+                                and str.create_date_id >= cl.create_date_id
+                                and str.create_date_id >= :l_retention_date_id
+                                and str.parent_order_id is not null)
+                            limit 1) str on true
+         left join lateral (select *
+                            from dwh.execution es
+                            where (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id
+                                and es.exec_date_id >= cl.create_date_id
+                                and es.exec_date_id >= :l_retention_date_id
+                                      )
+                            limit 1) es on true
 where true
   and ex.exec_date_id = :in_date_id
 --   and cl.create_date_id = :in_date_id
@@ -252,5 +277,21 @@ where true
   and ex.exec_type not in ('E', 'S', 'D', 'y')
   and cl.trans_type <> 'F'
   and cl.create_date_id > :l_retention_date_id
- and not exists (select null from trash.so_imc tao where tao.order_id = ex.order_id)
+  and not exists (select null from trash.so_imc tao where tao.order_id = ex.order_id)
 ;
+
+select order_id, ex_exec_id
+from trash.so_imc
+except
+select order_id, exec_id--, rec
+from trash.imc_oracle_report
+except
+select order_id, ex_exec_id
+from trash.so_imc;
+
+select count(*)
+from trash.so_imc
+union all
+select count(*)
+from trash.imc_oracle_report
+
