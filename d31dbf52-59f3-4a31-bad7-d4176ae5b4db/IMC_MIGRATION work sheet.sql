@@ -328,7 +328,7 @@ select cl.order_id,
        cl.instrument_id,
        cl.create_date_id,
        cl.fix_connection_id,
-       coalesce(lnb.no_legs, 1)       as no_legs,
+--        coalesce(lnb.no_legs, 1)       as no_legs,
        case
            when cl.multileg_reporting_type = '2'
                then trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end
@@ -385,7 +385,7 @@ select cl.order_id,
                        and create_date_id = :in_date_id
                      limit 1)
                end                        as RFR_ID,--rfr_id
-
+/*
            case
                when cl.par_order_id is null then (select orig.exch_order_id
                                                      from dwh.client_order orig
@@ -412,14 +412,16 @@ select cl.order_id,
                        and orig.create_date_id = :in_date_id
                        and co.create_date_id = :in_date_id)
                end                        as ORIG_RFR_ID,--orig_rfr_id
-       case
-           when cl.ex_exec_type in ('S', 'W') then orig.client_order_id
---                   (select orig.client_order_id from client_order orig where orig.order_id = tbs.orig_order_id) -- SO MOVED TO LATERAL
-           end                        as REPLACED_ORDER_ID,
-       case
-           when cl.ex_exec_type in ('b', '4') then cxl.client_order_id
---                   (select min(cxl.client_order_id) from client_order cxl where cxl.orig_order_id = tbs.order_id) -- SO MOVED TO LATERAL
-           end                        as cancel_order_id,
+*/
+
+--        case
+--            when cl.ex_exec_type in ('S', 'W') then orig.client_order_id
+-- --                   (select orig.client_order_id from client_order orig where orig.order_id = tbs.orig_order_id) -- SO MOVED TO LATERAL
+--            end                        as REPLACED_ORDER_ID,
+--        case
+--            when cl.ex_exec_type in ('b', '4') then cxl.client_order_id
+-- --                   (select min(cxl.client_order_id) from client_order cxl where cxl.orig_order_id = tbs.order_id) -- SO MOVED TO LATERAL
+--            end                        as cancel_order_id,
        case
            when cl.ex_exec_type = 'F' then
                (select LAST_QTY from EXECUTION exc where EXEC_ID = MCT.CONTRA_EXEC_ID and exec_date_id = :in_date_id)
@@ -485,7 +487,7 @@ from trash.so_imc cl
                               and fmj.date_id = :in_date_id
                             limit 1) fmj_p on true
          left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(cl.es_exec_id, cl.ex_exec_id)
-         left join lateral (select orig.client_order_id, exch_order_id
+/*         left join lateral (select orig.client_order_id, exch_order_id
                             from dwh.client_order orig
                             where orig.order_id = cl.orig_order_id
                               and cl.ex_exec_type in ('S', 'W')
@@ -497,7 +499,7 @@ from trash.so_imc cl
                             from client_order cxl
                             where cxl.orig_order_id = cl.order_id
                               and cl.ex_exec_type in ('b', '4')
-                              and cxl.create_date_id = :in_date_id
+                              and cxl.create_date_id = :in_date_id --??
                               and cxl.orig_order_id is not null
                             order by cxl.order_id
                             limit 1) cxl on true
@@ -506,7 +508,7 @@ from trash.so_imc cl
                             where cnl.order_id = cl.multileg_order_id
                               and cnl.create_date_id = :in_date_id
                             limit 1) lnb on true
-
+*/
          left join lateral (select string_agg(LP_DEMO_MNEMONIC, ' ') as t_alp_agg
                             from t_alp as cc_str
                             where cc_str.cross_order_id = cl.STR_CROSS_ORDER_ID
