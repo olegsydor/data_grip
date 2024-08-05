@@ -13,7 +13,6 @@ where true
 
 create index on t_alp (cross_order_id, order_id);
 
-
 -- Day part
 drop table if exists trash.so_imc;
 create table trash.so_imc as
@@ -50,12 +49,12 @@ select cl.order_id,
        cl.instrument_id,
        cl.fix_connection_id,
        cl.side,
-       cl.multileg_order_id,
+
        ex.exec_id                     as ex_exec_id,
        ex.exec_time                   as ex_exec_time,
        ex.exec_type                   as ex_exec_type,
        ex.cum_qty                     as ex_cum_qty,
-       ex.order_status                as ex_order_status,
+       ex.order_status                as order_status,
        ex.last_px                     as ex_last_px,
        ex.last_qty                    as ex_last_qty,
        ex.contra_account_capacity     as ex_contra_account_capacity,
@@ -74,13 +73,26 @@ select cl.order_id,
        ac.account_id                  as ac_account_id,
        ac.account_demo_mnemonic       as ac_account_demo_mnemonic,
        opx.opt_exec_broker            as opx_opt_exec_broker,
+       fc.acceptor_id                 as fc_acceptor_id,
        par.order_id                   as par_order_id,
        par.client_order_id            as par_client_order_id,
        par.create_date_id             as par_create_date_id,
        par.sub_strategy_desc          as par_sub_strategy_desc,
        par.order_type_id              as par_order_type_id,
        par.time_in_force_id           as par_time_in_force_id,
-       fc.acceptor_id                 as fc_acceptor_id
+       str.cons_payment_per_contract  as str_cons_payment_per_contract,
+       str.order_id                   as str_order_id,
+       str.cross_order_id             as str_cross_order_id,
+       str.strtg_decision_reason_code as str_strtg_decision_reason_code,
+       str.request_number             as str_request_number,
+       str.create_date_id             as str_create_date_id,
+       es.FIX_MESSAGE_ID              as es_fix_message_id,
+       es.exec_id                     as es_exec_id,
+       es.contra_broker               as es_contra_broker,
+       es.contra_account_capacity     as es_contra_account_capacity,
+       es.contra_trader               as es_contra_trader,
+       es.exchange_id                 as es_exchange_id,
+       es.exchange_id                 as es_exchange_id
 from dwh.client_order cl
          inner join dwh.execution ex on ex.order_id = cl.order_id
          inner join dwh.d_fix_connection fc
@@ -103,6 +115,16 @@ from dwh.client_order cl
                               and pro.create_date_id >= :l_retention_date_id
                             order by create_date_id desc
                             limit 1) par on true
+
+         left join dwh.client_order str
+                   on (cl.order_id = str.parent_order_id
+                       and ex.secondary_order_id = str.client_order_id
+                       and ex.exec_type = 'F'
+                       and str.create_date_id = :in_date_id
+                       and str.parent_order_id is not null)
+         left join dwh.execution es
+                   on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                       es.exec_date_id = cl.create_date_id)
 where true
   and ex.exec_date_id = :in_date_id
   and cl.create_date_id = :in_date_id
@@ -281,9 +303,12 @@ select cl.order_id, cl.create_date_id, str.parent_order_process_time, str.create
 --        clstr.order_id as str_order_id, clstr.client_order_id, clstr.exec_id
 from trash.so_imc cl
          left join dwh.client_order str
-                   on (cl.order_id = str.parent_order_id and cl.ex_secondary_order_id = str.client_order_id and
-                       cl.ex_exec_type = 'F' and str.create_date_id >= cl.create_date_id and
-                       str.parent_order_id is not null)
+                   on (cl.order_id = str.parent_order_id
+                           and cl.ex_secondary_order_id = str.client_order_id
+                           and cl.ex_exec_type = 'F'
+                           and str.create_date_id >= cl.create_date_id
+                           and str.parent_order_id is not null
+                           and get_dateid(str.parent_order_process_time::date) = cl.create_date_id)
     --              left join lateral(select * from dwh.execution es
 --                        where (es.order_id = STR.ORDER_ID and es.exch_exec_id = cl.ex_secondary_exch_exec_id and
 --                            es.exec_date_id >= cl.create_date_id) limit 1) es on true
@@ -302,6 +327,7 @@ where true
                               and str.parent_order_id is not null
                               and es.exch_exec_id = cl.ex_secondary_exch_exec_id
                               and str.create_date_id >= :l_retention_date_id
+    and get_dateid(str.parent_order_process_time::date) = cl.create_date_id)
                             limit 1
     ) clstr on true
 
