@@ -277,14 +277,20 @@ create table trash.so_imc_transf as
            fmj.t9730                      as str_t9730,
            fmj_p.t9730                    as par_t9730
 create temp table t_01 as
-select cl.order_id, cl.create_date_id, clstr.order_id as str_order_id, clstr.client_order_id, clstr.exec_id
+select cl.order_id, cl.create_date_id, str.parent_order_process_time, str.create_date_id
+--        clstr.order_id as str_order_id, clstr.client_order_id, clstr.exec_id
 from trash.so_imc cl
---                       left join dwh.client_order str
---                        on (cl.order_id = str.parent_order_id and cl.ex_secondary_order_id = str.client_order_id and
---                            cl.ex_exec_type = 'F' and str.create_date_id >= cl.create_date_id and str.parent_order_id is not null)
---              left join lateral(select * from dwh.execution es
+         left join dwh.client_order str
+                   on (cl.order_id = str.parent_order_id and cl.ex_secondary_order_id = str.client_order_id and
+                       cl.ex_exec_type = 'F' and str.create_date_id >= cl.create_date_id and
+                       str.parent_order_id is not null)
+    --              left join lateral(select * from dwh.execution es
 --                        where (es.order_id = STR.ORDER_ID and es.exch_exec_id = cl.ex_secondary_exch_exec_id and
 --                            es.exec_date_id >= cl.create_date_id) limit 1) es on true
+where true
+--   and cl.order_id = 16280308769
+    and str.parent_order_process_time::date != '2024-07-16'
+    limit 5
 
          left join lateral (select str.order_id, str.client_order_id, es.exec_id
                             from dwh.client_order str
