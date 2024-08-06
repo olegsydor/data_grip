@@ -480,10 +480,9 @@ from trash.so_imc cl
                             group by cc.cross_order_id
                             limit 1) cc on true
 ;
-create table trash.so_imc_ext as
-    select * from t_next;
 
-create temp table t_os_finale as
+drop table if exists trash.so_imc_base;
+create table trash.so_imc_base as
 select * from trash.so_imc_ext cl
          left join lateral (select
                                 -- AMEX
@@ -582,9 +581,7 @@ select * from trash.so_imc_ext cl
                             group by ls.transaction_id
                             limit 1
     ) md on true;
-drop table if exists trash.so_imc_base;
-create table trash.so_imc_base as
-select * from t_os_finale;
+
 
 
 
@@ -609,7 +606,7 @@ select * from t_os_finale;
 
 ------------------
 
-
+create table trash.so_imc_fin as
  with white as (select symbol, instrument_type_id from t_wht)
        , black as (select symbol, instrument_type_id from t_blk)
     select tbs.transaction_id,
@@ -888,6 +885,7 @@ select * from t_os_finale;
            tbs.mxop_bid_price                 as BidU,
            tbs.mxop_ask_price                 as AskU,
            tbs.mxop_ask_quantity              as AskSzU
+
     from trash.so_imc_base tbs
              inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
 --              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
@@ -899,8 +897,8 @@ select * from t_os_finale;
 
 
              left join dwh.d_clearing_account ca
-                       on tbs.ac_account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and ca.market_type = 'O' and ca.clearing_account_type = '1')
-             left join dwh.d_opt_exec_broker opx on opx.account_id = tbs.ac_account_id and opx.is_default = 'Y' and opx.is_active)
+                       on tbs.ac_account_id = ca.account_id and ca.is_default = 'Y' and ca.is_active and ca.market_type = 'O' and ca.clearing_account_type = '1'
+             left join dwh.d_opt_exec_broker opx on opx.account_id = tbs.ac_account_id and opx.is_default = 'Y' and opx.is_active
              left join dwh.d_order_type ot on ot.order_type_id = tbs.order_type_id
              left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
              left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
