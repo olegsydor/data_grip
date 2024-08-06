@@ -1,6 +1,6 @@
-select trash.so_imc_report(20240716);
-
-create function trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
+select * from trash.so_imc_report(20240716);
+-- add counts to
+create or replace function trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
     returns table
             (
                 ret_row text
@@ -44,7 +44,7 @@ begin
 
 -- Daily orders
     drop table if exists trash.so_imc_base;
-    create table trash.so_imc as
+    create table trash.so_imc_base as
     select cl.order_id,
            cl.create_date_id,
            cl.transaction_id,
@@ -161,11 +161,12 @@ begin
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F';
+    get diagnostics l_row_cnt = row_count;
 
     create index on trash.so_imc_base (order_id, ex_exec_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: daily orders counted',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
 -- counting missed orders
@@ -312,10 +313,11 @@ begin
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F'
-      and cl.create_date_id > l_retention_date_id;
-
+      and cl.create_date_id > l_retention_date_id
+    ;
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: non daily orders counted',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
     drop table if exists t_left_orders;
@@ -518,9 +520,9 @@ begin
                                   and cl.CROSS_ORDER_ID is not null
                                 group by cc.cross_order_id
                                 limit 1) cc on true;
-
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: extended table created',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
 
@@ -625,9 +627,9 @@ begin
                                 group by ls.transaction_id
                                 limit 1
         ) md on true;
-
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: market_data was added',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
     drop table if exists t_wht;
@@ -983,8 +985,9 @@ begin
              left join dwh.d_time_in_force tif on tif.tif_id = tbs.time_in_force_id
              left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
     where true;
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: all data was prepared',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
     return query
@@ -1168,9 +1171,12 @@ begin
                coalesce(cl.ac_account_demo_mnemonic, '')
                              as rec
         from trash.so_imc_final cl;
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for  ' || in_date_id::text || ' FINISHED ===',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
 end;
-$fx$
+$fx$;
+
+
