@@ -1,10 +1,8 @@
-select * from trash.so_imc_report(20240716);
+call trash.so_imc_report_making(20240716);
 -- add counts to
-create or replace function trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
-    returns table
-            (
-                ret_row text
-            )
+drop function if exists trash.so_imc_report;
+
+create or replace procedure trash.so_imc_report_making(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
     language plpgsql
 as
 $fx$
@@ -20,21 +18,6 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for ' || in_date_id::text || ' STARTED ===',
                            0, 'O')
     into l_step_id;
-
-    drop table if exists t_alp;
-
-    create temp table t_alp as
-    select constr.cross_order_id, constr.order_id, alp.lp_demo_mnemonic
-    from dwh.client_order constr
-             inner join dwh.client_order pcon on constr.parent_order_id = pcon.order_id --contra parent
-             inner join staging.lp_connection lc on lc.fix_connection_id = pcon.fix_connection_id
-             inner join staging.ats_liquidity_provider alp on alp.liquidity_provider_id = lc.liquidity_provider_id
-    where true
-      and constr.multileg_reporting_type in ('1', '3')
-      and constr.cross_order_id is not null
-      and constr.create_date_id = in_date_id;
-    create index on t_alp (cross_order_id, order_id);
-    analyze t_alp;
 
 --     call trash.match_cross_trades_pg(in_date_id);
 
@@ -321,6 +304,22 @@ begin
     into l_step_id;
 
     drop table if exists t_left_orders;
+    analyze trash.so_imc_base;
+
+    drop table if exists t_alp;
+
+    create temp table t_alp as
+    select constr.cross_order_id, constr.order_id, alp.lp_demo_mnemonic
+    from dwh.client_order constr
+             inner join dwh.client_order pcon on constr.parent_order_id = pcon.order_id --contra parent
+             inner join staging.lp_connection lc on lc.fix_connection_id = pcon.fix_connection_id
+             inner join staging.ats_liquidity_provider alp on alp.liquidity_provider_id = lc.liquidity_provider_id
+    where true
+      and constr.multileg_reporting_type in ('1', '3')
+      and constr.cross_order_id is not null
+      and constr.create_date_id = in_date_id;
+    create index on t_alp (cross_order_id, order_id);
+    analyze t_alp;
 
     drop table if exists trash.so_imc_base_ext;
     create table trash.so_imc_base_ext as
@@ -524,7 +523,9 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: extended table created',
                            l_row_cnt, 'O')
     into l_step_id;
+    analyze so_imc_base_ext;
 
+    drop table if exists t_alp;
 
     drop table if exists trash.so_imc_base_ext_md;
     create table trash.so_imc_base_ext_md as
@@ -648,7 +649,7 @@ begin
          where clp.liquidity_provider_id = 'IMC');
     analyze t_wht;
     analyze t_blk;
-
+    analyze trash.so_imc_base_ext_md;
 
 ------------------
     drop table if exists t_clearing_account;
@@ -989,7 +990,29 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: all data was prepared',
                            l_row_cnt, 'O')
     into l_step_id;
+    end;
+    $fx$;
 
+create or replace procedure trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
+--     returns table
+--             (
+--                 ret_row text
+--             )
+    language plpgsql
+as
+$fx$
+declare
+    l_load_id           int;
+    l_row_cnt           int;
+    l_step_id           int;
+    l_retention_date_id int4 := 20230901;
+
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for ' || in_date_id::text || ' STARTED ===',
+                           0, 'O')
+    into l_step_id;
     return query
         select cl.transaction_id,
                cl.order_id,
