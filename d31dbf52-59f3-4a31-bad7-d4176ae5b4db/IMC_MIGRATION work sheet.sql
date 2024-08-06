@@ -14,6 +14,7 @@ where true
 create index on t_alp (cross_order_id, order_id);
 
 -- Day part
+drop table if exists trash.so_imc;
 create table trash.so_imc as
 select cl.order_id,
        cl.create_date_id,
@@ -49,6 +50,7 @@ select cl.order_id,
        cl.fix_connection_id,
        cl.side,
        cl.multileg_order_id,
+       cl.dash_rfr_id,
        ex.exec_id                     as ex_exec_id,
        ex.exec_time                   as ex_exec_time,
        ex.exec_type                   as ex_exec_type,
@@ -131,7 +133,7 @@ where true
   and ex.exec_type not in ('E', 'S', 'D', 'y')
   and cl.trans_type <> 'F';
 
-create index on trash.so_imc (order_id, ex_exec_id);
+ create index on trash.so_imc (order_id, ex_exec_id);
 
 
 
@@ -184,6 +186,7 @@ select cl.order_id,
        cl.fix_connection_id,
        cl.side,
        cl.multileg_order_id,
+       cl.dash_rfr_id,
        ex.exec_id                     as ex_exec_id,
        ex.exec_time                   as ex_exec_time,
        ex.exec_type                   as ex_exec_type,
@@ -273,25 +276,10 @@ where true
   and ex.is_busted = 'N'
   and ex.exec_type not in ('E', 'S', 'D', 'y')
   and cl.trans_type <> 'F'
-  and cl.create_date_id > :l_retention_date_id;
+  and cl.create_date_id > :l_retention_date_id
+---  and not exists (select null from trash.so_imc tao where tao.order_id = ex.order_id)
+;
 
-drop table if exists t_left_orders;
-/*
-select order_id, ex_exec_id
-from trash.so_imc
-except
-select order_id, exec_id--, rec
-from trash.imc_oracle_report
-except
-select order_id, ex_exec_id
-from trash.so_imc;
-
-select count(*)
-from trash.so_imc
-union all
-select count(*)
-from trash.imc_oracle_report
-*/
 -------------------------------------------
 drop table if exists t_next;
 create temp table t_next as
@@ -366,53 +354,18 @@ select cl.order_id,
        cl.STR_strtg_decision_reason_code,
        cl.STR_request_number,
        cl.str_create_date_id,
-/*
-           case
-               when cl.par_order_id is null then cl.exch_order_id
-               when cl.ac_trading_firm_id <> 'imc01' then (select exch_order_id
-                                                        from dwh.client_order
-                                                        where order_id = cl.par_order_id
---                                                          and create_date_id = :in_date_id
-                                                        limit 1)
-               else (select exch_order_id
-                     from dwh.client_order
-                     where order_id = (select max(parent_order_id)
-                                       from dwh.client_order
-                                       where cross_order_id = cl.cross_order_id
-                                         and is_originator <> cl.is_originator
---                                         and create_date_id = :in_date_id
-                                         )
-                       and create_date_id = :in_date_id
-                     limit 1)
-               end                        as RFR_ID,--rfr_id
 
            case
-               when cl.par_order_id is null then (select orig.exch_order_id
-                                                     from dwh.client_order orig
-                                                     where orig.order_id = cl.orig_order_id
---                                                       and orig.create_date_id = :in_date_id
-                                                     limit 1)
-               when cl.ac_trading_firm_id <> 'imc01' then (select orig.exch_order_id
-                                                        from client_order co
-                                                                 join dwh.client_order orig
-                                                                      on orig.order_id = co.orig_order_id
---                                                                          and co.create_date_id = :in_date_id
-                                                        where co.order_id = cl.par_order_id
---                                                          and orig.create_date_id = :in_date_id
-                                                        limit 1)
-               else (select orig.exch_order_id
-                     from dwh.client_order orig
-                              join dwh.client_order co on co.orig_order_id = orig.order_id
-                     where co.order_id = (select max(parent_order_id) as max_orig_parent_order_id
-                                          from dwh.client_order cr
-                                          where cr.cross_order_id = cl.cross_order_id
-                                            and cr.is_originator <> cl.is_originator
---                                            and cr.create_date_id = :in_date_id
-                                          limit 1)
-                       and orig.create_date_id = :in_date_id
-                       and co.create_date_id = :in_date_id)
-               end                        as ORIG_RFR_ID,--orig_rfr_id
-*/
+               when cl.par_order_id is null then cl.exch_order_id
+               else cl.dash_rfr_id
+               end                        as rfr_id,--rfr_id
+
+                     case
+                         when cl.par_order_id is null then orig.exch_order_id
+                         when cl.ac_trading_firm_id <> 'imc01' then orig.exch_order_id
+                         else orig.exch_order_id
+                         end as ORIG_RFR_ID,--orig_rfr_id
+
 
        case
            when cl.ex_exec_type in ('S', 'W') then orig.client_order_id
@@ -526,3 +479,88 @@ from trash.so_imc cl
                               and cl.CROSS_ORDER_ID is not null
                             group by cc.cross_order_id
                             limit 1) cc on true
+;
+create table trash.so_imc_ext as
+    select * from t_next;
+
+drop table t_next;
+
+select * from trash.so_imc_ext
+
+select * from trash.so_imc cl
+where not (cl.ac_trading_firm_id <> 'imc01'
+and par_order_id is null);
+
+with base as (select cl.order_id,
+                     cl.par_order_id,
+                     cl.ac_trading_firm_id,
+                     cl.orig_order_id,
+                     orig.exch_order_id,
+
+                     case
+                         when cl.par_order_id is null then orig.exch_order_id
+                         when cl.ac_trading_firm_id <> 'imc01' then orig.exch_order_id
+                         else orig.exch_order_id
+                         end as ORIG_RFR_ID,--orig_rfr_id
+                     ''
+              from trash.so_imc cl
+
+                       left join lateral (select fix_message ->> '9730' as t9730
+                                          from fix_capture.fix_message_json fmj
+                                          where fmj.fix_message_id = cl.es_fix_message_id
+                                            and fmj.date_id = :in_date_id
+                                          limit 1) fmj on true
+                       left join lateral (select fix_message ->> '9730' as t9730
+                                          from fix_capture.fix_message_json fmj
+                                          where fmj.fix_message_id = cl.ex_fix_message_id
+                                            and fmj.date_id = :in_date_id
+                                          limit 1) fmj_p on true
+                       left join trash.matched_cross_trades_pg mct
+                                 on mct.orig_exec_id = coalesce(cl.es_exec_id, cl.ex_exec_id)
+                       left join lateral (select orig.client_order_id, exch_order_id
+                                          from dwh.client_order orig
+                                          where orig.order_id = cl.orig_order_id
+                                            and cl.ex_exec_type in ('S', 'W')
+                                            and orig.create_date_id <= :in_date_id
+                                            and cl.orig_order_id is not null
+                                          order by orig.create_date_id desc
+                                          limit 1) orig on true
+                       left join lateral (select cxl.client_order_id as client_order_id
+                                          from client_order cxl
+                                          where cxl.orig_order_id = cl.order_id
+                                            and cl.ex_exec_type in ('b', '4')
+                                            and cxl.create_date_id = :in_date_id --??
+                                            and cxl.orig_order_id is not null
+                                          order by cxl.order_id
+                                          limit 1) cxl on true
+                       left join lateral (select cnl.no_legs
+                                          from dwh.client_order cnl
+                                          where cnl.order_id = cl.multileg_order_id
+                                            and cnl.create_date_id = :in_date_id --??
+                                          limit 1) lnb on true
+
+                       left join lateral (select string_agg(LP_DEMO_MNEMONIC, ' ') as t_alp_agg
+                                          from t_alp as cc_str
+                                          where cc_str.cross_order_id = cl.STR_CROSS_ORDER_ID
+                                            and cc_str.order_id <> cl.STR_ORDER_ID
+                                            and cl.PAR_ORDER_ID is null
+                                            and cl.STR_CROSS_ORDER_ID is not null
+                                          group by cc_str.CROSS_ORDER_ID
+                                          limit 1) cc_str on true
+                       left join lateral (select string_agg(lp_demo_mnemonic, ' ') as t_alp_agg
+                                          from t_alp as cc
+                                          where cc.cross_order_id = cl.CROSS_ORDER_ID
+                                            and cc.order_id <> cl.ORDER_ID
+                                            and cl.PAR_ORDER_ID is not null
+                                            and cl.CROSS_ORDER_ID is not null
+                                          group by cc.cross_order_id
+                                          limit 1) cc on true
+              where not (cl.orig_order_id is null
+                  and cl.ac_trading_firm_id <> 'imc01'))
+select * from base
+where orig_rfr_id is not null
+limit 20
+
+
+select dash_rfr_id, * from dwh.client_order
+where order_id = 14386720515;
