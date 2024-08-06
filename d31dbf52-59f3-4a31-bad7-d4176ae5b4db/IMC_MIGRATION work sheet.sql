@@ -582,3 +582,7 @@ select * from trash.so_imc_ext cl
                             group by ls.transaction_id
                             limit 1
     ) md on true;
+
+
+select * from t_os_finale;
+
