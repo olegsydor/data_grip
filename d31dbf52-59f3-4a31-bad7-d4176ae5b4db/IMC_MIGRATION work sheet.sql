@@ -635,12 +635,12 @@ select tbs.transaction_id,
        case i.instrument_type_id
            when 'E' then i.symbol
            when 'O'
-               then oc.ui_symbol end                                                               as base_code,
+               then ui.symbol end                                                               as base_code,
        case i.instrument_type_id
            when 'E' then i.symbol
            when 'O'
-               then oc.os_root_symbol end                                                          as root_symbol,
-       case oc.ui_instrument_type_id when 'E' then 'EQUITY' when 'I' then 'INDEX' end              as base_asset_type,
+               then os.root_symbol end                                                          as root_symbol,
+       case ui.instrument_type_id when 'E' then 'EQUITY' when 'I' then 'INDEX' end              as base_asset_type,
        --
        to_char(oc.maturity_year, 'FM0000') || to_char(oc.maturity_month, 'FM00') ||
        to_char(oc.maturity_day, 'FM00')                                                            as expiration_date,
@@ -762,12 +762,12 @@ select tbs.transaction_id,
            end                                                                                     as CONTRA_TRADER,
 
        case
-           when case I.INSTRUMENT_TYPE_ID when 'E' then I.SYMBOL when 'O' then oc.OS_ROOT_SYMBOL end in
+           when case I.INSTRUMENT_TYPE_ID when 'E' then I.SYMBOL when 'O' then OS.ROOT_SYMBOL end in
                 (select SYMBOL
                  from black
                  where INSTRUMENT_TYPE_ID = case when tbs.multileg_reporting_type = '1' then 'O' else 'M' end)
                then 'N'
-           when case I.INSTRUMENT_TYPE_ID when 'E' then I.SYMBOL when 'O' then oc.OS_ROOT_SYMBOL end in
+           when case I.INSTRUMENT_TYPE_ID when 'E' then I.SYMBOL when 'O' then OS.ROOT_SYMBOL end in
                 (select SYMBOL
                  from white
                  where INSTRUMENT_TYPE_ID = case when tbs.multileg_reporting_type = '1' then 'O' else 'M' end)
@@ -802,7 +802,7 @@ select tbs.transaction_id,
 
        tbs.ac_account_id,
        I.SYMBOL,
-       oc.OS_ROOT_SYMBOL                                                                           as os_ROOT_SYMBOL,
+       OS.ROOT_SYMBOL                                                                           as os_ROOT_SYMBOL,
        case tbs.MULTILEG_REPORTING_TYPE
            when '1' then 'O'
            when '2'
@@ -904,32 +904,33 @@ select tbs.transaction_id,
        tbs.mxop_ask_quantity                                                                       as AskSzU
 
 from trash.so_imc_base tbs
-         inner join lateral (select i.instrument_type_id, i.symbol
-                             from dwh.d_instrument i
-                             where i.instrument_id = tbs.instrument_id
-                             limit 1) i on true
+    inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
+--          inner join lateral (select i.instrument_type_id, i.symbol
+--                              from dwh.d_instrument i
+--                              where i.instrument_id = tbs.instrument_id
+--                              limit 1) i on true
 --              inner join dwh.d_fix_connection fc on (fc.fix_connection_id = tbs.fix_connection_id)
          left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
          left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
-         left join lateral (
-    select oc.instrument_id,
-           oc.opra_symbol,
-           oc.maturity_year,
-           oc.maturity_month,
-           oc.maturity_day,
-           oc.strike_price,
-           oc.put_call,
-           os.root_symbol        as os_root_symbol,
-           ui.instrument_type_id as ui_instrument_type_id,
-           ui.symbol             as ui_symbol
-    from dwh.d_option_contract oc
-             left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
-             left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
-    where oc.instrument_id = tbs.instrument_id
-    limit 1) oc on true
-    --              left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
+--          left join lateral (
+--     select oc.instrument_id,
+--            oc.opra_symbol,
+--            oc.maturity_year,
+--            oc.maturity_month,
+--            oc.maturity_day,
+--            oc.strike_price,
+--            oc.put_call,
+--            os.root_symbol        as os_root_symbol,
+--            ui.instrument_type_id as ui_instrument_type_id,
+--            ui.symbol             as ui_symbol
+--     from dwh.d_option_contract oc
 --              left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
 --              left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
+--     where oc.instrument_id = tbs.instrument_id
+--     limit 1) oc on true
+                 left join dwh.d_option_contract oc on (oc.instrument_id = tbs.instrument_id)
+             left join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+             left join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
          left join t_clearing_account ca
                    on tbs.ac_account_id = ca.account_id --and ca.is_default = 'Y' and ca.is_active and ca.market_type = 'O' and ca.clearing_account_type = '1'
          left join t_opt_exec_broker opx on opx.account_id = tbs.ac_account_id --and opx.is_default = 'Y' and opx.is_active
@@ -938,3 +939,184 @@ from trash.so_imc_base tbs
          left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
 where true;
 
+
+
+select cl.transaction_id,
+           cl.order_id,
+           cl.ex_exec_id as exec_id,
+           cl.ac_trading_firm_id || ',' || --EntityCode
+           to_char(cl.create_time, 'YYYYMMDD') || ',' || --CreateDate
+           to_char(cl.create_time, 'HH24MISSFF3') || ',' || --CreateTime
+           to_char(cl.ex_exec_time, 'YYYYMMDD') || ',' || --StatusDate
+           to_char(cl.ex_exec_time, 'HH24MISSFF3') || ',' || --StatusTime
+           coalesce(cl.opra_symbol, '') || ',' || --OSI
+           coalesce(cl.base_code, '') || ',' ||--BaseCode
+           coalesce(cl.root_symbol, '') || ',' || --Root
+           coalesce(cl.base_asset_type, '') || ',' ||
+               --
+           coalesce(cl.expiration_date, '') || ',' ||
+           coalesce(staging.trailing_dot(cl.strike_price), '') || ',' ||
+           coalesce(cl.type_code, '') || ',' || -- (S - stock)
+           coalesce(cl.side, '') || ',' ||
+           coalesce(cl.no_legs::text, '') || ',' || --LegCount
+           coalesce(cl.leg_number::text, '') || ',' || --LegNumber
+           '' || ',' || --OrderType
+           coalesce(cl.ord_status, '') || ',' ||
+           coalesce(to_char(cl.price, 'FM999990D0099'), '') || ',' ||
+           coalesce(to_char(cl.ex_last_px, 'FM999990D0099'), '') || ',' || --StatusPrice
+           coalesce(cl.order_qty::text, '') || ',' || --EnteredQty
+-- ask++
+           coalesce(cl.ex_last_qty::text, '') || ',' || --StatusQty
+           coalesce(cl.rfr_id, '') || ',' ||--RFRID
+           coalesce(cl.orig_rfr_id, '') || ',' ||--OrigRFRID
+           coalesce(cl.client_order_id, '') || ',' ||
+           coalesce(cl.replaced_order_id, '') || ',' || --Replaced Order
+           coalesce(cl.cancel_order_id, '') || ',' || --CancelOrderID
+           coalesce(cl.parent_client_order_id, '') || ',' ||
+           coalesce(cl.order_id::text, '') || ',' || --SystemOrderID
+           coalesce(cl.exchange_code, '') || ',' || --ExchangeCode
+           coalesce(cl.ex_connection, '') || ',' || --ExConnection
+           coalesce(cl.give_up_firm, '') || ',' ||--GiveUpFirm
+           coalesce(cl.cmta_firm, '') || ',' || --CMTAFirm
+           coalesce(cl.clearing_account, '') || ',' || --Account
+           coalesce(cl.sub_account, '') || ',' || --SubAccount
+           coalesce(cl.open_close, '') || ',' ||
+           coalesce(cl.range, '') || ',' || --Range
+--EX.CONTRA_ACCOUNT_CAPACITY
+--		coalesce(cl.counterparty_range, '')||','||
+           coalesce(case ascii(cl.counterparty_range) when 0 then repeat(' ', 1) else cl.counterparty_range end,
+                    '') || ',' ||
+           coalesce(cl.order_type_short_name, '') || ',' || --PriceQualifier
+           coalesce(cl.tif_short_name, '') || ',' || --TimeQualifier
+           coalesce(cl.exec_instruction, '') || ',' || --ExecInst
+-- The next row was changed within https://dashfinancial.atlassian.net/browse/DEVREQ-3278
+           coalesce(staging.get_trade_liquidity_indicator(cl.ex_trade_liquidity_indicator), '') || ',' || --Maker/Take
+           coalesce(cl.ex_exch_exec_id, '') || ',' || --ExchangeTransactionID
+           coalesce(cl.exch_order_id, '') || ',' || --ExchangeOrderID
+
+           coalesce(BidSzA::text, '') || ',' || --BidSzA
+           coalesce(to_char(BidA, 'FM999999.0099'), '') || ',' || --BidA
+           coalesce(to_char(AskA, 'FM999999.0099'), '') || ',' || --AskA
+           coalesce(AskSzA::text, '') || ',' || --AskSzA
+
+           coalesce(BidSzZ::text, '') || ',' || --BidSzZ
+           coalesce(to_char(BidZ, 'FM999999.0099'), '') || ',' || --BidZ
+           coalesce(to_char(AskZ, 'FM999999.0099'), '') || ',' || --AskZ
+           coalesce(AskSzZ::text, '') || ',' || --AskSzZ
+
+           coalesce(BidSzB::text, '') || ',' || --BidSzB
+           coalesce(to_char(BidB, 'FM999999.0099'), '') || ',' || --BidB
+           coalesce(to_char(AskB, 'FM999999.0099'), '') || ',' || --AskB
+           coalesce(AskSzB::text, '') || ',' || --AskSzB
+--
+           coalesce(BidSzC::text, '') || ',' || --BidSzC
+           coalesce(to_char(BidC, 'FM999999.0099'), '') || ',' || --BidC
+           coalesce(to_char(AskC, 'FM999999.0099'), '') || ',' || --AskC
+           coalesce(AskSzC::text, '') || ',' || --AskSzC
+
+           coalesce(BidSzW::text, '') || ',' || --BidSzW
+           coalesce(to_char(BidW, 'FM999999.0099'), '') || ',' || --BidW
+           coalesce(to_char(AskW, 'FM999999.0099'), '') || ',' || --AskW
+           coalesce(AskSzW::text, '') || ',' || --AskSzW
+
+           coalesce(BidSzT::text, '') || ',' || --BidSzT
+           coalesce(to_char(BidT, 'FM999999.0099'), '') || ',' || --BidT
+           coalesce(to_char(AskT, 'FM999999.0099'), '') || ',' || --AskT
+           coalesce(AskSzT::text, '') || ',' || --AskSzT
+
+           coalesce(BidSzI::text, '') || ',' || --BidSzI
+           coalesce(to_char(BidI, 'FM999999.0099'), '') || ',' || --BidI
+           coalesce(to_char(AskI, 'FM999999.0099'), '') || ',' || --AskI
+           coalesce(AskSzI::text, '') || ',' || --AskSzI
+
+           coalesce(BidSzP::text, '') || ',' || --BidSzP
+           coalesce(to_char(BidP, 'FM999999.0099'), '') || ',' || --BidP
+           coalesce(to_char(AskP, 'FM999999.0099'), '') || ',' || --AskP
+           coalesce(AskSzP::text, '') || ',' || --AskSzP
+
+           coalesce(BidSzM::text, '') || ',' || --BidSzM
+           coalesce(to_char(BidM, 'FM999999.0099'), '') || ',' || --BidM
+           coalesce(to_char(AskM, 'FM999999.0099'), '') || ',' || --AskM
+           coalesce(AskSzM::text, '') || ',' || --AskSzM
+
+           coalesce(BidSzH::text, '') || ',' || --BidSzH
+           coalesce(to_char(BidH, 'FM999999.0099'), '') || ',' || --BidH
+           coalesce(to_char(AskH, 'FM999999.0099'), '') || ',' || --AskH
+           coalesce(AskSzH::text, '') || ',' || --AskSzH
+
+           coalesce(BidSzQ::text, '') || ',' || --BidSzQ
+           coalesce(to_char(BidQ, 'FM999999.0099'), '') || ',' || --BidQ
+           coalesce(to_char(AskQ, 'FM999999.0099'), '') || ',' || --AskQ
+           coalesce(AskSzQ::text, '') || ',' || --AskSzQ
+
+           coalesce(BidSzX::text, '') || ',' || --BidSzX
+           coalesce(to_char(BidX, 'FM999999.0099'), '') || ',' || --BidX
+           coalesce(to_char(AskX, 'FM999999.0099'), '') || ',' || --AskX
+           coalesce(AskSzX::text, '') || ',' || --AskSzX
+
+           coalesce(BidSzE::text, '') || ',' || --BidSzE
+           coalesce(to_char(BidE, 'FM999999.0099'), '') || ',' || --BidE
+           coalesce(to_char(AskE, 'FM999999.0099'), '') || ',' || --AskE
+           coalesce(AskSzE::text, '') || ',' || --AskSzE
+
+           coalesce(BidSzJ::text, '') || ',' || --BidSzJ
+           coalesce(to_char(BidJ, 'FM999999.0099'), '') || ',' || --BidJ
+           coalesce(to_char(AskJ, 'FM999999.0099'), '') || ',' || --AskJ
+           coalesce(AskSzJ::text, '') || ',' || --AskSzJ
+
+           coalesce(BidSzR::text, '') || ',' || --BidSzR
+           coalesce(to_char(BidR, 'FM999999.0099'), '') || ',' || --BidR
+           coalesce(to_char(AskR, 'FM999999.0099'), '') || ',' || --AskR
+           coalesce(AskSzR::text, '') || ',' || --AskSzR
+
+           coalesce(BidSzD::text, '') || ',' || --BidSzD
+           coalesce(to_char(BidD, 'FM999999.0099'), '') || ',' || --BidD
+           coalesce(to_char(AskD, 'FM999999.0099'), '') || ',' || --AskD
+           coalesce(AskSzD::text, '') || ',' || --AskSzD
+-----
+           coalesce(BidSzS::text, '') || ',' || --BidSzS
+           coalesce(to_char(BidS, 'FM999999.0099'), '') || ',' || --BidS
+           coalesce(to_char(AskS, 'FM999999.0099'), '') || ',' || --AskS
+           coalesce(AskSzS::text, '') || ',' || --AskSzS
+
+           coalesce(BidSzU::text, '') || ',' || --BidSzU
+           coalesce(to_char(BidU, 'FM999999.0099'), '') || ',' || --BidU
+           coalesce(to_char(AskU, 'FM999999.0099'), '') || ',' || --AskU
+           coalesce(AskSzU::text, '') || ',' || --AskSzU
+-----
+--CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty
+           coalesce(cl.cross_order_id::text, '') || ',' || --CrossOrderID
+-- 		coalesce(cl.auction_type, '')||','|| --Auc.type
+           case
+               when --cl.STRATEGY_DECISION_REASON_CODE in ('74') and
+                    cl.ex_exchange_id in
+                    ('AMEX', 'BOX', 'CBOE', 'EDGO', 'GEMINI', 'ISE', 'MCRY', 'MIAX', 'NQBXO', 'PHLX')
+                   and exists (select upper(description)
+                               from dwh.d_liquidity_indicator li
+                               where (upper(description) like '%FLASH%'
+                                   or upper(description) like '%EXPOSURE%')
+                                 and li.trade_liquidity_indicator = cl.ex_trade_liquidity_indicator)
+                   then 'FLASH'
+               when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(cl.par_t9730, 2, 1) in ('B', 'b', 's')
+                   then 'FLASH'
+               when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(cl.str_t9730, 2, 1) in ('B', 'b', 's')
+                   then 'FLASH'
+               when CL.STRATEGY_DECISION_REASON_CODE in ('32', '62', '96', '99') then 'FLASH'
+               when Cl.CROSS_TYPE = 'P' then 'PIM'
+               when Cl.CROSS_TYPE = 'Q' then 'QCC'
+               when Cl.CROSS_TYPE = 'F' then 'Facilitation'
+               when Cl.CROSS_TYPE = 'S' then 'Solicitation'
+               else coalesce(CL.CROSS_TYPE, '') end || ',' || --Auc.type
+
+
+           coalesce(cl.request_count, '') || ',' || --Req.count
+           coalesce(cl.billing_code, '') || ',' ||--Billing Code
+           coalesce(cl.contra_broker, '') || ',' || --ContraBroker
+           coalesce(cl.contra_trader, '') || ',' || --ContraTrader
+           coalesce(cl.white_list, '') || ',' || --WhiteList
+           coalesce(staging.trailing_dot(cl.cons_payment_per_contract), '') || ',' ||
+           coalesce(cl.contra_cross_exec_qty::text, '') || ',' ||
+           coalesce(cl.contra_cross_lp_id, '') || ',' ||
+           coalesce(cl.ac_account_demo_mnemonic, '')
+               as rec
+    from trash.so_imc_fin cl;
