@@ -1121,5 +1121,21 @@ select cl.transaction_id,
                as rec
     from trash.so_imc_fin cl;
 
-
-select * from staging.get_lp_list_lite_tmp()
+select cl.order_id,
+       cl.multileg_order_id,
+       cl.multileg_reporting_type,
+       cl.co_client_leg_ref_id,
+       case
+           when cl.multileg_reporting_type = '2'
+               then trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end
+           as leg_number,
+    lnb.*,
+    *
+from dwh.client_order cl
+             left join lateral (select cnl.no_legs
+                                from dwh.client_order cnl
+                                where cnl.order_id = cl.multileg_order_id
+                                  and cnl.create_date_id = :in_date_id --??
+                                      and cnl.create_date_id >= :l_retention_date_id
+                                limit 1) lnb on true
+where cl.order_id = 16563735189

@@ -64,6 +64,7 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
+           cl.co_client_leg_ref_id,
            ex.exec_id                     as ex_exec_id,
            ex.exec_time                   as ex_exec_time,
            ex.exec_type                   as ex_exec_type,
@@ -208,6 +209,7 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
+           cl.co_client_leg_ref_id,
            ex.exec_id                     as ex_exec_id,
            ex.exec_time                   as ex_exec_time,
            ex.exec_type                   as ex_exec_type,
@@ -322,6 +324,32 @@ begin
     create index on t_alp (cross_order_id, order_id);
     analyze t_alp;
 
+
+    drop table if exists t_providers;
+    create temp table t_providers as
+    select al.liquidity_provider_id, atp.lp_symbol_list_id, al.account_id, sl.symbol
+    from dwh.d_acc_allowed_liquidity_provider al
+             inner join dwh.d_ats_liquidity_provider atp
+                        on atp.liquidity_provider_id = al.liquidity_provider_id
+             join lateral (select sl.symbol
+                           from staging.symbol2lp_symbol_list sl
+                           where sl.lp_symbol_list_id = atp.lp_symbol_list_id
+                           limit 1) sl on true
+--                              and sl.symbol = :in_symbol
+    where atp.lp_symbol_list_id is not null
+      and atp.is_active
+      and al.is_active
+    union
+    select al.liquidity_provider_id, atp.lp_symbol_list_id, al.account_id, null
+    from dwh.d_acc_allowed_liquidity_provider al
+             inner join dwh.d_ats_liquidity_provider atp
+                        on atp.liquidity_provider_id = al.liquidity_provider_id
+    where atp.lp_symbol_list_id is null
+      and atp.is_active
+      and al.is_active;
+    create index on t_providers(account_id);
+
+
     drop table if exists trash.so_imc_base_ext;
     create table trash.so_imc_base_ext as
     select cl.order_id,
@@ -358,10 +386,7 @@ begin
            cl.create_date_id,
            cl.fix_connection_id,
            coalesce(lnb.no_legs, 1)      as no_legs,
-           case
-               when cl.multileg_reporting_type = '2'
-                   then trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end
-                                         as leg_number,
+           cl.co_client_leg_ref_id       as leg_number,
            cl.side,
            cl.ex_exec_id,
            cl.ex_exec_time,
@@ -448,14 +473,6 @@ begin
                                    then 'Exhaust_IMC'
                                when coalesce(cl.par_time_in_force_id, cl.time_in_force_id) in ('2', '7')
                                    then 'Exhaust_IMC'
-                               -- the other part is moved into the end part for billing_code!!!!!
---                               when (staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is null and
---                                     staging.get_lp_list_lite_tmp(ac.ACCOUNT_ID, OS.ROOT_SYMBOL,
---                                                              case cl.MULTILEG_REPORTING_TYPE
---                                                                  when '1' then 'O'
---                                                                  when '2' then 'M' end) is null)
---                                   then 'Exhaust_IMC'
---                               else 'Exhaust'
                                end
                        else 'Other'
                        --
@@ -494,15 +511,17 @@ begin
              left join lateral (select cxl.client_order_id as client_order_id
                                 from client_order cxl
                                 where cxl.orig_order_id = cl.order_id
-                                  and cl.ex_exec_type in ('b', '4')
+--                                   and cl.ex_exec_type in ('b', '4')
                                   and cxl.create_date_id = in_date_id --??
                                   and cxl.orig_order_id is not null
+                                  and cxl.create_date_id >= l_retention_date_id
                                 order by cxl.order_id
                                 limit 1) cxl on true
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id
-                                  and cnl.create_date_id = in_date_id --??
+--                                   and cnl.create_date_id = in_date_id --??
+                                      and cnl.create_date_id >= l_retention_date_id
                                 limit 1) lnb on true
 
              left join lateral (select string_agg(LP_DEMO_MNEMONIC, ' ') as t_alp_agg
