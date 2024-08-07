@@ -671,6 +671,7 @@ begin
     analyze t_opt_exec_broker;
 
 
+    drop table if exists trash.so_imc_final;
     create table trash.so_imc_final as
     with white as (select symbol, instrument_type_id from t_wht)
        , black as (select symbol, instrument_type_id from t_blk)
