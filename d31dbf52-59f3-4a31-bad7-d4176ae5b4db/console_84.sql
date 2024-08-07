@@ -1,4 +1,5 @@
 call trash.so_imc_report_making(20240716);
+select * from trash.so_imc_report(20240716);
 -- add counts to
 drop function if exists trash.so_imc_report;
 
@@ -19,7 +20,7 @@ begin
                            0, 'O')
     into l_step_id;
 
---     call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(in_date_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
@@ -523,7 +524,7 @@ begin
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: extended table created',
                            l_row_cnt, 'O')
     into l_step_id;
-    analyze so_imc_base_ext;
+    analyze trash.so_imc_base_ext;
 
     drop table if exists t_alp;
 
@@ -624,7 +625,7 @@ begin
                                     max(case when ls.exchange_id = 'MXOP' then ls.bid_quantity end)   as mxop_bid_quantity
                                 from dwh.l1_snapshot ls
                                 where ls.transaction_id = cl.transaction_id
-                                  and ls.start_date_id = in_date_id
+                                  and ls.start_date_id = cl.create_date_id
                                 group by ls.transaction_id
                                 limit 1
         ) md on true;
@@ -993,11 +994,11 @@ begin
     end;
     $fx$;
 
-create or replace procedure trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
---     returns table
---             (
---                 ret_row text
---             )
+create or replace function trash.so_imc_report(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
+    returns table
+            (
+                ret_row text
+            )
     language plpgsql
 as
 $fx$
@@ -1010,11 +1011,14 @@ declare
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for ' || in_date_id::text || ' STARTED ===',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg printing for ' || in_date_id::text || ' STARTED ===',
                            0, 'O')
     into l_step_id;
-    return query
-        select cl.transaction_id,
+
+    drop table if exists trash.imc_pg_report;
+    create table trash.imc_pg_report as
+        select
+               cl.transaction_id,
                cl.order_id,
                cl.ex_exec_id as exec_id,
                cl.ac_trading_firm_id || ',' || --EntityCode
@@ -1195,7 +1199,17 @@ begin
                              as rec
         from trash.so_imc_final cl;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for  ' || in_date_id::text || ' FINISHED ===',
+
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg printing: data is ready',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
+    create index on trash.imc_pg_report (order_id, exec_id);
+    return query
+        select rec from trash.imc_pg_report
+    order by order_id, exec_id;
+
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg printing for  ' || in_date_id::text || ' FINISHED ===',
                            l_row_cnt, 'O')
     into l_step_id;
 
