@@ -1208,7 +1208,8 @@ begin
     create index on trash.imc_pg_report (order_id, exec_id);
     return query
         select rec from trash.imc_pg_report
-    order by order_id, exec_id;
+    order by order_id, exec_id
+    limit 100;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg printing for  ' || in_date_id::text || ' FINISHED ===',
                            l_row_cnt, 'O')
