@@ -1120,3 +1120,6 @@ select cl.transaction_id,
            coalesce(cl.ac_account_demo_mnemonic, '')
                as rec
     from trash.so_imc_fin cl;
+
+
+select * from staging.get_lp_list_lite_tmp()

@@ -857,7 +857,26 @@ begin
                when '1' then 'O'
                when '2'
                    then 'M' end                                                                        as instrument_type,
-           tbs.BILLING_CODE,
+           case
+               when tbs.billing_code is not null then tbs.billing_code
+               when tbs.ex_EXEC_TYPE = 'F' and
+                    (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
+                     coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
+                   and trash.get_lp_list_tmp(tbs.ac_account_id, i.symbol, tbs.create_time::date) -- equal staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is NOT null
+                   then 'Exhaust'
+               when tbs.ex_EXEC_TYPE = 'F' and
+                    (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
+                     coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
+                   and staging.get_lp_list_lite_tmp(tbs.ac_ACCOUNT_ID, OS.ROOT_SYMBOL,
+                                                    case tbs.MULTILEG_REPORTING_TYPE
+                                                        when '1' then 'O'
+                                                        when '2' then 'M' end) is not null
+                   then 'Exhaust'
+               when tbs.ex_EXEC_TYPE = 'F' and
+                    (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
+                     coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
+                   then 'Exhaust_IMC'
+               end as BILLING_CODE,
            tbs.ac_account_demo_mnemonic,
 
            tbs.str_t9730,
