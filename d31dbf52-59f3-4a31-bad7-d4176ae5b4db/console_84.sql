@@ -488,6 +488,7 @@ begin
 --                                   and cl.ex_exec_type in ('S', 'W')
                                   and orig.create_date_id <= in_date_id
                                   and cl.orig_order_id is not null
+                                and orig.create_date_id >= l_retention_date_id
                                 order by orig.create_date_id desc
                                 limit 1) orig on true
              left join lateral (select cxl.client_order_id as client_order_id
