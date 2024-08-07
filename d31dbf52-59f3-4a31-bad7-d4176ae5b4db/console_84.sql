@@ -485,7 +485,7 @@ begin
              left join lateral (select orig.client_order_id, exch_order_id
                                 from dwh.client_order orig
                                 where orig.order_id = cl.orig_order_id
-                                  and cl.ex_exec_type in ('S', 'W')
+--                                   and cl.ex_exec_type in ('S', 'W')
                                   and orig.create_date_id <= in_date_id
                                   and cl.orig_order_id is not null
                                 order by orig.create_date_id desc
