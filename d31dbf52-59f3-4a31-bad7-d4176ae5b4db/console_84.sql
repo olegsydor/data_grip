@@ -441,7 +441,13 @@ begin
                                                            from dwh.client_order orig
                                                            where orig.order_id = cl.par_orig_order_id
                                                            limit 1)
-               else orig.exch_order_id
+               else (select orig.exch_order_id
+                     from dwh.client_order co
+                              join dwh.client_order orig on co.orig_order_id = orig.order_id
+                     where co.order_id = (select max(parent_order_id)
+                                          from dwh.client_order
+                                          where cross_order_id = cl.cross_order_id
+                                            and is_originator <> cl.is_originator))
                end as ORIG_RFR_ID,--orig_rfr_id
 
 

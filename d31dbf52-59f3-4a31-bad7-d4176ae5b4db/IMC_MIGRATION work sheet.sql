@@ -1151,40 +1151,38 @@ select cl.order_id,
        cl.parent_order_id,
        ac.trading_firm_id,
        cl.exch_order_id,
-       cl.dash_rfr_id,
-       cl.exch_order_id,
-       cxl.client_order_id,
-       cxl.create_date_id,
-       (select orig.exch_order_id
-        from dwh.client_order orig
-                 join client_order co on co.orig_order_id = orig.order_id
-        where co.order_id = cl.parent_order_id
-        limit 1) as orig_rfr_id_,
+       (select max(parent_order_id)
+        from dwh.client_order
+        where cross_order_id = cl.cross_order_id
+          and is_originator <> cl.is_originator)                       as max_cross_order_id,
 
-       (select orig.exch_order_id
-        from dwh.client_order orig
-        where orig.order_id = par.orig_order_id
-        limit 1) as orig_rfr_id__,
+    (select orig.exch_order_id
+        from dwh.client_order co
+                 join dwh.client_order orig on co.orig_order_id = orig.order_id
+        where co.order_id = (select max(parent_order_id)
+                             from dwh.client_order
+                             where cross_order_id = cl.cross_order_id
+                               and is_originator <> cl.is_originator)) as orig_rfr_id_true,
 
        case
            when par.order_id is null then orig.exch_order_id
            when ac.trading_firm_id <> 'imc01' then orig.exch_order_id
            else orig.exch_order_id
-           end   as ORIG_RFR_ID,--orig_rfr_id
+           end                                                         as ORIG_RFR_ID,--orig_rfr_id
        ''
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id
          join dwh.execution ex on ex.order_id = cl.order_id
-             left join lateral (select cxl.client_order_id as client_order_id, cxl.create_date_id
-                                from client_order cxl
-                                where cxl.orig_order_id = cl.order_id
+         left join lateral (select cxl.client_order_id as client_order_id, cxl.create_date_id
+                            from client_order cxl
+                            where cxl.orig_order_id = cl.order_id
 --                                   and cl.ex_exec_type in ('b', '4')
-                                  and cxl.create_date_id = :in_date_id --??
-                                  and cxl.orig_order_id is not null
-                                  and cxl.create_date_id >= :l_retention_date_id
+                              and cxl.create_date_id = :in_date_id --??
+                              and cxl.orig_order_id is not null
+                              and cxl.create_date_id >= :l_retention_date_id
 --                                 order by cxl.order_id
-                                order by cxl.client_order_id
-                                limit 10) cxl on true
+                            order by cxl.client_order_id
+                            limit 10) cxl on true
          left join lateral (select order_id,
                                    client_order_id,
                                    create_date_id,
@@ -1210,12 +1208,14 @@ from dwh.client_order cl
                               and orig.create_date_id >= :l_retention_date_id
                             order by orig.create_date_id desc
                             limit 1) orig on true
-where cl.order_id = 16585832973
-  and ex.exec_id = 54981352004
+where cl.order_id = 16581303512
+  and ex.exec_id = 54966401801
   and ex.exec_date_id = :in_date_id
+;
 
-select * from dwh.d_account
-where trading_firm_id = 'imc01';
+select no_legs, co_client_leg_ref_id, * from dwh.client_order
+where order_id = 16572896615
 
-
-16585832973  54981352004
+select no_legs, co_client_leg_ref_id, * from dwh.client_order co
+         join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id
+    where multileg_order_id = 16572896607
