@@ -1,5 +1,5 @@
 call trash.so_imc_report_making(20240806);
-select * from trash.so_imc_report(20240716);
+select * from trash.so_imc_report(20240806);
 -- add counts to
 drop function if exists trash.so_imc_report;
 
