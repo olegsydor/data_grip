@@ -1124,12 +1124,13 @@ select cl.transaction_id,
 select cl.order_id,
        cl.multileg_order_id,
        cl.multileg_reporting_type,
-       cl.co_client_leg_ref_id,
+       cl.co_client_leg_ref_id as pg_leg_number,
+       (select client_leg_ref_id from dwh.client_order_leg col where col.order_id = cl.order_id) as ora_leg_number,
        case
            when cl.multileg_reporting_type = '2'
                then trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end
            as leg_number,
-    lnb.*,
+    lnb.no_legs,
     *
 from dwh.client_order cl
     join dwh.execution ex on ex.order_id = cl.order_id
@@ -1137,8 +1138,84 @@ from dwh.client_order cl
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id
 --                                   and cnl.create_date_id = :in_date_id --??
-                                      and cnl.create_date_id >= :l_retention_date_id
+--                                       and cnl.create_date_id >= :l_retention_date_id
                                 limit 1) lnb on true
-where cl.order_id = 16572988717
-and ex.exec_id = 54939919158
+where cl.order_id = 16575861885
+and ex.exec_id = 54948658879
 and ex.exec_date_id = :in_date_id
+
+select * from dwh.client_order_leg col where col.order_id =16572988717
+
+
+select cl.order_id,
+       cl.parent_order_id,
+       ac.trading_firm_id,
+       cl.exch_order_id,
+       cl.dash_rfr_id,
+       cl.exch_order_id,
+       cxl.client_order_id,
+       cxl.create_date_id,
+       (select orig.exch_order_id
+        from dwh.client_order orig
+                 join client_order co on co.orig_order_id = orig.order_id
+        where co.order_id = cl.parent_order_id
+        limit 1) as orig_rfr_id_,
+
+       (select orig.exch_order_id
+        from dwh.client_order orig
+        where orig.order_id = par.orig_order_id
+        limit 1) as orig_rfr_id__,
+
+       case
+           when par.order_id is null then orig.exch_order_id
+           when ac.trading_firm_id <> 'imc01' then orig.exch_order_id
+           else orig.exch_order_id
+           end   as ORIG_RFR_ID,--orig_rfr_id
+       ''
+from dwh.client_order cl
+         join dwh.d_account ac on ac.account_id = cl.account_id
+         join dwh.execution ex on ex.order_id = cl.order_id
+             left join lateral (select cxl.client_order_id as client_order_id, cxl.create_date_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+--                                   and cl.ex_exec_type in ('b', '4')
+                                  and cxl.create_date_id = :in_date_id --??
+                                  and cxl.orig_order_id is not null
+                                  and cxl.create_date_id >= :l_retention_date_id
+--                                 order by cxl.order_id
+                                order by cxl.client_order_id
+                                limit 10) cxl on true
+         left join lateral (select order_id,
+                                   client_order_id,
+                                   create_date_id,
+                                   sub_strategy_desc,
+                                   ORDER_TYPE_id,
+                                   time_in_force_id,
+                                   exch_order_id,
+                                   orig_order_id
+                            from dwh.client_order pro
+                            where cl.parent_order_id = pro.order_id
+                              and pro.create_date_id = get_dateid(cl.parent_order_process_time::date)
+                              and pro.parent_order_id is null
+                              and cl.parent_order_id is not null
+                              and pro.create_date_id >= :l_retention_date_id
+                            order by create_date_id desc
+                            limit 1) par on true
+         left join lateral (select orig.client_order_id, exch_order_id
+                            from dwh.client_order orig
+                            where orig.order_id = cl.orig_order_id
+--                                   and cl.ex_exec_type in ('S', 'W')
+                              and orig.create_date_id <= :in_date_id
+                              and cl.orig_order_id is not null
+                              and orig.create_date_id >= :l_retention_date_id
+                            order by orig.create_date_id desc
+                            limit 1) orig on true
+where cl.order_id = 16585832973
+  and ex.exec_id = 54981352004
+  and ex.exec_date_id = :in_date_id
+
+select * from dwh.d_account
+where trading_firm_id = 'imc01';
+
+
+16585832973  54981352004

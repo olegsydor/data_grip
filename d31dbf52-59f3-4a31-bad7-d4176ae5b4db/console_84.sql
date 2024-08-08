@@ -95,6 +95,8 @@ begin
            par.sub_strategy_desc          as par_sub_strategy_desc,
            par.order_type_id              as par_order_type_id,
            par.time_in_force_id           as par_time_in_force_id,
+           par.exch_order_id              as par_exch_order_id,
+           par.orig_order_id              as par_orig_order_id,
            str.cons_payment_per_contract  as str_cons_payment_per_contract,
            str.order_id                   as str_order_id,
            str.cross_order_id             as str_cross_order_id,
@@ -119,8 +121,10 @@ begin
                                        client_order_id,
                                        create_date_id,
                                        sub_strategy_desc,
-                                       ORDER_TYPE_id,
-                                       time_in_force_id
+                                       order_type_id,
+                                       time_in_force_id,
+                                       exch_order_id,
+                                       orig_order_id
                                 from dwh.client_order pro
                                 where cl.parent_order_id = pro.order_id
                                   and pro.create_date_id = get_dateid(cl.parent_order_process_time::date)
@@ -240,6 +244,8 @@ begin
            par.sub_strategy_desc          as par_sub_strategy_desc,
            par.order_type_id              as par_order_type_id,
            par.time_in_force_id           as par_time_in_force_id,
+           par.exch_order_id              as par_exch_order_id,
+           par.orig_order_id              as par_orig_order_id,
            str.cons_payment_per_contract  as str_cons_payment_per_contract,
            str.order_id                   as str_order_id,
            str.cross_order_id             as str_cross_order_id,
@@ -265,8 +271,10 @@ begin
                                        client_order_id,
                                        create_date_id,
                                        sub_strategy_desc,
-                                       ORDER_TYPE_id,
-                                       time_in_force_id
+                                       order_type_id,
+                                       time_in_force_id,
+                                       exch_order_id,
+                                       orig_order_id
                                 from dwh.client_order pro
                                 where cl.parent_order_id = pro.order_id
                                   and pro.create_date_id = get_dateid(cl.parent_order_process_time::date)
@@ -423,14 +431,18 @@ begin
 
            case
                when cl.par_order_id is null then cl.exch_order_id
+               when cl.ac_trading_firm_id <> 'imc01' then cl.par_exch_order_id
                else cl.dash_rfr_id
                end                       as rfr_id,--rfr_id
 
            case
                when cl.par_order_id is null then orig.exch_order_id
-               when cl.ac_trading_firm_id <> 'imc01' then orig.exch_order_id
+               when cl.ac_trading_firm_id <> 'imc01' then (select orig.exch_order_id
+                                                           from dwh.client_order orig
+                                                           where orig.order_id = cl.par_orig_order_id
+                                                           limit 1)
                else orig.exch_order_id
-               end                       as ORIG_RFR_ID,--orig_rfr_id
+               end as ORIG_RFR_ID,--orig_rfr_id
 
 
            case
@@ -515,7 +527,7 @@ begin
                                   and cxl.create_date_id = in_date_id --??
                                   and cxl.orig_order_id is not null
                                   and cxl.create_date_id >= l_retention_date_id
-                                order by cxl.order_id
+                                order by cxl.client_order_id
                                 limit 1) cxl on true
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
