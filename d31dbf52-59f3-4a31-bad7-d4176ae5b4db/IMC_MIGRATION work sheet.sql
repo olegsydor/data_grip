@@ -1132,10 +1132,13 @@ select cl.order_id,
     lnb.*,
     *
 from dwh.client_order cl
+    join dwh.execution ex on ex.order_id = cl.order_id
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id
-                                  and cnl.create_date_id = :in_date_id --??
+--                                   and cnl.create_date_id = :in_date_id --??
                                       and cnl.create_date_id >= :l_retention_date_id
                                 limit 1) lnb on true
-where cl.order_id = 16563735189
+where cl.order_id = 16572988717
+and ex.exec_id = 54939919158
+and ex.exec_date_id = :in_date_id
