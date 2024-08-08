@@ -108,7 +108,15 @@ begin
            es.contra_broker               as es_contra_broker,
            es.contra_account_capacity     as es_contra_account_capacity,
            es.contra_trader               as es_contra_trader,
-           es.exchange_id                 as es_exchange_id
+           es.exchange_id                 as es_exchange_id,
+           case
+               when cl.parent_order_id is not null and ac.trading_firm_id = 'imc01' then
+                   (select max(parent_order_id)
+                    from dwh.client_order co
+                    where co.cross_order_id = cl.cross_order_id
+                      and co.is_originator <> cl.is_originator
+                      and co.create_date_id > l_retention_date_id)
+               else null end              as max_orig_parent_order_id
     from dwh.client_order cl
              inner join dwh.execution ex on ex.order_id = cl.order_id
              inner join dwh.d_fix_connection fc
@@ -257,7 +265,15 @@ begin
            es.contra_broker               as es_contra_broker,
            es.contra_account_capacity     as es_contra_account_capacity,
            es.contra_trader               as es_contra_trader,
-           es.exchange_id                 as es_exchange_id
+           es.exchange_id                 as es_exchange_id,
+           case
+               when cl.parent_order_id is not null and ac.trading_firm_id = 'imc01' then
+                   (select max(parent_order_id)
+                    from dwh.client_order co
+                    where co.cross_order_id = cl.cross_order_id
+                      and co.is_originator <> cl.is_originator
+                      and co.create_date_id > l_retention_date_id)
+               else null end              as max_orig_parent_order_id
     from dwh.execution ex
              join t_left_orders tlo on ex.order_id = tlo.order_id
              inner join dwh.client_order cl on ex.order_id = cl.order_id
@@ -444,12 +460,10 @@ begin
                else (select orig.exch_order_id
                      from dwh.client_order co
                               join dwh.client_order orig on co.orig_order_id = orig.order_id
-                     where co.order_id = (select max(parent_order_id)
-                                          from dwh.client_order
-                                          where cross_order_id = cl.cross_order_id
-                                            and is_originator <> cl.is_originator))
+                     where co.order_id = cl.max_orig_parent_order_id
+                     and co.create_date_id >= l_retention_date_id
+                     and orig.create_date_id >= l_retention_date_id)
                end as ORIG_RFR_ID,--orig_rfr_id
-
 
            case
                when cl.ex_exec_type in ('S', 'W') then orig.client_order_id

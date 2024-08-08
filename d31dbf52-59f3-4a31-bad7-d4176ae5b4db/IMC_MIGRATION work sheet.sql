@@ -1208,8 +1208,8 @@ from dwh.client_order cl
                               and orig.create_date_id >= :l_retention_date_id
                             order by orig.create_date_id desc
                             limit 1) orig on true
-where cl.order_id = 16574618602
-  and ex.exec_id = 54948940066
+where cl.order_id = 16573230017
+  and ex.exec_id = 54997186681
   and ex.exec_date_id = :in_date_id
 ;
 
