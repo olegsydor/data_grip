@@ -1208,14 +1208,25 @@ from dwh.client_order cl
                               and orig.create_date_id >= :l_retention_date_id
                             order by orig.create_date_id desc
                             limit 1) orig on true
-where cl.order_id = 16581303512
-  and ex.exec_id = 54966401801
+where cl.order_id = 16574618602
+  and ex.exec_id = 54948940066
   and ex.exec_date_id = :in_date_id
 ;
 
 select no_legs, co_client_leg_ref_id, * from dwh.client_order
 where order_id = 16572896615
 
-select no_legs, co_client_leg_ref_id, * from dwh.client_order co
+select co.no_legs, lnb.no_legs, left(co_client_leg_ref_id, 1), multileg_order_id, * from dwh.client_order co
          join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id
-    where multileg_order_id = 16572896607
+                                         left join lateral (select cnl.no_legs
+                                from dwh.client_order cnl
+                                where cnl.order_id = co.multileg_order_id
+--                                   and cnl.create_date_id = :in_date_id --??
+--                                       and cnl.create_date_id >= :l_retention_date_id
+                                limit 10) lnb on true
+    where true
+        and co.create_date_id = 20240808
+--       and order_id = 16574618602
+and multileg_order_id = 16574618596
+
+select left(null::varchar(30))
