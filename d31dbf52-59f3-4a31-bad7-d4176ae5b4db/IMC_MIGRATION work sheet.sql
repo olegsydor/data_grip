@@ -1155,7 +1155,7 @@ select cl.order_id,
         from dwh.client_order
         where cross_order_id = cl.cross_order_id
           and is_originator <> cl.is_originator)                       as max_cross_order_id,
-
+(select ORIG.EXCH_ORDER_ID from CLIENT_ORDER ORIG, CLIENT_ORDER CO where ORIG.ORDER_ID = CO.ORIG_ORDER_ID and CO.ORDER_ID =  CL.PARENT_ORDER_ID) as oracle_orig,
     (select orig.exch_order_id
         from dwh.client_order co
                  join dwh.client_order orig on co.orig_order_id = orig.order_id
