@@ -547,7 +547,7 @@ begin
                                   and cxl.create_date_id = in_date_id --??
                                   and cxl.orig_order_id is not null
                                   and cxl.create_date_id >= l_retention_date_id
-                                order by cxl.client_order_id
+                                order by cxl.order_id
                                 limit 1) cxl on true
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
@@ -1280,7 +1280,7 @@ begin
     return query
         select rec from trash.imc_pg_report
     order by order_id, exec_id
-    limit 100;
+    limit 0;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg printing for  ' || in_date_id::text || ' FINISHED ===',
                            l_row_cnt, 'O')
