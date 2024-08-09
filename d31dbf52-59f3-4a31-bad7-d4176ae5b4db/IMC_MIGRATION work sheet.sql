@@ -1156,6 +1156,7 @@ select cl.order_id,
         where cross_order_id = cl.cross_order_id
           and is_originator <> cl.is_originator)                       as max_cross_order_id,
 (select ORIG.EXCH_ORDER_ID from CLIENT_ORDER ORIG, CLIENT_ORDER CO where ORIG.ORDER_ID = CO.ORIG_ORDER_ID and CO.ORDER_ID =  CL.PARENT_ORDER_ID) as oracle_orig,
+orig.exch_order_id,
     (select orig.exch_order_id
         from dwh.client_order co
                  join dwh.client_order orig on co.orig_order_id = orig.order_id
@@ -1166,8 +1167,16 @@ select cl.order_id,
 
        case
            when par.order_id is null then orig.exch_order_id
-           when ac.trading_firm_id <> 'imc01' then orig.exch_order_id
-           else orig.exch_order_id
+           when ac.trading_firm_id <> 'imc01' then (select orig.exch_order_id
+                                                           from dwh.client_order orig
+                                                           where orig.order_id = par.orig_order_id
+                                                           limit 1)
+--            else (select orig.exch_order_id
+--                      from dwh.client_order co
+--                               join dwh.client_order orig on co.orig_order_id = orig.order_id
+--                      where co.order_id = cl.max_orig_parent_order_id
+--                      and co.create_date_id >= l_retention_date_id
+--                      and orig.create_date_id >= l_retention_date_id)
            end                                                         as ORIG_RFR_ID,--orig_rfr_id
        ''
 from dwh.client_order cl
@@ -1208,7 +1217,7 @@ from dwh.client_order cl
                               and orig.create_date_id >= :l_retention_date_id
                             order by orig.create_date_id desc
                             limit 1) orig on true
-where cl.order_id = 16573230017
+where cl.order_id = 16573231230
   and ex.exec_id = 54997186681
   and ex.exec_date_id = :in_date_id
 ;
