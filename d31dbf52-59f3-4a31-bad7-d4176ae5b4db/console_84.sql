@@ -1,7 +1,7 @@
-call trash.so_imc_report_making(20240806);
-select * from trash.so_imc_report(20240806);
+call trash.so_imc_report_making(20240808);
+select * from trash.so_imc_report(20240808);
 -- add counts to
-drop function if exists trash.so_imc_report;
+-- drop function if exists trash.so_imc_report;
 
 create or replace procedure trash.so_imc_report_making(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
     language plpgsql
