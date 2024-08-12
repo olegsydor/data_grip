@@ -391,3 +391,37 @@ select from trash.so_load_away_trade()
 
 select * from trash.so_away_trade;
 SELECT x.* FROM trash.so_away_trade x
+
+select  *
+from trash.so_away_trade;
+
+
+select trade_record_time::timestamp(6), db_create_time::timestamp(6), date_id, is_busted, subsystem_id ,  cl_ord_id as client_order_id , side , openclose  as open_close ,  exec_id ,
+	 liquidityindicator , secondary_order_id, exch_exec_id, secondary_exch_exec_id,  opt_qty , last_px, ex_destination /*, sub_strategy, street_order_id, order_id,
+	street_order_qty, order_qty, multileg_reporting_type, is_largest_leg, street_max_floor, exec_broker, cmta, street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
+	is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator, street_cross_is_originator, contra_account, contra_broker, trade_exec_broker, order_fix_message_id,
+	trade_fix_message_id, street_order_fix_message_id, client_id, street_transaction_id, transaction_id, order_price, order_process_time, clearing_account_number, sub_account, remarks,
+	optional_data, street_client_order_id, fix_comp_id, leaves_qty, is_billed, street_exec_inst, fee_sensitivity, street_order_price, leg_ref_id, load_batch_id, strategy_decision_reason_code,
+	compliance_id, floor_broker_id, order_id_guid, is_parent, symbol, symbol_sfx, strike_price, put_or_call, maturity_year, maturity_month, maturity_day, security_type, child_orders, handling_id,
+	secondary_order_id2, ex_destination_for_order_guid, sub_strategy_for_ordg, display_instrument_id, trade_record_id, instrument_type_id, activ_symbol, mapping_logic, commision_rate_unit,
+	blaze_account_alias, is_sor_routed, report_id, is_company_name_changed, companyname, generation, mx_gen, num_firms, "orderId", "parentOrderId", is_flex_order, last_px_temp*/
+select *
+from trash.so_away_trade
+where date_id = 20240809
+and last_px <> 0
+  and cl_ord_id = '1_29240809'
+-- and secondary_exch_exec_id ='7460000345235'
+union all
+SELECT trade_record_time, db_create_time, date_id, is_busted, subsystem_id , client_order_id, side, open_close,  exec_id::varchar,
+        trade_liquidity_indicator, secondary_order_id, exch_exec_id, secondary_exch_exec_id,  last_qty::text, last_px, ex_destination /*, sub_strategy, street_order_id, order_id,
+       street_order_qty, order_qty, multileg_reporting_type, is_largest_leg, street_max_floor, exec_broker, cmta, street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
+       is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator, street_cross_is_originator, contra_account, contra_broker, trade_exec_broker, order_fix_message_id,
+       trade_fix_message_id, street_order_fix_message_id, client_id, street_transaction_id, transaction_id, order_price, order_process_time, clearing_account_number, sub_account, remarks,
+       optional_data, street_client_order_id, fix_comp_id, leaves_qty, is_billed, street_exec_inst, fee_sensitivity, street_order_price, leg_ref_id, load_batch_id, strategy_decision_reason_code,
+       compliance_id, floor_broker_id, order_id_guid, is_parent, symbol, symbol_sfx, strike_price, put_or_call, maturity_year, maturity_month, maturity_day, security_type, child_orders, handling_id,
+       secondary_order_id2, ex_destination_for_order_guid, sub_strategy_for_ordg, display_instrument_id, trade_record_id, instrument_type_id, activ_symbol, mapping_logic, commision_rate_unit,
+       blaze_account_alias, is_sor_routed, report_id, is_company_name_changed, companyname, generation, mx_gen, num_firms, "orderId", "parentOrderId", is_flex_order, last_px_temp */
+FROM staging.trade_record_missed_lp
+where true
+--     and date_id = 20240809
+and client_order_id ='1_29240809'
