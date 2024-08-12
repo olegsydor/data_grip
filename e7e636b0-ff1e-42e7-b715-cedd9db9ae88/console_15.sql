@@ -427,3 +427,13 @@ where true
 and client_order_id ='1_29240809';
 
 
+select * from dash360.get_unmatched_trade_events(20240812,20240812);
+
+select *
+from public.load_timing lt
+where load_timing_id in (select max(load_timing_id)
+                         from public.load_timing lt2
+                         where table_name = 'LOAD_INTERNAL_DC_STREET_TRADE_MATCHING STARTED <<<<<<<<<<')
+order by 1, 2;
+
+select * from dash360.get_unmatched_street_trade_events (20240812,20240812)
