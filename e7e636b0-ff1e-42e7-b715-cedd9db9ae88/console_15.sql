@@ -424,4 +424,6 @@ SELECT trade_record_time, db_create_time, date_id, is_busted, subsystem_id , cli
 FROM staging.trade_record_missed_lp
 where true
 --     and date_id = 20240809
-and client_order_id ='1_29240809'
+and client_order_id ='1_29240809';
+
+

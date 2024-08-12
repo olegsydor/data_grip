@@ -1239,4 +1239,18 @@ select co.no_legs, lnb.no_legs, left(co_client_leg_ref_id, 1), multileg_order_id
       and order_id = 16623856596
 and multileg_order_id = 16623856596
 
-select left(null::varchar(30))
+select left(null::varchar(30));
+
+alter function trash.get_multileg_leg_number_old rename to get_multileg_leg_number;
+
+create or replace drop function trash.get_multileg_leg_number(in_order_id bigint, in_multileg_order_id bigint)
+    returns integer
+    language plpgsql
+as
+$function$
+begin
+    return dense_rank() over (partition by in_multileg_order_id order by in_order_id);
+
+end;
+$function$
+;
