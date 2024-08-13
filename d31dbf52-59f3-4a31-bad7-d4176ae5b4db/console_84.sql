@@ -20,7 +20,7 @@ begin
                            0, 'O')
     into l_step_id;
 
---     call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(in_date_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
@@ -66,7 +66,8 @@ begin
            cl.dash_rfr_id,
            case
                when cl.multileg_order_id is not null then
-                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end as leg_number,
+                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id)
+                                                                                    end as leg_number,
            ex.exec_id                                                                   as ex_exec_id,
            ex.exec_time                                                                 as ex_exec_time,
            ex.exec_type                                                                 as ex_exec_type,
@@ -552,7 +553,7 @@ begin
                                   and cxl.create_date_id >= l_retention_date_id
                                 order by cxl.order_id
                                 limit 1) cxl on true
-             left join lateral (select cnl.no_legs
+
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id

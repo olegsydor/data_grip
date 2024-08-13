@@ -1243,10 +1243,9 @@ select left(null::varchar(30));
 
 alter function trash.get_multileg_leg_number_old rename to get_multileg_leg_number;
 
-create or replace function trash.get_multileg_leg_number(in_order_id bigint, in_multileg_order_id bigint)
+create or replace function trash.get_multileg_leg_number(in_order_id bigint, in_multileg_order_id bigint, in_min_date_id int4)
     returns int4
     language plpgsql
-    stable
 as
 $function$
 declare
@@ -1256,28 +1255,31 @@ begin
     into l_leg_number
     from (select order_id, dense_rank() over (partition by multileg_order_id order by order_id) as rn
           from dwh.client_order
-          where multileg_order_id = in_multileg_order_id) x
-    where order_id = in_order_id;
+          where multileg_order_id = in_multileg_order_id
+          and create_date_id >= in_min_date_id) x
+    where order_id = in_order_id
+    limit 1;
     return l_leg_number;
 end;
 $function$
 ;
 
-select trash.get_multileg_leg_number(in_order_id := 16293729946, in_multileg_order_id := 16293729942)
+select trash.get_multileg_leg_number(in_order_id := 16293729946, in_multileg_order_id := 16293729942, in_min_date_id := 202430901)
 
 select multileg_order_id, * from dwh.client_order
 where true
---     and multileg_order_id = 16622865381
+     and multileg_order_id = 16293729942
 and order_id = 16293729946;
 
 
     select rn
-    from (select order_id, dense_rank() over (partition by multileg_order_id order by in_order_id) as rn
+    from (select order_id, dense_rank() over (partition by multileg_order_id order by order_id) as rn
           from dwh.client_order
           where multileg_order_id = :in_multileg_order_id) x
     where order_id = in_order_id;
 
 
-
 select exch_order_id, * from dwh.client_order
 where order_id = 16647044468
+
+
