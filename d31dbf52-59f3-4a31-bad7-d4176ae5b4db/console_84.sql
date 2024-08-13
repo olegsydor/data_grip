@@ -20,7 +20,7 @@ begin
                            0, 'O')
     into l_step_id;
 
-    call trash.match_cross_trades_pg(in_date_id);
+--     call trash.match_cross_trades_pg(in_date_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
@@ -40,7 +40,7 @@ begin
            cl.is_originator,
            cl.orig_order_id,
            cl.client_order_id,
-           cl.exchange_id                                                                                 as cl_exchange_id,
+           cl.exchange_id                                                               as cl_exchange_id,
            cl.sub_strategy_id,
            cl.sub_strategy_desc,
            cl.sub_system_unq_id,
@@ -64,54 +64,53 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
---            cl.co_client_leg_ref_id,
            case
                when cl.multileg_order_id is not null then
-                           dense_rank() over (partition by cl.multileg_order_id order by cl.order_id) end as leg_number,
-           ex.exec_id                                                                                     as ex_exec_id,
-           ex.exec_time                                                                                   as ex_exec_time,
-           ex.exec_type                                                                                   as ex_exec_type,
-           ex.cum_qty                                                                                     as ex_cum_qty,
-           ex.order_status                                                                                as ex_order_status,
-           ex.last_px                                                                                     as ex_last_px,
-           ex.last_qty                                                                                    as ex_last_qty,
-           ex.contra_account_capacity                                                                     as ex_contra_account_capacity,
-           ex.trade_liquidity_indicator                                                                   as ex_trade_liquidity_indicator,
-           ex.exch_exec_id                                                                                as ex_exch_exec_id,
-           ex.exchange_id                                                                                 as ex_exchange_id,
-           ex.contra_broker                                                                               as ex_contra_broker,
-           ex.contra_trader                                                                               as ex_contra_trader,
-           ex.secondary_order_id                                                                          as ex_secondary_order_id,
-           ex.secondary_exch_exec_id                                                                      as ex_secondary_exch_exec_id,
-           ex.exec_date_id                                                                                as ex_exec_date_id,
-           ex.fix_message_id                                                                              as ex_fix_message_id,
-           ac.trading_firm_id                                                                             as ac_trading_firm_id,
-           ac.opt_is_fix_clfirm_processed                                                                 as ac_opt_is_fix_clfirm_processed,
-           ac.opt_customer_or_firm                                                                        as ac_opt_customer_or_firm,
-           ac.account_id                                                                                  as ac_account_id,
-           ac.account_demo_mnemonic                                                                       as ac_account_demo_mnemonic,
-           opx.opt_exec_broker                                                                            as opx_opt_exec_broker,
-           fc.acceptor_id                                                                                 as fc_acceptor_id,
-           par.order_id                                                                                   as par_order_id,
-           par.client_order_id                                                                            as par_client_order_id,
-           par.create_date_id                                                                             as par_create_date_id,
-           par.sub_strategy_desc                                                                          as par_sub_strategy_desc,
-           par.order_type_id                                                                              as par_order_type_id,
-           par.time_in_force_id                                                                           as par_time_in_force_id,
-           par.exch_order_id                                                                              as par_exch_order_id,
-           par.orig_order_id                                                                              as par_orig_order_id,
-           str.cons_payment_per_contract                                                                  as str_cons_payment_per_contract,
-           str.order_id                                                                                   as str_order_id,
-           str.cross_order_id                                                                             as str_cross_order_id,
-           str.strtg_decision_reason_code                                                                 as str_strtg_decision_reason_code,
-           str.request_number                                                                             as str_request_number,
-           str.create_date_id                                                                             as str_create_date_id,
-           es.FIX_MESSAGE_ID                                                                              as es_fix_message_id,
-           es.exec_id                                                                                     as es_exec_id,
-           es.contra_broker                                                                               as es_contra_broker,
-           es.contra_account_capacity                                                                     as es_contra_account_capacity,
-           es.contra_trader                                                                               as es_contra_trader,
-           es.exchange_id                                                                                 as es_exchange_id,
+                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end as leg_number,
+           ex.exec_id                                                                   as ex_exec_id,
+           ex.exec_time                                                                 as ex_exec_time,
+           ex.exec_type                                                                 as ex_exec_type,
+           ex.cum_qty                                                                   as ex_cum_qty,
+           ex.order_status                                                              as ex_order_status,
+           ex.last_px                                                                   as ex_last_px,
+           ex.last_qty                                                                  as ex_last_qty,
+           ex.contra_account_capacity                                                   as ex_contra_account_capacity,
+           ex.trade_liquidity_indicator                                                 as ex_trade_liquidity_indicator,
+           ex.exch_exec_id                                                              as ex_exch_exec_id,
+           ex.exchange_id                                                               as ex_exchange_id,
+           ex.contra_broker                                                             as ex_contra_broker,
+           ex.contra_trader                                                             as ex_contra_trader,
+           ex.secondary_order_id                                                        as ex_secondary_order_id,
+           ex.secondary_exch_exec_id                                                    as ex_secondary_exch_exec_id,
+           ex.exec_date_id                                                              as ex_exec_date_id,
+           ex.fix_message_id                                                            as ex_fix_message_id,
+           ac.trading_firm_id                                                           as ac_trading_firm_id,
+           ac.opt_is_fix_clfirm_processed                                               as ac_opt_is_fix_clfirm_processed,
+           ac.opt_customer_or_firm                                                      as ac_opt_customer_or_firm,
+           ac.account_id                                                                as ac_account_id,
+           ac.account_demo_mnemonic                                                     as ac_account_demo_mnemonic,
+           opx.opt_exec_broker                                                          as opx_opt_exec_broker,
+           fc.acceptor_id                                                               as fc_acceptor_id,
+           par.order_id                                                                 as par_order_id,
+           par.client_order_id                                                          as par_client_order_id,
+           par.create_date_id                                                           as par_create_date_id,
+           par.sub_strategy_desc                                                        as par_sub_strategy_desc,
+           par.order_type_id                                                            as par_order_type_id,
+           par.time_in_force_id                                                         as par_time_in_force_id,
+           par.exch_order_id                                                            as par_exch_order_id,
+           par.orig_order_id                                                            as par_orig_order_id,
+           str.cons_payment_per_contract                                                as str_cons_payment_per_contract,
+           str.order_id                                                                 as str_order_id,
+           str.cross_order_id                                                           as str_cross_order_id,
+           str.strtg_decision_reason_code                                               as str_strtg_decision_reason_code,
+           str.request_number                                                           as str_request_number,
+           str.create_date_id                                                           as str_create_date_id,
+           es.FIX_MESSAGE_ID                                                            as es_fix_message_id,
+           es.exec_id                                                                   as es_exec_id,
+           es.contra_broker                                                             as es_contra_broker,
+           es.contra_account_capacity                                                   as es_contra_account_capacity,
+           es.contra_trader                                                             as es_contra_trader,
+           es.exchange_id                                                               as es_exchange_id,
            case
                when cl.parent_order_id is not null and ac.trading_firm_id = 'imc01' then
                    (select max(parent_order_id)
@@ -119,7 +118,7 @@ begin
                     where co.cross_order_id = cl.cross_order_id
                       and co.is_originator <> cl.is_originator
                       and co.create_date_id > l_retention_date_id)
-               else null end                                                                              as max_orig_parent_order_id
+               else null end                                                            as max_orig_parent_order_id
     from dwh.client_order cl
              inner join dwh.execution ex on ex.order_id = cl.order_id
              inner join dwh.d_fix_connection fc
@@ -224,11 +223,9 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
---            cl.co_client_leg_ref_id,
            case
                when cl.multileg_order_id is not null then
-                           dense_rank() over (partition by cl.multileg_order_id order by cl.order_id) end as leg_number,
-
+                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end                   as leg_number,
            ex.exec_id                                                                                     as ex_exec_id,
            ex.exec_time                                                                                   as ex_exec_time,
            ex.exec_type                                                                                   as ex_exec_type,
@@ -550,11 +547,12 @@ begin
                                 from client_order cxl
                                 where cxl.orig_order_id = cl.order_id
 --                                   and cl.ex_exec_type in ('b', '4')
-                                  and cxl.create_date_id = in_date_id --??
+--                                   and cxl.create_date_id = in_date_id --??
                                   and cxl.orig_order_id is not null
                                   and cxl.create_date_id >= l_retention_date_id
                                 order by cxl.order_id
                                 limit 1) cxl on true
+             left join lateral (select cnl.no_legs
              left join lateral (select cnl.no_legs
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id
