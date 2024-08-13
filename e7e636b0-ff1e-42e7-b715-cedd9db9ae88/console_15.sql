@@ -437,3 +437,7 @@ where load_timing_id in (select max(load_timing_id)
 order by 1, 2;
 
 select * from dash360.get_unmatched_street_trade_events (20240812,20240812)
+
+select 372889506-372885566;
+
+select 16648496-16644556
