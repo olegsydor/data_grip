@@ -20,7 +20,7 @@ begin
                            0, 'O')
     into l_step_id;
 
---     call trash.match_cross_trades_pg(in_date_id);
+    call trash.match_cross_trades_pg(in_date_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
