@@ -1243,7 +1243,7 @@ select left(null::varchar(30));
 
 alter function trash.get_multileg_leg_number_old rename to get_multileg_leg_number;
 
-create or replace drop function trash.get_multileg_leg_number(in_order_id bigint, in_multileg_order_id bigint)
+create or replace function trash.get_multileg_leg_number(in_order_id bigint, in_multileg_order_id bigint)
     returns integer
     language plpgsql
 as
@@ -1254,3 +1254,60 @@ begin
 end;
 $function$
 ;
+
+
+select cl.order_id,
+           cl.create_date_id,
+           cl.transaction_id,
+           cl.multileg_order_id,
+           cl.dash_rfr_id,
+--            cl.co_client_leg_ref_id,
+           dense_rank() over (partition by cl.multileg_order_id order by cl.order_id) as leg_number,
+           ex.exec_id                     as ex_exec_id,
+''
+    from dwh.client_order cl
+             inner join dwh.execution ex on ex.order_id = cl.order_id
+             inner join dwh.d_fix_connection fc
+                        on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             inner join dwh.d_trading_firm tf
+                        on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
+             left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
+             left join lateral (select order_id,
+                                       client_order_id,
+                                       create_date_id,
+                                       sub_strategy_desc,
+                                       order_type_id,
+                                       time_in_force_id,
+                                       exch_order_id,
+                                       orig_order_id
+                                from dwh.client_order pro
+                                where cl.parent_order_id = pro.order_id
+                                  and pro.create_date_id = get_dateid(cl.parent_order_process_time::date)
+                                  and pro.parent_order_id is null
+                                  and cl.parent_order_id is not null
+                                  and pro.create_date_id >= :l_retention_date_id
+                                order by create_date_id desc
+                                limit 1) par on true
+
+             left join dwh.client_order str
+                       on (cl.order_id = str.parent_order_id
+                           and ex.secondary_order_id = str.client_order_id
+                           and ex.exec_type = 'F'
+                           and str.create_date_id = :in_date_id
+                           and str.parent_order_id is not null)
+             left join dwh.execution es
+                       on (es.order_id = STR.ORDER_ID and es.exch_exec_id = ex.secondary_exch_exec_id and
+                           es.exec_date_id = cl.create_date_id)
+    where true
+      and ex.exec_date_id = :in_date_id
+--       and cl.create_date_id = :in_date_id
+      and cl.multileg_reporting_type in ('1', '2')
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E', 'S', 'D', 'y')
+      and cl.trans_type <> 'F'
+and cl.order_id = 16637646503;
+
+
+select * from trash.so_imc_base
+where order_id = 16637646503;
