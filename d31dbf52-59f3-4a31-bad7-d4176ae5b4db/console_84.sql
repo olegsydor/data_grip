@@ -20,7 +20,7 @@ begin
                            0, 'O')
     into l_step_id;
 
-    call trash.match_cross_trades_pg(in_date_id);
+--     call trash.match_cross_trades_pg(in_date_id);
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
@@ -64,10 +64,11 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
-           case
-               when cl.multileg_order_id is not null then
-                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id)
-                                                                                    end as leg_number,
+--            case
+--                when cl.multileg_order_id is not null then
+--                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, l_retention_date_id)
+--                                                                                     end as leg_number,
+           rn.leg_number,
            ex.exec_id                                                                   as ex_exec_id,
            ex.exec_time                                                                 as ex_exec_time,
            ex.exec_type                                                                 as ex_exec_type,
@@ -127,6 +128,16 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf
                         on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
+             left join lateral (
+        select leg_number
+        from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
+              from dwh.client_order co
+              where co.multileg_order_id = cl.multileg_order_id
+                and co.create_date_id >= l_retention_date_id) x
+        where x.order_id = cl.order_id
+          and cl.multileg_order_id is not null
+        limit 1
+        ) rn on true
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
              left join lateral (select order_id,
                                        client_order_id,
@@ -224,9 +235,10 @@ begin
            cl.side,
            cl.multileg_order_id,
            cl.dash_rfr_id,
-           case
-               when cl.multileg_order_id is not null then
-                   trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id) end                   as leg_number,
+--            case
+--                when cl.multileg_order_id is not null then
+--                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, l_retention_date_id) end                   as leg_number,
+           rn.leg_number,
            ex.exec_id                                                                                     as ex_exec_id,
            ex.exec_time                                                                                   as ex_exec_time,
            ex.exec_type                                                                                   as ex_exec_type,
@@ -287,6 +299,16 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              inner join dwh.d_trading_firm tf
                         on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
+             left join lateral (
+        select leg_number
+        from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
+              from dwh.client_order co
+              where co.multileg_order_id = cl.multileg_order_id
+                and co.create_date_id >= l_retention_date_id) x
+        where x.order_id = cl.order_id
+          and cl.multileg_order_id is not null
+        limit 1
+        ) rn on true
              left join dwh.d_opt_exec_broker opx on opx.opt_exec_broker_id = cl.opt_exec_broker_id
              left join lateral (select order_id,
                                        client_order_id,
