@@ -1294,7 +1294,7 @@ select exch_order_id, * from dwh.client_order
 where order_id = 16647044468
 ;
 
-select order_id, dense_rank() over (partition by multileg_order_id order by order_id) as rn
+select order_id, dense_rank() over (partition by multileg_order_id order by order_id) as rn, *
           from dwh.client_order
           where multileg_order_id = :in_multileg_order_id
           and create_date_id >= :in_min_date_id
@@ -1466,8 +1466,14 @@ from dwh.client_order cl
     ) rn on true
 where true
   and ex.exec_date_id = :in_date_id
-  and cl.create_date_id = :in_date_id
+--   and cl.create_date_id = :in_date_id
   and cl.multileg_reporting_type in ('1', '2')
   and ex.is_busted = 'N'
   and ex.exec_type not in ('E', 'S', 'D', 'y')
-  and cl.trans_type <> 'F';
+  and cl.trans_type <> 'F'
+and cl.order_id in (16591626591);
+
+select trash.get_multileg_leg_number(in_order_id := cl.order_id, in_multileg_order_id := cl.multileg_order_id, in_min_date_id := cl.create_date_id),
+* from dwh.client_order cl
+where true
+and order_id in (16591626591, 16293729943,16293729946);

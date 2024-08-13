@@ -66,7 +66,7 @@ begin
            cl.dash_rfr_id,
 --            case
 --                when cl.multileg_order_id is not null then
---                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, l_retention_date_id)
+--                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, cl.create_date_id)
 --                                                                                     end as leg_number,
            rn.leg_number,
            ex.exec_id                                                                   as ex_exec_id,
@@ -133,7 +133,7 @@ begin
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
               from dwh.client_order co
               where co.multileg_order_id = cl.multileg_order_id
-                and co.create_date_id >= l_retention_date_id) x
+                and co.create_date_id = in_date_id) x
         where x.order_id = cl.order_id
           and cl.multileg_order_id is not null
         limit 1
@@ -237,7 +237,7 @@ begin
            cl.dash_rfr_id,
 --            case
 --                when cl.multileg_order_id is not null then
---                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, l_retention_date_id) end                   as leg_number,
+--                    trash.get_multileg_leg_number(cl.order_id, cl.multileg_order_id, cl.create_date_id) end                   as leg_number,
            rn.leg_number,
            ex.exec_id                                                                                     as ex_exec_id,
            ex.exec_time                                                                                   as ex_exec_time,
@@ -304,7 +304,7 @@ begin
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
               from dwh.client_order co
               where co.multileg_order_id = cl.multileg_order_id
-                and co.create_date_id >= l_retention_date_id) x
+                and co.create_date_id >= cl.create_date_id) x
         where x.order_id = cl.order_id
           and cl.multileg_order_id is not null
         limit 1
