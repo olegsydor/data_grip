@@ -440,4 +440,13 @@ select * from dash360.get_unmatched_street_trade_events (20240812,20240812)
 
 select 372889506-372885566;
 
-select 16648496-16644556
+select *
+from genesis2.allocation_instruction ai
+         join genesis2.allocation_instruction_entry aie on aie.alloc_instr_id = ai.alloc_instr_id
+         join lateral (select *
+                       from genesis2.alloc_instr2trade_record atr
+                                join genesis2.trade_record tr
+                                     on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
+                       where atr.alloc_instr_id = ai.alloc_instr_id
+                       limit 1) atr on true
+where ai.alloc_instr_id = -221398947;

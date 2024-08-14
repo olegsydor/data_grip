@@ -1477,3 +1477,10 @@ select trash.get_multileg_leg_number(in_order_id := cl.order_id, in_multileg_ord
 * from dwh.client_order cl
 where true
 and order_id in (16591626591, 16293729943,16293729946);
+
+
+select min(CXL.CLIENT_ORDER_ID) from CLIENT_ORDER CXL where CXL.ORIG_ORDER_ID = 16680518086;
+
+select order_id, client_order.client_order_id
+from dwh.client_order
+where orig_order_id = 16680518086
