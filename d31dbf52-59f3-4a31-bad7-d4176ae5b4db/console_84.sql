@@ -1,4 +1,4 @@
-call trash.so_imc_report_making(20240809);
+call trash.so_imc_report_making(20240813);
 select * from trash.so_imc_report(20240808);
 -- add counts to
 -- drop function if exists trash.so_imc_report;
