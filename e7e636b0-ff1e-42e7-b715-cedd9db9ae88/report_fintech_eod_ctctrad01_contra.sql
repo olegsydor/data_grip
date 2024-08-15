@@ -1,7 +1,6 @@
 select * from dash360.report_fintech_eod_ctctrad01_contra(in_start_date_id := 20240814, in_end_date_id := 20240815);
 
 drop function if exists dash360.report_fintech_eod_ctctrad01_contra;
-
 create function dash360.report_fintech_eod_ctctrad01_contra(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
@@ -10,8 +9,8 @@ create function dash360.report_fintech_eod_ctctrad01_contra(in_start_date_id int
     language plpgsql
 as
 $fx$
+    -- OS 20240815 https://dashfinancial.atlassian.net/browse/DEVREQ-4693
 declare
-    ref       refcursor;
     l_load_id int;
     l_step_id int;
     l_row_cnt int;
