@@ -1484,3 +1484,76 @@ select min(CXL.CLIENT_ORDER_ID) from CLIENT_ORDER CXL where CXL.ORIG_ORDER_ID = 
 select order_id, client_order.client_order_id
 from dwh.client_order
 where orig_order_id = 16680518086
+;
+
+
+   drop table if exists t_opt_exec_broker;
+    create temp table t_opt_exec_broker as
+    select * from dwh.d_opt_exec_broker opx where opx.is_default = 'Y' and opx.is_active;
+    create index on t_opt_exec_broker (account_id);
+    analyze t_opt_exec_broker;
+
+select
+    cl.order_id,
+    cl.create_date_id,
+    cl.opx_opt_exec_broker,
+    opx.opt_exec_broker,
+case
+               when cl.par_order_id is null then orig.exch_order_id
+               when cl.ac_trading_firm_id <> 'imc01' then (select orig.exch_order_id
+                                                           from dwh.client_order orig
+                                                           where orig.order_id = cl.par_orig_order_id
+                                                           limit 1)
+               else (select orig.exch_order_id
+                     from dwh.client_order co
+                              join dwh.client_order orig on co.orig_order_id = orig.order_id
+                     where co.order_id = cl.max_orig_parent_order_id
+                     and co.create_date_id >= :l_retention_date_id
+                     and orig.create_date_id >= :l_retention_date_id)
+               end as ORIG_RFR_ID
+from trash.so_imc_base cl
+             left join lateral (select fix_message ->> '9730' as t9730
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = cl.es_fix_message_id
+                                  and fmj.date_id = :in_date_id
+                                limit 1) fmj on true
+             left join lateral (select fix_message ->> '9730' as t9730
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = cl.ex_fix_message_id
+                                  and fmj.date_id = :in_date_id
+                                limit 1) fmj_p on true
+             left join trash.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(cl.es_exec_id, cl.ex_exec_id)
+             left join lateral (select orig.client_order_id, exch_order_id
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+--                                   and cl.ex_exec_type in ('S', 'W')
+                                  and orig.create_date_id <= :in_date_id
+                                  and cl.orig_order_id is not null
+                                and orig.create_date_id >= :l_retention_date_id
+                                order by orig.create_date_id desc
+                                limit 1) orig on true
+             left join lateral (select cxl.client_order_id as client_order_id
+                                from client_order cxl
+                                where cxl.orig_order_id = cl.order_id
+--                                   and cl.ex_exec_type in ('b', '4')
+--                                   and cxl.create_date_id = in_date_id --??
+                                  and cxl.orig_order_id is not null
+                                  and cxl.create_date_id >= :l_retention_date_id
+                                order by cxl.order_id
+                                limit 1) cxl on true
+
+             left join lateral (select cnl.no_legs
+                                from dwh.client_order cnl
+                                where cnl.order_id = cl.multileg_order_id
+--                                   and cnl.create_date_id = in_date_id --??
+                                      and cnl.create_date_id >= :l_retention_date_id
+                                limit 1) lnb on true
+left join t_opt_exec_broker opx
+                       on opx.account_id = cl.ac_account_id
+where cl.order_id = 16692953019
+    and cl.ex_exec_id = 55331076301;
+
+select opt_exec_broker_id, *
+from dwh.client_order cl
+where cl.order_id = 16692953019
+
