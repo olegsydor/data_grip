@@ -1,6 +1,7 @@
-
+drop view trash.so_missed_lp;
 create view trash.so_missed_lp as
 select aw.order_id,
+       aw.orderid                                                                               as order_id_guid,
        aw.ex_destination                                                                        as rep_ex_destination,
        trade_record_time,
        db_create_time,
@@ -117,7 +118,7 @@ select aw.order_id,
        extract(year from aw.expiration_date::date)                                              as maturuty_year,
        extract(month from aw.expiration_date::date)                                             as maturuty_month,
        extract(day from aw.expiration_date::date)                                               as maturuty_day,
-       coalesce(aw.SecurityType, '1')                                                           as SecurityType,  --?????????????? null in securitytype = 'O'???
+       coalesce(aw.SecurityType, '1')                                                           as security_type,  --?????????????? null in securitytype = 'O'???
        aw.child_orders,
        coalesce(case when aw.orderreportspecialtype = 'M' then lt.id else null end, 0)          as handling,
        0                                                                                        as secondary_order_id2,
@@ -153,7 +154,7 @@ select aw.order_id,
                    aw.ParentORdeRID then 1
            else 0
            end                                                                                  as is_company_name_changed,
-       cmp.companyname,
+       cmp.companyname as company_name,
        aw.generation,
        max(aw.generation) over (partition by aw.ExchangeTransactionID)                             mx_gen,
 --        aw.order_id,
@@ -174,10 +175,11 @@ select aw.order_id,
            else coalesce(den1.mic_code, lm.ex_destination, aw.ex_destination) end               as mic_code,
        aw.option_range,
        aw.client_entity_id,
-       aw.status
+       aw.status,
+       coalesce(nullif(aw.liquidityindicator, ''), 'R')                                         as trade_liquidity_indicator
 
 from --staging.v_away_trade aw
-    trash.so_away_trade aw
+     trash.so_away_trade aw
          LEft join lateral (select *
                             from staging.d_Blaze_Exchange_Codes lm
                             where coalesce(lm.last_mkt, lm.ex_destination) = aw.Ex_Destination
@@ -212,11 +214,11 @@ from --staging.v_away_trade aw
          left join billing.time_in_force ltf on tif.id = ltf.code and ltf.systemid = 8
 
 --          LEFT JOIN staging.l_for_whom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
-    LEFT JOIN billing.lforwhom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
---          LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
+         LEFT JOIN billing.lforwhom lfw on lfw.ShortDesc = aw.option_range and lfw.SystemID = 4
+         --          LEFT OUTER JOIN staging.T_Company cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
 --                                                   cmp.EDWActive = 1 -- Company
-    LEFT OUTER JOIN billing.tcompany cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
-                                                  cmp.EDWActive = 1::bit -- Company
+         LEFT OUTER JOIN billing.tcompany cmp on us.company_id = cmp.CompanyID and us.System_ID = cmp.SystemID and
+                                                 cmp.EDWActive = 1::bit -- Company
 
          left join staging.d_liquidity_type lt on aw.rep_liquidity_type = lt.enum
 where true
@@ -231,8 +233,59 @@ where true
   and aw.status in ('1', '2');
 
 
-select *
+select 'new', left(trade_record_time, 26)::timestamp as trade_record_time, db_create_time, date_id, is_busted, subsystem_id, client_order_id, side, openclose as open_close, exec_id, trade_liquidity_indicator,
+       secondary_order_id2::text, exch_exec_id, secondary_exch_exec_id, last_qty, last_px, ex_destination, sub_strategy, order_id, street_order_qty::int4, order_qty::int4, multileg_reporting_type::char,
+       exec_broker, cmta, street_time_in_force::char, contra_broker, client_id, order_price, order_process_time, remarks, street_client_order_id,
+       fix_comp_id, leaves_qty::int, null::numeric(12, 4) as street_order_price, leg_ref_id::int2,
+/*       strategy_decision_reason_code, order_id_guid, is_parent, symbol, strike_price, put_or_call, maturuty_year, maturuty_month, maturuty_day, security_type, child_orders, handling,
+       secondary_order_id2, display_instrument_id, instrument_type_id, activ_symbol, mapping_logic, commision_rate_unit, blaze_account_alias, is_sor_routed, is_company_name_changed, company_name,
+       generation, mx_gen, sum(is_company_name_changed) over (partition by secondary_exch_exec_id) as num_firms, order_id, parent_order_id*/
+''
 from trash.so_missed_lp
 where true
   and date_id = 20240809
   and client_order_id = 'b_1_1le240809'
+
+union all
+
+SELECT 'exist', trade_record_time, db_create_time, date_id, is_busted, subsystem_id , client_order_id, side, open_close,  exec_id::varchar, trade_liquidity_indicator,
+       secondary_order_id, exch_exec_id, secondary_exch_exec_id,  last_qty, last_px, ex_destination, sub_strategy,
+--        street_order_id,
+       order_id,  street_order_qty, order_qty, multileg_reporting_type,
+
+--       is_largest_leg, street_max_floor,
+       exec_broker, cmta, street_time_in_force,
+--        street_order_type, opt_customer_firm, street_mpid,
+--        is_cross_order, street_is_cross_order, street_cross_type,
+--       cross_is_originator, street_cross_is_originator, contra_account,
+       contra_broker,
+--       trade_exec_broker, order_fix_message_id, trade_fix_message_id, street_order_fix_message_id,
+       client_id,
+--       street_transaction_id, transaction_id,
+       order_price, order_process_time::text,
+--       clearing_account_number, sub_account,
+        remarks,
+--        optional_data,
+        street_client_order_id, fix_comp_id, leaves_qty,
+-- is_billed, street_exec_inst, fee_sensitivity,
+       street_order_price, leg_ref_id,
+/*
+       --       load_batch_id,
+       strategy_decision_reason_code,
+--       compliance_id, floor_broker_id,
+       order_id_guid, is_parent, symbol,
+--       symbol_sfx,
+       strike_price, put_or_call, maturity_year, maturity_month, maturity_day, security_type, child_orders, handling_id, secondary_order_id2,
+--       ex_destination_for_order_guid, sub_strategy_for_ordg,
+       display_instrument_id,
+--       trade_record_id,
+       instrument_type_id, activ_symbol, mapping_logic, commision_rate_unit,
+       blaze_account_alias, is_sor_routed,
+--       report_id,
+       is_company_name_changed, companyname, generation, mx_gen, num_firms, "orderId", "parentOrderId",
+       --        , is_flex_order, last_px_temp */
+''
+FROM staging.trade_record_missed_lp
+where true
+    and date_id = 20240809
+and client_order_id ='b_1_1le240809'
