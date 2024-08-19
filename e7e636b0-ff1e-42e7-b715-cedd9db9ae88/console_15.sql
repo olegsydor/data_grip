@@ -397,8 +397,12 @@ from trash.so_away_trade;
 
 
 select 'away' as instance, trade_record_time::timestamp(6), db_create_time::timestamp(6), date_id, is_busted, subsystem_id ,  cl_ord_id as client_order_id , side , openclose  as open_close ,  exec_id ,
-	 liquidityindicator , secondary_order_id, exch_exec_id, secondary_exch_exec_id,  opt_qty , last_px, ex_destination /*, sub_strategy, street_order_id, order_id,
-	street_order_qty, order_qty, multileg_reporting_type, is_largest_leg, street_max_floor, exec_broker, cmta, street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
+	 liquidityindicator , secondary_order_id, exch_exec_id, secondary_exch_exec_id,  opt_qty , last_px, ex_destination, order_id, orderid, coalesce(opt_qty, eq_qty) as street_order_qty,
+	 coalesce(opt_qty, eq_qty) as order_qty, multileg_reporting_type, exec_broker, cmtafirm as cmta, co_time_in_force
+*
+
+/*, sub_strategy, street_order_id, order_id,
+	is_largest_leg, street_max_floor, street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
 	is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator, street_cross_is_originator, contra_account, contra_broker, trade_exec_broker, order_fix_message_id,
 	trade_fix_message_id, street_order_fix_message_id, client_id, street_transaction_id, transaction_id, order_price, order_process_time, clearing_account_number, sub_account, remarks,
 	optional_data, street_client_order_id, fix_comp_id, leaves_qty, is_billed, street_exec_inst, fee_sensitivity, street_order_price, leg_ref_id, load_batch_id, strategy_decision_reason_code,
