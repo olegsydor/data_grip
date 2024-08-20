@@ -129,7 +129,7 @@ begin
     end if;
 
     return query
-        select 'Record Number,OrderId,ClOrdId,OrderQty,LeavesQty,Security Type,Symbol,MaturityMonthYear,Option Strike Price,Call/Put,OrdType,Price,StopPx,ExecInst,Open/Close';
+        select 'Record Number,OrderId,ClOrdId,Order Side,OrderQty,LeavesQty,Security Type,Symbol,MaturityMonthYear,Option Strike Price,Call/Put,OrdType,Price,StopPx,ExecInst,Open/Close';
 
     return query
         select array_to_string(ARRAY [
@@ -178,7 +178,7 @@ begin
                  left join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id and oc.is_active)
                  left join dwh.d_time_in_force tif on (tif.tif_id = cl.time_in_force_id)
         where cl.parent_order_id is null
---           and ac.trading_firm_id = 'OFP0031'
+          and ac.trading_firm_id = 'OFP0031'
           and cl.trans_type in ('D', 'G')
           and gtc.time_in_force_id in ('1', '6')
           and cl.multileg_reporting_type in ('1', '2')
