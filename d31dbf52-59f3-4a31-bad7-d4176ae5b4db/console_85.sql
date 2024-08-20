@@ -204,4 +204,7 @@ begin
 end;
 $fx$;
 
-select to_char(123356789, 'FM9999999999')
+select to_char(123356789, 'FM9999999999');
+
+
+select * from dash360.get_active_parent_gtc_orders(in_trading_firm_ids := '{"baml"}')
