@@ -1319,3 +1319,4 @@ $fx$;
 
 
 call dash_reporting.imc_report_making(20240820);
+select * from dash_reporting.imc_report(20240820);
