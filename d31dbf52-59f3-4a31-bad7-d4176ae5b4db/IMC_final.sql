@@ -1318,3 +1318,7 @@ end;
 $fx$;
 
 
+---- MOVING FROM TRASH
+alter procedure trash.so_imc_report_making set schema dash_reporting;
+alter procedure dash_reporting.so_imc_report_making rename to imc_report_making;
+alter procedure trash.match_cross_trades_pg set schema dash_reporting;
