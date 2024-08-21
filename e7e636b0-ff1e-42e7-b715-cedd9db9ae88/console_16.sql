@@ -1,3 +1,6 @@
+alter table trash.so_away_trade add column order_create_time text;
+alter table trash.so_away_trade add column blaze_account_alias text;
+
 drop view trash.so_missed_lp;
 create view trash.so_missed_lp as
 select aw.order_id,
@@ -145,7 +148,6 @@ select aw.order_id,
        regexp_replace(coalesce(aw.basecode, ''), '\.|-', '', 'g')                               as activ_symbol,
        '???'                                                                                    as mapping_logic,
        '???'                                                                                    as commision_rate_unit,
-       '???'                                                                                    as blaze_account_alias,
        case when aw.orderreportspecialtype = 'M' then 0 else 1 end                              as is_sor_routed, -- it is assumption
        case
            when lag(cmp.companyname, 1) over (partition by aw.ExchangeTransactionID order by aw.generation) <>
@@ -176,7 +178,9 @@ select aw.order_id,
        aw.option_range,
        aw.client_entity_id,
        aw.status,
-       coalesce(nullif(aw.liquidityindicator, ''), 'R')                                         as trade_liquidity_indicator
+       coalesce(nullif(aw.liquidityindicator, ''), 'R')                                         as trade_liquidity_indicator,
+       order_create_time::timestamp                                                             as order_create_time,
+       blaze_account_alias
 
 from --staging.v_away_trade aw
      trash.so_away_trade aw
