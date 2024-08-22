@@ -18,4 +18,5 @@ CREATE TABLE Blaze7.dbo.exchange_map
 
 truncate table [dbo].[exchange_map];
 
-select 1;
+select 'pg_entity' "key",
+'prod' as "value";
