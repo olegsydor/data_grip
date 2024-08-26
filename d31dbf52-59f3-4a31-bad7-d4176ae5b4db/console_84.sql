@@ -87,3 +87,17 @@ on conflict on constraint sync_test_calc_metrics_pkey do update set pg_db_update
                                                                   , metric_name_01     = excluded.metric_name_01
                                                                   , metric_value_01    = excluded.metric_value_01
 ;
+
+
+
+select gtc.close_date_id,
+       public.get_gth_date_id_by_instrument(gtc.exec_time, cl.instrument_id),
+       gtc.exec_time,
+       gtc.order_id,
+       gtc.create_date_id
+from dwh.gtc_order_status gtc
+         join dwh.client_order cl using (order_id, create_date_id)
+where close_date_id is not null
+  and public.get_gth_date_id_by_instrument(gtc.exec_time, cl.instrument_id) != gtc.close_date_id
+  and closing_reason in ('E', 'P')
+limit 5
