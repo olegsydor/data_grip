@@ -101,3 +101,11 @@ where close_date_id is not null
   and public.get_gth_date_id_by_instrument(gtc.exec_time, cl.instrument_id) != gtc.close_date_id
   and closing_reason in ('E', 'P')
 limit 5
+
+
+select count(*)
+from dwh.gtc_order_status gtc
+         join lateral (select instrument_id from dwh.client_order cl where cl.order_id = gtc.order_id and cl.create_date_id = gtc.create_date_id limit 1) cl on true
+where close_date_id is not null
+  and public.get_gth_date_id_by_instrument(gtc.exec_time, cl.instrument_id) != gtc.close_date_id
+  and closing_reason in ('E', 'P')
