@@ -27,15 +27,33 @@
 			          when CL.SIDE in ('5', '6') then 'SS'
 			end,    -- Side
 
-			(select NO_LEGS from dwh.CLIENT_ORDER where ORDER_ID = CL.MULTILEG_ORDER_ID),  --LegCount
-			LN.LEG_NUMBER,  --LegNumber
-			'',  --OrderType
-			case
-			  when CL.PARENT_ORDER_ID is null then decode(EX.ORDER_STATUS,'A','Pnd Open','b','Pnd Cxl','S','Pnd Rep','1','Partial','2','Filled',decode(EX.EXEC_TYPE,'4','Canceled','W','Replaced',EX.EXEC_TYPE))
-			  else decode(EX.ORDER_STATUS,'A','Ex Pnd Open','0','Ex Open','8','Ex Rej','b','Ex Pnd Cxl','1','Ex Partial','2','Ex Rpt Fill','4','Ex Rpt Out', EX.ORDER_STATUS )
-			end,  --Status
-			to_char(CL.PRICE, 'FM999990D0099', 'NLS_NUMERIC_CHARACTERS = ''. '''),
-			to_char(EX.LAST_PX, 'FM999990D0099', 'NLS_NUMERIC_CHARACTERS = ''. '''),  --StatusPrice
+            (select NO_LEGS from dwh.CLIENT_ORDER where ORDER_ID = CL.MULTILEG_ORDER_ID), --LegCount
+            rn.LEG_NUMBER, --LegNumber
+            '', --OrderType
+            case
+                when CL.PARENT_ORDER_ID is null
+                    then case
+                             when EX.ORDER_STATUS = 'A' then 'Pnd Open'
+                             when EX.ORDER_STATUS = 'b' then 'Pnd Cxl'
+                             when EX.ORDER_STATUS = 'S' then 'Pnd Rep'
+                             when EX.ORDER_STATUS = '1' then 'Partial'
+                             when EX.ORDER_STATUS = '2' then 'Filled'
+                             when EX.EXEC_TYPE = '4' then 'Canceled'
+                             when EX.EXEC_TYPE = 'W' then 'Replaced'
+                             else EX.EXEC_TYPE end
+                else
+                    case
+                        when EX.ORDER_STATUS = 'A' then 'Ex Pnd Open'
+                        when EX.ORDER_STATUS = '0' then 'Ex Open'
+                        when EX.ORDER_STATUS = '8' then 'Ex Rej'
+                        when EX.ORDER_STATUS = 'b' then 'Ex Pnd Cxl'
+                        when EX.ORDER_STATUS = '1' then 'Ex Partial'
+                        when EX.ORDER_STATUS = '2' then 'Ex Rpt Fill'
+                        when EX.ORDER_STATUS = '4' then 'Ex Rpt Out'
+                        else EX.ORDER_STATUS end
+                end, --Status
+			to_char(CL.PRICE, 'FM999990D0099'),
+			to_char(EX.LAST_PX, 'FM999990D0099'),  --StatusPrice
 			CL.ORDER_QTY, --Entered Qty
 			-- ask++
 			EX.LEAVES_QTY, --StatusQty   
@@ -49,27 +67,28 @@
 
 			case
 			  when EX.EXEC_TYPE in ('b','4') then
-			  (select min(CXL.CLIENT_ORDER_ID) from CLIENT_ORDER CXL where CXL.ORIG_ORDER_ID = CL.ORDER_ID)
+			  (select CXL.CLIENT_ORDER_ID from CLIENT_ORDER CXL where CXL.ORIG_ORDER_ID = CL.ORDER_ID order by CxL.order_id limit 1)
 			end, --CancelOrderID
-			(select PO.CLIENT_ORDER_ID from CLIENT_ORDER PO where PO.ORDER_ID = CL.PARENT_ORDER_ID), 
+			(select PO.CLIENT_ORDER_ID from CLIENT_ORDER PO where PO.ORDER_ID = CL.PARENT_ORDER_ID),
 			CL.ORDER_ID, --SystemOrderID
 			EX.EXEC_ID, --ExecutionID
-			NVL(CL.SUB_STRATEGY, EXC.MIC_CODE), --ExchangeCode
+			coalesce(CL.sub_strategy_desc, EXC.MIC_CODE), --ExchangeCode
 			'', --ExConnection
-			NVL(CL.OPT_EXEC_BROKER,OPX.OPT_EXEC_BROKER), --GiveUpFirm
-			case
-			  when AC.OPT_IS_FIX_CLFIRM_PROCESSED = 'Y' then CL.OPT_CLEARING_FIRM_ID
-			  else NVL(lpad(CA.CMTA, 3, 0),CL.OPT_CLEARING_FIRM_ID)
-			end, --CMTAFirm
+-- 			coalesce(CL.OPT_EXEC_BROKER,OPX.OPT_EXEC_BROKER), --GiveUpFirm
+			opx.opt_exec_broker, --GiveUpFirm
+           case
+               when ac.opt_is_fix_clfirm_processed = 'Y' then cl.clearing_firm_id
+               else coalesce(lpad(ca.cmta, 3, '0'), cl.clearing_firm_id)
+               end, --CMTAFirm
 			'',  --AccountAlias
 			'',  --Account
 			'',  --SubAccount
 			'',  --SubAccount2
 			'',  --SubAccount3
 			CL.OPEN_CLOSE,
-			case (case AC.OPT_IS_FIX_CUSTFIRM_PROCESSED
-				  when 'Y' then NVL(CL.OPT_CUSTOMER_FIRM, AC.OPT_CUSTOMER_OR_FIRM)
-				   else AC.OPT_CUSTOMER_OR_FIRM
+			case (case ac.opt_is_fix_custfirm_processed
+				  when 'Y' then coalesce(CL.customer_or_firm_id, ac.opt_customer_or_firm)
+				   else ac.opt_customer_or_firm
 				  end)
 			   when '0' then 'CUST'
 			   when '1' then 'FIRM'
@@ -81,6 +100,7 @@
 			   when '8' then 'CUST-PRO'
 			   when 'J' then 'JBO'
 			end,  --Range
+
 			OT.ORDER_TYPE_SHORT_NAME, --PriceQualifier
 			TIF.TIF_SHORT_NAME, --TimeQualifier
 			EX.EXCH_EXEC_ID, --ExchangeTransactionID
@@ -166,9 +186,11 @@
 		  --left join LIQUIDITY_INDICATOR TLI on (TLI.TRADE_LIQUIDITY_INDICATOR = EX.TRADE_LIQUIDITY_INDICATOR and TLI.EXCHANGE_ID = EXC.REAL_EXCHANGE_ID)
 		  left join dwh.d_ORDER_TYPE OT on OT.ORDER_TYPE_ID = CL.ORDER_TYPE_id
 		  left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE_id
+
 -- 		  left join dwh.CLIENT_ORDER_LEG_NUM LN on LN.ORDER_ID = CL.ORDER_ID
 -- 		  left join dwh.d_STRATEGY_IN SIT on (SIT.TRANSACTION_ID = CL.TRANSACTION_ID and SIT.STRATEGY_IN_TYPE_ID in ('Ab','H'))
-        select leg_number
+             left join lateral (
+select leg_number
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
               from dwh.client_order co
               where co.multileg_order_id = cl.multileg_order_id
