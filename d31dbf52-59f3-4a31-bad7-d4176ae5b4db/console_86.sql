@@ -19,13 +19,15 @@
 			UI.INSTRUMENT_TYPE_ID, --BaseAssetType
 			to_char(OC.MATURITY_MONTH, 'FM00')||'/'||to_char(OC.MATURITY_DAY, 'FM00')||'/'||OC.MATURITY_YEAR, --ExpirationDate 
 			OC.STRIKE_PRICE,
-			decode(OC.PUT_CALL,'0','P','C'), --TypeCode
+			case OC.PUT_CALL when '0' then 'P' else 'C' end, --TypeCode
 			case 
 			  when CL.SIDE = '1' and CL.OPEN_CLOSE = 'C' then 'BC'
-			  else decode(CL.SIDE,'1','B','2','S', '5','SS', '6', 'SS')
-			end,    
+			  when CL.SIDE = '1' then 'B'
+			      when CL.SIDE = '2' then 'S'
+			          when CL.SIDE in ('5', '6') then 'SS'
+			end,    -- Side
 
-			(select CO_NO_LEGS from CLIENT_ORDER where ORDER_ID = CL.CO_MULTILEG_ORDER_ID),  --LegCount
+			(select NO_LEGS from dwh.CLIENT_ORDER where ORDER_ID = CL.MULTILEG_ORDER_ID),  --LegCount
 			LN.LEG_NUMBER,  --LegNumber
 			'',  --OrderType
 			case
@@ -166,6 +168,15 @@
 		  left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE_id
 -- 		  left join dwh.CLIENT_ORDER_LEG_NUM LN on LN.ORDER_ID = CL.ORDER_ID
 -- 		  left join dwh.d_STRATEGY_IN SIT on (SIT.TRANSACTION_ID = CL.TRANSACTION_ID and SIT.STRATEGY_IN_TYPE_ID in ('Ab','H'))
+        select leg_number
+        from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
+              from dwh.client_order co
+              where co.multileg_order_id = cl.multileg_order_id
+                and co.create_date_id >= cl.create_date_id) x
+        where x.order_id = cl.order_id
+          and cl.multileg_order_id is not null
+        limit 1
+        ) rn on true
 		  where true
 --     and trunc(CL.CREATE_TIME) = date '2024-08-27'
 		    and cl.create_date_id = 20240827
