@@ -1,5 +1,6 @@
-select * from dash360.get_lp_eod_compliance(20240828, 'aostb01');
-create or replace function dash360.get_lp_eod_compliance(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4, in_firm text default 'aostb01')
+select count(*) from dash360.get_lp_socgen_compliance(20240828);
+select * from dash360.get_lp_socgen_compliance();
+create or replace function dash360.get_lp_socgen_compliance(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
     returns table (ret_row text)
     language plpgsql
 as
@@ -12,7 +13,7 @@ declare
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'get_lp_eod_compliance for ' || in_date_id::text || 'and firm' ||in_firm ||' STARTED ===',
+    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' STARTED ===',
                            0, 'O')
     into l_step_id;
 
@@ -229,8 +230,6 @@ from CLIENT_ORDER CL
          left join dwh.d_ORDER_TYPE OT on OT.ORDER_TYPE_ID = CL.ORDER_TYPE_id
          left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE_id
 
-    -- 		  left join dwh.CLIENT_ORDER_LEG_NUM LN on LN.ORDER_ID = CL.ORDER_ID
--- 		  left join dwh.d_STRATEGY_IN SIT on (SIT.TRANSACTION_ID = CL.TRANSACTION_ID and SIT.STRATEGY_IN_TYPE_ID in ('Ab','H'))
          left join lateral (
     select leg_number
     from (select order_id,
@@ -346,7 +345,7 @@ from CLIENT_ORDER CL
                             limit 1
     ) md on true
 where true
-  and cl.create_date_id = 20240827
+  and cl.create_date_id = in_date_id
   and AC.TRADING_FIRM_ID = 'LPTF286'
   and CL.MULTILEG_REPORTING_TYPE in ('1', '2')
 
@@ -357,7 +356,7 @@ where true
 --   and cl.order_id in (16861524498, 16862144103)
     ;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_lp_eod_compliance for ' || in_date_id::text || 'and firm' ||in_firm ||' temp table created ===',
+    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' temp table created ===',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -376,7 +375,7 @@ where true
         order by rec_type, order_status;
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'get_lp_eod_compliance for ' || in_date_id::text || 'and firm' ||in_firm ||' COMPLETED ===',
+    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' COMPLETED ===',
                            l_row_cnt, 'O')
     into l_step_id;
 
