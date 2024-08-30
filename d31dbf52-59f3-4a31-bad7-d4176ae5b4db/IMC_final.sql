@@ -2,7 +2,8 @@ call trash.so_imc_report_making(20240813);
 select * from trash.so_imc_report(20240808);
 -- add counts to
 -- drop function if exists trash.so_imc_report;
-
+select min(create_date_id) from dwh.gtc_order_status
+where close_date_id is null
 create or replace procedure trash.so_imc_report_making(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
     language plpgsql
 as
