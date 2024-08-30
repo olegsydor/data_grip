@@ -1,6 +1,7 @@
-select count(*) from dash360.get_lp_socgen_compliance(20240828);
-select * from dash360.get_lp_socgen_compliance();
-create or replace function dash360.get_lp_socgen_compliance(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
+select * from dash360.report_rps_lp_socgen_compliance(20240828, 20240829);
+select * from dash360.report_rps_lp_socgen_compliance();
+create or replace function dash360.report_rps_lp_socgen_compliance(in_start_date_id integer default get_dateid(current_date),
+                                                  in_end_date_id integer default get_dateid(current_date))
     returns table (ret_row text)
     language plpgsql
 as
@@ -13,8 +14,9 @@ declare
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' STARTED ===',
-                           0, 'O')
+    select public.load_log(l_load_id, l_step_id,
+                           'get_lp_socgen_compliance for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
+                           ' STARTED ===', 0, 'O')
     into l_step_id;
 
 create temp table t_report on commit drop as
@@ -205,6 +207,26 @@ select EX.ORDER_ID                     as rec_type,
                            to_char(md.mprl_bid_price, 'FM999999.0099') , --as BidR,
                            to_char(md.mprl_ask_price, 'FM999999.0099') , --as AskR,
                            md.mprl_ask_quantity::text , --as AskSzR,
+
+                           md.emld_bid_quantity::text , --as BidSzD,
+                           to_char(md.emld_bid_price, 'FM999999.0099') , --as BidD,
+                           to_char(md.emld_ask_price, 'FM999999.0099') , --as AskD,
+                           md.emld_ask_quantity::text , --as AskSzD,
+
+                           md.sphr_bid_quantity::text , --as BidSzS,
+                           to_char(md.sphr_bid_price, 'FM999999.0099') , --as BidS,
+                           to_char(md.sphr_ask_price, 'FM999999.0099') , --as AskS,
+                           md.sphr_ask_quantity::text , --as AskSzS,
+
+                           md.mxop_bid_quantity::text , --as BidSzU,
+                           to_char(md.mxop_bid_price, 'FM999999.0099') , --as BidU,
+                           to_char(md.mxop_ask_price, 'FM999999.0099') , --as AskU,
+                           md.mxop_ask_quantity::text , --as AskSzU,
+
+
+
+
+
                            '', --ULBidSz
                            '', --ULBid
                            '', --ULAsk
@@ -345,7 +367,7 @@ from CLIENT_ORDER CL
                             limit 1
     ) md on true
 where true
-  and cl.create_date_id = in_date_id
+  and cl.create_date_id between in_start_date_id and in_end_date_id
   and AC.TRADING_FIRM_ID = 'LPTF286'
   and CL.MULTILEG_REPORTING_TYPE in ('1', '2')
 
@@ -356,7 +378,7 @@ where true
 --   and cl.order_id in (16861524498, 16862144103)
     ;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' temp table created ===',
+    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_start_date_id::text || '-' || in_end_date_id::text || ' temp table created ===',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -367,7 +389,7 @@ where true
 			'Status|EnteredPrice|StatusPrice|EnteredQty|StatusQty|OrderID|ReplacedOrderID|CancelOrderID|ParentOrderID|SystemOrderID|ExecutionID|ExchangeCode|ExConnection|GiveUpFirm|CMTAFirm|AccountAlias|Account|SubAccount|SubAccount2|SubAccount3|'||
 			'OpenClose|Range|PriceQualifier|TimeQualifier|ExchangeTransactionID|ExchangeOrderID|MPID|Comment|BidSzA|BidA|AskA|AskSzA|BidSzZ|BidZ|AskZ|AskSzZ|BidSzB|BidB|AskB|AskSzB|BidSzC|BidC|AskC|AskSzC|BidSzW|BidW|AskW|AskSzW|'||
 			'BidSzT|BidT|AskT|AskSzT|BidSzI|BidI|AskI|AskSzI|BidSzP|BidP|AskP|AskSzP|BidSzM|BidM|AskM|AskSzM|BidSzH|BidH|AskH|AskSzH|BidSzQ|BidQ|AskQ|AskSzQ|BidSzX|BidX|AskX|AskSzX|BidSzE|BidE|AskE|AskSzE|BidSzJ|BidJ|AskJ|AskSzJ|'||
-			'BidSzR|BidR|AskR|AskSzR|ULBidSz|ULBid|ULAsk|ULAskSz';
+			'BidSzR|BidR|AskR|AskSzR|BidSzD|BidD|AskD|AskSzD|BidSzS|BidS|AskS|AskSzS|BidSzU|BidU|AskU|AskSzU|ULBidSz|ULBid|ULAsk|ULAskSz';
 
     return query
         select rec
@@ -375,7 +397,7 @@ where true
         order by rec_type, order_status;
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_date_id::text || ' COMPLETED ===',
+    select public.load_log(l_load_id, l_step_id, 'get_lp_socgen_compliance for ' || in_start_date_id::text || '-' || in_end_date_id::text || ' COMPLETED ===',
                            l_row_cnt, 'O')
     into l_step_id;
 
