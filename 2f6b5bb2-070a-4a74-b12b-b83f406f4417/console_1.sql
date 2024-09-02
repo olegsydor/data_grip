@@ -50,7 +50,7 @@ end;
 $fn$
 ;
 
-select aux.base32_to_bin('f8cr1bv80000');
+select char_length(aux.base32_to_bin('f8cr1bv80000'));
 select aux.hex_to_decimal(aux.base32_to_bin('f8cr1bv80000'));
 
 select to_hex('011 110 100 001 100 110 110 000 101 011 111 110 100 000 000 000 000 000 000 000'::bit(4))
