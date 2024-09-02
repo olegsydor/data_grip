@@ -55,4 +55,26 @@ select aux.hex_to_decimal(aux.base32_to_bin('f8cr1bv80000'));
 
 select to_hex('011 110 100 001 100 110 110 000 101 011 111 110 100 000 000 000 000 000 000 000'::bit(4))
 
-select 88888888888888888888::int8
+select 88888888888888888888::int8;
+
+
+select aux.base32_to_int8('gg3ldjio0000');
+create or replace function aux.base32_to_int8(in_string text)
+    returns int8
+    language plpgsql
+as
+$$
+declare
+    base_string text := '0123456789abcdefghijklmnopqrstuv';
+    each_char   char;
+    ret_result  int8 := 0;
+
+begin
+    foreach each_char in array regexp_split_to_array(lower(in_string), '')
+        loop
+            ret_result = ret_result * 32;
+            ret_result = ret_result + (position(each_char in base_string) - 1);
+        end loop;
+    return ret_result;
+end;
+$$
