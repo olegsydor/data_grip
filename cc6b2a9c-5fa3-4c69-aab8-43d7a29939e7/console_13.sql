@@ -15,4 +15,6 @@ VALUES ('ISEF', '56', 'Simple Exposure Order - Subsequent', NULL, 4, 'N', curren
 INSERT INTO GENESIS2.LIQUIDITY_INDICATOR
 (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, "COMMENT", LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY, CREATE_TIME)
 VALUES ('ISEF', '57', 'Simple Exposure Order - Responder', NULL, 4, 'N', current_timestamp);
-commit
+commit;
+
+
