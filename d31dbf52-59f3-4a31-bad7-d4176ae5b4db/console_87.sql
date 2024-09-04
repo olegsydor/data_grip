@@ -57,4 +57,4 @@ begin
 end;
 $fx$;
 
-select * from dash360.report_fintech_eod_goldman_6(20240901, 20240903)
+select * from dash360.report_fintech_eod_goldman_6(20240903, 20240903)
