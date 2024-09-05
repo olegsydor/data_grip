@@ -45,8 +45,8 @@ begin
                  join dwh.d_instrument di on di.instrument_id = tr.instrument_id
                  left join dwh.d_option_contract oc on (oc.instrument_id = tr.instrument_id)
         where tr.date_id between in_start_date_id and in_end_date_id
---           and a.account_name = 'OFPGS_0001'
-      	and a.account_name = '0007BYV'
+          and a.account_name = 'OFPGS_0001'
+--       	and a.account_name = '0007BYV'
           and tr.instrument_type_id = 'O'
           and tr.is_busted = 'N'
         order by a.account_name, di.symbol, tr.side;
