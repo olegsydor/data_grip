@@ -106,3 +106,32 @@ begin
 end;
 $$;
 
+CREATE TABLE aux.your_table_name (
+    START_TIME TIMESTAMP,
+    START_DATE_ID INT GENERATED ALWAYS AS (EXTRACT(YEAR FROM START_TIME) * 10000 +
+                                           EXTRACT(MONTH FROM START_TIME) * 100 +
+                                           EXTRACT(DAY FROM START_TIME)) STORED
+);
+
+select * from aux.your_table_name
+alter table aux.your_table_name add column i int4;
+
+select * from aux.your_table_name
+
+insert into aux.your_table_name (start_time, i) values (clock_timestamp(), 1);
+
+alter table aux.your_table_name add column     START_DATE_ID_V INT GENERATED ALWAYS AS
+    (EXTRACT(YEAR FROM START_TIME) * 10000 +
+     EXTRACT(MONTH FROM START_TIME) * 100 +
+     EXTRACT(DAY FROM START_TIME)) VIRTUAL;
+
+select version()
+
+
+CREATE TABLE your_table_name (
+    START_TIME TIMESTAMP,
+    START_DATE_ID INT GENERATED ALWAYS AS
+    (EXTRACT(YEAR FROM START_TIME) * 10000 +
+     EXTRACT(MONTH FROM START_TIME) * 100 +
+     EXTRACT(DAY FROM START_TIME)) VIRTUAL
+);
