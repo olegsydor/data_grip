@@ -19,6 +19,7 @@ select fex.*, case when md5_before = md5(rt.routine_definition) then 'ok' else '
 from trash.so_fix_execution_column_text_ fex
          join lateral (select routine_definition
                        from information_schema.routines
-                       where routines.routine_schema = fex.routine_schema and routines.routine_name = fex.routine_name
+                       where routines.routine_schema = fex.routine_schema
+                         and routines.routine_name = fex.routine_name
                        limit 1) rt on true
-where new_script = '';
+where new_script is null;
