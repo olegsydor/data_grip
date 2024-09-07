@@ -40,7 +40,7 @@ where exchange_id = 'ISE'
   and trade_liquidity_indicator in ('1', '2');
 
 select * from LIQUIDITY_INDICATOR
-where exchange_id = 'ISEF'
+where exchange_id = 'ISE'
 order by CAST(TRADE_LIQUIDITY_INDICATOR AS integer);
 
 insert into LIQUIDITY_INDICATOR (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, "COMMENT", LIQUIDITY_INDICATOR_TYPE_ID)

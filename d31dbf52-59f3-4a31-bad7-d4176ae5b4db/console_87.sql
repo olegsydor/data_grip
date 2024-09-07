@@ -57,4 +57,27 @@ begin
 end;
 $fx$;
 
-select * from dash360.report_fintech_eod_goldman_6(20240903, 20240903)
+select * from dash360.report_fintech_eod_goldman_6(20240903, 20240903);
+
+select * from dwh.d_liquidity_indicator
+where exchange_id in ('ISE', 'ISEF')
+and is_active
+order by exchange_id, trade_liquidity_indicator::int;
+
+update dwh.d_liquidity_indicator
+set is_active = false,
+    end_date  = current_date
+where is_active
+  and exchange_id = 'ISE'
+  and trade_liquidity_indicator in ('C', 'H', 'M', 'O', 'R', 'T', 'X');
+
+
+select description, is_grey, liquidity_indicator_type_id, trade_liquidity_indicator from dwh.d_liquidity_indicator
+where exchange_id in ('ISEF')
+and is_active
+and trade_liquidity_indicator = '5'
+union
+select description, is_grey, liquidity_indicator_type_id, trade_liquidity_indicator from dwh.d_liquidity_indicator
+where exchange_id in ('ISE')
+and is_active
+and trade_liquidity_indicator = '5'
