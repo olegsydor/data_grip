@@ -33,4 +33,5 @@ where chk = 'ok'
   and new_script is null
 ;
 
-
+select * from trash.so_fix_execution_column_text_
+where routine_name = 'report_ctc_risk_alert_limit_email'
