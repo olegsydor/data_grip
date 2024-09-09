@@ -9,8 +9,8 @@ where execution.exch_exec_id = '40711000000002900000';
 
 
 select
-       tr.order_process_time::date,
-       tr.order_process_time::time,
+       to_char(tr.order_process_time, 'YYYY-MM-DD'), -- as Trade date
+       to_char(tr.order_process_time, 'HH24:MI:SS.')
        -- SYMBOL
        di.symbol,                                                                      -- as "SYMBOL",
        ui.symbol,                                                                      -- underlying_symbol
