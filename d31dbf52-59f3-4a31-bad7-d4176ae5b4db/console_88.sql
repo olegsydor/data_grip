@@ -149,3 +149,116 @@ $fx$;
 select * from dash360.report_eod_alpaca_equity_retail(in_start_date_id := 20240901, in_end_date_id := 20240909);
 
 
+------------------------------------
+
+select co.create_time,
+       'APC4' as "Client Short Name",
+       'APC4' as "Reporting Client MPID",
+
+          ac.account_name,
+          co.sub_strategy_desc
+          --, dts.target_strategy_desc
+          --, co.eq_order_capacity
+          --, co.customer_or_firm_id
+          , cof.customer_or_firm_name
+          , co.client_order_id
+          , co.order_qty
+          , tr.cum_qty as executed_qty
+          , case when co.multileg_reporting_type = '2' then 'Y' else 'N' end as is_mleg
+          , case when co.cross_order_id is not null then 'Y' else 'N' end as is_cross
+          --, co.*
+        from dwh.client_order co
+          left join dwh.d_account ac
+            on co.account_id = ac.account_id
+          --left join dwh.d_target_strategy dts
+          --  on co.sub_strategy_id = dts.target_strategy_id
+          left join dwh.d_instrument di
+            on co.instrument_id = di.instrument_id
+          left join dwh.d_customer_or_firm cof
+            on co.customer_or_firm_id = cof.customer_or_firm_id
+          left join lateral
+            (
+              select tr.order_id, sum(tr.last_qty) as cum_qty
+              from dwh.flat_trade_record tr
+              where tr.date_id between l_start_date_id and l_end_date_id -- 20220118 and 20220118 --
+                and tr.order_id = co.order_id
+                and tr.is_busted = 'N'
+              group by tr.order_id
+              limit 1
+            ) tr on true
+        where co.create_date_id between l_start_date_id and l_end_date_id -- 20220118 and 20220118 --
+          and co.account_id in (select account_id from dwh.d_account ac where ac.trading_firm_id = any (l_trading_firm_ids))
+          and co.trans_type <> 'F'
+          and co.multileg_reporting_type in ('1','2')
+          and co.parent_order_id is null -- only parent orders have target_strategy
+          and di.instrument_type_id = 'O';
+
+
+select co.create_time,
+       'APC4' as "Client Short Name",
+       'APCA' as "Reporting Client MPID",
+       di.symbol,
+       ftr.side,
+ ftr.last_px,
+ ftr.last_qty,
+ -- Contra Name,
+ -- RLi
+        li.trade_liquidity_indicator as "Li",
+        
+sub_strategy_desc,
+null as "Custom Algo",
+left(fmj.fix_message->>'9002',6) as "Urgency Code",
+ftr.exch_exec_id,
+''
+	from dwh.client_order co
+	    join dwh.flat_trade_record ftr on ftr.order_id = co.order_id and ftr.date_id = co.create_date_id
+	             left join dwh.d_liquidity_indicator li on li.exchange_id = ftr.exchange_id and
+                                                   li.trade_liquidity_indicator = ftr.trade_liquidity_indicator and
+                                                   li.is_active
+	join dwh.d_instrument di on di.instrument_id = ftr.instrument_id
+	left join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
+left join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
+	where co.ex_destination = 'ALGO'
+	  and co.create_date_id between :l_start_date_id and :l_end_date_id
+	  and i.instrument_type_id = 'E'
+	and co.multileg_reporting_type ='1'
+
+
+from dwh.flat_trade_record tr
+         left join dwh.d_account ac
+                   on tr.account_id = ac.account_id
+    --left join dwh.d_target_strategy dts
+    --  on co.sub_strategy_id = dts.target_strategy_id
+         left join dwh.d_instrument di
+                   on tr.instrument_id = di.instrument_id
+         left join dwh.d_liquidity_indicator li on li.exchange_id = tr.exchange_id and
+                                                   li.trade_liquidity_indicator = tr.trade_liquidity_indicator and
+                                                   li.is_active
+         left join dwh.sub_strategy ds
+--           left join dwh.d_customer_or_firm cof
+--             on tr.customer_or_firm_id = cof.customer_or_firm_id
+where tr.date_id between :l_start_date_id and :l_end_date_id
+  --   and ac.trading_firm_id = 'OFT0068'
+  and ac.trading_firm_id = 'mirae'
+  and tr.instrument_type_id = 'E'
+  and tr.is_busted = 'N'
+
+/*
+
+
+ */
+ select order_id from trash.gtc_base_modif
+ except
+ select order_id from trash.so_gtc_missed_close
+ except
+ select order_id from trash.gtc_base_modif;
+select * from dwh.gtc_order_status
+
+update dwh.gtc_order_status gtc
+set close_date_id  = base.close_date_id,
+    db_update_time = clock_timestamp(),
+    closing_reason = base.closing_reason,
+    order_status   = base.order_status
+from trash.gtc_base_modif base
+where gtc.order_id = base.order_id
+  and gtc.close_date_id is null;
