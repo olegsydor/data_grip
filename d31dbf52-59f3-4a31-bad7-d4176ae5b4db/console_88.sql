@@ -194,34 +194,37 @@ select co.create_time,
           and di.instrument_type_id = 'O';
 
 
-select co.create_time,
-       'APC4' as "Client Short Name",
-       'APCA' as "Reporting Client MPID",
+select to_char(co.create_time, 'DD/MM/YYYY')                                            as "Load Date",
+       'APC4'                                                                           as "Client Short Name",
+       'APCA'                                                                           as "Reporting Client MPID",
        di.symbol,
        ftr.side,
- ftr.last_px,
- ftr.last_qty,
- -- Contra Name,
- -- RLi
-        li.trade_liquidity_indicator as "Li",
-        
-sub_strategy_desc,
-null as "Custom Algo",
-left(fmj.fix_message->>'9002',6) as "Urgency Code",
-ftr.exch_exec_id,
-''
-	from dwh.client_order co
-	    join dwh.flat_trade_record ftr on ftr.order_id = co.order_id and ftr.date_id = co.create_date_id
-	             left join dwh.d_liquidity_indicator li on li.exchange_id = ftr.exchange_id and
+       ftr.last_px,
+       ftr.last_qty,
+       -- Contra Name,
+       -- RLi
+       li.trade_liquidity_indicator                                                     as "Li",
+       to_char(ftr.last_px * ftr.last_qty, 'FM09999999V990')                            as "Amount",
+       to_char(ftr.trade_record_time at time zone 'America/New_York', 'HH24:MI:SS.FF3') as "Exec Time EST",
+       co.client_order_id                                                               as "Client Order ID",
+       sub_strategy_desc                                                                as "Target Strategy Name",
+       null                                                                             as "Custom Algo",
+       left(fmj.fix_message ->> '9002', 6)                                              as "Urgency Code",
+       ftr.exch_exec_id                                                                 as "External Exec ID"
+from dwh.client_order co
+         join dwh.flat_trade_record ftr on ftr.order_id = co.order_id and ftr.date_id = co.create_date_id
+         join dwh.d_account ac on ac.account_id = ftr.account_id
+         join dwh.d_instrument di on di.instrument_id = ftr.instrument_id
+         left join dwh.d_liquidity_indicator li on li.exchange_id = ftr.exchange_id and
                                                    li.trade_liquidity_indicator = ftr.trade_liquidity_indicator and
                                                    li.is_active
-	join dwh.d_instrument di on di.instrument_id = ftr.instrument_id
-	left join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
-left join fix_capture.fix_message_json fmj on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
-	where co.ex_destination = 'ALGO'
-	  and co.create_date_id between :l_start_date_id and :l_end_date_id
-	  and i.instrument_type_id = 'E'
-	and co.multileg_reporting_type ='1'
+
+         left join fix_capture.fix_message_json fmj
+                   on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
+where co.ex_destination = 'ALGO'
+  --   and ac.trading_firm_id = 'OFT0068'
+  and ac.trading_firm_id = 'mirae'
+  and co.create_date_id between :l_start_date_id and :l_end_date_id;
 
 
 from dwh.flat_trade_record tr
@@ -243,16 +246,15 @@ where tr.date_id between :l_start_date_id and :l_end_date_id
   and tr.instrument_type_id = 'E'
   and tr.is_busted = 'N'
 
-/*
+select * from dwh.execution;
 
 
- */
  select order_id from trash.gtc_base_modif
  except
  select order_id from trash.so_gtc_missed_close
  except
  select order_id from trash.gtc_base_modif;
-select * from dwh.gtc_order_status
+select * from dwh.gtc_order_status;
 
 update dwh.gtc_order_status gtc
 set close_date_id  = base.close_date_id,
@@ -262,3 +264,5 @@ set close_date_id  = base.close_date_id,
 from trash.gtc_base_modif base
 where gtc.order_id = base.order_id
   and gtc.close_date_id is null;
+
+select * from dwh.gtc_order_status
