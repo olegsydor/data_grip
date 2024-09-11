@@ -29,7 +29,7 @@ with base as (select fex.*, case when md5_before = md5(rt.routine_definition) th
 )
 select *
 from base
-where chk = 'ok'
+where chk != 'ok'
   and new_script is null
 ;
 
