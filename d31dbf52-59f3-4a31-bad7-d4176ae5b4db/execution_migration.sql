@@ -34,4 +34,4 @@ where chk = 'ok'
 ;
 
 select * from trash.so_fix_execution_column_text_
-where routine_name like 'report_hkb_order_blotter%'
+where routine_name like 'eod_parallax_execution%'
