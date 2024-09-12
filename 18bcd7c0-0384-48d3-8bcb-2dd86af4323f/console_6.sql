@@ -1,0 +1,4 @@
+CREATE INDEX hft_fix_message_event_2024091_eod_orig_cl_ord_id_msg_type_date_idx1 ON partitions.hft_fix_message_event_20240911_eod USING btree (orig_cl_ord_id) INCLUDE (msg_type, date_id, cl_ord_id);
+CREATE INDEX hft_fix_message_event_20240911_eod_load_batch_id_idx ON partitions.hft_fix_message_event_20240911_eod USING btree (load_batch_id);
+CREATE INDEX hft_fix_message_event_20240911_eod_alternative_cl_ord_id_idx ON partitions.hft_fix_message_event_20240911_eod USING btree (alternative_cl_ord_id);
+CREATE INDEX hft_fix_message_event_2024091_eod_cl_ord_id_msg_type_exec_type_idx1 ON partitions.hft_fix_message_event_20240911_eod USING btree (cl_ord_id, msg_type, exec_type) INCLUDE (date_id, account_name);
