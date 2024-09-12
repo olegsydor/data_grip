@@ -29,9 +29,9 @@ with base as (select fex.*, case when md5_before = md5(rt.routine_definition) th
 )
 select *
 from base
-where chk != 'ok'
+where chk = 'ok'
   and new_script is null
 ;
-
+--
 select * from trash.so_fix_execution_column_text_
-where routine_name like 'eod_parallax_execution%'
+where execution_order is null

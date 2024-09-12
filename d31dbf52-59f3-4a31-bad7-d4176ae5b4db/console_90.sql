@@ -4,15 +4,15 @@ CREATE FUNCTION trash.adh_ml_broadcort_clearing_equity(in_date_id integer DEFAUL
                                                        in_file_name character varying DEFAULT 'BCT221XA'::character varying)
     RETURNS TABLE
             (
-               ret_row text
+                ret_row text
             )
     LANGUAGE plpgsql
 AS
 $function$
 declare
-    l_date_id   int;
-    l_file_name varchar;
-        l_load_id     int;
+    l_date_id     int;
+    l_file_name   varchar;
+    l_load_id     int;
     l_row_cnt     int;
     l_step_id     int;
     l_account_ids int4[];
@@ -28,22 +28,24 @@ begin
     into l_step_id;
 
     return query
-    select 'title';
+        select 'title';
 
     return query
-        select rpad(q.account_number, 8, ' '), -- as account_number,
-               'S', -- as sec_id_type,
-               q.sec_id, -- as sec_id
-               '4'                                                                as price_code_type,
-               round(sum(q.quantity * q.unit_price) / sum(q.quantity), unit_price_decimal) as unit_price,
-               sum(q.quantity)                                                             as quantity,
-               q.settle_date,
-               q.trade_date,
-               q.buy_sell_ind,
-               q.short_ind                                                                 as short_ind,
-               '8Z'::varchar                                                               as origin_exchange,
-               '0'::varchar                                                                as trade_action,
-               (case when sum(q.commission_amount) > 0 then '7' else '2' end)::varchar     as commission_type,
+        select rpad(q.account_number, 8, ' '),                               -- as account_number, #1-8
+               'S',                                                          -- as sec_id_type, #9-9
+               rpad(q.sec_id, 24, ' '),                                      -- as sec_id, #10-31 + #32-33
+               '4',                                                          -- as price_code_type, #34-34
+               lpad(round(sum(q.quantity * q.unit_price) / sum(q.quantity), unit_price_decimal)::text, 11,
+                    '0'),                                                    -- as unit_price, #35-45
+               lpad(sum(q.quantity)::text, 9, '0'),                          -- as quantity, #46-54
+               rpad(q.settle_date, 8, ' '),                                  -- as settle_date, #55-62
+               rpad(q.trade_date, 8, ' '),                                   -- as trade_date, #63-70
+               lpad(q.buy_sell_ind, 1, ' '),                                 -- as buy_sell_ind, #71-71
+               lpad(q.short_ind, 6, ' '),                                    -- as short_ind, #72-72 + #73-77
+               '8Z'::text,                                                   -- as origin_exchange,
+               lpad('', 8, ' '),                                             -- as nothing #80-89
+               '0'::text,                                                    -- as trade_action, #90-90
+               case when sum(q.commission_amount) > 0 then '7' else '2' end, -- as commission_type, #91-91
                case
                    when q.account_number in ('3Q802F21', '3Q802F30', '3Q830065') then
                        coalesce(nullif(round(sum(q.commission_amount), 2), 0), 0.01) -- Set minimum commission for certain ML accounts
@@ -58,49 +60,49 @@ begin
                                end
                            ), 2)
                    else round(sum(q.commission_amount), 2)
-                   end                                                                     as commission_amount,
-               --round(sum(q.commission_amount), 2) as commission_amount,
-               '3Q800797'::varchar                                                         as opposing_account,
-               '4'::varchar                                                                as nbr_misc_trailers,
-               '2'::varchar                                                                as ae_credit_type,
-               '0000'::varchar                                                             as financial_consultannt_nbr,
-               '1'::varchar                                                                as exchang_1,
-               '00'::varchar                                                               as percent_1,
-               q.acted_as_ind,
-               null::varchar                                                               as automated_trade_ind,
-               null::varchar                                                               as tif_sec_fe_spp_rsn_cd,
-               null::varchar                                                               as blue_sheet_acct_typ_ind,
-               '160000'::varchar                                                           as exec_time,
-               'Y'::varchar                                                                as taf_exemption_ind,
-               null::varchar                                                               as td_xtnl_cli_rf_no
+                   end,                                                      -- as commission_amount,
+               --round(sum(q.commission_amount), 2), -- ascommission_amount,
+               '3Q800797',                                                   -- as opposing_account,
+               '4',                                                          -- as nbr_misc_trailers,
+               '2',                                                          -- as ae_credit_type,
+               '0000',                                                       -- as financial_consultannt_nbr,
+               '1',                                                          -- as exchang_1,
+               '00',                                                         -- as percent_1,
+               q.acted_as_ind,                                               -- as acted_as_ind,
+               null::text,                                                   -- as automated_trade_ind,
+               null::text,                                                   -- as tif_sec_fe_spp_rsn_cd,
+               null::text,                                                   -- as blue_sheet_acct_typ_ind,
+               '160000',                                                     -- as exec_time,
+               'Y',                                                          -- as taf_exemption_ind,
+               null::text                                                    -- as td_xtnl_cli_rf_no
         from (select
                   --null::varchar as entity,
                   case
                       --when a.account_name in ('SAXOPROPCROSS', 'SAXORET') then a.account_name
                       when a.account_name in ('CIC3921C', 'CICMARCHES', 'ITAC') then tr.client_order_id
                       else null
-                      end::varchar                                                                         as entity,
+                      end::varchar                                   as entity,
                   a.account_name,
                   case
                       when a.trading_firm_id = 'rhumba01'
                           then coalesce(c2a.ml_account, mb.ml_account) --Rhumbline Advisers
                       else mb.ml_account
-                      end::varchar                                                                         as account_number,
-                  replace(hsd.display_instrument_id, ' ', '')::varchar                                     as sec_id,
-                  tr.last_px                                                                               as unit_price,
-                  last_qty                                                                                 as quantity,
+                      end::varchar                                   as account_number,
+                  replace(hsd.display_instrument_id, ' ', '')::text  as sec_id,
+                  tr.last_px                                         as unit_price,
+                  last_qty                                           as quantity,
                   to_char(public.get_settle_date_by_instrument_type(tr.trade_record_time::date, tr.instrument_type_id),
-                          'YYYYMMDD')::varchar                                                             as settle_date,
-                  to_char(tr.trade_record_time, 'YYYYMMDD')::varchar                                       as trade_date,
+                          'YYYYMMDD')::varchar                       as settle_date,
+                  to_char(tr.trade_record_time, 'YYYYMMDD')::varchar as trade_date,
                   (case
                        when tr.side = '1' then '1'
                        when tr.side in ('2', '5', '6')
-                           then '2' end)::varchar                                                          as buy_sell_ind,
+                           then '2' end)::varchar                    as buy_sell_ind,
                   --null::varchar as short_ind,
                   case
                       when tr.side in ('5', '6') then '1'
                       else null
-                      end::varchar                                                                         as short_ind,
+                      end::varchar                                   as short_ind,
                   case
                       when a.account_name in ('VANECK', 'VANECKPT', 'VANECKPTSP') then
                           (
@@ -139,8 +141,8 @@ begin
                       when mb.commission_type = '2' and mb.commission_rate is not null
                           then mb.commission_rate * tr.principal_amount
                       else coalesce(tr.tcce_account_dash_commission_amount, tr.tcce_firm_dash_commission_amount, 0.0)
-                      end                                                                                  as commission_amount,
-                  coalesce(a.eq_order_capacity, 'A')::varchar                                              as acted_as_ind,
+                      end                                            as commission_amount,
+                  coalesce(a.eq_order_capacity, 'A')::varchar        as acted_as_ind,
                   mb.unit_price_decimal
               from dwh.flat_trade_record tr
                        join fintech_reports.ml_broadcort_booking mb on (
@@ -162,28 +164,28 @@ begin
 
               union all
 
-              select tr.trading_firm_id                                                                             as entity,
+              select tr.trading_firm_id                                   as entity,
                      a.account_name,
-                     '3Q801987'::varchar                                                                            as account_number,
-                     replace(hsd.display_instrument_id, ' ', '')::varchar                                           as sec_id,
-                     tr.last_px                                                                                     as unit_price,
-                     last_qty                                                                                       as quantity,
+                     '3Q801987'::varchar                                  as account_number,
+                     replace(hsd.display_instrument_id, ' ', '')::varchar as sec_id,
+                     tr.last_px                                           as unit_price,
+                     last_qty                                             as quantity,
                      to_char(public.get_settle_date_by_instrument_type(tr.trade_record_time::date,
                                                                        tr.instrument_type_id),
-                             'YYYYMMDD')::varchar                                                                   as settle_date,
-                     to_char(tr.trade_record_time, 'YYYYMMDD')::varchar                                             as trade_date,
+                             'YYYYMMDD')::varchar                         as settle_date,
+                     to_char(tr.trade_record_time, 'YYYYMMDD')::varchar   as trade_date,
                      (case
                           when tr.side = '1' then '1'
                           when tr.side in ('2', '5', '6')
-                              then '2' end)::varchar                                                                as buy_sell_ind,
+                              then '2' end)::varchar                      as buy_sell_ind,
                      --null::varchar as short_ind,
                      case
                          when tr.side in ('5', '6') then '1'
                          else null
-                         end::varchar                                                                               as short_ind,
-                     0.0 * tr.last_qty                                                                              as commission_amount,
-                     coalesce(a.eq_order_capacity, 'A')::varchar                                                    as acted_as_ind,
-                     4                                                                                              as unit_price_decimal
+                         end::varchar                                     as short_ind,
+                     0.0 * tr.last_qty                                    as commission_amount,
+                     coalesce(a.eq_order_capacity, 'A')::varchar          as acted_as_ind,
+                     4                                                    as unit_price_decimal
               from dwh.flat_trade_record tr
                        join dwh.d_account a on (a.account_id = tr.account_id)
                        join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
@@ -201,4 +203,6 @@ end;
 $function$
 ;
 
-select rpad('os', 8, ' ') || 'eol'
+select rpad('os', 8, ' ') || 'eol';
+select lpad(round(1.005, 2)::text, 11, '0')
+lpad('', 8, ' '), -- as nothing
