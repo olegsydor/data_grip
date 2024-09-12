@@ -196,8 +196,19 @@ begin
     group by q.entity, q.account_number, q.sec_id, q.settle_date, q.trade_date, q.buy_sell_ind, q.short_ind,
              q.acted_as_ind, q.unit_price_decimal;
 
-        return query
-        select 'title';
+    return query
+        select rpad(l_file_name, 8) || -- 1-8
+               lpad('', 2) || -- 9-10
+               'ENTRY DATE: ' || -- 11-22
+               to_char(current_date, 'YYYYMMDD') || -- 23-30
+               ' ' || -- 31-31
+               to_char(clock_timestamp(), 'HH24MI') || -- 32-35
+               lpad('', 14) || -- 36-49
+               'E' || -- 50-50
+               '  1' || -- 51-53
+               ' ' || -- 54-54
+               lpad('', 5) || -- 55-59
+               lpad('', 941); -- 60-1000
 
     return query
         select rpad(q.account_number, 8) || -- 1-8
@@ -205,7 +216,7 @@ begin
                rpad(q.sec_id, 22) || -- 10-31
                lpad('', 2) || -- 32-33
                price_code_type || -- 34-34
-               lpad(q.unit_price::text, 11, '0') || -- 35-45
+               lpad(round(q.unit_price * 1000000)::text, 11, '0') || -- 35-45
                lpad(q.quantity::text, 9, '0') || -- 46-54
                lpad(settle_date, 8, ' ') || -- 55-62
                lpad(trade_date, 8, ' ') || -- 63-70
@@ -216,16 +227,16 @@ begin
                lpad('', 10) || -- 80-89
                trade_action || -- 90-90
                commission_type || -- 91-91
-               lpad(q.commission_amount::text, 9, '0') || -- 92-100
+               lpad(round(q.commission_amount * 100)::text, 9, '0') || -- 92-100
                opposing_account || -- 101-108
                nbr_misc_trailers || -- 109-109
                lpad('', 3) || -- 110-112
                ae_credit_type || -- 113-113
                lpad('', 9) || -- 114-122
-               lpad('', 4) || -- 123-126
+               lpad(q.financial_consultannt_nbr, 4) || -- 123-126
                lpad('', 5) || -- 127-131
-               ' ' || -- 132-132
-               percent_1 || -- 133-134
+               q.exchang_1 || -- 132-132
+               q.percent_1 || -- 133-134
                lpad('', 13) || -- 135-147
                acted_as_ind || -- 148-148
                lpad(automated_trade_ind, 1) || -- 149-149
@@ -243,11 +254,14 @@ begin
                ' ' || -- 520-520
                taf_exemption_ind || -- 521-521
                lpad('', 284) || -- 522-805
-               lpad(td_xtnl_cli_rf_no, 20) || -- 806-825
+               lpad('A' || to_char(now(), 'YYYYMMDDHH24MISS') || lpad((row_number() over ())::text, 5, '0'), 20) || -- 806-825
                lpad('', 175) -- 826-1000
-
         from t_equity q
         order by q.trade_date, q.account_number, q.sec_id, q.buy_sell_ind;
+
+
 end;
 $function$
 ;
+
+select clock_timestamp(), now()
