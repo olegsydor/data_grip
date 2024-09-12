@@ -182,14 +182,14 @@ where gos.close_date_id is null
 --                                                                                        gos.create_date_id) ) l on true
 -- where gos.close_date_id is null
 --   and create_date_id = 20240830;
-insert into trash.sy_gtc_cache
-select l.*
-from gtc_order_status gos
-         inner join lateral (select *
-                             from trash.order_blotter_fix_messages_chain_by_order_dmp2(gos.order_id,
-                                                                                       gos.create_date_id) ) l on true
-where gos.close_date_id is null
-  and create_date_id = 20240903;
+-- insert into trash.sy_gtc_cache
+-- select l.*
+-- from gtc_order_status gos
+--          inner join lateral (select *
+--                              from trash.order_blotter_fix_messages_chain_by_order_dmp2(gos.order_id,
+--                                                                                        gos.create_date_id) ) l on true
+-- where gos.close_date_id is null
+--   and create_date_id = 20240903;
 insert into trash.sy_gtc_cache
 select l.*
 from gtc_order_status gos
