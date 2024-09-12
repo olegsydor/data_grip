@@ -1,38 +1,40 @@
 -- DROP FUNCTION fintech_reports.adh_ml_broadcort_clearing_equity(int4, varchar);
 
-CREATE FUNCTION trash.adh_ml_broadcort_clearing_equity(in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
-                                                       in_file_name character varying DEFAULT 'BCT221XA'::character varying)
-    RETURNS TABLE
+create function dash360.report_fintech_ml_bct221x(in_file_name text default 'BCT221XA',
+                                                  in_start_date_id int4 default get_dateid(current_date),
+                                                  in_end_date_id int4 default get_dateid(current_date))
+    returns table
             (
                 ret_row text
             )
-    LANGUAGE plpgsql
-AS
+    language plpgsql
+as
 $function$
 declare
-    l_date_id     int;
-    l_file_name   varchar;
-    l_load_id     int;
-    l_row_cnt     int;
-    l_step_id     int;
 
-    l_nothing text := ' ';
+    l_file_name varchar;
+    l_load_id   int;
+    l_row_cnt   int;
+    l_step_id   int;
+
 begin
-    l_date_id := in_date_id;
+
     l_file_name := in_file_name;
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id,
-                           'adh_ml_broadcort_clearing_equity for ' || l_date_id::text || 'and file ' ||
-                           l_file_name::text || ' STARTED ===', 0, 'O')
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, 'report_fintech_ml_bct221x for ' || in_start_date_id::text || '-' ||
+                                                 in_end_date_id::text || ' and file ' || l_file_name || ' STARTED ===',
+                           0, 'O')
     into l_step_id;
--- drop table t_equity;
+-- EQUITY PART
     create temp table t_equity /*on commit drop*/ as
     select q.account_number,
            'S'                                                                         as sec_id_type,
            q.sec_id,
-           '4'                                                                as price_code_type,
+           '4'                                                                         as price_code_type,
            round(sum(q.quantity * q.unit_price) / sum(q.quantity), unit_price_decimal) as unit_price,
            sum(q.quantity)                                                             as quantity,
            q.settle_date,
@@ -91,10 +93,10 @@ begin
                       'YYYYMMDD')::varchar                       as settle_date,
               to_char(tr.trade_record_time, 'YYYYMMDD')::varchar as trade_date,
               case
-                   when tr.side = '1' then '1'
-                   when tr.side in ('2', '5', '6')
-                       then '2'
-                  else '' end                    as buy_sell_ind,
+                  when tr.side = '1' then '1'
+                  when tr.side in ('2', '5', '6')
+                      then '2'
+                  else '' end                                    as buy_sell_ind,
               --null::varchar as short_ind,
               case
                   when tr.side in ('5', '6') then '1'
@@ -153,8 +155,8 @@ begin
                    join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
                    left join fintech_reports.client_id2ml_account c2a
                              on (upper(c2a.client_id) = upper(tr.client_id))
-          where mb.file_name = :l_file_name
-            and tr.date_id = :l_date_id
+          where mb.file_name = l_file_name
+            and tr.date_id between in_start_date_id and in_end_date_id
             and tr.instrument_type_id = 'E'
             and tr.is_busted = 'N'
             and hsd.symbol not in ('ZVZZT')
@@ -187,15 +189,16 @@ begin
                    join dwh.d_account a on (a.account_id = tr.account_id)
                    join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
                    join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
-          where tr.date_id = :l_date_id
+          where tr.date_id between in_start_date_id and in_end_date_id
             and tr.instrument_type_id = 'E'
             and tr.is_busted = 'N'
             and tr.trading_firm_id in ('pegasus', 'fnyqsg', 'fnyinva01') --'fnyglob01'
             and hsd.symbol not in ('ZVZZT')
-            and :l_file_name = 'BCT221XA') as q
+            and l_file_name = 'BCT221XA') as q
     group by q.entity, q.account_number, q.sec_id, q.settle_date, q.trade_date, q.buy_sell_ind, q.short_ind,
              q.acted_as_ind, q.unit_price_decimal;
 
+-- TITLE
     return query
         select rpad(l_file_name, 8) || -- 1-8
                lpad('', 2) || -- 9-10
@@ -208,8 +211,9 @@ begin
                '  1' || -- 51-53
                ' ' || -- 54-54
                lpad('', 5) || -- 55-59
-               lpad('', 941); -- 60-1000
-
+               lpad('', 941);
+    -- 60-1000
+-- EQUITY
     return query
         select rpad(q.account_number, 8) || -- 1-8
                q.sec_id_type || -- 9-9
@@ -254,10 +258,171 @@ begin
                ' ' || -- 520-520
                taf_exemption_ind || -- 521-521
                lpad('', 284) || -- 522-805
-               lpad('A' || to_char(now(), 'YYYYMMDDHH24MISS') || lpad((row_number() over ())::text, 5, '0'), 20) || -- 806-825
+               lpad('A' || to_char(now(), 'YYYYMMDDHH24MISS') ||
+                    lpad((row_number() over (order by q.trade_date, q.account_number, q.sec_id, q.buy_sell_ind))::text,
+                         5, '0'), 20) || -- 806-825
                lpad('', 175) -- 826-1000
         from t_equity q
         order by q.trade_date, q.account_number, q.sec_id, q.buy_sell_ind;
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'report_fintech_ml_bct221x EQUITY for ' || in_start_date_id::text || '-' ||
+                                                 in_end_date_id::text || ' and file ' || l_file_name || ' finished ===',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
+    -- OPTION PART
+    create temp table t_option /*on commit drop*/ as
+        	select
+		q.account_number,
+		'O' as sec_id_type,
+		q.sec_id,
+		'4' as price_code_type,
+		round(sum(q.quantity * q.unit_price) / sum(q.quantity), 6) as unit_price,
+		sum(q.quantity) as quantity,
+		q.trade_date,
+		q.buy_sell_ind,
+		q.open_close_ind,
+		q.origin_exchange,
+		'0' as trade_action,
+		case when sum(q.commission_amount) > 0 then '7' else '2' end as commission_type,
+		round(sum(q.commission_amount), 2) + coalesce(q.ticket_charge, 0.0) as commission_amount,
+		'0' as nbr_misc_trailers,
+		'1' as unsolicited_ind,
+		'0000' as ae_nbr,
+		'C' as covered_uncovered_ind,
+		q.acted_as_ind,
+		'C' as cash_margin_ind,
+		'C' as blue_sheet_acct_type_ind,
+		'160000' as exec_time,
+		q.td_stk_px,
+		q.opt_sc_xpr_dt,
+		'' as td_xtnl_cli_rf_no
+	from
+	(
+		select
+			mb.ml_account as account_number,
+			hsd.symbol::varchar as sec_id,
+			tr.last_px as unit_price,
+			tr.last_qty as quantity,
+			to_char(tr.trade_record_time, 'YYYYMMDD')::varchar as trade_date,
+			(case when tr.side = '1' then '1' when tr.side in ('2', '5', '6') then '2' end)::varchar as buy_sell_ind,
+			tr.open_close::varchar as open_close_ind,
+			(case when hsd.put_call = '0' then 'P3' when hsd.put_call = '1' then 'C3' end)::varchar as origin_exchange,
+			case
+				when a.account_name = 'LGCAP_VRP_8677' then (case when hsd.symbol = 'SPX' then 1.0 else 2.0 end) * tr.last_qty
+				when a.trading_firm_id in ('wiltrst01', 'wiltrht') then (case when tr.last_px < 1.0 then 2.0 else 2.5 end) * tr.last_qty
+				when mb.commission_type = '1' then mb.commission_rate * tr.last_qty
+				when mb.commission_type = '2' then mb.commission_rate * tr.principal_amount
+				else coalesce(tr.tcce_account_dash_commission_amount, tr.tcce_firm_dash_commission_amount, 0.0)
+			end as commission_amount,
+			coalesce(a.eq_order_capacity, 'A')::varchar as acted_as_ind,
+			hsd.strike_px as td_stk_px,
+			to_char(hsd.maturity_date, 'YYYYMMDD')::varchar as opt_sc_xpr_dt,
+			mb.ticket_charge
+		from dwh.flat_trade_record tr
+		join fintech_reports.ml_broadcort_booking mb on (
+			mb.account_id = tr.account_id
+			and mb.instrument_type_id = tr.instrument_type_id
+			and mb.ml_account is not null
+			and mb.is_active
+		)
+		join dwh.d_account a on (a.account_id = tr.account_id)
+		join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+		join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
+		where mb.file_name = :l_file_name
+			and tr.date_id between :in_start_date_id and :in_end_date_id
+			and tr.instrument_type_id = 'O'
+			and tr.multileg_reporting_type in ('1', '2')
+			and tr.is_busted = 'N'
+
+		union all
+
+		select
+			aie.occ_actionable_id as account_number,
+			hsd.symbol as sec_id,
+			ai.avg_px as unit_price,
+			aie.alloc_qty as quantity,
+			to_char(ai.create_time, 'YYYYMMDD') as trade_date,
+			case when ai.side = '1' then '1' when ai.side in ('2','5','6') then '2' end as buy_sell_ind,
+			ai.open_close as open_close_ind,
+			case when hsd.put_call = '0' then 'P3' when hsd.put_call = '1' then 'C3' end as origin_exchange,
+			case
+				when mb.commission_type = '1' then mb.commission_rate * aie.alloc_qty
+				when mb.commission_type = '2' then mb.commission_rate * (aie.alloc_qty * ai.avg_px)
+				else 0.0
+			end as commission_amount,
+			coalesce(a.eq_order_capacity, 'A') as acted_as_ind,
+			hsd.strike_px as td_stk_px,
+			to_char(hsd.maturity_date, 'YYYYMMDD') as opt_sc_xpr_dt,
+			mb.ticket_charge
+		from staging.allocation_instruction ai
+		join staging.allocation_instruction_entry aie on (aie.date_id = ai.date_id and aie.alloc_instr_id = ai.alloc_instr_id)
+		join dwh.d_account a on (a.account_id = ai.account_id)
+		join dwh.historic_security_definition_all hsd on (hsd.instrument_id = ai.instrument_id)
+		join fintech_reports.ml_broadcort_booking mb on (
+			mb.account_id = ai.account_id
+			and mb.instrument_type_id = hsd.instrument_type_id
+			and mb.ml_account is null
+			and mb.is_active
+		)
+		where ai.date_id between :in_start_date_id and :in_end_date_id
+			and mb.file_name = :l_file_name
+			and ai.is_deleted = 'N'
+			--and coalesce(aie.occ_actionable_id, '') <> ''
+			and (aie.occ_actionable_id is not null and aie.occ_actionable_id <> '')
+			and hsd.instrument_type_id = 'O'
+	) as q
+	group by q.account_number, q.sec_id, q.trade_date, q.buy_sell_ind, q.open_close_ind, q.origin_exchange, q.acted_as_ind, q.td_stk_px, q.opt_sc_xpr_dt, q.ticket_charge;
+
+    return query
+        select rpad(q.account_number, 8) || -- 1-8
+               q.sec_id_type || -- 9-9
+               rpad(q.sec_id, 24) || -- 10-33
+               price_code_type || -- 34-34
+               lpad(round(q.unit_price * 1000000)::text, 11, '0') || -- 35-45
+               lpad(q.quantity::text, 9, '0') || -- 46-54
+               lpad('', 8) || -- 55-62
+               lpad(trade_date, 8, ' ') || -- 63-70
+               rpad(buy_sell_ind, 1) || -- 71-71
+               rpad(q.open_close_ind, 1) || -- 72-72
+               lpad('', 5) || -- 73-77
+               origin_exchange || -- 78-79
+               lpad('', 10) || -- 80-89
+               trade_action || -- 90-90
+               commission_type || -- 91-91
+               lpad(round(q.commission_amount * 100)::text, 9, '0') || -- 92-100
+               lpad('', 8) || -- 101-108
+               nbr_misc_trailers || -- 109-109
+               lpad('', 1) || -- 110-110
+               unsolicited_ind || -- 111-111
+               lpad('', 11) || -- 112-122
+               q.ae_nbr || -- 123-126
+               lpad('', 4) || -- 127-130
+               q.exchang_1 || -- 132-132
+               q.percent_1 || -- 133-134
+               lpad('', 13) || -- 135-147
+               acted_as_ind || -- 148-148
+               lpad(automated_trade_ind, 1) || -- 149-149
+               lpad('', 64) || -- 150-213
+               rpad(
+                       'Dash may receive(pay) rebates(fees) related to this trade. Details can be found via DASH360 or upon written request.',
+                       120) || -- 214-333
+               lpad('', 5) || -- 334-338
+               lpad(tif_sec_fe_spp_rsn_cd, 3) || -- 339-341
+               ' ' || -- 342-342
+               lpad(blue_sheet_acct_typ_ind, 1) || -- 343-343
+               lpad('', 9) || -- 344-352
+               exec_time || -- 353-358
+               lpad('', 161) || -- 359-519
+               ' ' || -- 520-520
+               taf_exemption_ind || -- 521-521
+               lpad('', 284) || -- 522-805
+               lpad('A' || to_char(now(), 'YYYYMMDDHH24MISS') ||
+                    lpad((row_number() over (order by q.trade_date, q.account_number, q.sec_id, q.buy_sell_ind))::text,
+                         5, '0'), 20) || -- 806-825
+               lpad('', 175) -- 826-1000
+        from t_option q
 
 
 end;
