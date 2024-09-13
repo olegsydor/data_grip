@@ -135,3 +135,52 @@ CREATE TABLE your_table_name (
      EXTRACT(MONTH FROM START_TIME) * 100 +
      EXTRACT(DAY FROM START_TIME)) VIRTUAL
 );
+
+
+CREATE TABLE trash.so_fix_execution_column_text_ (
+	routine_schema information_schema."sql_identifier" COLLATE "C" NULL,
+	routine_name information_schema."sql_identifier" COLLATE "C" NULL,
+	routine_definition information_schema."character_data" COLLATE "C" NULL,
+	md5_before text COLLATE "C" NULL,
+	last_update_time timestamptz NULL,
+	new_script text NULL,
+	execution_order int4 NULL,
+	was_executed bool NULL
+);
+
+
+truncate table trash.so_fix_execution_column_text_;
+
+update trash.so_fix_execution_column_text_
+set new_script = $insert$
+
+CREATE OR REPLACE FUNCTION aux.base32_to_int8_(in_string text)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+-- SO 20240912 temp changes (no changes in fact)
+declare
+    base_string text := '0123456789abcdefghijklmnopqrstuv';
+    ret_result  int8 := 0;
+    each_char   char;
+    i           int  := 1;
+    base_length int  := length(in_string);
+begin
+    while i <= base_length
+        loop
+            each_char := lower(substring(in_string from i for 1));
+            ret_result := ret_result * 32 + (position(each_char in base_string) - 1);
+            i := i + 1;
+        end loop;
+
+    return ret_result;
+end;
+$function$
+;
+
+    $insert$
+where true
+  and routine_schema = 'aux'
+  and routine_name = 'base32_to_int8_'
+  and new_script is null;
