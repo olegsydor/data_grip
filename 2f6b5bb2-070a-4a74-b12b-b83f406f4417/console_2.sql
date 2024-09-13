@@ -37,3 +37,32 @@ $$
             end loop;
     end;
 $$;
+
+
+-- dwh.gtc_order_status definition
+
+-- Drop table
+
+-- DROP TABLE dwh.gtc_order_status;
+create schema dwh
+CREATE TABLE dwh.gtc_order_status (
+	order_id int8 NOT NULL,
+	create_date_id int4 NOT NULL,
+	order_status bpchar(1) NULL,
+	exec_time timestamp(6) NULL,
+	last_trade_date timestamp(0) NULL, -- It is last_trade_date from instrument for time_in_force_id = 1 or expire_time from client_order for time_in_force_id = 6
+	last_mod_date_id int4 NULL,
+	is_parent bool NULL, -- if this attr is true the order has been closed because of closing its parent order
+	close_date_id int4 NULL,
+	account_id int4 NULL, -- account_id from dwh.d_account
+	time_in_force_id bpchar(1) DEFAULT '1'::bpchar NULL, -- time_in_force_id - 1 for GTC, 6 - for GTD
+	db_create_time timestamp DEFAULT clock_timestamp() NULL,
+	db_update_time timestamp NULL,
+	closing_reason bpchar(1) NULL, -- 'the order was closed because of¶E - by the execution flow ('2', '4', '8')¶P - by the parent flow (closed street because its parent was closed)¶I - instrument or client order expire time¶L - the one of closed leg has closed the head¶H - the head closed before has closed all non closed legs¶
+	client_order_id varchar(256) NULL,
+	instrument_id int8 NULL,
+	multileg_reporting_type bpchar(1) NULL
+)
+PARTITION BY RANGE (close_date_id);
+CREATE INDEX gtc_order_status_client_order_id_idx ON ONLY dwh.gtc_order_status USING btree (client_order_id);
+CREATE INDEX gtc_order_status_order_id_idx ON ONLY dwh.gtc_order_status USING btree (order_id);

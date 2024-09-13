@@ -447,3 +447,18 @@ $function$
 ;
 
 select * from dash360.report_fintech_ml_bct221x('BCT221XA', 20240909, 20240909)
+
+
+
+ select * from dwh.gtc_order_status gos
+ where order_id = 2254295520;
+
+
+with to_del as (select min(gos.ctid), order_id
+                from trash.so_gtc_duplicated dp
+                         join dwh.gtc_order_status gos using (create_date_id, order_id)
+                group by order_id)
+delete
+from dwh.gtc_order_status gos using to_del
+where gos.order_id = to_del.order_id
+  and gos.ctid = to_del.ctid
