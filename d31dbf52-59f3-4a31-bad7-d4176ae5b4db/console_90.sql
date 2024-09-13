@@ -446,4 +446,4 @@ end;
 $function$
 ;
 
-select * from dash360.report_fintech_ml_bct221x()
+select * from dash360.report_fintech_ml_bct221x('BCT221XA', 20240909, 20240909)
