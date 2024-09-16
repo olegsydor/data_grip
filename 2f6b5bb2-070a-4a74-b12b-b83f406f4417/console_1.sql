@@ -185,9 +185,18 @@ where true
   and routine_name = 'base32_to_int8_'
   and new_script is null;
 
-create table trash.ch_uniq (
+create table trash.check_uniq (
     un_id serial not null,
     limit_request_id int4,
-    is_active bool,
-    constraint limit_unq unique (limit_request_id) where 
-)
+    is_active bool
+);
+
+create unique index limit_rq on trash.check_uniq (limit_request_id) where (is_active);
+
+insert into trash.check_uniq (limit_request_id, is_active) values (1, true)
+update trash.check_uniq
+set is_active = false
+where limit_request_id = 1
+and is_active;
+
+select * from trash.check_uniq
