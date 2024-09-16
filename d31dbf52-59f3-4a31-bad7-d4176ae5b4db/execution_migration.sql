@@ -35,3 +35,6 @@ where chk != 'ok'
 --
 select * from trash.so_fix_execution_column_text_
 where execution_order is null
+
+
+select concat_ws(':', :in_a, :in_b)
