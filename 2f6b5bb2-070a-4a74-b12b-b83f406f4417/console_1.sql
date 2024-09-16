@@ -184,3 +184,10 @@ where true
   and routine_schema = 'aux'
   and routine_name = 'base32_to_int8_'
   and new_script is null;
+
+create table trash.ch_uniq (
+    un_id serial not null,
+    limit_request_id int4,
+    is_active bool,
+    constraint limit_unq unique (limit_request_id) where 
+)
