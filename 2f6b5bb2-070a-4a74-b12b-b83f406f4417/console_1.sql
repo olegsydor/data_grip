@@ -216,7 +216,8 @@ where pl.lanname NOT IN ('c', 'internal')
   and pn.nspname = 'aux';
 
 
-SELECT pn.nspname || '.' || pp.proname || '(' || array_to_string(pp.proargtypes::regtype[], ',') || ')'
+SELECT pn.nspname || '.' || pp.proname || '(' || array_to_string(pp.proargtypes::regtype[], ',') || ')',
+       pg_get_functiondef(pp.oid)
 from pg_proc pp
          inner join pg_namespace pn on (pp.pronamespace = pn.oid)
          inner join pg_language pl on (pp.prolang = pl.oid)
