@@ -199,4 +199,29 @@ set is_active = false
 where limit_request_id = 1
 and is_active;
 
-select * from trash.check_uniq
+select * from trash.check_uniq;
+
+    SELECT (pp.proargtypes::regtype[])[0:], pg_get_functiondef(pp.oid), replace(replace(replace(replace(replace(replace(replace(FORMAT(
+                                                                       'COPY (SELECT pg_get_functiondef(%s)) TO ''%s(%s).sql',
+                                                                       pp.oid, pn.nspname, pp.proname,
+                                                                       (pp.proargtypes::regtype[])[0:])::text, '{', ''),
+                                                       '}', ''), '"', ''), 'character', 'char'), 'char varying',
+                               'varchar'), 'integer', 'int'), 'timestamp without time zone', 'tstamp')
+from pg_proc pp
+         inner join pg_namespace pn on (pp.pronamespace = pn.oid)
+         inner join pg_language pl on (pp.prolang = pl.oid)
+where pl.lanname NOT IN ('c', 'internal')
+    and pn.nspname = 'aux';
+
+SELECT FORMAT(
+                                                                       'COPY (SELECT pg_get_functiondef(%s)) TO ''/u01/git/big_data/%s/functions/%s(%s).sql'' WITH (FORMAT csv, QUOTE '' '' );',
+                                                                       pp.oid, pn.nspname, pp.proname,
+                                                                       (pp.proargtypes::regtype[])[0:])::text
+from pg_proc pp
+         inner join pg_namespace pn on (pp.pronamespace = pn.oid)
+         inner join pg_language pl on (pp.prolang = pl.oid)
+where pl.lanname NOT IN ('c', 'internal')
+  and pn.nspname = 'dwh';
+
+
+COPY (SELECT pg_get_functiondef(55874)) TO '/u01/git/big_data/aux/functions/get_exp_date(date).sql' WITH (FORMAT csv, QUOTE ' ' );
