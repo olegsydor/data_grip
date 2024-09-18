@@ -800,7 +800,7 @@ $BODY$
 select * from aux.describe_table('dwh', 'flat_trade_record');
 select * from aux.wmv_get_table_definition('dwh', 'flat_trade_record')
 
-SELECT schema_name
+SELECT schema_name, *
 FROM information_schema.schemata
 WHERE schema_name NOT IN ('tash')
 and schema_name not like 'pg_%';
