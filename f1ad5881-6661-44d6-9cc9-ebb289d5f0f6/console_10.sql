@@ -379,3 +379,9 @@ from staging.tprices_edw as tp
 BLAZE7_EDW_UAT,BLAZE7_TPRICE,20240918,2024-09-19 17:07:10.342800 +00:00,1815,dev_pg_ord_id,39810227004855136,corr_legnumber,0.2612595973003835,corr_status,0.030754932164165426,corr_exec_id,0.010645219094902429,corr_dashsecurityid,-0.22427140775261634
 BLAZE7_EDW_UAT,BLAZE7_TPRICE,20240918,2024-09-19 17:06:22.033668 +00:00,1815,dev_pg_ord_id,39810227004855136,corr_legnumber,0.26125959730038584,corr_status,0.030754932164165874,corr_exec_id,0.004863824780777405,corr_dashsecurityid,-0.22427140775260818
 BLAZE7_EDW_UAT	BLAZE7_TPRICE	20240918	2024-09-19 13:10:13.172 -0400	1815.0	dev_pg_ord_id	39810227004855136	corr_legnumber	0.2612595973003835	corr_status	0.030754932164165426	corr_exec_id	0.010645219094902429	corr_dashsecurityid	-0.22427140775261634
+
+
+select *
+from dash_reporting.get_user_permissions(in_user_role := 'P',
+                                         in_trading_firm_id := 'cornerstn',
+                                         exclude_internal_users := true);

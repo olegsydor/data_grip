@@ -89,3 +89,26 @@ INSERT INTO LIQUIDITY_INDICATOR
 (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, "COMMENT", LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY, CREATE_TIME)
 VALUES ('C2OX', 'SN', 'Adds Liquidity', NULL, 1, 'N', current_timestamp);
 commit
+
+
+
+select ui.USER_ROLE, ui.user_id, asa.account_id, acc.trading_firm_id
+        from user_identifier ui
+        inner  join PORTAL_USER pu  on (ui.user_id = pu.user_id)
+        inner join ACCOUNT_SET2ACCOUNT asa on (pu.account_set_id = asa.ACCOUNT_SET_ID)
+        inner join account acc on (asa.account_id = acc.account_id)
+        where 1=1
+--     and USER_ROLE in ('A', 'P')
+--         and ui.is_deleted='N'
+--         and ((ui.USER_ROLE = 'P' and asa.account_id is not null) or ui.USER_ROLE = 'A')
+        and pu.USER_ID in (       15276, 15841, 15277)
+        UNION
+select ui.USER_ROLE, ui.user_id, acc.account_id, putf.trading_firm_id
+from user_identifier ui
+         left join PORTAL_USER2TRADING_FIRM putf on (ui.user_id = putf.user_id)
+         left join account acc on (putf.trading_firm_id = acc.trading_firm_id and acc.is_deleted = 'N')
+where 1 = 1
+-- --           and USER_ROLE in ('A', 'P')
+  and ui.is_deleted = 'N'
+--         and ((ui.USER_ROLE = 'P' and putf.trading_firm_id is not null) or ui.USER_ROLE = 'A')
+  and ui.USER_ID in (15276, 15841, 15277);
