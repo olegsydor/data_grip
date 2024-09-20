@@ -1,0 +1,25 @@
+use Blaze7;
+
+SELECT ID,
+       Status,
+       orderidint,
+       reportidint,
+       OrderID,
+       ReportID,
+       LegNumber,
+       DashSecurityId,
+       ContractID,
+       UserID,
+       ExchangeConnectionID,
+       ExchangeName,
+       Destination,
+       SystemID,
+       Generation,
+       pg_order_id,
+       pg_chain_id,
+       pg_db_create_time,
+       db_create_time,
+       exec_id,
+       date_id,
+       pg_entity
+FROM Blaze7.dbo.TPrices_EDW x
