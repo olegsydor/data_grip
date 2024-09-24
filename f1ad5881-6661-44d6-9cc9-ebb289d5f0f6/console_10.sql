@@ -385,3 +385,5 @@ select *
 from dash_reporting.get_user_permissions(in_user_role := 'P',
                                          in_trading_firm_id := 'cornerstn',
                                          exclude_internal_users := true);
+
+
