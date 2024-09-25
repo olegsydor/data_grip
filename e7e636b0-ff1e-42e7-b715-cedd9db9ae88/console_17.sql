@@ -182,32 +182,41 @@ begin
 --        then
          select array_agg(account_id) into l_tmp_accout_ids from tmp_606_s3_accts_src;
 
-         create temp table tmp_606_s3_order_fyc_src with (parallel_workers = 4)
+       create temp table tmp_606_s3_order_fyc_src with (parallel_workers = 4)
 --              on commit drop
-             as
-                          select yc.status_date_id
-                                  , yc.routed_time
-                                  , yc.exec_time
-                                  , yc.order_id
-                                  , yc.client_order_id
-                                  , yc.multileg_reporting_type
-                                  , yc.account_id
-                                  , yc.instrument_id
-                                  , null as orig_order_id
-                          from staging.f_yield_capture yc
-                          where true
-                            and yc.status_date_id between :l_start_date_id and :l_end_date_id -- 20240401 and 20240430 -- l_start_date_id and l_end_date_id --
-                            and yc.parent_order_id is not null
-                            and yc.account_id in (72162,71361,34069,52622,68488,49521);--= any(l_tmp_accout_ids);
+       as
+       select yc.status_date_id
+            , yc.routed_time
+            , yc.exec_time
+            , yc.order_id
+            , yc.client_order_id
+            , yc.multileg_reporting_type
+            , yc.account_id
+            , yc.instrument_id
+            , cl.orig_order_id as orig_order_id
+       from staging.f_yield_capture yc
+                left join lateral (select orig_order_id
+                                   from staging.client_order co
+                                   where co.orig_order_id is not null
+                                     and co.order_id = yc.order_id
+--        raise notice '%', l_sql;
+                                     AND co.create_time >= yc.routed_time
+                                     AND co.create_time <= yc.routed_time + '5 days'::interval
+                                     AND co.create_time >= '2023-01-01') cl on true
+       where true
+         and yc.status_date_id between :l_start_date_id and :l_end_date_id -- 20240401 and 20240430 -- l_start_date_id and l_end_date_id --
+         and yc.parent_order_id is not null
+         and yc.account_id in (72162, 71361, 34069, 52622, 68488, 49521);--= any(l_tmp_accout_ids);
 
 
        update tmp_606_s3_order_fyc_src fyc
            set orig_order_id = co.orig_order_id
        from staging.client_order co
        where co.orig_order_id is not null
-       and co.order_id = fyc.order_id;
+       and co.order_id = fyc.order_id
 --        raise notice '%', l_sql;
-
+       AND co.create_time >= fyc.routed_time AND co.create_time <= fyc.routed_time + '5 days'::interval
+         AND co.create_time >= '2023-01-01';
 --        execute l_sql; -->>>> DYN SQL
        GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
         select public.load_log(l_load_id, l_step_id, 'tmp_606_s3_order_fyc_src - Initial load', l_row_cnt, 'I')
