@@ -194,10 +194,11 @@ begin
                                   , yc.account_id
                                   , yc.instrument_id
                                   , null as orig_order_id
-                          from staging.v_f_yield_capture_parent_w_replace yc
+                          from staging.f_yield_capture yc
                           where true
                             and yc.status_date_id between :l_start_date_id and :l_end_date_id -- 20240401 and 20240430 -- l_start_date_id and l_end_date_id --
-                            and yc.account_id in (72162,71361,34069,52622,68488,49521)--= any(l_tmp_accout_ids);
+                            and yc.parent_order_id is not null
+                            and yc.account_id in (72162,71361,34069,52622,68488,49521);--= any(l_tmp_accout_ids);
 
 
        update tmp_606_s3_order_fyc_src fyc
