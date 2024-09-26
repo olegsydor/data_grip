@@ -273,3 +273,63 @@ select * from dwh.d_account
 
 
         select * from trash.report_fintech_ml_pro_200byte(in_start_date_id := 20240919, in_end_date_id := 20240919, in_account_ids := '{72307}', in_instrument_type := 'O')
+
+
+select *
+from dash360.report_eod_alpaca_options_retail(in_start_date_id := 20240901, in_end_date_id := 20240925);
+select *
+from dash360.report_eod_alpaca_algo_route(in_start_date_id := 20240901, in_end_date_id := 20240925);
+select *
+from dash360.report_eod_alpaca_equity_retail(in_start_date_id := 20240901, in_end_date_id := 20240925);
+
+
+
+select array_to_string(ARRAY [
+                                   ac.account_name,
+                                   to_char(co.create_time, 'DD/MM/YYYY'), -- as "Load Date",
+                                   'APC4', -- as "Client Short Name",
+                                   'APCA', -- as "Reporting Client MPID",
+                                   di.symbol,
+                                   case
+                                       when ftr.side = '1' then 'Buy'
+                                       when ftr.side = '2' then 'Sell'
+                                       when ftr.side in ('5', '6') then 'Sell Short'
+                                       end, -- as "Side"
+                                   to_char(ftr.last_px, 'LFM99999990D009999'), -- "Last Px"
+                                   ftr.last_qty::text, -- "Last Qty"
+            -- Contra Name,
+            -- RLi
+                                   li.trade_liquidity_indicator, -- as "Li",
+                                   to_char(ftr.last_px * ftr.last_qty, 'FM09999999V990'), -- as "Amount",
+                                   to_char(ftr.trade_record_time at time zone 'America/New_York',
+                                           'HH24:MI:SS.FF3'), -- as "Exec Time EST",
+                                   co.client_order_id, -- as "Client Order ID",
+                                   sub_strategy_desc, -- as "Target Strategy Name",
+                                   null::text, -- as "Custom Algo",
+                                   left(fmj.fix_message ->> '9002', 6), -- as "Urgency Code",
+                                   ftr.exch_exec_id -- as "External Exec ID"
+                                   ], ',', ''),
+    ftr.last_px,
+    ftr.last_qty,
+    ftr.last_px * ftr.last_qty,
+    to_char(ftr.last_px * ftr.last_qty, 'FM09999999V990')
+        from dwh.client_order co
+                 join dwh.flat_trade_record ftr on ftr.order_id = co.order_id and ftr.date_id = co.create_date_id
+                 join dwh.d_account ac on ac.account_id = ftr.account_id
+                 join dwh.d_instrument di on di.instrument_id = ftr.instrument_id
+                 left join dwh.d_liquidity_indicator li on li.exchange_id = ftr.exchange_id and
+                                                           li.trade_liquidity_indicator =
+                                                           ftr.trade_liquidity_indicator and
+                                                           li.is_active
+
+                 left join fix_capture.fix_message_json fmj
+                           on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
+        where co.ex_destination = 'ALGO'
+          and co.account_id = any ('{71913,71911,71912}')
+          and co.create_date_id between :in_start_date_id and :in_end_date_id
+        order by ftr.date_id, ftr.trade_record_id;
+
+select array_agg(account_id)
+
+    from dwh.d_account
+    where trading_firm_id in ('alpaca','OFP0068');
