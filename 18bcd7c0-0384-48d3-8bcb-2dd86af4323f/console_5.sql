@@ -15,3 +15,17 @@ select base_eod.fn, base_inc.fn, base_inc.loaded_row as sum_inc, base_inc.batchs
 from base_inc
 left join base_eod using(fn)
 where base_inc.loaded_row <> base_eod.loaded_row;
+
+
+select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
+from partitions.hft_fix_message_event_20240930_eod
+where load_batch_id = any ('{495104,495137,495170,495203,495236,495269,495302,495335,495368,495401,495434,495467,495500}')
+
+except
+select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
+from partitions.hft_fix_message_event_20240930
+where load_batch_id = any ('{495551}')
+except
+select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
+from partitions.hft_fix_message_event_20240930_eod
+where load_batch_id = any ('{495104,495137,495170,495203,495236,495269,495302,495335,495368,495401,495434,495467,495500}')
