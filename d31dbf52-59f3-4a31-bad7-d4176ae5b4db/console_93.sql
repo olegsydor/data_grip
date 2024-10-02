@@ -69,15 +69,24 @@ and auction_id = 290003977001;
             else case when min(acd.side) = '1' then 'buy' else 'sell' end end as side,
         min(acd.nbbo_bid_price)                                               as bid,
         min(acd.nbbo_ask_price)                                               as ask,
+--
+-- select
         acd.auction_id,
         acd.auction_date_id,
-        acd.liquidity_provider_id
+        acd.liquidity_provider_id,
+        acd.ofp_orig_order_id, -- to order_id ofp order
+         *
+--         array_agg(fmj.message_type) as message_type
  from data_marts.f_ats_cons_details acd
-          join dwh.client_order cl on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id
-          join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
- where acd.auction_date_id between 20240930 and 20240930
-   and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
-   and acd.liquidity_provider_id is not null
-   and fmj.message_type = 's'
- group by acd.auction_id, acd.auction_date_id, acd.liquidity_provider_id
- having count(distinct acd.side) > 1;
+          join dwh.client_order cl on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id --tf lpo
+--           join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
+ where acd.auction_date_id between 20240930 and 20241001
+--    and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
+--    and acd.liquidity_provider_id is not null
+--    and fmj.message_type = 's'
+    and acd.auction_id = 290004016470
+--  and is_lpo_parent
+-- and cl.ex_destination = 'LIQPT'
+--  and is_ats_or_cons = 'A'
+ group by acd.auction_id, acd.auction_date_id, acd.liquidity_provider_id;
+--  having count(distinct acd.side) = 1;
