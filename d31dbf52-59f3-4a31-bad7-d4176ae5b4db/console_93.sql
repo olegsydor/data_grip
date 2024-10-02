@@ -92,9 +92,9 @@ and auction_id = 290003977001;
 --  having count(distinct acd.side) = 1;
 
 
- create function trash.ats_responce_side(in_start_date_id integer, in_end_date_id integer,
-                                         in_liquidity_provider_id varchar(9)[] default '{}'::varchar(9)[],
-                                         in_is_bd bool default true, in_summary bool default true)
+ create or replace function trash.ats_responce_side(in_start_date_id integer, in_end_date_id integer,
+                                                    in_liquidity_provider_id varchar(9)[] default '{}'::varchar(9)[],
+                                                    in_is_bd bool default true, in_summary bool default true)
      returns table
              (
                  export_row text
@@ -115,16 +115,18 @@ and auction_id = 290003977001;
      into l_step_id;
 
      return query
+         select 'Date Start, Date End, Side, Bid, Ask, Auction Id, Auction Date Id, Liquidity Provider';
+     return query
          select array_to_string(ARRAY [
-                                    min(acd.auction_date_id), -- as min_date_id,
-                                    max(acd.auction_date_id), -- as max_date_id,
+                                    min(acd.auction_date_id)::text, -- as min_date_id,
+                                    max(acd.auction_date_id)::text, -- as max_date_id,
                                     case
                                         when count(distinct acd.side) = 2 then 'both'
                                         else case when min(acd.side) = '1' then 'buy' else 'sell' end end, -- as side,
-                                    min(acd.nbbo_bid_price), -- as bid,
-                                    min(acd.nbbo_ask_price), -- as ask,
-                                    acd.auction_id,
-                                    acd.auction_date_id,
+                                    min(acd.nbbo_bid_price)::text, -- as bid,
+                                    min(acd.nbbo_ask_price)::text, -- as ask,
+                                    acd.auction_id::text,
+                                    acd.auction_date_id::text,
                                     acd.liquidity_provider_id
                                     ], ',', '')
          from data_marts.f_ats_cons_details acd
@@ -149,4 +151,5 @@ and auction_id = 290003977001;
  end;
  $fx$;
 
-select * from dwh.d_trading_firm
+select * from trash.ats_responce_side(20240930, 20241001)
+
