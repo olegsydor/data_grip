@@ -50,7 +50,7 @@ and auction_id = 290003977001;
         auction_date_id,
         acd.liquidity_provider_id,
         acd.order_id,
-        fmj.fix_message ->> '35',
+        fmj.message_type,
         *
  from data_marts.f_ats_cons_details acd
           join dwh.client_order cl on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id
@@ -58,26 +58,26 @@ and auction_id = 290003977001;
  where acd.auction_date_id = 20240930
    and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
    and acd.liquidity_provider_id is not null
-   and fmj.fix_message ->> '35' = 's'
+   and fmj.message_type = 's'
  and acd.auction_id = 7190003581231;
 
-select fmj.fix_message, * from dwh.client_order cl
-         join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
-where order_id in (17294390331, 17294390368)
 
- select min(acd.auction_date_id)                                        as min_date_id,
-        max(acd.auction_date_id)                                        as max_date_id,
+ select min(acd.auction_date_id)                                              as min_date_id,
+        max(acd.auction_date_id)                                              as max_date_id,
         case
             when count(distinct acd.side) = 2 then 'both'
-            else case when min(side) = '1' then 'buy' else 'sell' end end as side,
-        min(acd.nbbo_bid_price)                                         as bid,
-        min(acd.nbbo_ask_price)                                         as ask,
-        auction_id,
-        auction_date_id,
-        liquidity_provider_id
+            else case when min(acd.side) = '1' then 'buy' else 'sell' end end as side,
+        min(acd.nbbo_bid_price)                                               as bid,
+        min(acd.nbbo_ask_price)                                               as ask,
+        acd.auction_id,
+        acd.auction_date_id,
+        acd.liquidity_provider_id
  from data_marts.f_ats_cons_details acd
- where acd.auction_date_id = 20240930
+          join dwh.client_order cl on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id
+          join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
+ where acd.auction_date_id between 20240930 and 20240930
    and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
-   and liquidity_provider_id is not null
- group by auction_id, auction_date_id, liquidity_provider_id
+   and acd.liquidity_provider_id is not null
+   and fmj.message_type = 's'
+ group by acd.auction_id, acd.auction_date_id, acd.liquidity_provider_id
  having count(distinct acd.side) > 1;
