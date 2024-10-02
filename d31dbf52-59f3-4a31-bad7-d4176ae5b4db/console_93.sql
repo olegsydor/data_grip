@@ -69,14 +69,14 @@ and auction_id = 290003977001;
             else case when min(acd.side) = '1' then 'buy' else 'sell' end end as side,
         min(acd.nbbo_bid_price)                                               as bid,
         min(acd.nbbo_ask_price)                                               as ask,
---
--- select
+--  select
         acd.auction_id,
         acd.auction_date_id,
-        acd.liquidity_provider_id,
-        acd.ofp_orig_order_id, -- to order_id ofp order
-         *
+        acd.liquidity_provider_id
+--         acd.ofp_orig_order_id, -- to order_id ofp order
+-- ,          *
 --         array_agg(fmj.message_type) as message_type
+
  from data_marts.f_ats_cons_details acd
           join dwh.client_order cl on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id --tf lpo
 --           join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
@@ -84,9 +84,69 @@ and auction_id = 290003977001;
 --    and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
 --    and acd.liquidity_provider_id is not null
 --    and fmj.message_type = 's'
-    and acd.auction_id = 290004016470
---  and is_lpo_parent
+     and acd.auction_id = 7790001338874
+ and is_lpo_parent
 -- and cl.ex_destination = 'LIQPT'
---  and is_ats_or_cons = 'A'
+ and is_ats_or_cons = 'A'
  group by acd.auction_id, acd.auction_date_id, acd.liquidity_provider_id;
 --  having count(distinct acd.side) = 1;
+
+
+ create function trash.ats_responce_side(in_start_date_id integer, in_end_date_id integer,
+                                         in_liquidity_provider_id varchar(9)[] default '{}'::varchar(9)[],
+                                         in_is_bd bool default true, in_summary bool default true)
+     returns table
+             (
+                 export_row text
+             )
+     language plpgsql
+ AS
+ $fx$
+ DECLARE
+     l_row_cnt integer;
+     l_load_id integer;
+     l_step_id integer;
+
+ begin
+     select nextval('public.load_timing_seq') into l_load_id;
+     l_step_id := 1;
+
+     select public.load_log(l_load_id, l_step_id, 'trash.ats_resp STARTED===', 0, 'O')
+     into l_step_id;
+
+     return query
+         select array_to_string(ARRAY [
+                                    min(acd.auction_date_id), -- as min_date_id,
+                                    max(acd.auction_date_id), -- as max_date_id,
+                                    case
+                                        when count(distinct acd.side) = 2 then 'both'
+                                        else case when min(acd.side) = '1' then 'buy' else 'sell' end end, -- as side,
+                                    min(acd.nbbo_bid_price), -- as bid,
+                                    min(acd.nbbo_ask_price), -- as ask,
+                                    acd.auction_id,
+                                    acd.auction_date_id,
+                                    acd.liquidity_provider_id
+                                    ], ',', '')
+         from data_marts.f_ats_cons_details acd
+                  join dwh.client_order cl
+                       on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id --tf lpo
+                  join dwh.d_account ac on ac.account_id = cl.account_id
+                  join dwh.d_trading_firm tf on tf.trading_firm_id = cl.trading_firm_id
+         where acd.auction_date_id between in_start_date_id and in_end_date_id
+--    and acd.auction_id = 7790001338874
+           and is_lpo_parent
+-- and cl.ex_destination = 'LIQPT'
+           and is_ats_or_cons = 'A'
+           and case when in_is_bd then tf.is_broker_dealer = 'Y' else true end
+           and case
+                   when in_liquidity_provider_id = '{}' then true
+                   else acd.liquidity_provider_id = any (in_liquidity_provider_id) end
+         group by acd.auction_id, acd.auction_date_id, acd.liquidity_provider_id;
+     get diagnostics l_row_cnt = row_count;
+     select public.load_log(l_load_id, l_step_id, 'trash.ats_resp COMPLETE===',
+                            coalesce(l_row_cnt, 0), 'O')
+     into l_step_id;
+ end;
+ $fx$;
+
+select * from dwh.d_trading_firm
