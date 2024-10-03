@@ -157,3 +157,32 @@ select extract(epoch from timestamp with time zone '2024-10-02 20:56:32.571049 +
 union all
 select extract(epoch from timestamp with time zone '2024-10-02 20:56:32.571051 +00:00')
 
+ create temp table t_ats as
+ select tf.trading_firm_name,
+        acd.auction_date_id,
+        case when acd.side in ('1', '3') then 'buy' else 'sell' end as side,
+        acd.auction_id,
+        acd.liquidity_provider_id
+ from data_marts.f_ats_cons_details acd
+          join dwh.client_order cl
+               on cl.order_id = acd.order_id and cl.create_date_id >= acd.auction_date_id --tf lpo
+          join dwh.d_account ac on ac.account_id = cl.account_id
+          join dwh.d_trading_firm tf on tf.trading_firm_id = cl.trading_firm_id
+ where acd.auction_date_id between :in_start_date_id and :in_end_date_id
+--    and acd.auction_id = 7790001338874
+   and is_lpo_parent
+   and num_nonnulls(acd.nbbo_bid_price, acd.nbbo_ask_price) > 0
+   and is_ats_or_cons = 'A'
+   and case when :in_is_bd then tf.is_broker_dealer = 'Y' else true end
+   and case
+           when :in_liquidity_provider_id = '{}' then true
+           else acd.liquidity_provider_id = any (:in_liquidity_provider_id) end;
+
+
+select trading from (select trading_firm_name,
+                      auction_date_id,
+                      case when count(distinct side) > 1 then 'both' else min(side) end as responce,
+                      liquidity_provider_id
+               from t_ats
+               group by trading_firm_name, auction_date_id, liquidity_provider_id, auction_id) x
+
