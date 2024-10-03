@@ -153,3 +153,7 @@ and auction_id = 290003977001;
 
 select * from trash.ats_responce_side(20240930, 20241001)
 
+select extract(epoch from timestamp with time zone '2024-10-02 20:56:32.571049 +00:00')
+union all
+select extract(epoch from timestamp with time zone '2024-10-02 20:56:32.571051 +00:00')
+
