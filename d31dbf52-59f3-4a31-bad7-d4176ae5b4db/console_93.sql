@@ -205,3 +205,8 @@ from (select trading_firm_name,
                from t_ats
                group by trading_firm_name, auction_date_id, liquidity_provider_id, auction_id) x
 group by trading_firm_name, auction_date_id, liquidity_provider_id
+
+
+SELECT *
+FROM d_liquidity_indicator
+WHERE exchange_id ~ '[A-Za-zА-Яа-я]';
