@@ -164,7 +164,7 @@ and auction_id = 290003977001;
  end;
  $fx$;
 
-'select * from trash.ats_responce_side(20240930, 20241001, in_is_summary := true, in_liquidity_provider_id := '{WALLLPA}', in_is_bd := false)'
+select * from trash.ats_responce_side(20240930, 20241001, in_is_summary := true, in_liquidity_provider_id := '{WALLLPA}', in_is_bd := false)
 
 select extract(epoch from timestamp with time zone '2024-10-02 20:56:32.571049 +00:00')
 union all
