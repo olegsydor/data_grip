@@ -1,0 +1,1 @@
+    select * from trash.ats_responce_side(20240930, 20241001, in_is_summary := true, in_is_bd := true)
