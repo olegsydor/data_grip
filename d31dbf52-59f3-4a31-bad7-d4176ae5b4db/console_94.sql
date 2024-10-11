@@ -1,5 +1,21 @@
-where (case when coalesce(in_accounts, '{}') = '{}' then false else vi.account_id = any (in_accounts) end
-        	   or case when coalesce(in_trader_ids, '{}') = '{}' then false else vi.trader_internal_id = any (in_trader_ids) end)
+select tf.trading_firm_id, * from dwh.d_account da
+join dwh.d_trading_firm tf on tf.trading_firm_unq_id = da.trading_firm_unq_id
+left join staging.trader2trading_firm ttf on ttf.trading_firm_id = tf.trading_firm_id
+left join dwh.d_trader dt on dt.trader_internal_id = ttf.trader_internal_id
+where (case when coalesce(:in_accounts, '{}') = '{}' then false else da.account_id = any (:in_accounts) end
+        	   or case when coalesce(:in_trader_ids, '{}') = '{}' then false else ttf.trader_internal_id = any (:in_trader_ids) end
+    or case when coalesce(:in_trading_firm_ids, '{}') = '{}' then false else tf.trading_firm_id = any(:in_trading_firm_ids) end);
+
+
+select tf.trading_firm_id
+
+from dwh.d_account da
+join dwh.d_trading_firm tf on tf.trading_firm_unq_id = da.trading_firm_unq_id
+left join staging.trader2trading_firm ttf on ttf.trading_firm_id = tf.trading_firm_id
+-- left join dwh.d_trader dt on dt.trader_internal_id = ttf.trader_internal_id
+where (case when coalesce(:in_accounts, '{}') = '{}' then true else da.account_id = any (:in_accounts) end
+        	   and case when coalesce(:in_trader_ids, '{}') = '{}' then true else ttf.trader_internal_id = any (:in_trader_ids) end
+    and case when coalesce(:in_trading_firm_ids, '{}') = '{}' then true else tf.trading_firm_id = any(:in_trading_firm_ids) end);
 
     create or replace function dash360.report_risk_credit_utilization(in_start_date_id int4, in_end_date_id int4,
                                                                       in_trading_firm_ids character varying[] default '{"OFP0016"}'::character varying[],
@@ -14,9 +30,10 @@ where (case when coalesce(in_accounts, '{}') = '{}' then false else vi.account_i
 AS
 $fx$
 DECLARE
-    l_row_cnt integer;
-    l_load_id integer;
-    l_step_id integer;
+    l_row_cnt int;
+    l_load_id int;
+    l_step_id int;
+    l_account_ids int[];
 
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -27,22 +44,38 @@ begin
                            in_end_date_id::text || ' started====', 0, 'O')
     into l_step_id;
 
+    select array_agg(da.account_id)
+--     into l_account_ids
+    from dwh.d_account da
+             join dwh.d_trading_firm tf on tf.trading_firm_unq_id = da.trading_firm_unq_id
+             left join staging.trader2trading_firm ttf on ttf.trading_firm_id = tf.trading_firm_id
+    where (case when coalesce(:in_accounts, '{}') = '{}' then true else da.account_id = any (:in_accounts) end
+        and case
+                when coalesce(:in_trader_ids, '{}') = '{}' then true
+                else ttf.trader_internal_id = any (:in_trader_ids) end
+        and case
+                when coalesce(:in_trading_firm_ids, '{}') = '{}' then true
+                else tf.trading_firm_id = any (:in_trading_firm_ids) end);
+
+
     return query
 SELECT 'Parameter,Scope,Security Type,Value,Trading Firm,Account,Trader,Min Notional,Max Notional,Average Notional,Max % Utilization';
 
     return query
         with cte_daily as
 (
-	select rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
-	from dash_bi.risk_limit_usage_dt rlu
-	join dwh.d_account a on (a.account_id = rlu.account_id)
-	join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-	where rlu.date_id between :in_start_date_id and :in_end_date_id
-		and rlu.trading_firm_id = any(:in_trading_firm_ids)
-	and a.is_active
-	and tf.is_active
-	group by rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
-	--order by rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
+select distinct on (rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum, tf.trading_firm_name) rlu.security_type,
+                                                                                                                                                               rlu.risk_limit_parameter,
+                                                                                                                                                               rlu.date_id,
+                                                                                                                                                               rlu.tf_risk_limit_param_max_value,
+                                                                                                                                                               rlu.tf_avg,
+                                                                                                                                                               rlu.tf_sum,
+                                                                                                                                                               tf.trading_firm_name
+from dash_bi.risk_limit_usage_dt rlu
+         join dwh.d_account da using (account_id)
+         join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = da.trading_firm_unq_id)
+where rlu.date_id between :in_start_date_id and :in_end_date_id
+  and da.account_id = any(:l_account_ids)
 ),
 cte_param as
 (
@@ -51,7 +84,8 @@ cte_param as
 		rlp.*
 	from staging.risk_limits_osr_param_v rlp
 	where rlp.osr_param_name ilike '%totalnotional%'
-		and rlp.trading_firm_id = any(in_trading_firm_ids)
+-- 		and rlp.trading_firm_id = any(:in_trading_firm_ids)
+	and rlp.account_id = any(:l_account_ids)
 )
 select
 	d.risk_limit_parameter as "Parameter",
@@ -75,17 +109,6 @@ order by "Parameter", "Scope", "Security Type", "Value", "Trading Firm", "Accoun
 
 
 
-select distinct on (rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum, tf.trading_firm_name) rlu.security_type,
-                                                                                                                                                               rlu.risk_limit_parameter,
-                                                                                                                                                               rlu.date_id,
-                                                                                                                                                               rlu.tf_risk_limit_param_max_value,
-                                                                                                                                                               rlu.tf_avg,
-                                                                                                                                                               rlu.tf_sum,
-                                                                                                                                                               tf.trading_firm_name
-from dash_bi.risk_limit_usage_dt rlu
-         join dwh.d_account a on (a.account_id = rlu.account_id)
-         join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-where rlu.date_id between :in_start_date_id and :in_end_date_id
-  and rlu.trading_firm_id = any (:in_trading_firm_ids)
+
 -- 	and a.is_active
 -- 	and tf.is_active
