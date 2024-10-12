@@ -16,7 +16,7 @@ where (case when coalesce(:in_accounts, '{}') = '{}' then true else da.account_i
         	   and case when coalesce(:in_trader_ids, '{}') = '{}' then true else ttf.trader_internal_id = any (:in_trader_ids) end
     and case when coalesce(:in_trading_firm_ids, '{}') = '{}' then true else tf.trading_firm_id = any(:in_trading_firm_ids) end);
 
-
+alter function dash360.report_risk_credit_utilization rename to report_risk_credit_utilization_csv;
 create or replace function dash360.report_risk_credit_utilization(in_start_date_id int4, in_end_date_id int4,
                                                                   in_trading_firm_ids character varying[] default '{"OFP0016"}'::character varying[],
                                                                   in_account_ids int4[] default '{}'::int4[],
@@ -65,13 +65,13 @@ begin
 
     return query
         with cte_daily as
-            (select distinct on (rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum, tf.trading_firm_name) rlu.security_type,
-                                                                                                                                                                            rlu.risk_limit_parameter,
-                                                                                                                                                                            rlu.date_id,
-                                                                                                                                                                            rlu.tf_risk_limit_param_max_value,
-                                                                                                                                                                            rlu.tf_avg,
-                                                                                                                                                                            rlu.tf_sum,
-                                                                                                                                                                            tf.trading_firm_name
+            (select distinct rlu.security_type,
+                             rlu.risk_limit_parameter,
+                             rlu.date_id,
+                             rlu.tf_risk_limit_param_max_value,
+                             rlu.tf_avg,
+                             rlu.tf_sum,
+                             tf.trading_firm_name
              from dash_bi.risk_limit_usage_dt rlu
                       join dwh.d_account da using (account_id)
                       join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = da.trading_firm_unq_id)
