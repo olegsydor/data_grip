@@ -219,8 +219,9 @@ $fx$;
 
 
 select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trader_ids := '{182,233,223,160}');
-select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_account_ids := '{13686,13687,13735,13736,20151,20152}');
+select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_account_ids := '{142,1183,1446,1472,2925,2928,3481,6329,6331,6670,7548,7612,7670,7671,8712,9234,9251,9264,9374,9432,10423,10492,11203,11209,11239,11240,11241,11806,11808,11820,11826,11844,11881,11941,11948,12001,12013,12264,12271,12351,12397,12657,12713,12757,12770,12833,12909}');
 select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trading_firm_ids := '{"OFP0016"}');
+
 
 
 233
@@ -233,7 +234,8 @@ where rlp.trading_firm_id = 'OFP0016'
 select a.account_name, rlp.*
 from staging.risk_limits_osr_param_v rlp
 join dwh.d_account a on (a.account_id = rlp.account_id)
-where rlp.account_id in (67281, 63423)
+where true
+--   and rlp.account_id in (67281, 63423)
 	and rlp.osr_param_name ilike '%totalnotional%';
 
 
@@ -278,19 +280,20 @@ select *
                and rlu.trader_id in (select dt.trader_id from dwh.d_trader dt)
 
 
-select distinct rlu.security_type,
-                             rlu.risk_limit_parameter,
-                             rlu.date_id,
-                             rlu.acc_risk_limit_param_max_value,
-                             rlu.acc_avg,
-                             rlu.acc_sum,
-                             ac.account_name,
-                             ac.account_id,
-                             rlp.osr_param_name
+select distinct
+--     rlu.security_type,
+--                              rlu.risk_limit_parameter,
+--                              rlu.date_id,
+--                              rlu.acc_risk_limit_param_max_value,
+--                              rlu.acc_avg,
+--                              rlu.acc_sum,
+--                              ac.account_name,
+                             array_agg(distinct ac.account_id)
+--                              rlp.osr_param_name
              from dash_bi.risk_limit_usage_dt rlu
                       join dwh.d_account ac using (account_id)
-                      join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
-             join staging.risk_limits_osr_param_v rlp on rlp.account_id = rlu.account_id and rlp.osr_param_name = rlu.risk_limit_parameter
+--                       join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
+             join staging.risk_limits_osr_param_v rlp on rlp.account_id = rlu.account_id and replace(rlp.osr_param_name, '_LowTouch', '') = rlu.risk_limit_parameter
              where true
                and rlu.date_id between :in_start_date_id and :in_end_date_id
                and rlp.osr_param_name ilike '%totalnotional%'
