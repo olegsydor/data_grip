@@ -14,7 +14,7 @@ and client_order_id = '1_153241014';
 create temp table t_old as
 select *
 	from staging.trade_record_missed_lp
-		where date_id = 20241014
+		where date_id >= 20241014
 and client_order_id = '1_153241014';
 
 
