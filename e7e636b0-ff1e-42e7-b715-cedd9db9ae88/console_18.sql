@@ -11,7 +11,7 @@ select *
 		where date_id = 20241014
 and client_order_id = '1_153241014';
 
-
+create temp table t_old as
 select *
 	from staging.trade_record_missed_lp
 		where date_id = 20241014
@@ -91,4 +91,80 @@ select
        trade_liquidity_indicator,
        order_create_time,
        blaze_account_alias
-from t_new tn
+from t_new tn;
+
+select
+    'new' as src,
+    client_order_id,
+       side,
+       openclose,
+       exch_exec_id,
+       secondary_exch_exec_id,
+       last_mkt,
+       last_qty,
+       last_px,
+       ex_destination,
+       street_order_qty::int,
+       order_qty::int,
+       multileg_reporting_type::text,
+       exec_broker,
+       cmta,
+       street_time_in_force::text,
+       opt_customer_firm,
+       is_cross_order,
+       contra_broker,
+       client_id,
+       order_price,
+       leaves_qty::int,
+       symbol,
+       strike_price,
+       put_or_call,
+       maturuty_year,
+       maturuty_month,
+       maturuty_day,
+       security_type,
+       display_instrument_id,
+       instrument_type_id,
+       activ_symbol,
+       company_name,
+       generation::int,
+       mx_gen::int
+from t_new
+union all
+select
+    'old' as src,
+       client_order_id,
+       side,
+       open_close,
+       exch_exec_id,
+       secondary_exch_exec_id,
+       last_mkt,
+       last_qty,
+       last_px,
+       ex_destination,
+       street_order_qty,
+       order_qty,
+       multileg_reporting_type::text,
+       exec_broker,
+       cmta,
+       street_time_in_force,
+       opt_customer_firm,
+       is_cross_order,
+       contra_broker,
+       client_id,
+       order_price,
+       leaves_qty,
+       symbol,
+       strike_price,
+       put_or_call,
+       maturity_year,
+       maturity_month,
+       maturity_day,
+       security_type,
+       display_instrument_id,
+       instrument_type_id,
+       activ_symbol,
+       companyname,
+       generation,
+       mx_gen
+from t_old
