@@ -93,9 +93,8 @@ select
        blaze_account_alias
 from t_new tn;
 
-select
-    'new' as src,
-    client_order_id,
+select 'new' as src,
+       client_order_id,
        side,
        openclose,
        exch_exec_id,
@@ -131,8 +130,7 @@ select
        mx_gen::int
 from t_new
 union all
-select
-    'old' as src,
+select 'old' as src,
        client_order_id,
        side,
        open_close,
