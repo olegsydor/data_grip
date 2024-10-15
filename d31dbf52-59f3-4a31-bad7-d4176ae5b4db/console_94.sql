@@ -1,7 +1,7 @@
 create or replace function dash360.report_risk_credit_utilization(in_start_date_id int4, in_end_date_id int4,
                                                                   in_trading_firm_ids character varying[] default '{}'::character varying[],
                                                                   in_account_ids int4[] default '{}'::int4[],
-                                                                  in_trader_ids text[] default '{}'::int8[],
+                                                                  in_trader_ids int8[] default '{}'::int8[],
                                                                   in_instrument_type_id char default null::char)
     returns table
             (
@@ -24,10 +24,12 @@ AS
 $fx$
     -- 20241011 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4990
 declare
-    l_row_cnt int;
-    l_load_id int;
-    l_step_id int;
-
+    l_row_cnt    int;
+    l_load_id    int;
+    l_step_id    int;
+    l_trader_ids text[] := array(select dt.trader_id
+                                 from dwh.d_trader dt
+                                 where dt.trader_internal_id = any (in_trader_ids));
 
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -46,10 +48,11 @@ begin
                              rlu.acc_risk_limit_param_max_value,
                              rlu.acc_avg,
                              rlu.acc_sum,
-                             ac.account_name
+                             ac.account_name,
+                             ac.account_id
              from dash_bi.risk_limit_usage_dt rlu
                       join dwh.d_account ac using (account_id)
-                      left join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
+                      join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
              where true
                and rlu.date_id between in_start_date_id and in_end_date_id
                and case
@@ -60,7 +63,7 @@ begin
                        else rlu.trading_firm_id = any (in_trading_firm_ids) end
                and case
                        when coalesce(in_trader_ids, '{}') = '{}' then true
-                       else rlu.trader_id = any (in_trader_ids) end
+                       else rlu.trader_id = any (l_trader_ids) end
                and case
                        when in_instrument_type_id is null then true
                        when in_instrument_type_id = 'O' then rlu.security_type = 'Option'
@@ -74,7 +77,8 @@ begin
                              rlu.tf_risk_limit_param_max_value,
                              rlu.tf_avg,
                              rlu.tf_sum,
-                             tf.trading_firm_name
+                             tf.trading_firm_name,
+                             tf.trading_firm_id
              from dash_bi.risk_limit_usage_dt rlu
                       join dwh.d_account ac using (account_id)
                       left join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
@@ -88,7 +92,7 @@ begin
                        else rlu.trading_firm_id = any (in_trading_firm_ids) end
                and case
                        when coalesce(in_trader_ids, '{}') = '{}' then true
-                       else rlu.trader_id = any (in_trader_ids) end
+                       else rlu.trader_id = any (l_trader_ids) end
                and case
                        when in_instrument_type_id is null then true
                        when in_instrument_type_id = 'O' then rlu.security_type = 'Option'
@@ -103,9 +107,10 @@ begin
                              rlu.trd_risk_limit_param_max_value,
                              rlu.trd_avg,
                              rlu.trd_sum,
-                             rlu.trader_id
+                             rlu.trader_id,
+                             dt.trader_internal_id
              from dash_bi.risk_limit_usage_dt rlu
-                      join dwh.d_account ac using (account_id)
+                      join dwh.d_trader dt using (trader_id)
              where true
                and rlu.date_id between in_start_date_id and in_end_date_id
                and case
@@ -113,10 +118,10 @@ begin
                        else rlu.account_id = any (in_account_ids) end
                and case
                        when coalesce(in_trading_firm_ids, '{}') = '{}' then true
-                       else ac.trading_firm_id = any (in_trading_firm_ids) end
+                       else rlu.trading_firm_id = any (in_trading_firm_ids) end
                and case
                        when coalesce(in_trader_ids, '{}') = '{}' then true
-                       else rlu.trader_id = any (in_trader_ids) end
+                       else dt.trader_internal_id = any (in_trader_ids) end
                and case
                        when in_instrument_type_id is null then true
                        when in_instrument_type_id = 'O' then rlu.security_type = 'Option'
@@ -135,7 +140,10 @@ begin
                        else rlp.trading_firm_id = any (in_trading_firm_ids) end
                and case
                        when coalesce(in_account_ids, '{}') = '{}' then true
-                       else rlp.account_id = any (in_account_ids) end)
+                       else rlp.account_id = any (in_account_ids) end
+               and case
+                       when coalesce(in_trader_ids, '{}') = '{}' then true
+                       else rlp.trader_internal_id = any (in_trader_ids) end)
         -- account_level
         select acd.risk_limit_parameter::text                                   as "Parameter",
                'Account -Level'                                                 as "Scope", --We should make it works for other scopes as well (Trading Firm, Account, Trader)
@@ -151,7 +159,7 @@ begin
                round(max(acd.acc_sum) / p.osr_param_value::numeric, 4)::numeric as "Min % Utilization",
                round(avg(acd.acc_sum) / p.osr_param_value::numeric, 4)::numeric as "Avg % Utilization"
         from account_data as acd
-                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter)
+                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.account_id = p.account_id)
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.account_name
 --         order by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.account_name
 
@@ -173,7 +181,7 @@ begin
                round(avg(acd.tf_sum) / p.osr_param_value::numeric, 4)::numeric as "Avg % Utilization"
 
         from trading_firm_data as acd
-                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter)
+                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.trading_firm_id = p.trading_firm_id)
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.trading_firm_name
 
         union all
@@ -193,7 +201,7 @@ begin
                round(avg(acd.trd_sum) / p.osr_param_value::numeric, 4)::numeric as "Avg % Utilization"
 
         from trader_data as acd
-                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter)
+                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.trader_internal_id = p.trader_internal_id)
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.trader_id
 
         order by 1, 2, 3, 4, 5, 6;
@@ -210,61 +218,93 @@ $fx$;
 
 
 
-select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trader_ids := '{"BOFA_CASEYDESK", "CHURCHILL", "MS_CASEYDESK"}');
+select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trader_ids := '{182,233,223,160}');
+select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_account_ids := '{13686,13687,13735,13736,20151,20152}');
 select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trading_firm_ids := '{"OFP0016"}');
-select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trading_firm_ids := null);
 
-select distinct on (rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum, tf.trading_firm_name) rlu.security_type,
-                                                                                                                                                                            rlu.risk_limit_parameter,
-                                                                                                                                                                            rlu.date_id,
-                                                                                                                                                                            rlu.tf_risk_limit_param_max_value,
-                                                                                                                                                                            rlu.tf_avg,
-                                                                                                                                                                            rlu.tf_sum,
-                                                                                                                                                                            tf.trading_firm_name,
-                                                                                                                                                                            tf.trading_firm_id
+
+233
+
+select *
+from staging.risk_limits_osr_param_v rlp
+where rlp.trading_firm_id = 'OFP0016'
+	and rlp.osr_param_name ilike '%totalnotional%';
+
+select a.account_name, rlp.*
+from staging.risk_limits_osr_param_v rlp
+join dwh.d_account a on (a.account_id = rlp.account_id)
+where rlp.account_id in (67281, 63423)
+	and rlp.osr_param_name ilike '%totalnotional%';
+
+
+
+select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
+                    rlp.*
+             from staging.risk_limits_osr_param_v rlp
+             where rlp.osr_param_name ilike '%totalnotional%'
+               and rlp.trading_firm_id = 'OFP0016'
+
+select * from dash360.report_risk_limit_usage(p_trading_firm_ids := '{"OFP0016"}')
+
+
+select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
+       rlp.*
+from staging.risk_limits_osr_param_v rlp
+where rlp.osr_param_name ilike '%totalnotional%'
+  and case
+          when coalesce(:in_trading_firm_ids, '{}') = '{}' then true
+          else rlp.trading_firm_id = any (:in_trading_firm_ids) end
+  and case
+          when coalesce(:in_account_ids, '{}') = '{}' then true
+          else rlp.account_id = any (:in_account_ids) end
+or case when coalesce(in_trader_id)
+
+select array_agg(dt.trader_id)
+                                 from dwh.d_trader dt
+                                 where dt.trader_internal_id = any (:in_trader_ids)
+select distinct rlu.security_type,
+                             rlu.risk_limit_parameter,
+                             rlu.date_id,
+                             rlu.trd_risk_limit_param_max_value,
+                             rlu.trd_avg,
+                             rlu.trd_sum,
+                             rlu.trader_id
+select *
              from dash_bi.risk_limit_usage_dt rlu
-                      join dwh.d_account da using (account_id)
-                      join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = da.trading_firm_unq_id)
-             where rlu.date_id between in_start_date_id and in_end_date_id
-and da.trading_firm_id != 'OFP0016'
+--                        join dwh.d_trader dt using(trader_id)
+             where true
+               and rlu.date_id between :in_start_date_id and :in_end_date_id
+--                and rlu.trader_id = any ('{"reuben.jacob","daniel.brennan","josselin.guillaume","christian.vale","david.maule","milad.haddad"}')
+               and rlu.trader_id in (select dt.trader_id from dwh.d_trader dt)
 
 
+select distinct rlu.security_type,
+                             rlu.risk_limit_parameter,
+                             rlu.date_id,
+                             rlu.acc_risk_limit_param_max_value,
+                             rlu.acc_avg,
+                             rlu.acc_sum,
+                             ac.account_name,
+                             ac.account_id,
+                             rlp.osr_param_name
+             from dash_bi.risk_limit_usage_dt rlu
+                      join dwh.d_account ac using (account_id)
+                      join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
+             join staging.risk_limits_osr_param_v rlp on rlp.account_id = rlu.account_id and rlp.osr_param_name = rlu.risk_limit_parameter
+             where true
+               and rlu.date_id between :in_start_date_id and :in_end_date_id
+               and rlp.osr_param_name ilike '%totalnotional%'
+               and case
+                       when coalesce(:in_account_ids, '{}') = '{}' then true
+                       else rlu.account_id = any (:in_account_ids) end
+               and case
+                       when coalesce(:in_account_ids, '{}') = '{}' then true
+                       else rlp.account_id = any (:in_account_ids) end
 
-
-----
-with cte_daily as
-(
-	select rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
-	from dash_bi.risk_limit_usage_dt rlu
-	join dwh.d_account a on (a.account_id = rlu.account_id)
-	join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-	where rlu.date_id between 20240701 and 20240930
-		and rlu.trading_firm_id = 'OFP0016'
-	group by rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
-	order by rlu.security_type, rlu.risk_limit_parameter, rlu.date_id, tf.trading_firm_name, rlu.tf_risk_limit_param_max_value, rlu.tf_avg, rlu.tf_sum
-),
-cte_param as
-(
-	select
-		replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
-		rlp.*
-	from staging.risk_limits_osr_param_v rlp
-	where rlp.osr_param_name ilike '%totalnotional%'
-		and rlp.trading_firm_id = 'OFP0016'
-)
-select
-	d.risk_limit_parameter as "Parameter",
-	'Trading Firm -Level' as "Scope", --We should make it works for other scopes as well (Trading Firm, Account, Trader)
-	d.security_type as "Security Type",
-	p.osr_param_value::numeric as "Value",
-	d.trading_firm_name as "Trading Firm",
-	null as "Account",
-	null as "Trader",
-	round(min(d.tf_sum), 2) as "Min Notional",
-	round(max(d.tf_sum), 2) as "Max Notional",
-	round(avg(d.tf_sum), 2) as "Average Notional",
-	round(max(d.tf_sum) / p.osr_param_value::numeric, 4) as "Max % Utilization"
-from cte_daily as d
-join cte_param as p on (p.norm_osr_param_name = d.risk_limit_parameter)
-group by "Parameter", "Scope", "Security Type", "Value", "Trading Firm", "Account", "Trader"
-order by "Parameter", "Scope", "Security Type", "Value", "Trading Firm", "Account", "Trader";
+select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
+                    rlp.*
+             from staging.risk_limits_osr_param_v rlp
+             where rlp.osr_param_name ilike '%totalnotional%'
+               and case
+                       when coalesce(:in_account_ids, '{}') = '{}' then true
+                       else rlp.account_id = any (:in_account_ids) end
