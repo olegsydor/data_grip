@@ -1,25 +1,3 @@
-CREATE TABLE Blaze7.dbo.dBlazeOrderStatus (
-	ID bigint IDENTITY(1,1) NOT NULL,
-	enum varchar(50) COLLATE Latin1_General_CS_AS NOT NULL,
-	enumname varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	name varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	groupStatus varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	blazeStatusCode varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	Order_or_Report_status int NULL,
-	CONSTRAINT PK_dBlazeOrderStatus PRIMARY KEY (ID)
-);
-
-CREATE TABLE LiquidPoint_EDW.dbo.LOrderStatus (
-	ID int IDENTITY(1,1) NOT NULL,
-	StatusCode int NOT NULL,
-	StatusDesc varchar(64) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	UpdateDate datetime NULL,
-	IsCompleted int NULL,
-	SystemID int NOT NULL,
-	EDWID int NULL,
-	CONSTRAINT PK_LOrderStatus PRIMARY KEY (ID)
-);
-
 SELECT aw.order_id,
     aw.orderid AS order_id_guid,
     aw.ex_destination AS rep_ex_destination,
@@ -37,7 +15,7 @@ SELECT aw.order_id,
     '???'::text AS instrument_id,
     aw.side,
     aw.openclose,
-    '-1'::integer * base32_to_int8(aw.exec_id::text) AS exec_id,
+    '-1'::integer * public.base32_to_int8(aw.exec_id::text) AS exec_id,
     '0'::text AS exch_exec_id,
     aw.secondary_exch_exec_id,
         CASE
@@ -182,7 +160,8 @@ SELECT aw.order_id,
     aw.status,
     COALESCE(NULLIF(aw.liquidityindicator, ''::text), 'R'::text) AS trade_liquidity_indicator,
     aw.order_create_time::timestamp without time zone AS order_create_time,
-    aw.blaze_account_alias
+    aw.blaze_account_alias,
+    CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status
    FROM trash.so_away_trade aw
      LEFT JOIN LATERAL ( SELECT lm_1.id,
             lm_1.mic_code,
@@ -215,4 +194,8 @@ SELECT aw.order_id,
      LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.option_range AND lfw.systemid = 4
      LEFT JOIN billing.tcompany cmp ON us.company_id = cmp.companyid AND us.system_id = cmp.systemid AND cmp.edwactive = 1::bit(1)
      LEFT JOIN staging.d_liquidity_type lt ON aw.rep_liquidity_type = lt.enum::text
-  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]));
+   left join staging.d_blaze_order_status bos on aw.status = bos.enum and bos.order_or_report_status = 2
+   left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
+   left join staging.d_order_class oc on oc.enum = aw.
+  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
+and aw.cl_ord_id = '1_153241014';
