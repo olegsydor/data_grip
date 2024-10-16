@@ -135,15 +135,15 @@ begin
                     rlp.*
              from staging.risk_limits_osr_param_v rlp
              where rlp.osr_param_name ilike '%totalnotional%'
-               and case
-                       when coalesce(in_trading_firm_ids, '{}') = '{}' then true
+               and (case
+                       when coalesce(in_trading_firm_ids, '{}') = '{}' then false
                        else rlp.trading_firm_id = any (in_trading_firm_ids) end
-               and case
-                       when coalesce(in_account_ids, '{}') = '{}' then true
+               or case
+                       when coalesce(in_account_ids, '{}') = '{}' then false
                        else rlp.account_id = any (in_account_ids) end
-               and case
+               or case
                        when coalesce(in_trader_ids, '{}') = '{}' then true
-                       else rlp.trader_internal_id = any (in_trader_ids) end)
+                       else rlp.trader_internal_id = any (in_trader_ids) end))
         -- account_level
         select acd.risk_limit_parameter::text                                   as "Parameter",
                'Account -Level'                                                 as "Scope", --We should make it works for other scopes as well (Trading Firm, Account, Trader)
@@ -159,7 +159,10 @@ begin
                round(max(acd.acc_sum) / p.osr_param_value::numeric, 4)::numeric as "Min % Utilization",
                round(avg(acd.acc_sum) / p.osr_param_value::numeric, 4)::numeric as "Avg % Utilization"
         from account_data as acd
-                 join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.account_id = p.account_id)
+                 join cte_param as p
+                      on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.account_id = p.account_id)
+        where true
+          and case when coalesce(in_account_ids, '{}') = '{}' then false else true end
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.account_name
 --         order by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.account_name
 
@@ -182,6 +185,8 @@ begin
 
         from trading_firm_data as acd
                  join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.trading_firm_id = p.trading_firm_id)
+        where true
+          and case when coalesce(in_trading_firm_ids, '{}') = '{}' then false else true end
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.trading_firm_name
 
         union all
@@ -199,9 +204,10 @@ begin
                round(min(acd.trd_sum) / p.osr_param_value::numeric, 4)::numeric as "Max % Utilization",
                round(max(acd.trd_sum) / p.osr_param_value::numeric, 4)::numeric as "Min % Utilization",
                round(avg(acd.trd_sum) / p.osr_param_value::numeric, 4)::numeric as "Avg % Utilization"
-
         from trader_data as acd
                  join cte_param as p on (p.norm_osr_param_name = acd.risk_limit_parameter and acd.trader_internal_id = p.trader_internal_id)
+        where true
+          and case when coalesce(in_trader_ids, '{}') = '{}' then false else true end
         group by acd.risk_limit_parameter, acd.security_type, p.osr_param_value, acd.trader_id
 
         order by 1, 2, 3, 4, 5, 6;
@@ -223,91 +229,25 @@ select * from dash360.report_risk_credit_utilization(in_start_date_id := 2024070
 select * from dash360.report_risk_credit_utilization(in_start_date_id := 20240701, in_end_date_id := 20240930, in_trading_firm_ids := '{"OFP0016"}');
 
 
-
-233
-
 select *
-from staging.risk_limits_osr_param_v rlp
-where rlp.trading_firm_id = 'OFP0016'
-	and rlp.osr_param_name ilike '%totalnotional%';
-
-select a.account_name, rlp.*
-from staging.risk_limits_osr_param_v rlp
-join dwh.d_account a on (a.account_id = rlp.account_id)
-where true
---   and rlp.account_id in (67281, 63423)
-	and rlp.osr_param_name ilike '%totalnotional%';
-
+from dash360.report_risk_credit_utilization(
+ in_start_date_id := 20240701,
+ in_end_date_id := 20240930,
+ in_trading_firm_ids := '{"ctctrad01"}',
+ in_account_ids := '{24508,24505,24614,24507}'
+);
 
 
 select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
                     rlp.*
              from staging.risk_limits_osr_param_v rlp
              where rlp.osr_param_name ilike '%totalnotional%'
-               and rlp.trading_firm_id = 'OFP0016'
-
-select * from dash360.report_risk_limit_usage(p_trading_firm_ids := '{"OFP0016"}')
-
-
-select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
-       rlp.*
-from staging.risk_limits_osr_param_v rlp
-where rlp.osr_param_name ilike '%totalnotional%'
-  and case
-          when coalesce(:in_trading_firm_ids, '{}') = '{}' then true
-          else rlp.trading_firm_id = any (:in_trading_firm_ids) end
-  and case
-          when coalesce(:in_account_ids, '{}') = '{}' then true
-          else rlp.account_id = any (:in_account_ids) end
-or case when coalesce(in_trader_id)
-
-select array_agg(dt.trader_id)
-                                 from dwh.d_trader dt
-                                 where dt.trader_internal_id = any (:in_trader_ids)
-select distinct rlu.security_type,
-                             rlu.risk_limit_parameter,
-                             rlu.date_id,
-                             rlu.trd_risk_limit_param_max_value,
-                             rlu.trd_avg,
-                             rlu.trd_sum,
-                             rlu.trader_id
-select *
-             from dash_bi.risk_limit_usage_dt rlu
---                        join dwh.d_trader dt using(trader_id)
-             where true
-               and rlu.date_id between :in_start_date_id and :in_end_date_id
---                and rlu.trader_id = any ('{"reuben.jacob","daniel.brennan","josselin.guillaume","christian.vale","david.maule","milad.haddad"}')
-               and rlu.trader_id in (select dt.trader_id from dwh.d_trader dt)
-
-
-select distinct
---     rlu.security_type,
---                              rlu.risk_limit_parameter,
---                              rlu.date_id,
---                              rlu.acc_risk_limit_param_max_value,
---                              rlu.acc_avg,
---                              rlu.acc_sum,
---                              ac.account_name,
-                             array_agg(distinct ac.account_id)
---                              rlp.osr_param_name
-             from dash_bi.risk_limit_usage_dt rlu
-                      join dwh.d_account ac using (account_id)
---                       join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = ac.trading_firm_unq_id)
-             join staging.risk_limits_osr_param_v rlp on rlp.account_id = rlu.account_id and replace(rlp.osr_param_name, '_LowTouch', '') = rlu.risk_limit_parameter
-             where true
-               and rlu.date_id between :in_start_date_id and :in_end_date_id
-               and rlp.osr_param_name ilike '%totalnotional%'
-               and case
-                       when coalesce(:in_account_ids, '{}') = '{}' then true
-                       else rlu.account_id = any (:in_account_ids) end
-               and case
-                       when coalesce(:in_account_ids, '{}') = '{}' then true
-                       else rlp.account_id = any (:in_account_ids) end
-
-select replace(rlp.osr_param_name, '_LowTouch', '') as norm_osr_param_name, --What should we deal with it? EquityTotalNotionalNonCross_LowTouch vs EquityTotalNotionalNonCross?
-                    rlp.*
-             from staging.risk_limits_osr_param_v rlp
-             where rlp.osr_param_name ilike '%totalnotional%'
-               and case
-                       when coalesce(:in_account_ids, '{}') = '{}' then true
-                       else rlp.account_id = any (:in_account_ids) end
+               and (case
+                       when coalesce(:in_trading_firm_ids, '{}') = '{}' then false
+                       else rlp.trading_firm_id = any (:in_trading_firm_ids) end
+               or case
+                       when coalesce(:in_account_ids, '{}') = '{}' then false
+                       else rlp.account_id = any (:in_account_ids) end)
+               or case
+                       when coalesce(in_trader_ids, '{}') = '{}' then false
+                       else rlp.trader_internal_id = any (in_trader_ids) end
