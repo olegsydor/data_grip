@@ -204,7 +204,7 @@ SELECT aw.order_id,
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
   WHERE true
     AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
---   and aw.cl_ord_id = '1_106241016'
+   and aw.cl_ord_id in ('1_106241016', '1_10d241016')
 and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004')
 -----------
 select
