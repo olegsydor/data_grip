@@ -202,15 +202,17 @@ SELECT aw.order_id,
    left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
    left join staging.d_order_class oc on oc.enum = aw.systemordertypeid
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
-  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]));
-
-
+  WHERE true
+    AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
+--   and aw.cl_ord_id = '1_106241016'
+and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004')
 -----------
 select
-    aw.status,
-    los.EDWID, bos.ID, aw.orderreportspecialtype,
-    CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
-    coalesce(lot.edwid,oc.id) as system_order_type_id
+    array_agg(distinct exec_id)
+--     aw.status,
+--     los.EDWID, bos.ID, aw.orderreportspecialtype,
+--     CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
+--     coalesce(lot.edwid,oc.id) as system_order_type_id
    FROM trash.so_away_trade aw
      LEFT JOIN LATERAL ( SELECT lm_1.id,
             lm_1.mic_code,
@@ -247,7 +249,9 @@ select
    left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
    left join staging.d_order_class oc on oc.enum = aw.systemordertypeid
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
-  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
+  WHERE true
+    AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
 and aw.cl_ord_id = '1_106241016'
+and exec_id in ('jelu6ngk0004','jelucahg0002','jelucaho0002')
 
 ('00000000-3230-3030-6768-6163756C656A','00000000-3230-3030-6F68-6163756C656A','00000000-3430-3030-6B67-6E36756C656A')
