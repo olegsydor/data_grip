@@ -202,5 +202,52 @@ SELECT aw.order_id,
    left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
    left join staging.d_order_class oc on oc.enum = aw.systemordertypeid
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
-  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
+  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]));
 
+
+-----------
+select
+    aw.status,
+    los.EDWID, bos.ID, aw.orderreportspecialtype,
+    CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
+    coalesce(lot.edwid,oc.id) as system_order_type_id
+   FROM trash.so_away_trade aw
+     LEFT JOIN LATERAL ( SELECT lm_1.id,
+            lm_1.mic_code,
+            lm_1.security_type,
+            lm_1.venue_exchange,
+            lm_1.business_name,
+            lm_1.ex_destination,
+            lm_1.last_mkt
+           FROM staging.d_blaze_exchange_codes lm_1
+          WHERE COALESCE(lm_1.last_mkt, lm_1.ex_destination)::text = aw.ex_destination AND
+                CASE
+                    WHEN aw.securitytype = '1'::text THEN 'O'::text
+                    WHEN aw.securitytype IS NULL THEN 'O'::text
+                    WHEN aw.securitytype = '2'::text THEN 'E'::text
+                    ELSE aw.securitytype
+                END = lm_1.security_type::text
+         LIMIT 1) lm ON true
+     LEFT JOIN staging.t_users us ON us.user_id = aw.userid::integer
+     LEFT JOIN LATERAL ( SELECT den_1.last_mkt
+           FROM billing.dash_exchange_names den_1
+          WHERE den_1.mic_code::text = COALESCE(lm.ex_destination, aw.ex_destination::character varying)::text AND den_1.real_exchange_id::text = den_1.exchange_id::text AND den_1.mic_code::text <> ''::text AND den_1.is_active
+         LIMIT 1) den ON true
+     LEFT JOIN LATERAL ( SELECT den1_1.last_mkt,
+            den1_1.mic_code
+           FROM billing.dash_exchange_names den1_1
+          WHERE den1_1.exchange_id::text = COALESCE(lm.ex_destination, aw.ex_destination::character varying)::text AND den1_1.real_exchange_id::text = den1_1.exchange_id::text AND den1_1.mic_code::text <> ''::text AND den1_1.is_active
+         LIMIT 1) den1 ON true
+     LEFT JOIN staging.d_time_in_force tif ON tif.enum = aw.co_time_in_force
+     LEFT JOIN billing.time_in_force ltf ON tif.id = ltf.code AND ltf.systemid = 8
+     LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.option_range AND lfw.systemid = 4
+     LEFT JOIN billing.tcompany cmp ON us.company_id = cmp.companyid AND us.system_id = cmp.systemid AND cmp.edwactive = 1::bit(1)
+     LEFT JOIN staging.d_liquidity_type lt ON aw.rep_liquidity_type = lt.enum::text
+   left join staging.d_blaze_order_status bos on aw.status = bos.enum and bos.order_or_report_status = 2
+   left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
+   left join staging.d_order_class oc on oc.enum = aw.systemordertypeid
+   left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
+  WHERE true AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
+and aw.cl_ord_id = '1_106241016'
+
+('00000000-3230-3030-6768-6163756C656A','00000000-3230-3030-6F68-6163756C656A','00000000-3430-3030-6B67-6E36756C656A')

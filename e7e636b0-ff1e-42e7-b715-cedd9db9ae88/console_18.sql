@@ -1,21 +1,21 @@
 
 select client_order_id, count(*)
 	from staging.trade_record_missed_lp
-		where date_id = 20241014
+		where date_id = 20241016
 group by client_order_id
 having count(*) > 1
 
 create temp table t_new as
 select *
 	from trash.so_missed_lp
-		where date_id = 20241014
-and client_order_id = '1_153241014';
+		where date_id = 20241016
+and client_order_id = '1_106241016';
 
 create temp table t_old as
 select *
 	from staging.trade_record_missed_lp
-		where date_id >= 20241014
-and client_order_id = '1_153241014';
+		where date_id = 20241016
+and client_order_id = '1_106241016';
 
 
 select
@@ -91,6 +91,8 @@ select
        trade_liquidity_indicator,
        order_create_time,
        blaze_account_alias
+, edw_status
+, system_order_type_id
 from t_new tn;
 
 select 'new' as src,
@@ -128,6 +130,8 @@ select 'new' as src,
        company_name,
        generation::int,
        mx_gen::int
+-- , edw_status
+-- , system_order_type_id
 from t_new
 union all
 select 'old' as src,
