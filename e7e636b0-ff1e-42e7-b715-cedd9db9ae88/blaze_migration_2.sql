@@ -165,7 +165,8 @@ SELECT aw.order_id,
     aw.order_create_time::timestamp without time zone AS order_create_time,
     aw.blaze_account_alias,
     CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
-    coalesce(lot.edwid,oc.id) as system_order_type_id
+    coalesce(lot.edwid,oc.id) as system_order_type_id,
+    los.id
    FROM trash.so_away_trade aw
      LEFT JOIN LATERAL ( SELECT lm_1.id,
             lm_1.mic_code,
