@@ -222,3 +222,7 @@ from trash.so_away_trade
 where date_id = 20241017
 and report_cl_ord_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
 
+select * from trash.so_missed_lp
+where date_id = 20241017
+  and client_order_id =  '1_1q4241017'
+and order_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
