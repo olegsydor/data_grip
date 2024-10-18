@@ -8,7 +8,7 @@ having count(*) > 1
 create temp table t_new as
 select *
 	from trash.so_missed_lp
-		where date_id = 20241016
+		where date_id = 20241017
 and client_order_id = '1_106241016';
 
 create temp table t_old as
@@ -213,5 +213,12 @@ FROM trash.so_away_trade aw
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
   WHERE true
     AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
-   and aw.cl_ord_id in ('1_106241016', '1_10d241016')
- and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004')
+   and aw.cl_ord_id in ('1_1q4241017')
+ and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004');
+
+
+select report_exec_id_guid, cl_ord_id
+from trash.so_away_trade
+where date_id = 20241017
+and report_cl_ord_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
+
