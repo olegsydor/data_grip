@@ -1,3 +1,5 @@
+select * from dash360.report_fintech_needham_equity(in_start_date_id := 20241018, in_end_date_id:= 20241018)
+
 create or replace function dash360.report_fintech_needham_equity(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
@@ -12,6 +14,7 @@ declare
     l_load_id     int;
     l_step_id     int;
     l_account_ids int4[];
+    l_batch_id    text := '777777';
 
 
 begin
@@ -24,17 +27,17 @@ begin
     into l_step_id;
 
     select array_agg(account_id)
---     into l_account_ids
+    into l_account_ids
     from dwh.d_account da
-    join dwh.d_trading_firm tf on tf.trading_firm_id = da.trading_firm_id
+             join dwh.d_trading_firm tf on tf.trading_firm_id = da.trading_firm_id
     where tf.trading_firm_id = 'wallstacc'
-    and da.is_active;
+      and da.is_active;
 
     -- header
     return query
         select array_to_string(ARRAY [
                                    '*PANDS', -- as heading_literal,
-                                   lpad('123456', 6), -- as batch_id, --Should we hardcode?
+                                   lpad(l_batch_id, 6), -- as batch_id, --Should we hardcode?
                                    lpad('', 48), -- as filler,
                                    to_char(current_date, 'MM/DD/YYYY'), -- as processing_date,
                                    lpad('', 13) -- as filler2
@@ -45,14 +48,18 @@ begin
         on commit drop
     as
     select tr.trade_record_id,
-           1 as record_num,
+           case
+               when tr.side = '1' then 'B'
+               when tr.side in ('2', '5', '6') then 'S' end as side,
+           tr.last_qty,
+           1                                                as record_num,
            array_to_string(ARRAY [
                                case
                                    when tr.side = '1' then 'B'
                                    when tr.side in ('2', '5', '6') then 'S' end, -- as buy_sell, [1]
                                'NCO', -- as correspondent_office [2-4]
-                               '8966731', -- as customer_account_num, --Should we hardcode? [5-10]
-                               '?', -- as account_type, --Should we hardcode? [11]
+                               '896673', -- as customer_account_num, --Should we hardcode? [5-10]
+                               '1', -- as account_type, --Should we hardcode? [11]
                                rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
                                lpad('', 2), -- as filler1, [16-17]
                                lpad(case when tr.instrument_type_id = 'E' then di.symbol else 'OPTION' end,
@@ -84,50 +91,91 @@ begin
                                rpad('', 3), -- as rr_override, [75-77]
                                '1', -- as control_field, [78]
                                rpad('', 2) -- as filler3 [79-80]
-                               ], '', '')
+                               ], '', '')                   as ret_row
     from dwh.flat_trade_record tr
              join dwh.d_instrument di on (di.instrument_id = tr.instrument_id)
     where tr.date_id between in_start_date_id and in_end_date_id
       and tr.is_busted = 'N'
       and tr.account_id = any (l_account_ids);
 
+    insert into t_rec
+    select tr.trade_record_id,
+           case
+               when tr.side = '1' then 'B'
+               when tr.side in ('2', '5', '6') then 'S' end as side,
+           tr.last_qty,
+           3                                                as record_num,
+           array_to_string(ARRAY [
+                               case
+                                   when tr.side = '1' then 'B'
+                                   when tr.side in ('2', '5', '6') then 'S' end, -- as buy_sell, [1]
+                               'NCO', -- as correspondent_office [2-4]
+                               '896673', -- as customer_account_num, --Should we hardcode? [5-10]
+                               '1', -- as account_type, --Should we hardcode? [11]
+                               rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
+                               lpad('', 2), -- as filler1, [16-17]
+                               lpad(case when tr.instrument_type_id = 'E' then di.symbol else 'OPTION' end,
+                                    9), -- as cusip_symbol, --Use Symbol? We don't provide CUISP [18-26]
+                               '8', -- as market, [27]
+                               '1', -- as blotter, [28]
+                               to_char(tr.trade_record_time, 'MMDDYY'), -- as trade_date, [29-34]
+                               to_char(public.get_settle_date_by_instrument_type(tr.trade_record_time::date,
+                                                                                 tr.instrument_type_id),
+                                       'MMDDYY'), -- as settlement_date, [35-40]
+                               ' ', -- as order_accum_code, [41]
+                               ' ', -- as blank, [42]
+                               ' ', -- as standard_instruction_override, [43]
+                               ' ', -- as blotter_override, [44]
+                               ' ', -- as special_confirm_print, [45]
+                               ' ', -- as multiple_round, [46]
+                               ' ', -- as cns_override, [47]
+                               ' ', -- as transfer_override, [48]
+                               lpad('', 3), -- as execution_time_milli_seconds, [49-51]
+                               lpad('', 2), -- as filler2, [52-53]
+                               lpad('', 3), -- as x2nd_rr_override, [54-56]
+                               lpad('', 2), -- as x2nd_rr_percentage, [57-58]
+                               lpad('', 3), -- as x3rd_rr_override, [59-61]
+                               lpad('', 2), -- as x3rd_rr_percentage, [62-63]
+                               lpad('', 10), -- as trading_account,[64-73]
+                               lpad('', 4), -- as execution_time_hhmm,[74-77]
+                               '3', -- as control_field, [78]
+                               lpad('', 2) -- as execution_time_ss [79-80]
+                               ], '', '')                   as ret_row
+    from dwh.flat_trade_record tr
+             join dwh.d_instrument di on (di.instrument_id = tr.instrument_id)
+    where tr.date_id between in_start_date_id and in_end_date_id
+      and tr.is_busted = 'N'
+      and tr.account_id = any (l_account_ids);
 
+    return query
+        select t_rec.ret_row
+        from t_rec
+        order by trade_record_id, record_num;
 
-   end;
+    get diagnostics l_row_cnt = row_count;
+
+    return query
+        select array_to_string(ARRAY [
+                                   '*TRAIL', -- as TRAILER IDENTIFIER [1-6]
+                                   lpad(l_batch_id, 6), -- as batch_id, --Should we hardcode? [7-11]
+                                   lpad('', 4), -- as filler, [12-15]
+                                   lpad(l_row_cnt::text, 7, '0'), -- RECORD COUNT [16-22]
+                                   lpad('', 3), -- as filler, [23-25]
+                                   lpad((select sum(last_qty)::text from t_rec where side = 'B'), 17,
+                                        '0'), -- as Total Buy Quantity [26-42]
+                                   lpad('', 3), -- as filler, [43-45]
+                                   lpad((select sum(last_qty)::text from t_rec where side = 'S'), 17,
+                                        '0'), -- as Total Sell Quantity [46-62]
+                                   lpad('', 18) -- as filler, [63-80]
+                                   ], '', '');
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_needham_equity for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' completed====', l_row_cnt, 'E')
+    into l_step_id;
+end;
 $fx$;
 
 
-select
-	case when tr.side = '1' then 'B' when tr.side in ('2','5','6') then 'S' end as buy_sell,
-	'NCO8966731' as correspondent_office,
-	'?' as customer_account_num, ----Should we hardcode?
-	'?' as account_type, --Should we hardcode?
-	tr.exchange_id as exchange_mnemonic,
-	null as filler1,
-	(case when tr.instrument_type_id = 'E' then hsd.symbol else 'OPTION' end) as cusip_symbol, --Use Symbol? We don't provide CUISP
-	'8' as market,
-	'1' as blotter,
-	to_char(tr.trade_record_time, 'MMddyyyy') as trade_date,
-	to_char(public.get_settle_date_by_instrument_type(tr.trade_record_time::date, tr.instrument_type_id), 'MMddyyyy') as settlement_date,
-	null as order_accum_code,
-	null as blank,
-	null as standard_instruction_override,
-	null as blotter_override,
-	null as special_confirm_print,
-	null as multiple_round,
-	null as cns_override,
-	null as transfer_override,
-	null as execution_time_milli_seconds,
-	null as filler2,
-	null as x2nd_rr_override,
-	null as x2nd_rr_percentage,
-	null as x3rd_rr_override,
-	null as x3rd_rr_percentage,
-	null as trading_account,
-	null as execution_time_hhmm,
-	'3' as control_field,
-	null as execution_time_ss
-from dwh.flat_trade_record tr
-join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
-where tr.date_id = 20241007
-	and tr.is_busted = 'N'
+select * from t_rec
+order by trade_record_id, record_num
