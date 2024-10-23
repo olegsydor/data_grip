@@ -14,7 +14,7 @@ declare
     l_load_id     int;
     l_step_id     int;
     l_account_ids int4[];
-    l_batch_id    text := '777777';
+    l_batch_id    text := 'NEEDC';
 
 
 begin
@@ -37,7 +37,7 @@ begin
     return query
         select array_to_string(ARRAY [
                                    '*PANDS', -- as heading_literal,
-                                   lpad(l_batch_id, 6), -- as batch_id, --Should we hardcode?
+                                   rpad(l_batch_id, 6), -- as batch_id, --Should we hardcode?
                                    lpad('', 48), -- as filler,
                                    to_char(current_date, 'MM/DD/YYYY'), -- as processing_date,
                                    lpad('', 13) -- as filler2
