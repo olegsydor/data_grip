@@ -1,4 +1,4 @@
-select * from dash360.report_fintech_needham_equity(in_start_date_id := 20241018, in_end_date_id:= 20241018)
+select * from dash360.report_fintech_needham_equity(in_start_date_id := 20241022, in_end_date_id:= 20241022)
 
 create or replace function dash360.report_fintech_needham_equity(in_start_date_id int4, in_end_date_id int4)
     returns table
@@ -53,6 +53,7 @@ begin
                when tr.side in ('2', '5', '6') then 'S' end as side,
            tr.last_qty,
            1                                                as record_num,
+           tr.last_px,
            array_to_string(ARRAY [
                                case
                                    when tr.side = '1' then 'B'
@@ -60,7 +61,8 @@ begin
                                'NCO', -- as correspondent_office [2-4]
                                '896673', -- as customer_account_num, --Should we hardcode? [5-10]
                                '1', -- as account_type, --Should we hardcode? [11]
-                               rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
+--                                rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
+                               rpad('', 4), -- as exchange_mnemonic, [12-15]
                                lpad('', 2), -- as filler1, [16-17]
                                lpad(case when tr.instrument_type_id = 'E' then di.symbol else 'OPTION' end,
                                     9), -- as cusip_symbol, --Use Symbol? We don't provide CUISP [18-26]
@@ -68,11 +70,7 @@ begin
                                '1', -- as blotter, [28]
                                lpad(tr.last_qty::text, 8, '0'), -- as quantity, [29-36]
                                lpad(floor(tr.last_px)::text, 4, '0'), -- as price_whole_number, --Need whole number [37-40]
-                               case
-                                   when tr.last_px - floor(tr.last_px) < 0
-                                       then (10000000 * (tr.last_px - floor(tr.last_px)))::text
-                                   else '.' || to_char(10000 * (tr.last_px - floor(tr.last_px)), 'FM0000??')
-                                   end, -- as price_decimal, --Need decimal [41-47]
+                               to_char(round(10000000 * (last_px - floor(last_px))), 'FM0000000'), -- as price_decimal, --Need decimal [41-47]
                                ' ', -- as price_code, [48]
                                '9', -- as settlement_date_code, [49]
                                ' ', -- as step_in_step_out_code, [50]
@@ -105,6 +103,7 @@ begin
                when tr.side in ('2', '5', '6') then 'S' end as side,
            tr.last_qty,
            3                                                as record_num,
+           tr.last_px,
            array_to_string(ARRAY [
                                case
                                    when tr.side = '1' then 'B'
@@ -112,7 +111,8 @@ begin
                                'NCO', -- as correspondent_office [2-4]
                                '896673', -- as customer_account_num, --Should we hardcode? [5-10]
                                '1', -- as account_type, --Should we hardcode? [11]
-                               rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
+--                                rpad(tr.exchange_id, 4), -- as exchange_mnemonic, [12-15]
+                               rpad('', 4), -- as exchange_mnemonic, [12-15]
                                lpad('', 2), -- as filler1, [16-17]
                                lpad(case when tr.instrument_type_id = 'E' then di.symbol else 'OPTION' end,
                                     9), -- as cusip_symbol, --Use Symbol? We don't provide CUISP [18-26]
@@ -179,3 +179,11 @@ $fx$;
 
 select * from t_rec
 order by trade_record_id, record_num
+
+
+select  lpad(floor(:last_px)::text, 4, '0') ||
+                              (round(10000000 * (:last_px - floor(:last_px))))::text,
+    to_char(round(10000000 * (:last_px - floor(:last_px))), 'FM0000000')
+
+
+select * from t_rec
