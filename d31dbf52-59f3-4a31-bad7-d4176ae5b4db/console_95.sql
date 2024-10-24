@@ -195,11 +195,12 @@ $function$
     -- 20241021 SO https://dashfinancial.atlassian.net/browse/DEVREQ-4881
     -- 20241023 SO add account_ids and trading_firm_ids as input parameters
 declare
-    l_row_cnt     int;
-    l_load_id     int;
-    l_step_id     int;
-    l_account_ids int4[];
-    l_batch_id    text := 'NEEDC';
+    l_row_cnt             int;
+    l_load_id             int;
+    l_step_id             int;
+    l_account_ids         int4[];
+    l_batch_id            text     := 'NEEDC';
+    l_instrument_type_ids bpchar[] := '{"E"}';
 
 
 begin
@@ -233,7 +234,7 @@ begin
 
 
     create temp table t_rec
-        on commit drop
+         on commit drop
     as
     select tr.trade_record_id,
            case
@@ -281,6 +282,7 @@ begin
              join dwh.d_instrument di on (di.instrument_id = tr.instrument_id)
     where tr.date_id between in_start_date_id and in_end_date_id
       and tr.is_busted = 'N'
+      and di.instrument_type_id = any(l_instrument_type_ids)
       and tr.account_id = any (l_account_ids);
 
     insert into t_rec
@@ -330,6 +332,7 @@ begin
     from dwh.flat_trade_record tr
              join dwh.d_instrument di on (di.instrument_id = tr.instrument_id)
     where tr.date_id between in_start_date_id and in_end_date_id
+      and di.instrument_type_id = any(l_instrument_type_ids)
       and tr.is_busted = 'N'
       and tr.account_id = any (l_account_ids);
 
@@ -362,12 +365,11 @@ begin
 end;
 $function$
 ;
-select * from dash360.report_fintech_pershing_ps_trade_file(in_start_date_id := 20241022, in_end_date_id:= 20241022, in_trading_firm_ids := '{wallstacc}');
+select * from dash360.report_fintech_pershing_ps_trade_file(in_start_date_id := 20241023, in_end_date_id:= 20241023, in_trading_firm_ids := '{wallstacc}');
 select * from dash360.report_fintech_pershing_ps_trade_file(in_start_date_id := 20241022, in_end_date_id:= 20241022, in_account_ids := '{15826, 69422}');
 
-drop table t_rec;
-    3
-15826
-69422
 
-select distinct account_id from t_rec
+drop table t_rec;
+
+
+select * from t_rec
