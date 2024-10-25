@@ -209,11 +209,12 @@ SELECT aw.order_id,
 and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004')
 -----------
 select
-    array_agg(distinct exec_id)
---     aw.status,
---     los.EDWID, bos.ID, aw.orderreportspecialtype,
---     CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
---     coalesce(lot.edwid,oc.id) as system_order_type_id
+--     array_agg(distinct exec_id)
+    aw.status,
+    los.EDWID, bos.ID, aw.orderreportspecialtype,
+    CASE WHEN coalesce(los.EDWID, bos.ID,0) = 151 and aw.orderreportspecialtype = 'M' then 156 ELSE coalesce(los.EDWID, bos.ID,0) END as edw_status,
+    coalesce(lot.edwid,oc.id) as system_order_type_id
+, *
    FROM trash.so_away_trade aw
      LEFT JOIN LATERAL ( SELECT lm_1.id,
             lm_1.mic_code,
@@ -246,13 +247,13 @@ select
      LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.option_range AND lfw.systemid = 4
      LEFT JOIN billing.tcompany cmp ON us.company_id = cmp.companyid AND us.system_id = cmp.systemid AND cmp.edwactive = 1::bit(1)
      LEFT JOIN staging.d_liquidity_type lt ON aw.rep_liquidity_type = lt.enum::text
+
    left join staging.d_blaze_order_status bos on aw.status = bos.enum and bos.order_or_report_status = 2
    left join staging.l_order_status los on bos.id = los.statuscode and los.systemid = 8
    left join staging.d_order_class oc on oc.enum = aw.systemordertypeid
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
   WHERE true
     AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
-and aw.cl_ord_id = '1_106241016'
-and exec_id in ('jelu6ngk0004','jelucahg0002','jelucaho0002')
-
-('00000000-3230-3030-6768-6163756C656A','00000000-3230-3030-6F68-6163756C656A','00000000-3430-3030-6B67-6E36756C656A')
+-- and aw.cl_ord_id = '1_118241024'
+and orderid = '00000000-0001-0000-0000-06131313ad80'
+and report_exec_id_guid = '00000000-3030-3030-3435-37666a38686a'
