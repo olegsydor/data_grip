@@ -365,7 +365,7 @@ begin
 end;
 $function$
 ;
-select * from dash360.report_fintech_pershing_ps_trade_file(in_start_date_id := 20241023, in_end_date_id:= 20241023, in_trading_firm_ids := '{wallstacc}');
+select * from dash360.report_fintech_eod_pershing_ps_trade_file(in_start_date_id := 20241024, in_end_date_id:= 20241024, in_trading_firm_ids := '{wallstacc}');
 select * from dash360.report_fintech_pershing_ps_trade_file(in_start_date_id := 20241022, in_end_date_id:= 20241022, in_account_ids := '{15826, 69422}');
 
 
