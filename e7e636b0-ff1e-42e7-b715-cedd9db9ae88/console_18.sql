@@ -20,10 +20,11 @@ select *
 and client_order_id = '1_0241024';
 
 
-select *
+select client_order_id, count(*)
 	from t_new
 		where date_id = 20241024
-and client_order_id = '1_0241024';
+-- and client_order_id = '1_0241024'
+group by client_order_id
 
 select *
 	from t_old
@@ -148,7 +149,7 @@ with bth as (select 'new' as src,
 -- , system_order_type_id
              from t_new
              where true
-               and client_order_id = '1_0241024'
+               and client_order_id = '1_118241024'
              union all
              select 'old' as src,
                     client_order_id,
@@ -187,12 +188,12 @@ with bth as (select 'new' as src,
                     mx_gen
              from t_old
              where true
-               and client_order_id = '1_0241024')
+               and client_order_id = '1_118241024')
 select * from bth
 order by secondary_exch_exec_id, src
 
 ---
-select *
+select aw.edw_status, *
 FROM trash.so_away_trade aw
      LEFT JOIN LATERAL ( SELECT lm_1.id,
             lm_1.mic_code,
@@ -231,7 +232,7 @@ FROM trash.so_away_trade aw
    left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
   WHERE true
     AND (aw.status = ANY (ARRAY['1'::bpchar, '2'::bpchar]))
-   and aw.cl_ord_id in ('1_1q4241017')
+   and aw.cl_ord_id in ('1_118241024')
  and exec_id in ('jelu6ngc0000', 'jelucahg0002', 'jelucaho0002', 'jelu6ngk0004');
 
 
