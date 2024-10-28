@@ -274,6 +274,6 @@ Left join staging.d_Order_Class oc on ord.SystemOrderTypeID = oc.enum
 Left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
 LEFT JOIN billing.tCompany comp
   on us.Company_ID = comp.CompanyID and us.System_ID = comp.SystemID and comp.EDWActive = '1'::bit -- Company
-where rep.orderid = '1_79241024'
+where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
   and los.ID is not null
