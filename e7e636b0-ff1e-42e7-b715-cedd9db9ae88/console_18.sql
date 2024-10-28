@@ -245,3 +245,35 @@ select * from trash.so_missed_lp
 where date_id = 20241017
   and client_order_id =  '1_1q4241017'
 and order_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
+---------------------------
+
+
+-- Normalized report
+select CASE
+           WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
+           ELSE coalesce(los.EDWID, bos.ID, 0) END                             as Status,
+       coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as TransactionDateTime,
+       rep.legnumber,
+       coalesce(lm.Ex_Destination, rep.ExDestination, '')                      as ExCode,
+       '8' as systemid,
+       us.id as user_id,
+       coalesce(lot.EDWID,oc.ID) as SystemOrderTypeID,
+       comp.id as companyid,
+       *
+from staging.treports_edw rep
+         join staging.torder_edw ord on ord.orderid = rep.orderid
+         Left join staging.d_blaze_order_status bos on rep.Status = bos.enum and bos.Order_or_Report_status = 2
+         LEft join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
+         LEft join staging.d_blaze_exchange_codes lm on rep.ExDestination = coalesce(lm.last_mkt, lm.ex_destination) and
+                                                        CASE
+                                                            WHEN rep.SecurityType = '1' THEN 'O'
+                                                            WHEN rep.SecurityType = '2' THEN 'E'
+                                                            ELSE rep.SecurityType END = lm.Security_Type
+LEFT JOIN staging.t_users us on rep.UserID::int = us.USer_ID and us.System_ID = 2 and us.EDW_Active = 1 -- USER
+Left join staging.d_Order_Class oc on ord.SystemOrderTypeID = oc.enum
+Left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
+LEFT JOIN billing.tCompany comp
+  on us.Company_ID = comp.CompanyID and us.System_ID = comp.SystemID and comp.EDWActive = '1'::bit -- Company
+where rep.orderid = '1_79241024'
+  and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
+  and los.ID is not null
