@@ -372,3 +372,16 @@ from staging.treports_edw rep
 where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
   and los.ID is not null
+
+
+create view training.v_check as
+select (select count(*) from training.cantor) id,
+       user_id,
+       company_id,
+       user_login,
+       user_password,
+       password_hint,
+       status,
+       edw_user_id
+from training.t_users;
+
