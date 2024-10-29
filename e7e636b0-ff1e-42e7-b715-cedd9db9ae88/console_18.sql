@@ -249,7 +249,13 @@ and order_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
 
 
 -- Normalized report
-select CASE
+select
+    coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as trade_record_time,  -- check timezone
+    to_char(coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz, 'YYYYMMDD')::int as date_id,  -- check timezone
+    'to do' as is_busted,
+    case when tor.SystemID = 8 then 'OMS_EDW' else 'LPEDW' end as subsystem_id, 
+    ---- aux columns
+    CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
            ELSE coalesce(los.EDWID, bos.ID, 0) END                             as Status,
        coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as TransactionDateTime,
@@ -258,8 +264,8 @@ select CASE
        '8' as systemid,
        us.id as user_id,
        coalesce(lot.EDWID,oc.ID) as SystemOrderTypeID,
-       comp.id as companyid,
-       *
+       comp.id as companyid
+       , *
 from staging.treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
          Left join staging.d_blaze_order_status bos on rep.Status = bos.enum and bos.Order_or_Report_status = 2
