@@ -253,7 +253,11 @@ select
     coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as trade_record_time,  -- check timezone
     to_char(coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz, 'YYYYMMDD')::int as date_id,  -- check timezone
     'to do' as is_busted,
-    case when tor.SystemID = 8 then 'OMS_EDW' else 'LPEDW' end as subsystem_id, 
+    case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end as subsystem_id, -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
+	   coalesce(tom.dashaliasid,
+	   case when  coalesce(us.aors_user_name, us.user_login)='BBNTRST' then 'NTRSCBOE'
+              								   							else  coalesce(us.aors_user_name, us.user_login)
+		                                      					end)   as account_name,
     ---- aux columns
     CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
@@ -268,6 +272,7 @@ select
        , *
 from staging.treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
+    join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
          Left join staging.d_blaze_order_status bos on rep.Status = bos.enum and bos.Order_or_Report_status = 2
          LEft join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
          LEft join staging.d_blaze_exchange_codes lm on rep.ExDestination = coalesce(lm.last_mkt, lm.ex_destination) and
