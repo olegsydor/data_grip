@@ -335,10 +335,35 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
     'no data' as order_process_time,
       'no data' as remarks,
       	rep.ExchangeMappedOrderID as street_client_order_id,
+      	'LPEDWCOMPID' as fix_comp_id,
+      	rep.leavesqty::bigint as leaves_qty,
+      	tl.Legnumber as leg_ref_id,
+       null                                        as load_batch_id,
+       CASE
+           WHEN ord.ORIGOrderID is not null or ord.ContraOrderID is not null then 26
+           WHEN ord.ParentOrderID is not null or (ord.ParentOrderID is null and nullif(ord.ChildOrders::int, 0) is not null) then 10
+           WHEN ord.COMMENT like '%OVR%' then 4
+           ELSE 50 end                             as strategy_decision_reason_code,
+    case when rep.ParentID is null then 'Y' else 'N' end as is_parent,
+    tl.basecode as symbol,
+    round(tl.strike::numeric, 6)                                                 as strike_price,
+    	case tl.TypeCode
+		when 'P' then '0'
+		when 'C' then '1'
+	end as put_or_call,
+    extract(year from tl.expirationdate) as maturity_year,
+    extract(month from tl.expirationdate) as maturity_month,
+    extract(day from tl.expirationdate) as maturity_day,
+          CASE
+			WHEN rep.SecurityType = 'O' THEN 1
+			WHEN rep.SecurityType = 'E' THEN 2
+			ELSE rep.SecurityType::int END as security_type,
+    ord.ChildOrders as child_orders,
+    coalesce(case when rep.OrderReportSpecialType = 'M' then lt.ID ELSE rep.Handling::int END, 0) as handling_id,
        ---- aux columns
        CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
-           ELSE coalesce(los.EDWID, bos.ID, 0) END                                              as Status,
+           ELSE coalesce(los.EDWID, bos.ID, 0) END as Status,
        coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz                  as TransactionDateTime,
        rep.legnumber,
        coalesce(lm.Ex_Destination, rep.ExDestination, '')                                       as ExCode,
@@ -376,7 +401,7 @@ from staging.treports_edw rep
          LEFT JOIN staging.d_time_in_force tif ON tif.enum = ord.TimeInForceCode
          LEFT JOIN billing.time_in_force ltf ON tif.id = ltf.code AND ltf.systemid = 8
          LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = ord.ForWhom AND lfw.systemid = 4
-
+LEft join staging.d_liquidity_type lt on rep.LiquidityType = lt.enum
 where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
   and los.ID is not null;
