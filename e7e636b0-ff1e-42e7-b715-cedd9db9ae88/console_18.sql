@@ -327,6 +327,14 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
            end                                                                                  as opt_customer_firm,
        case when ord.OrigOrderID is not null then 'Y' else 'N' end                              as is_cross_order,
        case when ord.OrigOrderID is not null then 'Y' else 'N' end                              as street_is_cross_order,
+       rep.ContraBroker                                                                         as contra_broker,
+       coalesce(comp.CompanyCode, us.user_login)                                                as client_id,
+       case
+           when round(tl.price::bigint / 10000.0, 4) > 99999999.9999 then 99999999.9999
+           else round(tl.price::bigint / 10000.0, 4) end                                        as order_price,
+    'no data' as order_process_time,
+      'no data' as remarks,
+      	rep.ExchangeMappedOrderID as street_client_order_id,
        ---- aux columns
        CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
@@ -371,17 +379,5 @@ from staging.treports_edw rep
 
 where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
-  and los.ID is not null
-
-
-create view training.v_check as
-select (select count(*) from training.cantor) id,
-       user_id,
-       company_id,
-       user_login,
-       user_password,
-       password_hint,
-       status,
-       edw_user_id
-from training.t_users;
+  and los.ID is not null;
 
