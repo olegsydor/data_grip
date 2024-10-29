@@ -249,30 +249,63 @@ and order_id_guid ilike '00000000-0001-0000-0000-03471313AD79'
 
 
 -- Normalized report
-select
-    coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as trade_record_time,  -- check timezone
-    to_char(coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz, 'YYYYMMDD')::int as date_id,  -- check timezone
-    'to do' as is_busted,
-    case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end as subsystem_id, -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
-	   coalesce(tom.dashaliasid,
-	   case when  coalesce(us.aors_user_name, us.user_login)='BBNTRST' then 'NTRSCBOE'
-              								   							else  coalesce(us.aors_user_name, us.user_login)
-		                                      					end)   as account_name,
-    ---- aux columns
-    CASE
+select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz                  as trade_record_time, -- check timezone
+       to_char(coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz,
+               'YYYYMMDD')::int                                                                 as date_id,           -- check timezone
+       'to do'                                                                                  as is_busted,
+       case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end                                          as subsystem_id,      -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
+       coalesce(tom.dashaliasid,
+                case
+                    when coalesce(us.aors_user_name, us.user_login) = 'BBNTRST' then 'NTRSCBOE'
+                    else coalesce(us.aors_user_name, us.user_login)
+                    end)                                                                        as account_name,
+       rep.orderid                                                                              as client_order_id,
+       tl.side,
+       tl.OpenClose                                                                             as open_close,
+       rep.reportid                                                                             as exec_id,
+       'no data'                                                                                as exchange_id,
+       coalesce(rep.LiquidityIndicator, 'R')                                                    as trade_liquidity_indicator,
+       rep.ExchangeMappedOrderID                                                                as secondary_order_id,
+       CASE
+           WHEN rep.OrderReportSpecialType = 'M' THEN 'Manual Report'
+           ELSE rep.ExchangeTransactionID END                                                   as secondary_exch_exec_id,
+
+       case
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in
+                ('CBOE-CRD NO BK', 'PAR', 'CBOIE') then 'W'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('XPAR', 'PLAK', 'PARL')
+               then 'LQPT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in
+                ('SOHO', 'KNIGHT', 'LSCI', 'NOM') then 'ECUT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('FOGS', 'MID')
+               then 'XCHI'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('C2', 'CBOE2')
+               then 'C2OX'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) = 'SMARTR' then 'COWEN'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in
+                ('ACT', 'BOE', 'OTC', 'lp', 'VOL') then 'BRKPT'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('XPSE') then 'N'
+           when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('TO') then '1'
+           else coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) end as last_mkt,
+
+       ---- aux columns
+       CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
-           ELSE coalesce(los.EDWID, bos.ID, 0) END                             as Status,
-       coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as TransactionDateTime,
+           ELSE coalesce(los.EDWID, bos.ID, 0) END                                              as Status,
+       coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz                  as TransactionDateTime,
        rep.legnumber,
-       coalesce(lm.Ex_Destination, rep.ExDestination, '')                      as ExCode,
-       '8' as systemid,
-       us.id as user_id,
-       coalesce(lot.EDWID,oc.ID) as SystemOrderTypeID,
-       comp.id as companyid
-       , *
+       coalesce(lm.Ex_Destination, rep.ExDestination, '')                                       as ExCode,
+       '8'                                                                                      as systemid,
+       us.id                                                                                    as user_id,
+       coalesce(lot.EDWID, oc.ID)                                                               as SystemOrderTypeID,
+       comp.id                                                                                  as companyid,
+       coalesce(lm.Ex_Destination, rep.ExDestination, '')                                       as ExDestination
+        ,
+       *
 from staging.treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
-    join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
+         join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
+         left join staging.tlegs_edw tl on tl.orderid = rep.orderid and tl.legnumber = rep.legnumber
          Left join staging.d_blaze_order_status bos on rep.Status = bos.enum and bos.Order_or_Report_status = 2
          LEft join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
          LEft join staging.d_blaze_exchange_codes lm on rep.ExDestination = coalesce(lm.last_mkt, lm.ex_destination) and
@@ -280,11 +313,17 @@ from staging.treports_edw rep
                                                             WHEN rep.SecurityType = '1' THEN 'O'
                                                             WHEN rep.SecurityType = '2' THEN 'E'
                                                             ELSE rep.SecurityType END = lm.Security_Type
-LEFT JOIN staging.t_users us on rep.UserID::int = us.USer_ID and us.System_ID = 2 and us.EDW_Active = 1 -- USER
-Left join staging.d_Order_Class oc on ord.SystemOrderTypeID = oc.enum
-Left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
-LEFT JOIN billing.tCompany comp
-  on us.Company_ID = comp.CompanyID and us.System_ID = comp.SystemID and comp.EDWActive = '1'::bit -- Company
+         LEFT JOIN staging.t_users us on rep.UserID::int = us.USer_ID and us.System_ID = 2 and us.EDW_Active = 1 -- USER
+         Left join staging.d_Order_Class oc on ord.SystemOrderTypeID = oc.enum
+         Left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
+         LEFT JOIN billing.tCompany comp on us.Company_ID = comp.CompanyID and us.System_ID = comp.SystemID
+    and comp.EDWActive = '1'::bit -- Company
+         left join billing.dash_exchange_names den
+                   on den.mic_code = regexp_replace(rep.ExDestination, '(DIRECT-| Printer)', '', 'g') and
+                      den.real_exchange_id = den.exchange_id and den.mic_code != '' and den.is_active
+         left join billing.dash_exchange_names den1
+                   on den1.exchange_id = regexp_replace(rep.ExDestination, '(DIRECT-| Printer)', '', 'g') and
+                      den1.real_exchange_id = den1.exchange_id and den1.mic_code != '' and den1.is_active = 'TRUE'
 where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
   and los.ID is not null
