@@ -287,7 +287,46 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
            when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('XPSE') then 'N'
            when coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) in ('TO') then '1'
            else coalesce(den.last_mkt, den1.last_mkt, lm.Ex_Destination, rep.ExDestination) end as last_mkt,
-
+       coalesce(rep.lastshares::int, 0)                                                         as last_qty,
+       round(lastprice::numeric / 10000.0, 8)                                                   as last_px,
+       coalesce(lm.Ex_Destination, rep.ExDestination, '')                                       as ex_destination,
+       'no data'                                                                                as sub_strategy,
+       rep._order_id                                                                            as order_id,
+--        	coalesce(nullif(case when nullif(tl.[ExpirationDate],'1900-01-01 00:00:00.000') is not null and nullif(tl.[Strike],0.00) is not null then tl.OptionQuantity
+-- 			else tl.StockQuantity end,0),tl.Quantity) as street_order_qty,
+       coalesce(case
+                    when tl.ExpirationDate is not null and tl.Strike is not null then tl.OptionQuantity
+                    else tl.StockQuantity end, tl.Quantity)::int8                               as street_order_qty,
+       coalesce(case
+                    when tl.ExpirationDate is not null and tl.Strike is not null then tl.OptionQuantity
+                    else tl.StockQuantity end, tl.Quantity)::int8                               as order_qty,
+       case when ord.LegCount::int4 > 1 then 2 else 1 end                                       as multileg_reporting_type,
+       coalesce(ord.GiveUpFirm, rep.ExecutingBroker)                                            as exec_broker,
+       ord.CMTAFirm                                                                             as cmta,
+       coalesce(ltf.edwid, tif.id)                                                              as tif,
+       case
+           when coalesce(ltf.edwid, tif.id) = any (array [24, 17, 10, 1, 44]) then 0
+           when coalesce(ltf.edwid, tif.id) = any (array [26, 18, 3, 45, 12]) then 1
+           when coalesce(ltf.edwid, tif.id) = any (array [31, 8, 15, 46]) then 2
+           when coalesce(ltf.edwid, tif.id) = any (array [47, 28, 11, 19, 5]) then 3
+           when coalesce(ltf.edwid, tif.id) = any (array [48, 2, 13, 25, 20]) then 4
+           when coalesce(ltf.edwid, tif.id) = any (array [36, 37, 38, 49]) then 5
+           when coalesce(ltf.edwid, tif.id) = any (array [50, 14, 21, 33]) then 6
+           when coalesce(ltf.edwid, tif.id) = any (array [32, 9, 16]) then 7
+           end                                                                                  as street_time_in_force,
+       case
+           when lfw.edwid = any (array [1, 25, 32, 78]) then '0'
+           when lfw.edwid = any (array [33, 26, 79]) then '1'
+           when lfw.edwid = any (array [52, 103, 20, 97]) then '2'
+           when lfw.edwid = any (array [19, 30, 38, 96]) then '3'
+           when lfw.edwid = any (array [35, 28, 4, 81]) then '4'
+           when lfw.edwid = any (array [5, 29, 36, 82]) then '5'
+           when lfw.edwid = any (array [21, 6, 83]) then '7'
+           when lfw.edwid = any (array [31, 23, 41, 98]) then '8'
+           when lfw.edwid = any (array [9, 40, 50, 86]) then 'J'
+           end                                                                                  as opt_customer_firm,
+       case when ord.OrigOrderID is not null then 'Y' else 'N' end                              as is_cross_order,
+       case when ord.OrigOrderID is not null then 'Y' else 'N' end                              as street_is_cross_order,
        ---- aux columns
        CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
@@ -301,7 +340,9 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
        comp.id                                                                                  as companyid,
        coalesce(lm.Ex_Destination, rep.ExDestination, '')                                       as ExDestination
         ,
-       *
+       ord.TimeInForceCode,
+       tif.*,
+       ltf.*
 from staging.treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
          join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
@@ -324,6 +365,10 @@ from staging.treports_edw rep
          left join billing.dash_exchange_names den1
                    on den1.exchange_id = regexp_replace(rep.ExDestination, '(DIRECT-| Printer)', '', 'g') and
                       den1.real_exchange_id = den1.exchange_id and den1.mic_code != '' and den1.is_active = 'TRUE'
+         LEFT JOIN staging.d_time_in_force tif ON tif.enum = ord.TimeInForceCode
+         LEFT JOIN billing.time_in_force ltf ON tif.id = ltf.code AND ltf.systemid = 8
+         LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = ord.ForWhom AND lfw.systemid = 4
+
 where rep.orderid = 'f_0_1o241024'
   and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-24'::date
   and los.ID is not null
