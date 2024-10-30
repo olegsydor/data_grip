@@ -344,8 +344,8 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz a
        ord.cancelorderid                                                       as          cancel_client_order_id,
        ord.contraorderid                                                       as          contra_client_order_id,
        ord.origorderid                                                         as          orig_client_order_id,
-       ord.replaceorderid                                                      as          replace_client_order_id,
-       rep.childorderid                                                        as          child_client_order_id,
+--        ord.replaceorderid                                                      as          replace_client_order_id, -- refused
+--        rep.childorderid                                                        as          child_client_order_id, -- refused
        rep.reportid                                                            as          report_id,
        rep.childreportid                                                       as          child_exec_id,
 
@@ -391,8 +391,8 @@ where true
 --   and los.ID is not null;
  and rep.reportid >= 'jj5s3fes0000'
 and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-30'::date
-   order by rep.reportid
---                limit 1
+--    order by rep.reportid
+               limit 10
 and rep.reportid = 'jitanr200000'
 
 select *
@@ -404,28 +404,3 @@ where true
   and (Status in (151, 156, 239)
     and SystemID::int in (2, 3, 8)
     and SystemOrderTypeID <> 87);
-
--- alter table trash.so_away_trade rename to so_away_trade_old;
-SELECT r2.legcount,
-       r2.giveupfirm,
-       r2.cmtafirm,
-       r2.origorderid,
-       r2.contraorderid,
-       r2.parentorderid,
-       r2.childorders,
-       r2.comment,
-       r2.contractdesc,
-       r2.accountalias,
-       r2.orderid,
-       r2.generation,
-       r2.cancelorderid,
-       r2.replaceorderid,
-       r2.systemordertypeid,
-       r2.timeinforcecode,
-       r2.forwhom,
-       r4.dashaliasid,
-       r4.orderid
-FROM (blaze7.torder_edw r2 INNER JOIN blaze7.tordermisc1_edw r4 ON (((r2.orderid = r4.orderid))))
-
-
-(((COALESCE(rep.manualexecutiontime, rep.transactiondatetime))::timestamp with time zone)::date = '2024-10-30'::date)
