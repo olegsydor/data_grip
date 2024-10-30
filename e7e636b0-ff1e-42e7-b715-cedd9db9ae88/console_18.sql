@@ -360,6 +360,7 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
 			ELSE rep.SecurityType::int END as security_type,
     ord.ChildOrders as child_orders,
     coalesce(case when rep.OrderReportSpecialType = 'M' then lt.ID ELSE rep.Handling::int END, 0) as handling_id,
+    0 as secondary_order_id2,
        ---- aux columns
        CASE
            WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and rep.OrderReportSpecialType = 'M' then 156
@@ -375,7 +376,19 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz  
         ,
        ord.TimeInForceCode,
        tif.*,
-       ltf.*
+       ltf.*,
+
+            case
+            when tl.expirationdate is not null and tl.strike IS NOT NULL THEN replace(COALESCE(((((regexp_replace(COALESCE(tl.basecode, ''::text), '\.|-'::text, ''::text, 'g'::text) || ' '::text) || to_char(tl.expirationdate::timestamp with time zone, 'DDMonYY'::text)) || ' '::text) || staging.trailing_dot(tl.strike)) || "left"(tl.typecode, 8),
+            CASE
+                WHEN aw.ord_contractdesc !~~ (tl.basecode || ' %'::text) THEN (tl.basecode || ' '::text) || replace(aw.ord_contractdesc, tl.basecode, ''::text)
+                WHEN aw.legcount::integer = 1 AND tl.typecode = 'S'::text THEN aw.ord_contractdesc || ' Stock'::text
+                WHEN aw.ord_contractdesc !~~ ' %'::text THEN aw.ord_contractdesc || ' '::text
+                ELSE aw.ord_contractdesc
+            END), '/'::text, ''::text)
+            ELSE regexp_replace(COALESCE(tl.rootcode, ''::text), '\.|-'::text, ''::text, 'g'::text)
+        END AS display_instrument_id,
+
 from staging.treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
          join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
