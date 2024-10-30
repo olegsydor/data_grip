@@ -153,12 +153,13 @@ select staging.clordid_to_guid('1_3230826');
 
 
 -- main query
-drop view if exists trash.v_away_trade ;
-create view trash.v_away_trade as
+drop view if exists trash.v_away_trade;
+-- create view trash.v_away_trade as
+-- create table trash.so_away_trade as
 select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz as          trade_record_time, -- check timezone
        to_char(coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz,
                'YYYYMMDD')::int                                                as          date_id,           -- check timezone
-       'to do'                                                                 as          is_busted,
+       'N'                                                                     as          is_busted,
        case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end                         as          subsystem_id,      -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
        coalesce(tom.dashaliasid,
                 case
@@ -354,13 +355,13 @@ select coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz a
        staging.clordid_to_guid(ord.orderid)                                    as          client_order_id_guid,
        staging.execid_to_guid(rep.reportid)                                    as          report_id_guid,
        '-1'::integer * base32_to_int8(rep.reportid)                            AS          exec_id
-from staging.treports_edw rep
+from staging.temp_treports_edw rep
          join staging.torder_edw ord on ord.orderid = rep.orderid
          join staging.tordermisc1_edw tom on tom.orderid = rep.orderid
          left join staging.tlegs_edw tl on tl.orderid = rep.orderid and tl.legnumber = rep.legnumber
          Left join staging.d_blaze_order_status bos
                    on rep.Status = bos.enum and bos.Order_or_Report_status = 2
-         LEft join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
+         join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
          LEft join staging.d_blaze_exchange_codes lm
                    on rep.ExDestination = coalesce(lm.last_mkt, lm.ex_destination) and
                       CASE
@@ -387,16 +388,21 @@ from staging.treports_edw rep
          LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = ord.ForWhom AND lfw.systemid = 4
          LEft join staging.d_liquidity_type lt on rep.LiquidityType = lt.enum
 where true
-  and los.ID is not null
-  and rep.orderid = '1_po241029'
-  and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-29'::date
+--   and los.ID is not null;
+and rep.orderid >= '1_2q1241029'
+and coalesce(rep.manualexecutiontime, rep.transactiondatetime)::timestamptz::date = '2024-10-29'::date
+--   order by rep.reportid
+--                limit 1
+and rep.reportid = 'jitanr200000'
 
-
-  select * from trash.v_away_trade
-      where client_order_id = '1_po241029'
+select *
+from trash.v_away_trade
+where true
+  and client_order_id = '1_2q1241029'
+  and report_id = '1_2q1241029'
   and trade_record_time::date = '2024-10-29'::date
   and (Status in (151, 156, 239)
-and SystemID::int in(2,3,8)
-  and SystemOrderTypeID <> 87);
+    and SystemID::int in (2, 3, 8)
+    and SystemOrderTypeID <> 87);
 
-alter table trash.so_away_trade rename to so_away_trade_old;
+-- alter table trash.so_away_trade rename to so_away_trade_old;
