@@ -253,14 +253,14 @@ create index away_trade_report_id on staging.away_trade (report_id);
 
 select * from trash.so_load_away_trade();
 
-CREATE OR REPLACE FUNCTION trash.so_load_away_trade()
-    RETURNS integer
-    LANGUAGE plpgsql
-AS
+create or replace function trash.so_load_away_trade()
+    returns integer
+    language plpgsql
+as
 $function$
 declare
     l_last_loaded_report_id text;
-    l_last_loaded_order_id  int8;
+    l_maxt_report_id        text;
     l_row_cnt               int4;
     l_load_id               int4;
     l_step_id               int4;
@@ -269,12 +269,14 @@ begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
-    select into l_last_loaded_report_id
-        coalesce(report_id, '')
+    select into l_last_loaded_report_id coalesce(report_id, '')
     from staging.away_trade
     where true
     order by report_id desc
     limit 1;
+
+    select into l_maxt_report_id exec_id
+    from staging.v_max_blaze_exec_id;
 
     select public.load_log(l_load_id, l_step_id, 'load_away_trade for report_id > ' || l_last_loaded_report_id::text ||
                                                  ' STARTED===',
@@ -286,7 +288,13 @@ begin
     select *
     from staging.v_away_trade aw
     where true
-      and aw.reportid > coalesce(l_last_loaded_report_id, '');
+      and aw.reportid > coalesce(l_last_loaded_report_id, '')
+      and aw.reportid <= l_maxt_report_id;
+
+    select public.load_log(l_load_id, l_step_id, 'load_away_trade for report_id > ' || l_last_loaded_report_id::text ||
+                                                 ' temp table created',
+                           0, 'O')
+    into l_step_id;
 
     insert into staging.away_trade(trade_record_time, date_id, is_busted, subsystem_id, account_name, side, open_close,
                                    exchange_id, trade_liquidity_indicator, secondary_order_id, secondary_exch_exec_id,
@@ -537,7 +545,7 @@ begin
              LEft join staging.d_liquidity_type lt on aw.LiquidityType = lt.enum
     where true
       and aw.reportid > coalesce(l_last_loaded_report_id, '')
---       and aw.reportid <= 'jj5cs060000c'
+    --       and aw.reportid <= 'jj5cs060000c'
 -- --       and CASE
 -- --               WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and aw.OrderReportSpecialType = 'M' then 156
 -- --               ELSE coalesce(los.EDWID, bos.ID, 0) END in (151, 156, 239)
@@ -545,7 +553,7 @@ begin
 -- --       and coalesce(lot.EDWID, oc.ID) <> 87
 --     and aw.report_db_create_time::date = '2024-10-30'
 --     and aw.order_trade_date_id >= 20241030
-;
+    ;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'load_away_trade COMPLETED ===',
