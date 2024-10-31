@@ -570,8 +570,18 @@ end;
 $function$
 ;
 -- truncate staging.away_trade;
-select * from trash.so_load_away_trade('jj4pujdk0000', 'jj5ihm400000');
+
+select * from trash.so_load_away_trade(in_min_report_id := 'jj4ogr3s0002', in_max_report_id := 'jj5m5e4g0000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj5nqgsg0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj5rcsgc0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj60h2q00006');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj5nqgsg0004');
+
+select * from trash.so_load_away_trade(in_max_report_id := 'jj63rb900002');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj67rq6k0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6a40q00000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6crkck0002');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6htme00006');
 
 select * from trash.so_load_away_trade(in_max_report_id := 'jj5rcsgc0004');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj60h2q00006');
@@ -595,3 +605,14 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jj87mjds0000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
 select * from trash.so_load_away_trade();
+*/
+
+create index away_trade_client_order_id_idx on staging.away_trade (client_order_id);
+
+select * from staging.away_trade
+where client_order_id = 'a_0_75241030'
+and trade_record_time::date = '2024-10-30'
+and Status in (151, 156, 239)
+  and SystemOrderTypeID <> 87
+and report_id = 'jj7sog9g0000'
+order by report_id
