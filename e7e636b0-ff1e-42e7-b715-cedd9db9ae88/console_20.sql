@@ -251,9 +251,9 @@ and SystemOrderTypeID <> 87;
 select * from staging.away_trade;
 create index away_trade_report_id on staging.away_trade (report_id);
 
-select * from trash.so_load_away_trade();
 
-create or replace function trash.so_load_away_trade()
+
+create or replace function trash.so_load_away_trade(in_min_report_id text default null, in_max_report_id text default null)
     returns integer
     language plpgsql
 as
@@ -269,13 +269,17 @@ begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
-    select into l_last_loaded_report_id coalesce(report_id, '')
+    select into l_last_loaded_report_id report_id
     from staging.away_trade
     where true
     order by report_id desc
     limit 1;
 
-    select into l_maxt_report_id exec_id
+    if l_last_loaded_report_id is null then
+        l_last_loaded_report_id := coalesce(in_min_report_id, '');
+    end if;
+
+    select into l_maxt_report_id coalesce(in_max_report_id, exec_id)
     from staging.v_max_blaze_exec_id;
 
     select public.load_log(l_load_id, l_step_id,
@@ -292,8 +296,7 @@ begin
       and aw.reportid > coalesce(l_last_loaded_report_id, '')
       and aw.reportid <= l_maxt_report_id;
 
-    select public.load_log(l_load_id, l_step_id, 'load_away_trade ' || l_last_loaded_report_id::text ||
-                                                 ' temp table created',
+    select public.load_log(l_load_id, l_step_id, 'load_away_trade temp table created',
                            0, 'O')
     into l_step_id;
 
@@ -565,9 +568,20 @@ begin
 end;
 $function$
 ;
+truncate staging.away_trade;
+select * from trash.so_load_away_trade('jj4pujdk0000', 'jj5ihm400000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj5nqgsg0004');
 
+select * from trash.so_load_away_trade(in_max_report_id := 'jj5rcsgc0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj60h2q00006');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj63rb900002');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj67rq6k0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6a40q00000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6crkck0002');
 
-
-
-alter table staging.away_trade add column db_create_time timestamp not null default clock_timestamp()
-
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6htme00006');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6kc4v40000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj6q0sr40000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj71idog0000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj76jbm80000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj7cs46g0000');
