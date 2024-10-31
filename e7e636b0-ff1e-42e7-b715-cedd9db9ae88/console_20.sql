@@ -278,8 +278,9 @@ begin
     select into l_maxt_report_id exec_id
     from staging.v_max_blaze_exec_id;
 
-    select public.load_log(l_load_id, l_step_id, 'load_away_trade for report_id > ' || l_last_loaded_report_id::text ||
-                                                 ' STARTED===',
+    select public.load_log(l_load_id, l_step_id,
+                           'load_away_trade for report_id between ' || l_last_loaded_report_id::text ||
+                           ' and ' || l_maxt_report_id || ' STARTED===',
                            0, 'O')
     into l_step_id;
 
@@ -291,7 +292,7 @@ begin
       and aw.reportid > coalesce(l_last_loaded_report_id, '')
       and aw.reportid <= l_maxt_report_id;
 
-    select public.load_log(l_load_id, l_step_id, 'load_away_trade for report_id > ' || l_last_loaded_report_id::text ||
+    select public.load_log(l_load_id, l_step_id, 'load_away_trade ' || l_last_loaded_report_id::text ||
                                                  ' temp table created',
                            0, 'O')
     into l_step_id;
