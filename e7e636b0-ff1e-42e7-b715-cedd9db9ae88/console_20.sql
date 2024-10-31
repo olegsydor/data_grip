@@ -612,6 +612,27 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jjg6j9u40000');
 select * from trash.so_load_away_trade();
 
 
+create temp table st as
+select distinct client_order_id
+	from staging.trade_record_missed_lp
+		where date_id = 20241030;
+
+create temp table tr as
+select *
+	from staging.away_trade
+		where date_id = 20241030
+and Status in (151, 156, 239)
+  and SystemOrderTypeID <> 87
+and client_order_id = '1_17g241030'
+
+
+
+select * from st
+except
+select * from tr
+except
+select * from st
+
 create index away_trade_client_order_id_idx on staging.away_trade (client_order_id);
 
 select * from staging.away_trade
