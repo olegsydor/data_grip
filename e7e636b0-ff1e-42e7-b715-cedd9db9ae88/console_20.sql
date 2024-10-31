@@ -613,9 +613,11 @@ select * from trash.so_load_away_trade();
 
 
 create temp table st as
-select distinct client_order_id
+select *
 	from staging.trade_record_missed_lp
-		where date_id = 20241030;
+		where true
+--     and  date_id = 20241030
+and client_order_id = '1_17g241030';
 
 create temp table tr as
 select *
@@ -628,7 +630,7 @@ and client_order_id = '1_17g241030'
 
 
 select * from st
-except
+intersect
 select * from tr
 except
 select * from st
@@ -636,7 +638,7 @@ select * from st
 create index away_trade_client_order_id_idx on staging.away_trade (client_order_id);
 
 select * from staging.away_trade
-where client_order_id = 'a_0_75241030'
+where client_order_id = 'f_0_m8241030'
 and trade_record_time::date = '2024-10-30'
 and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
