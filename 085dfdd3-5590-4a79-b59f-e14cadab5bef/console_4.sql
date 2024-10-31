@@ -24,28 +24,28 @@ BEGIN
                                      on r.ORdeRID = o.OrderID
                  Where r.ID = 1396888736--@reportID
 
---                  UNION ALL
---
---                  Select r.ORdeRID,
---                         o.ParentORdeRID,
---                         o.ExDestination,
---                         n + 1,
---                         r.ID,
---                         r.ReportID,
---                         convert(nvarchar(38), ISNULL(r.ChildReportID, r.ReportID)),
---                         r.ExchangeTransactionID,
---                         r.LegNumber,
---                         o.Generation,
---                         o.ChildORders
---
---                  From LiquidPoint_EDW.dbo.TReports_EDW r with (nolock)
---                           Inner join LiquidPoint_EDW.dbo.TOrder_EDW o with (nolock)
---                                      on r.ORdeRID = o.OrderID
---                           Inner join cte
---                                      on o.ParentORdeRID = cte.ORdeRID and (cte.ChildReportID = r.ReportID or
---                                                                            cte.ExchangeTransactionID =
---                                                                            r.ExchangeTransactionID) and
---                                         r.LegNumber = cte.LEgNumber
+                 UNION ALL
+
+                 Select r.ORdeRID,
+                        o.ParentORdeRID,
+                        o.ExDestination,
+                        n + 1,
+                        r.ID,
+                        r.ReportID,
+                        convert(nvarchar(38), ISNULL(r.ChildReportID, r.ReportID)),
+                        r.ExchangeTransactionID,
+                        r.LegNumber,
+                        o.Generation,
+                        o.ChildORders
+
+                 From LiquidPoint_EDW.dbo.TReports_EDW r with (nolock)
+                          Inner join LiquidPoint_EDW.dbo.TOrder_EDW o with (nolock)
+                                     on r.ORdeRID = o.OrderID
+                          Inner join cte
+                                     on o.ParentORdeRID = cte.ORdeRID and (cte.ChildReportID = r.ReportID or
+                                                                           cte.ExchangeTransactionID =
+                                                                           r.ExchangeTransactionID) and
+                                        r.LegNumber = cte.LEgNumber
                  )
     select r.ExDestination, *-- @l_return = max(case when r.ExDestination is not null then 1 else 0 end) --as routed_to_sor
     --into @l_return
