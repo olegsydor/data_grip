@@ -281,6 +281,13 @@ begin
                            0, 'O')
     into l_step_id;
 
+    create temp table t_blaze on commit drop
+    as
+    select *
+    from staging.v_away_trade aw
+    where true
+      and aw.reportid > coalesce(l_last_loaded_report_id, '');
+
     insert into staging.away_trade(trade_record_time, date_id, is_busted, subsystem_id, account_name, side, open_close,
                                    exchange_id, trade_liquidity_indicator, secondary_order_id, secondary_exch_exec_id,
                                    last_mkt, last_qty, last_px, ex_destination, sub_strategy, street_order_qty,
@@ -499,7 +506,7 @@ begin
            '-1'::integer * base32_to_int8(aw.reportid)                           AS          exec_id
 
 -- select *
-    from staging.v_away_trade aw
+    from t_blaze aw --staging.v_away_trade aw
              Left join staging.d_blaze_order_status bos
                        on aw.Status = bos.enum and bos.Order_or_Report_status = 2
              join staging.l_order_status los on bos.ID = los.StatusCode and los.SystemID = 8
@@ -538,8 +545,7 @@ begin
 -- --       and coalesce(lot.EDWID, oc.ID) <> 87
 --     and aw.report_db_create_time::date = '2024-10-30'
 --     and aw.order_trade_date_id >= 20241030
-    order by aw.reportid
-    limit 100;
+;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'load_away_trade COMPLETED ===',
