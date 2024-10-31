@@ -295,9 +295,10 @@ begin
     where true
       and aw.reportid > coalesce(l_last_loaded_report_id, '')
       and aw.reportid <= l_maxt_report_id;
+    get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'load_away_trade temp table created',
-                           0, 'O')
+                           l_row_cnt, 'O')
     into l_step_id;
 
     insert into staging.away_trade(trade_record_time, date_id, is_busted, subsystem_id, account_name, side, open_close,
@@ -568,7 +569,7 @@ begin
 end;
 $function$
 ;
-truncate staging.away_trade;
+-- truncate staging.away_trade;
 select * from trash.so_load_away_trade('jj4pujdk0000', 'jj5ihm400000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj5nqgsg0004');
 
@@ -585,3 +586,10 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jj6q0sr40000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj71idog0000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj76jbm80000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj7cs46g0000');
+
+select * from trash.so_load_away_trade(in_max_report_id := 'jj7j57o80000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj7qt6n80002');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj7vt2e00001');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj84lh9o0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj87mjds0000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
