@@ -593,3 +593,5 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jj7vt2e00001');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj84lh9o0004');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj87mjds0000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
+select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
+select * from trash.so_load_away_trade();
