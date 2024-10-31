@@ -604,8 +604,13 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jj84lh9o0004');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj87mjds0000');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
 select * from trash.so_load_away_trade(in_max_report_id := 'jj8bv6j00002');
+
+select * from trash.so_load_away_trade(in_max_report_id := 'jjg0197k0004');
+select * from trash.so_load_away_trade(in_max_report_id := 'jjg2duvo0000');
+select * from trash.so_load_away_trade(in_max_report_id := 'jjg6j9u40000');
+
 select * from trash.so_load_away_trade();
-*/
+
 
 create index away_trade_client_order_id_idx on staging.away_trade (client_order_id);
 
