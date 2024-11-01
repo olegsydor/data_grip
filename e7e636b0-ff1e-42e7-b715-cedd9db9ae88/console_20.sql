@@ -611,6 +611,15 @@ select * from trash.so_load_away_trade(in_max_report_id := 'jjg6j9u40000');
 
 select * from trash.so_load_away_trade();
 
+create function staging.is_sor_routed(in_report_id text)
+returns text
+language plpgsql
+    stable
+as $fx$
+    declare
+
+    $fx$
+
 
 create temp table st as
 select *
