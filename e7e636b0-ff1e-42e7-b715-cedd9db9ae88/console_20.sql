@@ -631,16 +631,19 @@ create temp table st as
 select *
 	from staging.trade_record_missed_lp
 		where true
---     and  date_id = 20241030
+     and  date_id = 20241031
 and client_order_id = '1_17g241030';
 
+
+
+
 create temp table tr as
-select is_sor_routed, *
+select *
 	from staging.away_trade
-		where date_id = 20241101
+		where date_id = 20241031
 and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
--- and client_order_id = '1_17g241030'
+ and client_order_id in ('1_1241101', '1_0241101', '1_qe241031')
 and (  generation= 0
     or (generation>0 and is_company_name_changed =1 and is_sor_routed = 0 and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ) /* non-routed to SOR company name chaned in firther generation*/
     or (generation>0 and is_company_name_changed =1 and is_sor_routed = 1 and mx_gen>generation and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' )
@@ -662,11 +665,11 @@ where is_sor_routed is null
 and date_id = 20241030
 
 
-select * from st
-intersect
-select * from tr
+select  client_order_id from st
 except
-select * from st
+select client_order_id from tr
+except
+select client_order_id from st
 
 create index away_trade_client_order_id_idx on staging.away_trade (client_order_id);
 
