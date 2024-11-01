@@ -18,7 +18,7 @@ BEGIN
                         r.LegNumber,
                         o.Generation,
                         o.ChildORders
-
+, *
                  From LiquidPoint_EDW.dbo.TReports_EDW r with (nolock)
                           Inner join LiquidPoint_EDW.dbo.TOrder_EDW o with (nolock)
                                      on r.ORdeRID = o.OrderID
