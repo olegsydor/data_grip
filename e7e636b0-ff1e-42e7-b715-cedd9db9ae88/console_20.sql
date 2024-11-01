@@ -466,7 +466,19 @@ begin
            regexp_replace(COALESCE(aw.basecode, ''::text), '\.|-'::text, ''::text,
                           'g'::text)                                             AS          activ_symbol,
            aw.accountalias,
-           'to do'                                                               as          is_sor_routed,
+--            'to do'                                                               as          is_sor_routed,
+           case  when aw.orderid like 'f_%' then '1'
+                 when
+                     CASE
+                         WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and aw.OrderReportSpecialType = 'M' then 156
+                         ELSE coalesce(los.EDWID, bos.ID, 0) END = 151 and exists
+                         (select null
+                          from billing.troute_aors sor
+                          where (CatDestinationID = 'DFIN' or ExDestination like '%PAR')
+                            and coalesce(lm.Ex_Destination, aw.ExDestination) = sor.exdestination) then '1'
+                 else '0'
+               end as is_sor_routed,
+
            case
                when lag(comp.companyname, 1) over (partition by CASE
                                                                     WHEN aw.OrderReportSpecialType = 'M'
@@ -548,16 +560,10 @@ begin
              LEFT JOIN billing.time_in_force ltf ON tif.id = ltf.code AND ltf.systemid = 8
              LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.ForWhom AND lfw.systemid = 4
              LEft join staging.d_liquidity_type lt on aw.LiquidityType = lt.enum
+
     where true
       and aw.reportid > coalesce(l_last_loaded_report_id, '')
-    --       and aw.reportid <= 'jj5cs060000c'
--- --       and CASE
--- --               WHEN coalesce(los.EDWID, bos.ID, 0) = 151 and aw.OrderReportSpecialType = 'M' then 156
--- --               ELSE coalesce(los.EDWID, bos.ID, 0) END in (151, 156, 239)
--- -- --and SystemID in('2','3','8')
--- --       and coalesce(lot.EDWID, oc.ID) <> 87
---     and aw.report_db_create_time::date = '2024-10-30'
---     and aw.order_trade_date_id >= 20241030
+
     ;
 
     get diagnostics l_row_cnt = row_count;
@@ -629,13 +635,31 @@ select *
 and client_order_id = '1_17g241030';
 
 create temp table tr as
-select *
+select is_sor_routed, *
 	from staging.away_trade
-		where date_id = 20241030
+		where date_id = 20241101
 and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
-and client_order_id = '1_17g241030'
+-- and client_order_id = '1_17g241030'
+and (  generation= 0
+    or (generation>0 and is_company_name_changed =1 and is_sor_routed = 0 and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ) /* non-routed to SOR company name chaned in firther generation*/
+    or (generation>0 and is_company_name_changed =1 and is_sor_routed = 1 and mx_gen>generation and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' )
+);
 
+
+
+update staging.away_trade
+    set is_sor_routed =
+          case  when client_order_id like 'f_%' then 1
+                 when Status = 151 and exists
+                         (select null
+                          from billing.troute_aors sor
+                          where (CatDestinationID = 'DFIN' or ExDestination like '%PAR')
+                            and ExDestination = sor.exdestination) then 1
+                 else 0
+               end
+where is_sor_routed is null
+and date_id = 20241030
 
 
 select * from st
@@ -652,4 +676,5 @@ and trade_record_time::date = '2024-10-30'
 and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
 and report_id = 'jj7sog9g0000'
-order by report_id
+order by report_id;
+

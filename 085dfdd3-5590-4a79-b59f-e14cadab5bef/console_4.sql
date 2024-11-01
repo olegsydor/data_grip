@@ -1,9 +1,10 @@
-CREATE function EDW_Billing.dbo.[f_get_is_trade_SOR_routed_exec_id](@reportID varchar)
+use Blaze7;
+
+CREATE function [f_get_is_trade_SOR_routed_exec_id_test_so](@reportID bigint)
     RETURNS integer
 
 BEGIN
     declare @l_return bigint;
-
 
     WITH cte (ORdeRID, ParentORdeRID, ExDestination, n, ReportID_INT, ReportID, ChildReportID, ExchangeTransactionID,
               LegNumber, Generation, ChildORders)
@@ -18,11 +19,10 @@ BEGIN
                         r.LegNumber,
                         o.Generation,
                         o.ChildORders
-, *
                  From LiquidPoint_EDW.dbo.TReports_EDW r with (nolock)
                           Inner join LiquidPoint_EDW.dbo.TOrder_EDW o with (nolock)
                                      on r.ORdeRID = o.OrderID
-                 Where r.ID = 1396888736--@reportID
+                 Where r.ID = @reportID
 
                  UNION ALL
 
@@ -47,7 +47,7 @@ BEGIN
                                                                            r.ExchangeTransactionID) and
                                         r.LegNumber = cte.LEgNumber
                  )
-    select r.ExDestination, *-- @l_return = max(case when r.ExDestination is not null then 1 else 0 end) --as routed_to_sor
+    select @l_return = sum(case when r.ExDestination is not null then 1 else 1 end) --as routed_to_sor
     --into @l_return
     FROM cte
              --left join AORS.Flexconfig.dbo.TRoute r with(nolock) on  ((CatDestinationID = 'DFIN' or r.ExDestination like '%PAR') and r.ExDestination =cte.ExDestination)  ;
@@ -60,5 +60,5 @@ BEGIN
 
 end
 
-select * from Flexconfig.dbo.TRoute
-where CatDestinationID = 'DFIN' or ExDestination like '%PAR'
+
+select * from
