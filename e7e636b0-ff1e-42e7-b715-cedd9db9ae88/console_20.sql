@@ -636,18 +636,19 @@ and client_order_id = '1_17g241030';
 
 
 
-
 create temp table tr as
 select *
-	from staging.away_trade
-		where date_id = 20241101
-and Status in (151, 156, 239)
+from staging.away_trade
+where date_id = 20241104
+  and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
---  and client_order_id in ('1_1241101', '1_0241101', '1_qe241031')
-and (  generation= 0
-    or (generation>0 and is_company_name_changed =1 and is_sor_routed = 0 and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ) /* non-routed to SOR company name chaned in firther generation*/
-    or (generation>0 and is_company_name_changed =1 and is_sor_routed = 1 and mx_gen>generation and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' )
-);
+  and (generation = 0
+    or (generation > 0 and is_company_name_changed = 1 and is_sor_routed = 0 and
+        coalesce(nullif(secondary_exch_exec_id, ''), 'Manual Report') <>
+        'Manual Report') /* non-routed to SOR company name chaned in firther generation*/
+    or (generation > 0 and is_company_name_changed = 1 and is_sor_routed = 1 and mx_gen > generation and
+        coalesce(nullif(secondary_exch_exec_id, ''), 'Manual Report') <> 'Manual Report')
+    );
 
 select * from st
 
