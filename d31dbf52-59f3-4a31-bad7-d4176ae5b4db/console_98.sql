@@ -1,5 +1,5 @@
-select cl.account_id,
-    to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
+select --cl.account_id,
+       to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
        cl.order_id                                                               as "Trade Ref",
        cl.client_order_id                                                        as "Order ID",
        case
@@ -36,14 +36,14 @@ select cl.account_id,
        OC.OPRA_SYMBOL                                                            as "BBG", --OSI
 --             cl.exchange_id as "Exchange",
        exc.exchange_name                                                         as "Exchange",
-       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') || '/' ||
+       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
        to_char(OC.MATURITY_DAY, 'FM00')                                          as "Maturity Date",
        to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') as "Prompt",
        oc.strike_price                                                           as "Strike",
        oc.put_call                                                               as "Put/Call",
        CL.ORDER_QTY                                                              as "Quantity",
        cl.price                                                                  as "Price",
-       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') || '/' ||
+       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
        to_char(OC.MATURITY_DAY, 'FM00')                                          as "Expiry"
 from dwh.client_order cl
          inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
@@ -56,13 +56,14 @@ from dwh.client_order cl
 
 where CL.CREATE_date_id between :in_start_date_id and :in_end_date_id
 --             and AC.TRADING_FIRM_ID = in_firm
---   and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+  and case when :l_account_ids = '{}' then true else cl.account_id = any ('{70621}') end
   --and CL.PARENT_ORDER_ID is null -- all orders
   and CL.MULTILEG_REPORTING_TYPE in ('1', '2')
-  --and EX.EXEC_TYPE = 'F'
+  and di.instrument_type_id = 'O'
   and EX.IS_BUSTED = 'N'
   and EX.EXEC_TYPE not in ('3', 'a', '5', 'E')
   and CL.TRANS_TYPE <> 'F'
   and ((CL.PARENT_ORDER_ID is null and EX.EXEC_TYPE <> '0') or CL.PARENT_ORDER_ID is not null)
+order by cl.order_id, ex.exec_id
 -- and ex.order_id = 13454466648
 ;
