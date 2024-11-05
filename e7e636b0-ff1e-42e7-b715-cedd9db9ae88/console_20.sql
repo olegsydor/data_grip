@@ -631,7 +631,7 @@ create temp table st as
 select *
 	from staging.trade_record_missed_lp
 		where true
-     and  date_id = 20241101
+     and  date_id = 20241105
 and client_order_id = '1_17g241030';
 
 
@@ -639,7 +639,7 @@ and client_order_id = '1_17g241030';
 create temp table tr as
 select *
 from staging.away_trade
-where date_id = 20241104
+where date_id = 20241105
   and Status in (151, 156, 239)
   and SystemOrderTypeID <> 87
   and (generation = 0
