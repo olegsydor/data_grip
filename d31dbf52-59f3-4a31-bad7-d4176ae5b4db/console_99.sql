@@ -33,39 +33,37 @@ and order_id in(10619804527,
 
 
 
-select co.create_date_id, co.order_id, yc.order_id
-                               from dwh.client_order po
-                                        join dwh.client_order co on (co.create_date_id = po.create_date_id and
-                                                                     (co.order_id = po.order_id or co.parent_order_id = po.order_id))
-                                        join dwh.historic_security_definition_all hsd
-                                             on (hsd.instrument_id = po.instrument_id)
-                               left join data_marts.f_yield_capture yc
-                      on (yc.status_date_id between :in_start_date_id and :in_end_date_id
+select distinct po.order_id, co.parent_order_id--co.create_date_id, co.order_id, yc.order_id
+from dwh.client_order po
+         join dwh.client_order co on (co.create_date_id = po.create_date_id and
+                                      (co.order_id = po.order_id or co.parent_order_id = po.order_id))
+         join dwh.historic_security_definition_all hsd
+              on (hsd.instrument_id = po.instrument_id)
+         join data_marts.f_yield_capture yc
+                   on (yc.status_date_id between :in_start_date_id and :in_end_date_id
 --                           yc.status_date_id = oic.create_date_id
-                                                    and yc.order_id = co.order_id
-                          )
-
-
-                               where po.create_date_id between :in_start_date_id and :in_end_date_id
-                                 and po.multileg_reporting_type in ('1', '2')
-                                 and case
-                                         when :in_row_type is null then true
-                                         when :in_row_type = 'Parent' then co.parent_order_id is null
-                                         when :in_row_type = 'Child' then co.parent_order_id is not null
-                                   end
-                                 and case
-                                         when :in_instrument_type is null then true
-                                         else hsd.instrument_type_id = :in_instrument_type end
-                                 and case
-                                         when coalesce(:in_account_ids, '{}') = '{}' then true
-                                         else co.account_id = any (:in_account_ids) end
-                                 and case
-                                         when coalesce(:in_client_order_ids, '{}') = '{}' then true
-                                         else po.client_order_id = any (:in_client_order_ids) end
-                                 and case
-                                         when coalesce(:in_symbols, '{}') = '{}' then true
-                                         else hsd.symbol = any (:in_symbols) end
-and yc.order_id is null
+                       and yc.order_id = co.order_id
+                       )
+where po.create_date_id between :in_start_date_id and :in_end_date_id
+  and po.multileg_reporting_type in ('1', '2')
+  and case
+          when :in_row_type is null then true
+          when :in_row_type = 'Parent' then co.parent_order_id is null
+          when :in_row_type = 'Child' then co.parent_order_id is not null
+    end
+  and case
+          when :in_instrument_type is null then true
+          else hsd.instrument_type_id = :in_instrument_type end
+  and case
+          when coalesce(:in_account_ids, '{}') = '{}' then true
+          else co.account_id = any (:in_account_ids) end
+  and case
+          when coalesce(:in_client_order_ids, '{}') = '{}' then true
+          else po.client_order_id = any (:in_client_order_ids) end
+  and case
+          when coalesce(:in_symbols, '{}') = '{}' then true
+          else hsd.symbol = any (:in_symbols) end
+  and yc.order_id is null
 
 CREATE OR REPLACE FUNCTION dash360.report_compliance_order_blotter_reg(in_start_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                                        in_end_date_id integer DEFAULT get_dateid(CURRENT_DATE),
@@ -306,3 +304,6 @@ select distinct ex.order_id, co.create_date_id --, co.time_in_force_id
             AND CO.MULTILEG_REPORTING_TYPE in ('1', '2')
        		AND CO.PARENT_ORDER_ID IS NULL
        		AND CO.TRANS_TYPE not IN( 'F');
+
+
+select * from dash360.report_compliance_order_blotter_reg( in_start_date_id := 20230103, in_end_date_id := 20230103,  in_client_order_ids := '{"0180000017"}' );
