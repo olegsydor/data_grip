@@ -252,3 +252,57 @@ begin
 end ;
 $function$
 ;
+
+select co.parent_order_id,coalesce(co.parent_order_id, co.order_id) as order_id,
+       		case when co.parent_order_id is null
+            	then co.create_date_id
+            	else public.get_gth_date_id_by_instrument(co.parent_order_process_time, co.instrument_id)
+        	end as date_id,
+        	ex.exec_date_id as event_date_id,
+        	CO.MULTILEG_REPORTING_TYPE,
+ 			CO.TRANS_TYPE,
+ 			ex.time_in_force_id, -- not in ('1', '6')
+ 			ex.exec_type -- <>'D'
+		    from dwh.execution  ex
+		    inner join dwh.client_order co on (ex.order_id = co.order_id and co.create_date_id = ex.exec_date_id)
+-- 		  	where ex.dataset_id = any (l_batch_ids_to_process)
+-- 		    and ex.exec_date_id = any (l_date_ids)
+-- 		    and order_status <> '3'
+-- 		    AND CO.MULTILEG_REPORTING_TYPE in ('1', '2')
+-- 			AND CO.TRANS_TYPE not IN('F')
+-- 			and ex.time_in_force_id not in ('1', '6')
+			and ex.exec_type <>'D'
+
+select time_in_force_id, *
+-- from dwh.client_order co
+from dwh.execution co
+where true
+  and co.order_id in (10619804527,
+                      10619804543,
+                      10619804564,
+                      10619804581,
+                      10619804606,
+                      10619860736,
+                      10620242637,
+                      10620243217);
+
+select distinct ex.order_id, co.create_date_id --, co.time_in_force_id
+            from dwh.execution  ex
+             inner join dwh.client_order co on (ex.order_id = co.order_id and ex.order_create_date_id = co.create_date_id )
+          where true
+    and ex.order_id = 10619804527
+            and ex.exec_date_id = 20230103--in_date_id
+--            and order_status <> '3'
+--            and ex.exec_type <>'D'
+--             and ((order_status <> '3'and ex.exec_type <>'D')
+--                  or exists (select null
+--                             from client_order str
+--                             inner join execution str_ex on (str_ex.order_id= str.order_id and str_ex.order_create_date_id = str.create_date_id and str_ex.exec_date_id = 20230103)--in_date_id)
+--                             where str_ex.order_status <> '3'
+--                               and str_ex.exec_type <>'D'
+--                               AND str.MULTILEG_REPORTING_TYPE in ('1', '2')
+--        						  AND str.TRANS_TYPE not IN( 'F')
+--        						  and str.parent_order_id = co.order_id) )
+            AND CO.MULTILEG_REPORTING_TYPE in ('1', '2')
+       		AND CO.PARENT_ORDER_ID IS NULL
+       		AND CO.TRANS_TYPE not IN( 'F');
