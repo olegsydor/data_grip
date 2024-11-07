@@ -18,6 +18,20 @@ select di.instrument_type_id, di.display_instrument_id2 , u.* from u
 left join dwh.d_instrument di on u.instrument_id = di.instrument_id and di.is_active
 order by row_type desc, coalesce(parent_order_id, order_id)
 
+select *
+from data_marts.f_yield_capture
+where true
+--     and status_date_id between 20230101 and 20230501
+and order_id in(10619804527,
+10619804543,
+10619804564,
+10619804581,
+10619804606,
+10619860736,
+10620242637,
+10620243217)
+
+
 
 select co.create_date_id, co.order_id, yc.order_id
                                from dwh.client_order po
