@@ -1,3 +1,5 @@
+select * from dwh.d_account
+where account_name = 'RBCSTP'
 create or replace function dash360.report_compliance_order_blotter_reg_v2(in_start_date_id integer default public.get_dateid(current_date),
                                                                           in_end_date_id integer default public.get_dateid(current_date),
                                                                           in_row_type text default null::text,
