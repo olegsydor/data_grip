@@ -64,7 +64,8 @@ begin
                                          else po.client_order_id = any (in_client_order_ids) end
                                  and case
                                          when coalesce(in_symbols, '{}') = '{}' then true
-                                         else di.symbol = any (in_symbols) end)
+                                         else di.symbol = any (in_symbols) end
+                               )
         select array_to_string(ARRAY [
 --        co.order_id,
                                    coalesce(pyc.client_order_id, co.client_order_id) , -- as "Parent Cl Ord ID",
@@ -230,6 +231,7 @@ begin
             cro.cross_order_id = co.cross_order_id and co.cross_order_id is not null
         where co.create_date_id between in_start_date_id and in_end_date_id
           and co.multileg_reporting_type in ('1', '2')
+        and co.trans_type <>'F'
         order by co.create_date_id, coalesce(co.parent_order_id, co.order_id), co.order_id;
 
     get diagnostics l_row_cnt = row_count;
@@ -244,11 +246,18 @@ $function$
 
 
 select *
-from dash360.report_compliance_order_blotter_reg_v2(in_start_date_id := 20230103, in_end_date_id := 20230103,
-                                                    in_client_order_ids := '{"0180000017"}');
+into temp table t3
+from dash360.report_compliance_order_blotter_reg_v2(in_start_date_id := 20230131, in_end_date_id := 20230131,
+                                                    in_client_order_ids := '{"0180000043"}');
+with b as (select *
+           from t3
+           except
+           select *
+           from t1)
+select distinct * from b;
 
-select * from t_os
 
 select *
-into temp table t_os1
-from dash360.report_compliance_order_blotter_reg( in_start_date_id := 20241107, in_end_date_id := 20241107);
+into temp table t1
+from dash360.report_compliance_order_blotter_reg(in_start_date_id := 20230131, in_end_date_id := 20230131,
+                                                    in_client_order_ids := '{"0180000043"}');
