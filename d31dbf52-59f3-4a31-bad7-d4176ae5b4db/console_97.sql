@@ -224,3 +224,9 @@ begin
 end;
 $function$
 ;
+
+
+
+select * from trash.report_eod_alpaca_algo_route(in_start_date_id := 20241020, in_end_date_id := 20241030);
+select * from trash.report_eod_alpaca_equity_retail(in_start_date_id := 20241020, in_end_date_id := 20241030);
+select * from trash.report_eod_alpaca_options_retail(in_start_date_id := 20241020, in_end_date_id := 20241030);
