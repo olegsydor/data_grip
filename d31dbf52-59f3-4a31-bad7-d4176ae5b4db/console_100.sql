@@ -258,6 +258,8 @@ select distinct * from b;
 
 
 select *
-into temp table t1
-from dash360.report_compliance_order_blotter_reg(in_start_date_id := 20230131, in_end_date_id := 20230131,
-                                                    in_client_order_ids := '{"0180000043"}');
+into temp table t01
+from dash360.report_compliance_order_blotter_reg_v2(in_account_ids := '{63030}', in_start_date_id := 20230103, in_end_date_id := 20230103,
+                                                    in_client_order_ids := '{"0180000017"}');
+
+select * from t01
