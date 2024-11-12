@@ -1,3 +1,11 @@
+create function trash.kill_long_process(in_process_name text, in_interval int4)
+returns jsonb
+    language plpgsql
+as $$
+
+    $$
+
+
  select pid, state, application_name, user, wait_event, query_start::timestamp as query_start, age(clock_timestamp(), query_start) as age, usename, query, state
 	from pg_stat_activity
 	where true
