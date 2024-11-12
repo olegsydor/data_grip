@@ -1,3 +1,7 @@
+select distinct side from dwh.client_order
+where create_date_id >= 20241101
+
+create temp table t_os as
 select --cl.account_id,
        to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
        cl.order_id                                                               as "Trade Ref",
@@ -14,33 +18,36 @@ select --cl.account_id,
                        case EX.EXEC_TYPE
                            when '4' then 'Canceled'
                            when 'W' then 'Replaced'
-                           else coalesce(EX.EXEC_TYPE, '') end end
+                           else EX.EXEC_TYPE end end
            else case EX.ORDER_STATUS
-                    when 'A' then 'Ex Pnd Open'
-                    when '0' then 'Ex Open'
-                    when '8' then 'Ex Rej'
-                    when 'b' then 'Ex Pnd Cxl'
-                    when '1' then 'Ex Partial'
-                    when '2' then 'Ex Rpt Fill'
+                    when 'A' then 'Pending New'
+                    when '0' then 'New'
+                    when '8' then 'Rejected'
+                    when 'b' then 'Pending Cancel'
+                    when '1' then 'Partial Fill'
+                    when '2' then 'Filled'
+                    when '3' then 'Done For Day'
                     when '4' then 'Ex Rpt Out'
                     else coalesce(EX.ORDER_STATUS, '') end
            end                                                                   as "Action",
        'DASH'                                                                    as "Executing Broker",
        'SQRT'                                                                    as "Client",
-       case
-           when CL.SIDE = '1' and CL.OPEN_CLOSE = 'C' then 'BC'
-           else case CL.SIDE when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SS' end
+       case cl.side
+           when '1' then 'Buy'
+           when '2' then 'Sell'
+           when '3' then 'Buymin'
+           when '5' then 'SellShort'
            end                                                                   as "Side",
-       'Opp'                                                                     as "Fut/Opt",
+       'Opt'                                                                     as "Fut/Opt",
        di.symbol                                                                 as "Ticker",
        OC.OPRA_SYMBOL                                                            as "BBG", --OSI
 --             cl.exchange_id as "Exchange",
-       exc.exchange_name                                                         as "Exchange",
+       exc.mic_code                                                              as "Exchange",
        to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
        to_char(OC.MATURITY_DAY, 'FM00')                                          as "Maturity Date",
        to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') as "Prompt",
        oc.strike_price                                                           as "Strike",
-       oc.put_call                                                               as "Put/Call",
+       case oc.put_call when '0' then 'Put' when '1' then 'Call' end             as "Put/Call",
        CL.ORDER_QTY                                                              as "Quantity",
        cl.price                                                                  as "Price",
        to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
@@ -67,3 +74,8 @@ where CL.CREATE_date_id between :in_start_date_id and :in_end_date_id
 order by cl.order_id, ex.exec_id
 -- and ex.order_id = 13454466648
 ;
+
+select "Action", count(*)
+from t_os
+-- where "OrderType" = 'Street'
+group by  "Action"
