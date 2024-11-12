@@ -1,4 +1,16 @@
-create or replace function trash.kill_long_process(in_process_name text, in_interval int4)
+select pid, state, application_name, user, wait_event, query_start::timestamp as query_start, age(clock_timestamp(), query_start) as age, usename, query, state
+	from pg_stat_activity
+	where true
+	and state in ('active', 'idle in transaction')
+	and query not ilike '%pg_stat_activity%'
+--	and query not ilike '%vacuum%'
+	and query not ilike '%replicat%'
+--	and query ilike '%f_paren%'
+
+
+select * from trash.kill_long_process('DBeaver Oleh.Sydor', 30);
+
+create or replace function trash.kill_long_process(in_process_name text, in_interval int4) -- ETL: f_parent_order_process
     returns jsonb
     language plpgsql
 as
@@ -29,7 +41,7 @@ begin
 
         select nextval('public.load_timing_seq') into l_load_id;
         l_step_id := 1;
-        l_message = in_process_name || ' was stopped because it was running for ' || l_timeout::text || ' sec. ' ||
+        l_message = in_process_name || 'was killed because it was running for ' || l_timeout::text || ' sec. ' ||
                     in_interval::text || ' was allowed.';
 --         raise notice '%', l_message;
 
