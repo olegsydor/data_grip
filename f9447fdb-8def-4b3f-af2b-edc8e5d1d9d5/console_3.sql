@@ -1,24 +1,5 @@
-
-select public.f_insert_etl_reject('trade_record_inc',
-    'trade_record_'||substring(NEW.DATE_ID::TEXT, 1, 6)||'_nk',
-    '(date_id = '||EXCLUDED.date_id::text||' exch_exec_id=''||EXCLUDED.exch_exec_id||'', client_order_id = ''||EXCLUDED.client_order_id||'')''::varchar)
-
-insert into genesis2.trade_record (trade_record_id, trade_record_time, db_create_time, date_id, is_busted, orig_trade_record_id, trade_record_trans_type, trade_record_reason, subsystem_id, user_id, account_id, client_order_id, instrument_id, side, open_close, fix_connection_id, exec_id, exchange_id, trade_liquidity_indicator, secondary_order_id, exch_exec_id, secondary_exch_exec_id, last_mkt, last_qty, last_px, ex_destination, sub_strategy, street_order_id, order_id, street_order_qty, order_qty, multileg_reporting_type, is_largest_leg, street_max_floor, exec_broker, cmta, street_time_in_force, street_order_type, opt_customer_firm, street_mpid, is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator, street_cross_is_originator, contra_account, contra_broker, trade_exec_broker, order_fix_message_id, trade_fix_message_id, street_order_fix_message_id, client_id, street_transaction_id, transaction_id, order_price, order_process_time, clearing_account_number, sub_account, remarks, optional_data, street_client_order_id, fix_comp_id, is_billed, street_exec_inst, leaves_qty, fee_sensitivity, street_order_price, leg_ref_id_old, load_batch_id, strategy_decision_reason_code, compliance_id, floor_broker_id, auction_id, street_opt_customer_firm, multileg_order_id, internal_component_type, street_trade_fix_message_id, pt_basket_id, pt_order_id, blaze_account_alias, customer_review_status, street_client_sender_compid, street_account_name, street_exec_broker, trade_text, branch_sequence_number, frequent_trader_id, int_liq_source_type, allocation_avg_price, account_nickname, time_in_force, clearing_account_id, market_participant_id, alternative_compliance_id, street_trade_record_time, street_order_process_time, leg_ref_id)
-values (trade_record_id, trade_record_time, db_create_time, date_id, is_busted, orig_trade_record_id, trade_record_trans_type, trade_record_reason, subsystem_id, user_id, account_id, client_order_id, instrument_id, side, open_close, fix_connection_id, exec_id, exchange_id, trade_liquidity_indicator, secondary_order_id, exch_exec_id, secondary_exch_exec_id, last_mkt, last_qty, last_px, ex_destination, sub_strategy, street_order_id, order_id, street_order_qty, order_qty, multileg_reporting_type, is_largest_leg, street_max_floor, exec_broker, cmta, street_time_in_force, street_order_type, opt_customer_firm, street_mpid, is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator, street_cross_is_originator, contra_account, contra_broker, trade_exec_broker, order_fix_message_id, trade_fix_message_id, street_order_fix_message_id, client_id, street_transaction_id, transaction_id, order_price, order_process_time, clearing_account_number, sub_account, remarks, optional_data, street_client_order_id, fix_comp_id, is_billed, street_exec_inst, leaves_qty, fee_sensitivity, street_order_price, leg_ref_id_old, load_batch_id, strategy_decision_reason_code, compliance_id, floor_broker_id, auction_id, street_opt_customer_firm, multileg_order_id, internal_component_type, street_trade_fix_message_id, pt_basket_id, pt_order_id, blaze_account_alias, customer_review_status, street_client_sender_compid, street_account_name, street_exec_broker, trade_text, branch_sequence_number, frequent_trader_id, int_liq_source_type, allocation_avg_price, account_nickname, time_in_force, clearing_account_id, market_participant_id, alternative_compliance_id, street_trade_record_time, street_order_process_time, leg_ref_id)
-    on conflict  (date_id,
-                            COALESCE(exch_exec_id, (exec_id)::character varying),
-                            client_order_id, (
-							CASE WHEN (orig_trade_record_id IS NOT NULL)
-                                 THEN trade_record_id
-							     ELSE 1
-							 END)
-                           )
-               do update
-          set 	date_id	= coalesce(public.f_insert_etl_reject('trade_record_inc', 'trade_record_'||substring(NEW.DATE_ID::TEXT, 1, 6)||'_nk', '(date_id = '||EXCLUDED.date_id||'' , exch_exec_id=''||EXCLUDED.exch_exec_id||'', client_order_id = ''||EXCLUDED.client_order_id||'')''::varchar),
-                                   EXCLUDED.date_id)';
-
--- DROP FUNCTION genesis2.load_trade_record_inc(numeric, int8, bpchar);
-
+drop function if exists genesis2.load_trade_record_inc;
+alter function genesis2.load_trade_record_inc rename to load_trade_record_inc_old;
 CREATE OR REPLACE FUNCTION genesis2.load_trade_record_inc(in_exec_id numeric DEFAULT NULL::numeric, in_orig_trade_record_id bigint DEFAULT NULL::bigint, in_trade_record_reason character DEFAULT NULL::character(1))
  RETURNS integer
  LANGUAGE plpgsql
@@ -29,6 +10,7 @@ AS $function$
 -- SY: 20230619 https://dashfinancial.atlassian.net/browse/DS-6846 OMS_EDW trades processing has been enabled
 -- SY: 20230622 https://dashfinancial.atlassian.net/browse/DS-6921 Trade_liquidity_indicator needs to be converted to correct value due to Java-2329
 -- SY: 20230821 https://dashfinancial.atlassian.net/browse/DS-7137 Blaze_account_alias logic has been fixed for crosses
+-- SO: 20241114 https://dashfinancial.atlassian.net/browse/DS-9091 Added on conflict (moved from the old trigger)
 
 DECLARE
    l_max_exec_id bigint;
@@ -231,7 +213,24 @@ IF l_foreign_max_exec_id> l_max_exec_id /* 1=1*/ THEN
 	from staging.trade_record_v v
 	left join genesis2.instrument i on v.instrument_id =i.instrument_id
 --	where exec_id between l_max_exec_id+1 and l_max_exec_id+100001;
-	where exec_id between l_max_exec_id+1 and l_foreign_max_exec_id /*-50*/;
+	where exec_id between l_max_exec_id+1 and l_foreign_max_exec_id
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id)
+	/*-50*/;
 
 select load_log(l_load_id, l_step_id, 'trade_record l_foreign_max_exec_id='||l_foreign_max_exec_id, 0, 'I')
 into l_step_id;
@@ -350,7 +349,24 @@ if 1=2 and current_time < '06:30'::time
 
 	from staging.trade_record_varch
 	/*where exec_id between l_max_exec_id+1 and l_max_exec_id+100001;*/
-	where exec_id between l_arch_max_exec_id+1 and l_arch_max_exec_id+550000 /*-50*/;
+	where exec_id between l_arch_max_exec_id+1 and l_arch_max_exec_id+550000 /*-50*/
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id)
+        ;
 
 	select load_log(l_load_id, l_step_id, 'trade_record arch insert', 0, 'I')
 	into l_step_id;
@@ -658,7 +674,24 @@ select trade_record_time
           (subsystem_id in ('PG_DASH') and load_batch_id = any(l_away_trade_ids) )
          )
     and last_qty<=order_qty
-    and trml.is_busted ='N';
+    and trml.is_busted ='N'
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id)
+  ;
 
 
 
