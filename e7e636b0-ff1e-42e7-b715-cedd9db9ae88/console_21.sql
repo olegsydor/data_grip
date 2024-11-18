@@ -26,22 +26,25 @@ begin
     select public.load_log(l_load_id, l_step_id, 'perform_fill_allocation_trade_record started', 0, 'B')
     into l_step_id;
 
+    select coalesce(min(alloc_instr_id), 0) -- loaded already
+    into l_min_alloc_instr_id
+    from genesis2.rt_allocation_trade_record;
+    raise notice 'l_min_alloc_instr_id - %', l_min_alloc_instr_id;
+
+    select clock_timestamp() - interval '1 minute' into l_max_time;
+
     select last_loaded_id
     into l_last_alloc_instr_id
     from staging.tlnd_inc_last_loaded_id
     where table_name = 'rt_allocation_trade_record';
+    raise notice 'l_last_alloc_instr_id - %', l_last_alloc_instr_id;
 
     select coalesce(min(alloc_instr_id), l_last_alloc_instr_id)
-    into l_min_alloc_instr_id
-    from genesis2.rt_allocation_trade_record;
-
-    select clock_timestamp() - interval '1 minute' into l_max_time;
-
-    select coalesce(min(alloc_instr_id), 0)
     into l_max_alloc_instr_id
     from genesis2.allocation_instruction tr
     where tr.alloc_instr_id < l_min_alloc_instr_id
       and tr.create_time < l_max_time;
+    raise notice 'l_max_alloc_instr_id - %', l_max_alloc_instr_id;
 
     select to_char(current_date, 'YYYYMMDD')::int4 into l_date_id;
 
@@ -126,7 +129,7 @@ begin
      and ae.alloc_instr_id < l_min_alloc_instr_id
      and ae.alloc_instr_id >= l_max_alloc_instr_id
 --      and ftr.date_id = l_date_id
--- and 1=2
+and 1=2
     ;
 
     get diagnostics l_row_cnt = row_count;
