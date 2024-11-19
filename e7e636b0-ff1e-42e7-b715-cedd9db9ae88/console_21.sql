@@ -39,7 +39,7 @@ begin
     where table_name = 'rt_allocation_trade_record';
     raise notice 'l_last_alloc_instr_id - %', l_last_alloc_instr_id;
 
-    select coalesce(min(alloc_instr_id), l_last_alloc_instr_id)
+    select greatest(min(alloc_instr_id), l_last_alloc_instr_id)
     into l_max_alloc_instr_id
     from genesis2.allocation_instruction tr
     where tr.alloc_instr_id < l_min_alloc_instr_id
@@ -49,6 +49,7 @@ begin
     select to_char(current_date, 'YYYYMMDD')::int4 into l_date_id;
 
     raise notice 'l_min_alloc_instr_id - %, l_max_alloc_instr_id - %, l_max_time - %', l_min_alloc_instr_id, l_max_alloc_instr_id, l_max_time;
+
     insert into genesis2.rt_allocation_trade_record
     (trade_record_id, trade_record_time, date_id, exch_exec_id, client_order_id, exchange_id, last_mkt,
      secondary_exch_exec_id, clearing_account_number, cusip, symbol, symbol_suffix, account_name, nscc_mpid,
@@ -141,7 +142,7 @@ and 1=2
         update staging.tlnd_inc_last_loaded_id
         set last_loaded_id   = l_max_alloc_instr_id,
             last_update_time = now(),
-            last_date_id     = to_char(current_date, 'YYYYMMDD')
+            last_date_id     = to_char(current_date, 'YYYYMMDD')::int4
         where table_name = 'rt_allocation_trade_record';
     end if;
 
