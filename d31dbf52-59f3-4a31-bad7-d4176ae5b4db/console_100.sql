@@ -46,25 +46,26 @@ begin
                                         join dwh.client_order co on (co.create_date_id = po.create_date_id and
                                                                      (co.order_id = po.order_id or co.parent_order_id = po.order_id))
                                         join dwh.d_instrument di on di.instrument_id = po.instrument_id
-                               where po.create_date_id between in_start_date_id and in_end_date_id
+                               where po.create_date_id between :in_start_date_id and :in_end_date_id
                                  and po.multileg_reporting_type in ('1', '2')
-                                 and case
-                                         when in_row_type is null then true
-                                         when in_row_type = 'Parent' then co.parent_order_id is null
-                                         when in_row_type = 'Child' then co.parent_order_id is not null
-                                   end
-                                 and case
-                                         when in_instrument_type is null then true
-                                         else di.instrument_type_id = in_instrument_type end
-                                 and case
-                                         when coalesce(in_account_ids, '{}') = '{}' then true
-                                         else co.account_id = any (in_account_ids) end
-                                 and case
-                                         when coalesce(in_client_order_ids, '{}') = '{}' then true
-                                         else po.client_order_id = any (in_client_order_ids) end
-                                 and case
-                                         when coalesce(in_symbols, '{}') = '{}' then true
-                                         else di.symbol = any (in_symbols) end
+--                                  and case
+--                                          when in_row_type is null then true
+--                                          when in_row_type = 'Parent' then co.parent_order_id is null
+--                                          when in_row_type = 'Child' then co.parent_order_id is not null
+--                                    end
+--                                  and case
+--                                          when in_instrument_type is null then true
+--                                          else di.instrument_type_id = in_instrument_type end
+--                                  and case
+--                                          when coalesce(in_account_ids, '{}') = '{}' then true
+--                                          else co.account_id = any (in_account_ids) end
+--                                  and case
+--                                          when coalesce(in_client_order_ids, '{}') = '{}' then true
+--                                          else po.client_order_id = any (in_client_order_ids) end
+--                                  and case
+--                                          when coalesce(in_symbols, '{}') = '{}' then true
+--                                          else di.symbol = any (in_symbols) end
+                               and po.client_order_id in ('0180000122', '0180000123')
                                )
         select array_to_string(ARRAY [
 --        co.order_id,
@@ -149,9 +150,9 @@ begin
 
                  join dwh.client_order co on
             co.create_date_id = oic.create_date_id and co.order_id = oic.order_id and
-            co.create_date_id between in_start_date_id and in_end_date_id
+            co.create_date_id between :in_start_date_id and :in_end_date_id
                  left join dwh.client_order pyc on
-            pyc.create_date_id between in_start_date_id and in_end_date_id and
+            pyc.create_date_id between :in_start_date_id and :in_end_date_id and
             pyc.create_date_id = co.create_date_id and pyc.order_id = co.parent_order_id
                  join dwh.d_account a on (a.account_id = co.account_id)
             --                  join dwh.client_order co on (co.create_date_id between in_start_date_id and in_end_date_id and
@@ -263,3 +264,11 @@ from dash360.report_compliance_order_blotter_reg_v2(in_account_ids := '{63030}',
                                                     in_client_order_ids := '{"0180000017"}');
 
 select * from t01
+
+
+select *
+into temp table t_os
+from dash360.report_compliance_order_blotter_reg(in_start_date_id := 20230103, in_end_date_id := 20230103,
+                                                          in_client_order_ids := '{"0180000122", "0180000123"}');
+
+select * from t_os
