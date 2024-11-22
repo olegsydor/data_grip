@@ -1,4 +1,4 @@
-create function trash.so_order_blotter_reg(in_start_date_id int4, in_end_date_id int4, in_client_order_ids text[])
+create or replace function trash.so_order_blotter_reg(in_start_date_id int4, in_end_date_id int4, in_client_order_ids text[])
     returns table
             (
                 ret_row text
@@ -28,6 +28,8 @@ begin
                                  co.client_order_id,
                                  hsd.symbol,
                                  co.order_id,
+                                 to_char(co.process_time, 'MM/DD/YYYY')                            as "Event Date",
+                                 lst_ex.order_status_description                                   as "Order Status",
                                  coalesce(pyc.client_order_id, co.client_order_id)                 as "Parent Cl Ord ID",
                                  a.account_name                                                    as "Account",
                                  case
@@ -87,23 +89,36 @@ begin
                             and co.multileg_reporting_type in ('1', '2')
                             and co.trans_type <> 'F')
         select array_to_string(ARRAY [
+                                   "Event Date",
+                                   "Order Status",
                                    "Ex Dest",
-                                   "Account",
-                                   "Security Type",
                                    "Event Type",
                                    "Free Text",
                                    "Reject Reason",
                                    "Is Mleg",
                                    "Is Cross",
+                                   "Security Type",
+                                   "Account",
                                    "Trading Firm",
                                    count(distinct "Parent Cl Ord ID")::text,
                                    count(order_id)::text
                                    ], ',', '') as ret_row
         from all_rows
-        group by "Account", "Security Type", "Ex Dest", "Event Type", "Free Text", "Reject Reason", "Is Mleg",
-                 "Is Cross",
-                 "Trading Firm";
+        group by "Event Date",
+                                   "Order Status",
+                                   "Ex Dest",
+                                   "Event Type",
+                                   "Free Text",
+                                   "Reject Reason",
+                                   "Is Mleg",
+                                   "Is Cross",
+                                   "Security Type",
+                                   "Account",
+                                   "Trading Firm";
 end;
 $$;
 
 select * from trash.so_order_blotter_reg(20221212, 20221212,'{0180000134}');
+
+
+select 'Event Date,Order Status,Ex Dest,Event Type,Free Text,Reject Reason,Is Mleg,Is Cross,Security Type,Account,Trading Firm,Count Parent Cl Ord ID,Count Order_id'
