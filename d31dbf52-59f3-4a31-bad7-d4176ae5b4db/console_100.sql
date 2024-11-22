@@ -48,23 +48,23 @@ begin
                                         join dwh.d_instrument di on di.instrument_id = po.instrument_id
                                where po.create_date_id between :in_start_date_id and :in_end_date_id
                                  and po.multileg_reporting_type in ('1', '2')
---                                  and case
---                                          when in_row_type is null then true
---                                          when in_row_type = 'Parent' then co.parent_order_id is null
---                                          when in_row_type = 'Child' then co.parent_order_id is not null
---                                    end
---                                  and case
---                                          when in_instrument_type is null then true
---                                          else di.instrument_type_id = in_instrument_type end
---                                  and case
---                                          when coalesce(in_account_ids, '{}') = '{}' then true
---                                          else co.account_id = any (in_account_ids) end
---                                  and case
---                                          when coalesce(in_client_order_ids, '{}') = '{}' then true
---                                          else po.client_order_id = any (in_client_order_ids) end
---                                  and case
---                                          when coalesce(in_symbols, '{}') = '{}' then true
---                                          else di.symbol = any (in_symbols) end
+                                 and case
+                                         when in_row_type is null then true
+                                         when in_row_type = 'Parent' then co.parent_order_id is null
+                                         when in_row_type = 'Child' then co.parent_order_id is not null
+                                   end
+                                 and case
+                                         when in_instrument_type is null then true
+                                         else di.instrument_type_id = in_instrument_type end
+                                 and case
+                                         when coalesce(in_account_ids, '{}') = '{}' then true
+                                         else co.account_id = any (in_account_ids) end
+                                 and case
+                                         when coalesce(in_client_order_ids, '{}') = '{}' then true
+                                         else po.client_order_id = any (in_client_order_ids) end
+                                 and case
+                                         when coalesce(in_symbols, '{}') = '{}' then true
+                                         else di.symbol = any (in_symbols) end
                                and po.client_order_id in ('0180000122', '0180000123')
                                )
         select array_to_string(ARRAY [
