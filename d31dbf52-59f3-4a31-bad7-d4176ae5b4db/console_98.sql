@@ -114,6 +114,7 @@ select cl.client_order_id,
                        case EX.EXEC_TYPE
                            when '0' then 'New'
                            when '4' then 'Cancel'
+                           when '5' then 'Amend'
                            when 'W' then 'Amend'
                            else EX.EXEC_TYPE end --end
            end                                                                   as "Action",
@@ -219,12 +220,12 @@ begin
                                    to_char(ex.exec_time, 'YYYYMMDD'), -- as "Trade date",
                                    cl.order_id::text, -- as "Trade Ref",
                                    cl.client_order_id, -- as "Order ID",
-                                   case
-                                       when ex.order_status = 'S' then 'Amend++' -- Replace
-                                       when ex.exec_type = '0' then 'New'
-                                       when ex.exec_type = '4' then 'Cancel'
-                                       when ex.exec_type = 'W' then 'Amend'
-                                       else ex.exec_type end, -- as "Action",
+                                   case ex.exec_type
+                                       when '0' then 'New' -- New
+                                       when '4' then 'Amend' -- Cancel
+                                       when '5' then 'Amend' -- Replace
+                                       when 'W' then 'Amend' -- Replace
+                                       end, -- as "Action",
 
                                    'DASH', -- as "Executing Broker",
                                    'SQRT', -- as "Client",
@@ -267,7 +268,7 @@ begin
           and di.instrument_type_id = 'O'
           and ex.is_busted = 'N'
 --           and ex.exec_type not in ('3', 'a', '5', 'E')
-          and ex.exec_type in ('0', '4', 'W')
+          and ex.exec_type in ('0', '4', 'W', '5')
           and cl.trans_type <> 'F'
         order by cl.order_id, ex.exec_id;
     get diagnostics l_row_cnt = row_count;
@@ -277,7 +278,6 @@ begin
                            '-' || in_end_date_id::text || ' COMPLETED ====', l_row_cnt, 'O')
     into l_step_id;
 end;
-
 $function$;
 
 
