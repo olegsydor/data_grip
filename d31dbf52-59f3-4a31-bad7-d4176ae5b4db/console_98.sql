@@ -1,4 +1,4 @@
-select distinct side from dwh.client_order
+/*select distinct side from dwh.client_order
 where create_date_id >= 20241101
 
 create temp table t_os as
@@ -78,4 +78,65 @@ order by cl.order_id, ex.exec_id
 select "Action", count(*)
 from t_os
 -- where "OrderType" = 'Street'
-group by  "Action"
+group by  "Action";
+*/
+
+select to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
+       cl.order_id                                                               as "Trade Ref",
+       cl.client_order_id                                                        as "Order ID",
+       case
+           when CL.PARENT_ORDER_ID is null then
+               case EX.ORDER_STATUS
+                   when 'A' then 'Pnd Open'
+                   when 'b' then 'Pnd Cxl'
+                   when 'S' then 'Pnd Rep'
+                   when '1' then 'Partial'
+                   when '2' then 'Filled'
+                   else
+                       case EX.EXEC_TYPE
+                           when '4' then 'Canceled'
+                           when 'W' then 'Replaced'
+                           else EX.EXEC_TYPE end end
+           end                                                                   as "Action",
+       'DASH'                                                                    as "Executing Broker",
+       'SQRT'                                                                    as "Client",
+       case cl.side
+           when '1' then 'Buy'
+           when '2' then 'Sell'
+           when '3' then 'Buymin'
+           when '5' then 'SellShort'
+           end                                                                   as "Side",
+       'Opt'                                                                     as "Fut/Opt",
+       di.symbol                                                                 as "Ticker",
+       OC.OPRA_SYMBOL                                                            as "BBG", --OSI
+--             cl.exchange_id as "Exchange",
+       exc.mic_code                                                              as "Exchange",
+       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
+       to_char(OC.MATURITY_DAY, 'FM00')                                          as "Maturity Date",
+       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') as "Prompt",
+       oc.strike_price                                                           as "Strike",
+       case oc.put_call when '0' then 'Put' when '1' then 'Call' end             as "Put/Call",
+       CL.ORDER_QTY                                                              as "Quantity",
+       cl.price                                                                  as "Price",
+       to_char(OC.MATURITY_YEAR, 'FM0000') || to_char(OC.MATURITY_MONTH, 'FM00') ||
+       to_char(OC.MATURITY_DAY, 'FM00')                                          as "Expiry"
+from dwh.client_order cl
+         inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+         join dwh.d_instrument di on di.instrument_id = cl.instrument_id
+         inner join dwh.execution ex on cl.order_id = ex.order_id and ex.exec_date_id >= cl.create_date_id
+         left join dwh.d_exchange exc on exc.exchange_id = cl.exchange_id and exc.is_active
+         inner join dwh.d_option_contract oc on (oc.instrument_id = cl.instrument_id)
+         inner join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
+         inner join dwh.d_instrument ui on ui.instrument_id = os.underlying_instrument_id
+
+where CL.CREATE_date_id between :in_start_date_id and :in_end_date_id
+--             and AC.TRADING_FIRM_ID = in_firm
+  and case when :l_account_ids = '{}' then true else cl.account_id = any (:l_account_ids) end
+  and CL.PARENT_ORDER_ID is null
+  and CL.MULTILEG_REPORTING_TYPE in ('1', '2')
+  and di.instrument_type_id = 'O'
+  and EX.IS_BUSTED = 'N'
+  and EX.EXEC_TYPE not in ('3', 'a', '5', 'E')
+  and CL.TRANS_TYPE <> 'F'
+  and ((CL.PARENT_ORDER_ID is null and EX.EXEC_TYPE <> '0') or CL.PARENT_ORDER_ID is not null)
+order by cl.order_id, ex.exec_id
