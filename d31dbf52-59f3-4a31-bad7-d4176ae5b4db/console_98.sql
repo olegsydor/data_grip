@@ -99,7 +99,23 @@ select cl.client_order_id,
                            when '4' then 'Canceled ++'
                            when 'W' then 'Replaced ++'
                            else EX.EXEC_TYPE end end
+           end                                                                   as "Action_old",
+
+           case
+           when CL.PARENT_ORDER_ID is null then
+               case EX.ORDER_STATUS
+                   when 'A' then 'New'
+                   when 'b' then 'Cancel'
+                   when 'S' then 'Amend'
+                   when '1' then 'AMend'
+                   when '2' then '???'
+                   else
+                       case EX.EXEC_TYPE
+                           when '4' then 'Canceled'
+                           when 'W' then 'Amend'
+                           else EX.EXEC_TYPE end end
            end                                                                   as "Action",
+
        'DASH'                                                                    as "Executing Broker",
        'SQRT'                                                                    as "Client",
        case cl.side
