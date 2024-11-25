@@ -81,7 +81,9 @@ from t_os
 group by  "Action";
 */
 
-select to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
+select cl.client_order_id,
+       cl.order_id,
+    to_char(ex.exec_time, 'YYYYMMDD')::int4                                   as "Trade date",
        cl.order_id                                                               as "Trade Ref",
        cl.client_order_id                                                        as "Order ID",
        case
@@ -94,8 +96,8 @@ select to_char(ex.exec_time, 'YYYYMMDD')::int4                                  
                    when '2' then 'Filled'
                    else
                        case EX.EXEC_TYPE
-                           when '4' then 'Canceled'
-                           when 'W' then 'Replaced'
+                           when '4' then 'Canceled ++'
+                           when 'W' then 'Replaced ++'
                            else EX.EXEC_TYPE end end
            end                                                                   as "Action",
        'DASH'                                                                    as "Executing Broker",
@@ -138,5 +140,6 @@ where CL.CREATE_date_id between :in_start_date_id and :in_end_date_id
   and EX.IS_BUSTED = 'N'
   and EX.EXEC_TYPE not in ('3', 'a', '5', 'E')
   and CL.TRANS_TYPE <> 'F'
+--   and CL.TRANS_TYPE in ('D', 'G')
   and ((CL.PARENT_ORDER_ID is null and EX.EXEC_TYPE <> '0') or CL.PARENT_ORDER_ID is not null)
 order by cl.order_id, ex.exec_id
