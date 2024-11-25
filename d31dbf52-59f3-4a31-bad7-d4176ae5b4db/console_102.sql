@@ -122,3 +122,21 @@ select * from trash.so_order_blotter_reg(20221212, 20221212,'{0180000134}');
 
 
 select 'Event Date,Order Status,Ex Dest,Event Type,Free Text,Reject Reason,Is Mleg,Is Cross,Security Type,Account,Trading Firm,Count Parent Cl Ord ID,Count Order_id'
+
+
+select --tf.trading_firm_id, a.account_name, ts.target_strategy_name, fmo.fix_message->>'9000' as tag9000, co.client_order_id, co.create_date_id
+distinct co.client_order_id, co.create_date_id
+into temp table t_so
+from dwh.client_order co
+left join dwh.d_account a on (a.account_id = co.account_id)
+-- left join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+left join dwh.d_target_strategy ts on (ts.target_strategy_id = co.sub_strategy_id)
+-- left join fix_capture.fix_message_json fmo on (fmo.date_id = co.create_date_id and fmo.fix_message_id = co.fix_message_id)
+where co.create_date_id between 20221201 and 20230131
+ and co.parent_order_id is null --Parent orders only
+ and co.multileg_reporting_type in ('1','2')
+ and ts.target_strategy_name = 'VOL'
+
+select * from t_so
+         where create_date_id >= 20230101
+order by 2
