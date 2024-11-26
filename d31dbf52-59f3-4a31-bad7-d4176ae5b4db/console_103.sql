@@ -63,3 +63,7 @@ create table partitions.f_parent_order_new_202412 partition of data_marts.f_pare
 -- alter table data_marts.f_parent_order add constraint f_parent_order_d_instrument_fk foreign key (instrument_id) references dwh.d_instrument (instrument_id);
 
 -- run db_management
+
+insert into db_management.table_partman
+(schema_name, table_name, part_schema_name, part_type, part_schedule, is_active, part_priority)
+values ('data_marts', 'f_parent_order', 'partitions', 'int', 'MONTH', false, 99);

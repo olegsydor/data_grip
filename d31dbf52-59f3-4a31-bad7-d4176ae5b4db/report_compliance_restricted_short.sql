@@ -1,9 +1,13 @@
 -- DROP FUNCTION trash.get_restricted_short(timestamp);
 
-CREATE OR REPLACE FUNCTION dash360.report_compliance_restricted_short(in_start_date_id int4, in_end_date_id int4)
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+create or replace function dash360.report_compliance_restricted_short(in_start_date_id int4, in_end_date_id int4)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$function$
 declare
     l_date_id_end   int;
     l_date_id_begin int;
@@ -17,10 +21,8 @@ begin
     select public.load_log(l_load_id, l_step_id, 'report_compliance_restricted_short STARTED ====', 0, 'O')
     into l_step_id;
 
-    l_date_id_end := to_char(in_date, 'YYYYMMDD')::int;
-    l_date_id_begin := to_char(public.get_business_date_back(in_date::date, 4), 'YYYYMMDD')::int;
-
---    raise notice '%, %', l_date_id_begin, l_date_id_end;
+    l_date_id_end := in_end_date_id;
+    l_date_id_begin := in_start_date_id;
 
     select public.load_log(l_load_id, l_step_id, 'l_date_id size is =' || l_date_id_begin || '-' || l_date_id_end, 1,
                            'O')
@@ -118,7 +120,7 @@ begin
           and le.order_status <> '4'; --Benz 6/21/2024
 
     get diagnostics row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'COMPLETED', row_cnt, 'I')
+    select public.load_log(l_load_id, l_step_id, 'report_compliance_restricted_short COMPLETED', row_cnt, 'I')
     into l_step_id;
 
 -- Finish
@@ -126,3 +128,5 @@ begin
 end;
 $function$
 ;
+select *
+from dash360.report_compliance_restricted_short(in_start_date_id := 20241118, in_end_date_id := 20241122)
