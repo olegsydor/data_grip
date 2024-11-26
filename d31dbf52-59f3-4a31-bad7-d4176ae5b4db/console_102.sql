@@ -138,5 +138,5 @@ where co.create_date_id between 20221201 and 20230131
  and ts.target_strategy_name = 'VOL'
 
 select * from t_so
-         where create_date_id >= 20230101
+         where create_date_id < 20230101
 order by 2
