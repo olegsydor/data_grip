@@ -112,11 +112,11 @@ from genesis2.trade_record tr
 where tr.date_id = 20241129
   and tr.secondary_exch_exec_id = 'S09GVAB00000001'
   and tr.secondary_order_id = 'BKAA0009-20241129'
-order by trade_record_id asc;
+order by tr.trade_record_id asc;
 
 
 SELECT alin.alloc_instr_id,
-       ftr.trade_record_id,
+       ftr.trade_record_ids,
        alin.side,
        ae.alloc_qty,
        alin.avg_px,
@@ -142,16 +142,22 @@ SELECT alin.alloc_instr_id,
 FROM genesis2.allocation_instruction_entry ae
          JOIN genesis2.allocation_instruction alin
               ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'
-         inner join lateral (select tr.trade_record_id,
-                                    tr.cmta,
-                                    tr.opt_customer_firm --, coalesce(tr.street_account_name,'') street_account_name
+         inner join lateral (select
+                                 aitr.alloc_instr_id, aitr.date_id,
+                                 array_agg(tr.trade_record_id) as trade_record_ids,
+                                    min(tr.cmta) as cmta,
+                                    min(tr.opt_customer_firm) as opt_customer_firm--, coalesce(tr.street_account_name,'') street_account_name
                              from genesis2.alloc_instr2trade_record aitr
                                       inner join genesis2.trade_record tr
                                                  on aitr.trade_record_id = tr.trade_record_id and
-                                                    aitr.date_id = tr.date_id and tr.is_busted = 'N'
+                                                    aitr.date_id = tr.date_id
+--                                                         and tr.is_busted = 'N'
 --                                                                       and tr.exec_broker = :in_exec_broker
-                             where aitr.alloc_instr_id = alin.alloc_instr_id
+                             where true
+                                 and aitr.alloc_instr_id = alin.alloc_instr_id
                                and aitr.date_id = alin.date_id
+--                               and aitr.trade_record_id in (2346592826, 2346592949,2346592950,2346593040,2346593041,2346593042,2346593043,2346593044)
+                             group by aitr.alloc_instr_id, aitr.date_id
                              limit 1) ftr on true
          JOIN genesis2.clearing_account ca
               ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/ AND
@@ -163,3 +169,22 @@ FROM genesis2.allocation_instruction_entry ae
          JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
          JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
 WHERE alin.date_id between :in_start_date_id and :in_end_date_id;
+
+
+
+select aitr.trade_record_id, *
+from genesis2.allocation_instruction_entry ae
+         join genesis2.allocation_instruction alin on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+         join genesis2.alloc_instr2trade_record aitr on aitr.alloc_instr_id = alin.alloc_instr_id
+         join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+         join genesis2.clearing_account ca
+              on (ca.clearing_account_id = ae.clearing_account_id
+                  and ca.clearing_account_type = '1' and ca.market_type = 'O')
+         join genesis2.account acc
+              on (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and acc.opt_report_to_mpid = 'MLCB' and
+                  acc.trading_firm_id <> 'cantor')
+         join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+         join genesis2.option_series os on os.option_series_id = oc.option_series_id
+         join genesis2.instrument i on i.instrument_id = alin.instrument_id
+where alin.date_id between :in_start_date_id and :in_end_date_id
+order by aitr.trade_record_id;
