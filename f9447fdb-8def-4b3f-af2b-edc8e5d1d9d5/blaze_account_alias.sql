@@ -3,7 +3,7 @@ select distinct routines.routine_schema || '.' || routines.routine_name--, param
 from information_schema.routines
          left join information_schema.parameters on routines.specific_name = parameters.specific_name
 where true
-and routine_name ilike '%clearing_get_trades_by_trade_record_id%'
+and routine_name ilike '%clearing_complete_instruction%'
 
 select * from genesis2.clearing_instruction_entry;
 
@@ -116,3 +116,5 @@ begin
 end;
 $function$
 ;
+
+
