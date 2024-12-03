@@ -290,7 +290,7 @@ begin
                  JOIN genesis2.option_contract oc ON oc.instrument_id = alin.instrument_id
                  JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
                  JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
-        WHERE alin.date_id between in_start_date_id and in_end_date_id;
+        WHERE alin.date_id between :in_start_date_id and :in_end_date_id;
 
     GET DIAGNOSTICS row_cnt = ROW_COUNT;
     select public.load_log(l_load_id, l_step_id, 'COMPLETED', row_cnt, 'I')
