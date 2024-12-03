@@ -54,5 +54,7 @@ end;
 $function$
 ;
 
-select * from public.load_log(1, 1, 'test', 0, 'I')
+select * from public.load_log(1, 1, 'test', 0, 'I');
+
+alter table public.load_timing alter column log_date drop not null;
 
