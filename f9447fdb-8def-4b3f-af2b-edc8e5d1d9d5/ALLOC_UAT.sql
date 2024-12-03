@@ -243,6 +243,8 @@ begin
 -- Start
     return query
         SELECT ftr.first_orig_trade_record_id,
+               qty.last_qty as first_qty,
+               ftr.last_qty,
                alin.side,
                ae.alloc_qty,
                alin.avg_px,
@@ -269,6 +271,7 @@ begin
                       ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'
                  inner join lateral (select tr.cmta,
                                             tr.opt_customer_firm,-- coalesce(tr.street_account_name,'') street_account_name
+                                            tr.last_qty,
                                             staging.last_orig_trade_record_id_today(tr.trade_record_id,
                                                                                     tr.date_id) as first_orig_trade_record_id
                                      from genesis2.alloc_instr2trade_record aitr
@@ -277,11 +280,12 @@ begin
                                                              and aitr.date_id = tr.date_id
                                                              and tr.is_busted = 'N'
                                                              and case
-                                                                     when in_exec_broker is null then true
-                                                                     else tr.exec_broker = in_exec_broker end
+                                                                     when :in_exec_broker is null then true
+                                                                     else tr.exec_broker = :in_exec_broker end
                                      where aitr.alloc_instr_id = alin.alloc_instr_id
                                        and aitr.date_id = alin.date_id
                                      limit 1) ftr on true
+            join lateral (select last_qty from genesis2.trade_record tr where tr.trade_record_id = ftr.first_orig_trade_record_id limit 1) qty on true
                  JOIN genesis2.clearing_account ca
                       ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                           AND ca.clearing_account_type = '1' AND ca.market_type = 'O')
@@ -339,4 +343,6 @@ $fn$
 ;
 
 
-select staging.last_orig_trade_record_id_today(2346593043, 20241129)
+select staging.last_orig_trade_record_id_today(2346593043, 20241129);
+
+select last_qty, * from trade_record where trade_record_id = 2346592826
