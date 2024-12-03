@@ -243,11 +243,11 @@ begin
 -- Start
     return query
         SELECT ftr.first_orig_trade_record_id,
-               qty.last_qty as first_qty,
-               ftr.last_qty,
+               qty.last_qty         as first_qty,
                alin.alloc_instr_id,
-               alin.side,
+               ftr.last_qty,
                ae.alloc_qty,
+               alin.side,
                alin.avg_px,
                acc.opt_is_fix_clfirm_processed,
                ftr.cmta             AS ftr_cmta,
@@ -286,7 +286,10 @@ begin
                                      where aitr.alloc_instr_id = alin.alloc_instr_id
                                        and aitr.date_id = alin.date_id
                                      limit 1) ftr on true
-            join lateral (select last_qty from genesis2.trade_record tr where tr.trade_record_id = ftr.first_orig_trade_record_id limit 1) qty on true
+                 join lateral (select last_qty
+                               from genesis2.trade_record tr
+                               where tr.trade_record_id = ftr.first_orig_trade_record_id
+                               limit 1) qty on true
                  JOIN genesis2.clearing_account ca
                       ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                           AND ca.clearing_account_type = '1' AND ca.market_type = 'O')
