@@ -1,3 +1,4 @@
+/*
 -- OS 20241202 https://dashfinancial.atlassian.net/browse/DS-9047 added blaze_account_alias to output
 select distinct routines.routine_schema || '.' || routines.routine_name--, parameters.data_type, parameters.ordinal_position, *
 from information_schema.routines
@@ -6,7 +7,7 @@ where true
 and routine_name ilike '%clearing_post%'
 
 select * from genesis2.clearing_instruction_entry;
-
+*/
 alter table genesis2.clearing_instruction_entry
     add column if not exists blaze_account_alias varchar(255) null;
 comment on column genesis2.clearing_instruction_entry.blaze_account_alias is 'Base on EDWDilling..TOrder_EDW.AccountAlias. Filled for blaze traffic only';

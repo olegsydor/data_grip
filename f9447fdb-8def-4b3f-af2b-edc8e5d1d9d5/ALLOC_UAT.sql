@@ -245,6 +245,7 @@ begin
         SELECT ftr.first_orig_trade_record_id,
                qty.last_qty as first_qty,
                ftr.last_qty,
+               alin.alloc_instr_id,
                alin.side,
                ae.alloc_qty,
                alin.avg_px,

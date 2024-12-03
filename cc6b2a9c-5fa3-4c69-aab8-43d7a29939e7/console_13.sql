@@ -114,4 +114,4 @@ where 1 = 1
   and ui.USER_ID in (15276, 15841, 15277);
 
 
-C:\Users\Oleh_Sydor\AppData\Roaming\JetBrains\DataGrip2024.1\consoles\db\cc6b2a9c-5fa3-4c69-aab8-43d7a29939e7\console_13.sql
+C:\Users\Oleh_Sydor\AppData\Roaming\JetBrains\DataGrip2024.1\consoles\db\cc6b2a9c-5fa3-4c69-aab8-43d7a29939e7\blaze_account_alias_Bigdata.sql
