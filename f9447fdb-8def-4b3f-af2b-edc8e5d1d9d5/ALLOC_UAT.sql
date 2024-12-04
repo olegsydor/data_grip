@@ -652,13 +652,13 @@ $function$
 
 -- DROP FUNCTION staging.last_orig_order(int8);
 
-create function staging.last_orig_trade_record_id_today(in_trade_record_id bigint, in_date_id int4)
-    returns bigint
+create or replace function staging.all_orig_trade_record_id_today(in_trade_record_id bigint, in_date_id int4)
+    returns bigint[]
     language plpgsql
 as
 $fn$
 declare
-    ret_trade_record_id int8;
+    ret_trade_record_ids int8[];
 begin
     with recursive total (trade_record_id, orig_trade_record_id) as
                        (select tr.trade_record_id, tr.orig_trade_record_id
@@ -673,12 +673,11 @@ begin
                         from genesis2.trade_record tr
                                  join total on tr.trade_record_id = total.orig_trade_record_id
                         where tr.date_id = in_date_id)
-    select trade_record_id
-    into ret_trade_record_id
-    from total
-    where orig_trade_record_id is null
-    limit 1;
-    return ret_trade_record_id;
+    select array_agg(trade_record_id order by trade_record_id)
+    into ret_trade_record_ids
+    from total;
+
+    return ret_trade_record_ids;
 end;
 $fn$
 ;
@@ -690,7 +689,7 @@ select last_qty, * from genesis2.trade_record
 where trade_record_id in (2346593078, 2346593027, 2346592823)
 
 select staging.last_orig_trade_record_id_today(2346593043, 20241129);
-
+select staging.all_orig_trade_record_id_today(2346593043, 20241129);
 select last_qty, * from trade_record where trade_record_id = 2346592826;
 
 with base as (SELECT ftr.first_orig_trade_record_id,
@@ -806,10 +805,10 @@ where trade_record_id in (2346593042, 2346593043, 2346593044)
 group by tr.clearing_account_id, tr.street_account_name, tr.account_nickname;
 
 
-insert into trash.allocation_report (first_orig_trade_record_id, first_qty, orig_trade_record_id, trade_record_id,
-                                     last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty,
-                                     opt_is_fix_clfirm_processed, ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed,
-                                     opt_customer_firm, opt_customer_or_firm, occ_actionable_id, dataset, to_report)
+-- insert into trash.allocation_report (first_orig_trade_record_id, first_qty, orig_trade_record_id, trade_record_id,
+--                                      last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty,
+--                                      opt_is_fix_clfirm_processed, ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed,
+--                                      opt_customer_firm, opt_customer_or_firm, occ_actionable_id, dataset, to_report)
 SELECT ftr.first_orig_trade_record_id,
        qty.last_qty                     as first_qty,
        ftr.orig_trade_record_id,
@@ -829,8 +828,9 @@ SELECT ftr.first_orig_trade_record_id,
        acc.opt_customer_or_firm,
        ae.occ_actionable_id             as occ_actionable_id,
        to_char(now(), 'YYYYMMDDHH24MI') as dataset,
---        row_number() over (partition by ftr.trade_record_id) as rn
+
        case
+
            when exists (select null
                         from trash.allocation_report ar
                         where ar.alloc_instr_id = ae.alloc_instr_id
@@ -883,5 +883,17 @@ and not exists (select null
                           and ar.date_id = alin.date_id);
 
 
-select first_orig_trade_record_id, orig_trade_record_id, last_qty, alloc_qty, *
-from trash.allocation_report
+select staging.all_orig_trade_record_id_today(trade_record_id, date_id), orig_trade_record_id, trade_record_id, last_qty, alloc_qty, *
+from trash.allocation_report;
+alter table trash.allocation_report add column orig_trade_records int8[];
+
+update trash.allocation_report
+    set orig_trade_records = staging.all_orig_trade_record_id_today(trade_record_id, date_id)
+where orig_trade_records is null;
+
+select orig_trade_records, *
+from trash.allocation_report;
+
+select secondary_exch_exec_id, * from genesis2.trade_record
+where trade_record_id in (2346597214,2346597252,2346597265,2346597280, 2346597208,2346597217)
+order by 1, trade_record_id
