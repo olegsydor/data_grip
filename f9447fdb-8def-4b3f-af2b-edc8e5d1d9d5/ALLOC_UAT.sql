@@ -830,7 +830,7 @@ SELECT ftr.first_orig_trade_record_id,
        to_char(now(), 'YYYYMMDDHH24MI') as dataset,
 
        case
-
+when exists (select null from trash.allocation_report where )
            when exists (select null
                         from trash.allocation_report ar
                         where ar.alloc_instr_id = ae.alloc_instr_id
