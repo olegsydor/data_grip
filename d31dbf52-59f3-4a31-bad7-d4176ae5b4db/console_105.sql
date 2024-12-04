@@ -37,3 +37,8 @@ into temp table t_03
         select * from t_03
         order by 1, 3
         select * from t_01
+
+
+select distinct trade_liquidity_indicator from dwh.flat_trade_record
+where date_id = 20241203
+and instrument_type_id = 'E'
