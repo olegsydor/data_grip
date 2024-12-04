@@ -363,22 +363,26 @@ select last_qty, * from trade_record where trade_record_id = 2346592826;
 
 SELECT ftr.first_orig_trade_record_id,
        qty.last_qty         as first_qty,
-       alin.alloc_instr_id,
        ftr.orig_trade_record_id,
        ftr.trade_record_id,
        ftr.last_qty,
-       ae.alloc_qty,
+       alin.alloc_instr_id,
        alin.side,
        alin.avg_px,
+       alin.date_id,
+       alin.open_close,
+       ae.alloc_qty,
        acc.opt_is_fix_clfirm_processed,
        ftr.cmta             AS ftr_cmta,
        ca.cmta              AS ca_cmta,
-       alin.date_id,
-         alin.open_close,
        acc.opt_is_fix_custfirm_processed,
        ftr.opt_customer_firm,
        acc.opt_customer_or_firm,
-       ae.occ_actionable_id as occ_actionable_id --, ftr.street_account_name
+       ae.occ_actionable_id as occ_actionable_id,
+       to_char(now(),'YYYYMMDDHH24MI'),
+       sum(ae.alloc_qty) over (partition by ftr.first_orig_trade_record_id),
+--        case when
+''
 FROM genesis2.allocation_instruction_entry ae
          JOIN genesis2.allocation_instruction alin
               ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'
@@ -394,7 +398,7 @@ FROM genesis2.allocation_instruction_entry ae
                                       inner join genesis2.trade_record tr
                                                  on aitr.trade_record_id = tr.trade_record_id
                                                      and aitr.date_id = tr.date_id
---                                                              and tr.is_busted = 'N'
+--                                                      and tr.is_busted = 'N'
                                                      and case
                                                              when :in_exec_broker is null then true
                                                              else tr.exec_broker = :in_exec_broker end
