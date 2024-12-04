@@ -114,6 +114,7 @@ FROM genesis2.allocation_instruction_entry ae
 --                                                                       and tr.exec_broker = :in_exec_broker
                              where aitr.alloc_instr_id = alin.alloc_instr_id
                                and aitr.date_id = alin.date_id
+                             and aitr.
                              limit 1) ftr on true
          JOIN genesis2.clearing_account ca
               ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/ AND
@@ -121,10 +122,10 @@ FROM genesis2.allocation_instruction_entry ae
          JOIN genesis2.account acc ON (acc.account_id = ca.account_id AND acc.is_deleted <> 'Y' AND
                                        acc.opt_report_to_mpid = 'MLCB' AND
                                        acc.trading_firm_id <> 'cantor')
-         JOIN genesis2.option_contract oc ON oc.instrument_id = alin.instrument_id
-         JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
-         JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
-WHERE alin.date_id between :in_start_date_id and :in_end_date_id;
+         join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+         join genesis2.option_series os on os.option_series_id = oc.option_series_id
+         join genesis2.instrument i on i.instrument_id = alin.instrument_id
+where alin.date_id between :in_start_date_id and :in_end_date_id;
 
 
 
@@ -518,15 +519,16 @@ select tr.trade_record_id,
           from genesis2.trade_record tr
                    inner join genesis2.instrument i on tr.instrument_id = i.instrument_id
           where date_id = :in_date_id
-            and trade_record_id = any ('{2346593042,2346593043,2346593044}')
+            and trade_record_id = any ('{2346593042,2346593043,2346593044}');
+
 
 select *
 from genesis2.allocation_instruction alin
          join genesis2.allocation_instruction_entry ae
               on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
-         join genesis2.alloc_instr2trade_record aitr
-              on aitr.alloc_instr_id = alin.alloc_instr_id and aitr.date_id = alin.date_id
-         inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+--          join genesis2.alloc_instr2trade_record aitr
+--               on aitr.alloc_instr_id = alin.alloc_instr_id and aitr.date_id = alin.date_id
+--          inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
          join genesis2.clearing_account ca
               on (ca.clearing_account_id = ae.clearing_account_id and ca.clearing_account_type = '1' and
                   ca.market_type = 'O')
