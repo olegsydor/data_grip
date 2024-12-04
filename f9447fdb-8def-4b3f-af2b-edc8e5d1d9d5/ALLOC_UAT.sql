@@ -1,3 +1,82 @@
+-- list of functions
+--create temp table t_f as
+select distinct routines.routine_schema || '.' || routines.routine_name--, parameters.data_type, parameters.ordinal_position, *
+from information_schema.routines
+         left join information_schema.parameters on routines.specific_name = parameters.specific_name
+where true
+--and routine_name ilike '%scrape%'
+--and routine_name ilike '%eod_pershing_ps%'
+--and routine_name ilike '%eod%'
+--and parameter_name not ilike '%gtc%'
+--and parameter_mode = 'IN'
+and routine_name !~~* all(ARRAY['%_bkp%', '%_old%', '%_tst%', '%_test%'])
+--and routines.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
+and routines.routine_schema in ('dash360', 'dash_reporting')
+--and (routine_definition ilike $$%trans_type%<>%'F'%$$
+--or routine_definition ilike $$%trans_type%in%('D',%'G')%$$)
+--and routine_definition not like $$%%$$
+and routine_definition ilike '%alloc_instr_id%';
+
+
+
+with tr as
+         (select tr.trade_record_id,
+                 tr.account_id,
+                 tr.instrument_id,
+                 tr.last_qty,
+                 tr.allocation_avg_price,
+                 tr.open_close,
+                 tr.side,
+                 tr.street_account_name,
+                 tr.account_nickname,
+                 tr.cmta,
+                 tr.clearing_account_number,
+                 i.instrument_type_id
+          from genesis2.trade_record tr
+                   inner join genesis2.instrument i on tr.instrument_id = i.instrument_id
+          where date_id = :in_date_id
+            and trade_record_id = any ('{2346593042,2346593043,2346593044}')
+            and is_busted = 'N')
+     , aie as (
+--          INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id,
+--                                                         occ_actionable_id, account_nickname, alloc_qty)
+         select :l_alloc_instr
+              , :in_date_id
+--               , dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number, tr.account_nickname,
+--                                                   tr.street_account_name, tr.instrument_type_id,
+--                                                   :in_user_id) as clearing_account_id
+              , tr.street_account_name
+              , tr.account_nickname
+              , sum(last_qty)
+         from tr
+         group by /*3,*/ tr.street_account_name, tr.account_nickname
+),
+     a2tr as (
+--      INSERT INTO alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id)
+         select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id
+         from tr
+         /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
+                            coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
+                            coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */ )
+INSERT
+INTO allocation_instruction
+(alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side,
+ created_by_user_id, dataset_id)
+select l_alloc_instr,
+       in_date_id,
+       clock_timestamp(),
+       account_id,
+       instrument_id,
+       sum(last_qty),
+       allocation_avg_price,
+       open_close,
+       side,
+       in_user_id,
+       l_load_batch_id
+from tr
+group by account_id, instrument_id, allocation_avg_price, open_close, side;
+-----------------------------------------------------------------------------------------------------------------------
+
 SELECT alin.alloc_instr_id,
     ftr.trade_record_id,
        alin.side,
@@ -423,25 +502,40 @@ select * from base
          where rn = 1
 order by first_orig_trade_record_id, alloc_instr_id desc, trade_record_id;
 
+
+select tr.trade_record_id,
+                 tr.account_id,
+                 tr.instrument_id,
+                 tr.last_qty,
+                 tr.allocation_avg_price,
+                 tr.open_close,
+                 tr.side,
+                 tr.street_account_name,
+                 tr.account_nickname,
+                 tr.cmta,
+                 tr.clearing_account_number,
+                 i.instrument_type_id
+          from genesis2.trade_record tr
+                   inner join genesis2.instrument i on tr.instrument_id = i.instrument_id
+          where date_id = :in_date_id
+            and trade_record_id = any ('{2346593042,2346593043,2346593044}')
+
 select *
-from genesis2.allocation_instruction_entry ae
-         JOIN genesis2.allocation_instruction alin ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'
+from genesis2.allocation_instruction alin
+         join genesis2.allocation_instruction_entry ae
+              on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
          join genesis2.alloc_instr2trade_record aitr
               on aitr.alloc_instr_id = alin.alloc_instr_id and aitr.date_id = alin.date_id
-         inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id
-    and tr.date_id = aitr.date_id
-         JOIN genesis2.clearing_account ca
-              ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
-                  AND ca.clearing_account_type = '1' AND ca.market_type = 'O')
-         JOIN genesis2.account acc ON (acc.account_id = ca.account_id AND acc.is_deleted <> 'Y' AND
-                                       acc.opt_report_to_mpid = 'MLCB' AND
-                                       acc.trading_firm_id <> 'cantor')
-         JOIN genesis2.option_contract oc ON oc.instrument_id = alin.instrument_id
-         JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
-         JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
+         inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+         join genesis2.clearing_account ca
+              on (ca.clearing_account_id = ae.clearing_account_id and ca.clearing_account_type = '1' and
+                  ca.market_type = 'O')
+         join genesis2.account acc
+              on (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and acc.opt_report_to_mpid = 'MLCB' and
+                  acc.trading_firm_id <> 'cantor')
+         join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+         join genesis2.option_series os on os.option_series_id = oc.option_series_id
+         join genesis2.instrument i on i.instrument_id = alin.instrument_id
 where true
   and alin.date_id between :in_start_date_id and :in_end_date_id
-  and case
-          when :in_exec_broker is null then true
-          else tr.exec_broker = :in_exec_broker end
-  and tr.exec_broker is not null
+  and alin.alloc_instr_id = -51641
