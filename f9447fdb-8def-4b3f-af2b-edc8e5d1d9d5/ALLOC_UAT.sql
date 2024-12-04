@@ -418,3 +418,5 @@ FROM genesis2.allocation_instruction_entry ae
 WHERE alin.date_id between :in_start_date_id and :in_end_date_id
 order by ftr.first_orig_trade_record_id, alin.alloc_instr_id desc, ftr.trade_record_id;
 
+
+-- MONITORING INC
