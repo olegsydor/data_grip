@@ -880,7 +880,8 @@ and not exists (select null
                         from trash.allocation_report ar
                         where ar.alloc_instr_id = ae.alloc_instr_id
                           and ar.side = alin.side
-                          and ar.date_id = alin.date_id)
+                          and ar.date_id = alin.date_id);
 
 
-select first_orig_trade_record_id, orig_trade_record_id, last_qty, alloc_qty, * from trash.allocation_report
+select first_orig_trade_record_id, orig_trade_record_id, last_qty, alloc_qty, *
+from trash.allocation_report
