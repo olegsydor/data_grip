@@ -794,12 +794,7 @@ where true
   and alin.date_id between :in_start_date_id and :in_end_date_id
 --   and alin.alloc_instr_id = -51641;
 
-create table if not exists trash.alloc_instr_parent_trade_ids
-(
-    alloc_instr_id  int4,
-    trade_record_id int8,
-    db_create_time  timestamp default clock_timestamp()
-);
+
 
 
 select tr.clearing_account_id,
