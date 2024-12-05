@@ -774,22 +774,22 @@ select tr.trade_record_id,
             and trade_record_id = any ('{2346593042,2346593043,2346593044}');
 
 
-select *
+select tr.*, *
 from genesis2.allocation_instruction alin
          join genesis2.allocation_instruction_entry ae
               on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
---          join genesis2.alloc_instr2trade_record aitr
---               on aitr.alloc_instr_id = alin.alloc_instr_id and aitr.date_id = alin.date_id
---          inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
---          join genesis2.clearing_account ca
---               on (ca.clearing_account_id = ae.clearing_account_id and ca.clearing_account_type = '1' and
---                   ca.market_type = 'O')
---          join genesis2.account acc
---               on (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and acc.opt_report_to_mpid = 'MLCB' and
---                   acc.trading_firm_id <> 'cantor')
---          join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
---          join genesis2.option_series os on os.option_series_id = oc.option_series_id
---          join genesis2.instrument i on i.instrument_id = alin.instrument_id
+          join genesis2.alloc_instr2trade_record aitr
+               on aitr.alloc_instr_id = alin.alloc_instr_id and aitr.date_id = alin.date_id
+          inner join genesis2.trade_record tr on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+         join genesis2.clearing_account ca
+              on (ca.clearing_account_id = ae.clearing_account_id and ca.clearing_account_type = '1' and
+                  ca.market_type = 'O')
+         join genesis2.account acc
+              on (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and acc.opt_report_to_mpid = 'MLCB' and
+                  acc.trading_firm_id <> 'cantor')
+         join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+         join genesis2.option_series os on os.option_series_id = oc.option_series_id
+         join genesis2.instrument i on i.instrument_id = alin.instrument_id
 where true
   and alin.date_id between :in_start_date_id and :in_end_date_id
 --   and alin.alloc_instr_id = -51641;
@@ -828,15 +828,16 @@ SELECT ftr.first_orig_trade_record_id,
        acc.opt_customer_or_firm,
        ae.occ_actionable_id             as occ_actionable_id,
        to_char(now(), 'YYYYMMDDHH24MI') as dataset,
-
-       case
-when exists (select null from trash.allocation_report where )
+       staging.all_orig_trade_record_id_today(ftr.trade_record_id, alin.date_id),
+       :in_arr,
+        case
+             when staging.all_orig_trade_record_id_today(ftr.trade_record_id, alin.date_id) && :in_arr then 'skip 0'
            when exists (select null
                         from trash.allocation_report ar
                         where ar.alloc_instr_id = ae.alloc_instr_id
                           and ar.side = alin.side
                           and ar.date_id = alin.date_id) then 'skip'
-           when ae.alloc_qty > ftr.last_qty then 'skip 2'
+--            when ae.alloc_qty > ftr.last_qty then 'skip 2'
            else 'report' end            as to_report
 FROM genesis2.allocation_instruction_entry ae
          JOIN genesis2.allocation_instruction alin
@@ -882,6 +883,34 @@ and not exists (select null
                           and ar.side = alin.side
                           and ar.date_id = alin.date_id);
 
+
+select * from
+
+create temp table t_remove_trade_record as
+select trade_record_id, staging.all_orig_trade_record_id_today(trade_record_id, date_id)
+from genesis2.alloc_instr2trade_record
+where alloc_instr_id in (select alloc_instr_id from trash.allocation_report)
+
+
+SELECT
+    array_agg(distinct elem) from (
+    select unnest(all_orig_trade_record_id_today) AS elem
+    FROM t_remove_trade_record
+    order by 1) x
+
+SELECT unnest(string_to_array(
+        trim(both '{}' FROM all_orig_trade_record_id_today), ',')) AS element
+    FROM t_remove_trade_record
+
+SELECT array_agg(elem) AS all_elements
+FROM (
+
+) subquery;
+
+select * from t_remove_trade_record;
+
+select *
+from trash.allocation_report;
 
 select staging.all_orig_trade_record_id_today(trade_record_id, date_id), orig_trade_record_id, trade_record_id, last_qty, alloc_qty, *
 from trash.allocation_report;
