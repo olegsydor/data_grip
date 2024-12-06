@@ -5,6 +5,8 @@ create table if not exists trash.alloc_instr_parent_trade_ids
     date_id         int4,
     db_create_time  timestamp default clock_timestamp()
 );
+create index alloc_instr_parent_trade_ids_trade_record_id_idx on trash.alloc_instr_parent_trade_ids (trade_record_id);
+
 select distinct alloc_instr_id from trash.allocation_report;
 
  insert into trash.alloc_instr_parent_trade_ids (trade_record_id, alloc_instr_id, date_id)
