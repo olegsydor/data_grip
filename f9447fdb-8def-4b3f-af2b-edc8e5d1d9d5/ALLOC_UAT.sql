@@ -929,7 +929,7 @@ select secondary_exch_exec_id, * from genesis2.trade_record
 where trade_record_id in (2346597214,2346597252,2346597265,2346597280, 2346597208,2346597217)
 order by 1, trade_record_id;
 
-
+select * from trash.get_all_parent_trade_record_ids_by_alloc_instr_id(-52306, 20241206)
 create or replace function trash.get_all_parent_trade_record_ids_by_alloc_instr_id(in_alloc_instr_id int4, in_date_id int4)
     returns bigint[]
     language plpgsql
@@ -942,13 +942,14 @@ begin
     select array_agg(distinct trade_record_id)
     into l_trade_record_ids
     from genesis2.alloc_instr2trade_record
-    where alloc_instr_id = :in_alloc_instr_id
+    where alloc_instr_id = in_alloc_instr_id
       and date_id = in_date_id;
 
     with recursive total (trade_record_id, orig_trade_record_id) as
                        (select tr.trade_record_id, tr.orig_trade_record_id
                         from genesis2.trade_record tr
-                        where tr.orig_trade_record_id is not null
+                        where true
+--                           and tr.orig_trade_record_id is not null
                           and tr.trade_record_id = any (l_trade_record_ids)
                           and tr.date_id = in_date_id
 
