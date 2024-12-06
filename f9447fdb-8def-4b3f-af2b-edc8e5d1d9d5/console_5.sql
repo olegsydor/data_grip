@@ -65,7 +65,7 @@ begin
                    ftr.opt_customer_firm,
                    acc.opt_customer_or_firm,
                    ae.occ_actionable_id             as occ_actionable_id,
-                   to_char(now(), 'YYYYMMDDHH24MI') as dataset,
+                   to_char(clock_timestamp(), 'YYYYMMDDHH24MI') as dataset,
                    case
                        when
                            trash.get_all_parent_trade_record_ids_by_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
@@ -132,10 +132,27 @@ begin
 end;
 $fx$;
 
-select * from trash.so_allocation_report(20241205, 20241205, null);
 
-select * from trash.allocation_report;
+
+2346609425,2346609426,2346609427
+
+select * from trash.allocation_report ar
+         order by dataset
+where dataset = '202412061535'
+
+select ar.alloc_instr_id, alloc_qty--, min(to_report), array_agg(pa.trade_record_id) as trade_records
+ from trash.allocation_report ar
+join trash.alloc_instr_parent_trade_ids pa on pa.alloc_instr_id = ar.alloc_instr_id
+where dataset = '202412061535'
+group by ar.alloc_instr_id, alloc_qty;
+
+
 select distinct alloc_instr_id, trade_record_id from trash.alloc_instr_parent_trade_ids;
 
 
 select * from dash360.report_rps_ml_options_cmta(20241205, 20241205, null);
+
+select * from trash.so_allocation_report(20241206, 20241206, null);
+
+
+select to_char(now(), 'YYYYMMDDHH24MI') as dataset
