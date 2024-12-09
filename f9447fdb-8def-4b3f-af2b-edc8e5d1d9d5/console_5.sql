@@ -45,8 +45,9 @@ begin
     -- get the list of all alloc_instr_id_reported in the chain of the reported records;
     select array_agg(alloc_instr_id)
     into l_alloc_instr_id_reported
-    from trash.alloc_instr_parent_trade_ids
-    where date_id between in_start_date_id and in_end_date_id;
+    from trash.allocation_report
+    where date_id between in_start_date_id and in_end_date_id
+    and to_report = 'report'; -- this condition looks excessive
 
     with base_ins as (
         insert into trash.allocation_report (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty,
@@ -61,24 +62,25 @@ begin
                    alin.open_close,
                    ae.alloc_qty,
                    acc.opt_is_fix_clfirm_processed,
-                   ftr.cmta                         AS ftr_cmta,
-                   ca.cmta                          AS ca_cmta,
+                   ftr.cmta                                     AS ftr_cmta,
+                   ca.cmta                                      AS ca_cmta,
                    acc.opt_is_fix_custfirm_processed,
                    ftr.opt_customer_firm,
                    acc.opt_customer_or_firm,
-                   ae.occ_actionable_id             as occ_actionable_id,
+                   ae.occ_actionable_id                         as occ_actionable_id,
                    to_char(clock_timestamp(), 'YYYYMMDDHH24MI') as dataset,
                    case
-                       when
-                           trash.get_all_parent_trade_record_ids_by_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
-                           l_trade_record_id_reported
-                           then 'old false logic'
+                       --                        when
+--                            trash.get_all_parent_trade_record_ids_by_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
+--                            l_trade_record_id_reported
+--                            then 'old false logic'
                        when exists (select null
-                              from trash.allocation_report ar
-                              where ar.alloc_instr_id = ae.alloc_instr_id
-                              and to_report = 'report') then 'skip - alloc_instr_id has been reported'
-                       when ''
-                       else 'report' end            as to_report
+                                    from trash.allocation_report ar
+                                    where ar.alloc_instr_id = ae.alloc_instr_id
+                                      and to_report = 'report') then 'skip - current alloc_instr_id'
+                       when trash.get_all_parent_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
+                            l_alloc_instr_id_reported then 'skip alloc_instr_id has been reported'
+                       else 'report' end                        as to_report
             FROM genesis2.allocation_instruction_entry ae
                      JOIN genesis2.allocation_instruction alin
                           ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'

@@ -1003,7 +1003,7 @@ $fn$
 create
     or replace
     function trash.get_all_parent_alloc_instr_id(in_alloc_instr_id integer, in_date_id integer)
-    returns bigint[]
+    returns int4[]
     language plpgsql
 as
 $function$
