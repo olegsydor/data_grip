@@ -967,3 +967,91 @@ begin
 end;
 $fn$
 ;
+
+
+create or replace function staging.all_orig_trade_record_id_today(in_trade_record_id bigint, in_date_id int4)
+    returns bigint[]
+    language plpgsql
+as
+$fn$
+declare
+    ret_trade_record_ids int8[];
+begin
+    with recursive total (trade_record_id, orig_trade_record_id) as
+                       (select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                        where tr.orig_trade_record_id is not null
+                          and tr.trade_record_id = in_trade_record_id
+                          and tr.date_id = in_date_id
+
+                        union all
+
+                        select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                                 join total on tr.trade_record_id = total.orig_trade_record_id
+                        where tr.date_id = in_date_id)
+    select array_agg(trade_record_id order by trade_record_id)
+    into ret_trade_record_ids
+    from total;
+
+    return ret_trade_record_ids;
+end;
+$fn$
+;
+
+
+create
+    or replace
+    function trash.get_all_parent_alloc_instr_id(in_alloc_instr_id integer, in_date_id integer)
+    returns bigint[]
+    language plpgsql
+as
+$function$
+    -- 1. We have alloc_instr_id
+    -- 2. We calculate all trade_record_id inside it
+    -- 3. We found all orig of these trade_records
+    -- 4. We found all alloc_instr_id that these origs can be found
+declare
+    l_trade_record_id_in  int8[];
+    l_trade_record_id_out int8[];
+    ret_alloc_instr_ids   int4[];
+begin
+    select array_agg(distinct trade_record_id)
+    into l_trade_record_id_in
+    from genesis2.alloc_instr2trade_record
+    where alloc_instr_id = in_alloc_instr_id
+      and date_id = in_date_id;
+
+    with recursive total (trade_record_id, orig_trade_record_id) as
+                       (select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                        where true
+                          and tr.trade_record_id = any (l_trade_record_id_in)
+                          and tr.date_id = in_date_id
+
+                        union all
+
+                        select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                                 join total on tr.trade_record_id = total.orig_trade_record_id
+                        where tr.date_id = in_date_id)
+    select array_agg(distinct trade_record_id order by trade_record_id)
+    into l_trade_record_id_out
+    from total;
+
+    select array_agg(distinct alloc_instr_id order by alloc_instr_id)
+    into ret_alloc_instr_ids
+    from genesis2.alloc_instr2trade_record
+    where trade_record_id = any (l_trade_record_id_out);
+
+    return ret_alloc_instr_ids;
+end;
+$function$
+;
+
+select * from trash.get_all_parent_alloc_instr_id(in_alloc_instr_id := -52294, in_date_id := 20241206)
+
+-52325
+-52294
+-52295
+-52249

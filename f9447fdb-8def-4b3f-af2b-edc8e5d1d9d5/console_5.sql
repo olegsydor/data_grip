@@ -30,21 +30,21 @@ where date_id = in_date
 --------------
 create
     or replace
-    function trash.so_allocation_report(in_start_date_id integer, in_end_date_id integer,
+    function trash.so_allocation_report2(in_start_date_id integer, in_end_date_id integer,
                                         in_exec_broker text DEFAULT '792'::text)
     returns int4
     language plpgsql
 as
 $fx$
 declare
-    l_trade_record_id_reported int8[];
+    l_alloc_instr_id_reported int4[];
     l_alloc_instr_id           int4[];
     l_row_cnt                  int4;
 
 begin
-    -- get the list of all trade_record_ids in the chain of the reported records;
-    select array_agg(trade_record_id)
-    into l_trade_record_id_reported
+    -- get the list of all alloc_instr_id_reported in the chain of the reported records;
+    select array_agg(alloc_instr_id)
+    into l_alloc_instr_id_reported
     from trash.alloc_instr_parent_trade_ids
     where date_id between in_start_date_id and in_end_date_id;
 
@@ -72,7 +72,12 @@ begin
                        when
                            trash.get_all_parent_trade_record_ids_by_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
                            l_trade_record_id_reported
-                           then 'skip because of existing'
+                           then 'old false logic'
+                       when exists (select null
+                              from trash.allocation_report ar
+                              where ar.alloc_instr_id = ae.alloc_instr_id
+                              and to_report = 'report') then 'skip - alloc_instr_id has been reported'
+                       when ''
                        else 'report' end            as to_report
             FROM genesis2.allocation_instruction_entry ae
                      JOIN genesis2.allocation_instruction alin
@@ -157,3 +162,5 @@ select * from trash.so_allocation_report(20241206, 20241209, null);
 
 select * from trash.allocation_report ar
          order by dataset;
+
+select * from trash.get_all_parent_trade_record_ids_by_alloc_instr_id(-52394, 20241206)
