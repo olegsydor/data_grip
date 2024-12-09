@@ -136,10 +136,8 @@ $fx$;
 
 
 
-2346609425,2346609426,2346609427
-
 select * from trash.allocation_report ar
-         order by dataset
+         order by dataset;
 where dataset = '202412061535'
 
 select ar.alloc_instr_id, alloc_qty--, min(to_report), array_agg(pa.trade_record_id) as trade_records
@@ -152,9 +150,10 @@ group by ar.alloc_instr_id, alloc_qty;
 select distinct alloc_instr_id, trade_record_id from trash.alloc_instr_parent_trade_ids;
 
 
-select * from dash360.report_rps_ml_options_cmta(20241205, 20241205, null);
+select * from dash360.report_rps_ml_options_cmta(20241206, 20241209, null);
 
-select * from trash.so_allocation_report(20241206, 20241206, null);
+select * from trash.so_allocation_report(20241206, 20241209, null);
 
 
-select to_char(now(), 'YYYYMMDDHH24MI') as dataset
+select * from trash.allocation_report ar
+         order by dataset;
