@@ -1051,7 +1051,3 @@ $function$
 
 select * from trash.get_all_parent_alloc_instr_id(in_alloc_instr_id := -52294, in_date_id := 20241206)
 
--52325
--52294
--52295
--52249
