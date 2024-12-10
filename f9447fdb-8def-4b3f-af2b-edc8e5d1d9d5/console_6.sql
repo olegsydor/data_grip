@@ -22,7 +22,7 @@ create index bofa_allocation_report_alloc_instr_id_idx on dash360.bofa_allocatio
 create index bofa_allocation_report_date_id_idx on dash360.bofa_allocation_report (date_id);
 
 
-create or replace function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer)
+create function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer)
     returns integer[]
     language plpgsql
 AS
@@ -179,9 +179,12 @@ begin
 
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' FINISHED ====', l_row_cnt, 'O')
     into l_step_id;
-    
-    return l_row_cnt::text;
+
+    return query
+        select l_row_cnt::text;
 
 end;
 $fn$
 ;
+
+select * from dash360.bofa_allocation_report
