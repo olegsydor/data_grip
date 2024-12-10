@@ -1,28 +1,117 @@
--- DROP FUNCTION trash.so_allocation_report2(int4, int4, text);
+create table if not exists dash360.bofa_allocation_report
+(
+    last_qty                      int4                                null,
+    alloc_instr_id                int4                                null,
+    side                          bpchar(1)                           null,
+    avg_px                        numeric(14, 6)                      null,
+    date_id                       int4                                null,
+    open_close                    bpchar(1)                           null,
+    alloc_qty                     int4                                null,
+    opt_is_fix_clfirm_processed   bpchar(1)                           null,
+    ftr_cmta                      varchar(3)                          null,
+    ca_cmta                       varchar(3)                          null,
+    opt_is_fix_custfirm_processed bpchar(1)                           null,
+    opt_customer_firm             bpchar(1)                           null,
+    opt_customer_or_firm          bpchar(1)                           null,
+    occ_actionable_id             varchar(10)                         null,
+    dataset                       int4                                null,
+    to_report                     text                                null,
+    db_create_time                timestamp default clock_timestamp() not null
+);
+create index bofa_allocation_report_alloc_instr_id_idx on dash360.bofa_allocation_report (alloc_instr_id);
+create index bofa_allocation_report_date_id_idx on dash360.bofa_allocation_report (date_id);
 
-CREATE FUNCTION dash360.so_allocation_report2(in_start_date_id integer, in_end_date_id integer, in_exec_broker text DEFAULT '792'::text)
- RETURNS table (ret_row text)
- LANGUAGE plpgsql
-AS $fn$
+
+create or replace function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer)
+    returns integer[]
+    language plpgsql
+AS
+$function$
+    -- 1. We have alloc_instr_id
+    -- 2. We calculate all trade_record_id inside it
+    -- 3. We found all orig of these trade_records
+    -- 4. We found all alloc_instr_id that these origs can be found
 declare
+    l_trade_record_id_in  int8[];
+    l_trade_record_id_out int8[];
+    ret_alloc_instr_ids   int4[];
+begin
+    select array_agg(distinct trade_record_id)
+    into l_trade_record_id_in
+    from genesis2.alloc_instr2trade_record
+    where alloc_instr_id = in_alloc_instr_id
+      and date_id = in_date_id;
+
+    with recursive total (trade_record_id, orig_trade_record_id) as
+                       (select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                        where true
+                          and tr.trade_record_id = any (l_trade_record_id_in)
+                          and tr.date_id = in_date_id
+
+                        union all
+
+                        select tr.trade_record_id, tr.orig_trade_record_id
+                        from genesis2.trade_record tr
+                                 join total on tr.trade_record_id = total.orig_trade_record_id
+                        where tr.date_id = in_date_id)
+    select array_agg(distinct trade_record_id order by trade_record_id)
+    into l_trade_record_id_out
+    from total;
+
+    select array_agg(distinct alloc_instr_id order by alloc_instr_id)
+    into ret_alloc_instr_ids
+    from genesis2.alloc_instr2trade_record
+    where trade_record_id = any (l_trade_record_id_out);
+
+    return ret_alloc_instr_ids;
+end;
+$function$
+;
+
+
+
+create function dash360.allocation_report(in_start_date_id integer, in_end_date_id integer,
+                                          in_exec_broker text default '792'::text)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$fn$
+declare
+        l_load_id int;
+    l_step_id int;
     l_alloc_instr_id_reported int4[];
     l_alloc_instr_id           int4[];
     l_row_cnt                  int4;
+    l_msg_text text;
 
 begin
+    l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || 'for ' ||
+                  case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ' ';
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+    -- preparing data
     -- get the list of all alloc_instr_id_reported in the chain of the reported records;
     select array_agg(alloc_instr_id)
     into l_alloc_instr_id_reported
-    from trash.allocation_report
+    from dash360.bofa_allocation_report
     where date_id between in_start_date_id and in_end_date_id
     and to_report = 'report'; -- this condition looks excessive
 
+
     with base_ins as (
-        insert into trash.allocation_report (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty,
-                                             opt_is_fix_clfirm_processed, ftr_cmta, ca_cmta,
-                                             opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
-                                             occ_actionable_id, dataset, to_report)
-            SELECT ftr.last_qty,
+        insert into dash360.bofa_allocation_report
+            (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
+             ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
+             occ_actionable_id, dataset, to_report)
+            select ftr.last_qty,
                    alin.alloc_instr_id,
                    alin.side,
                    alin.avg_px,
@@ -30,24 +119,21 @@ begin
                    alin.open_close,
                    ae.alloc_qty,
                    acc.opt_is_fix_clfirm_processed,
-                   ftr.cmta                                     AS ftr_cmta,
-                   ca.cmta                                      AS ca_cmta,
+                   ftr.cmta,             -- ftr_cmta,
+                   ca.cmta,              -- ca_cmta,
                    acc.opt_is_fix_custfirm_processed,
                    ftr.opt_customer_firm,
                    acc.opt_customer_or_firm,
-                   ae.occ_actionable_id                         as occ_actionable_id,
-                   to_char(clock_timestamp(), 'YYYYMMDDHH24MI') as dataset,
+                   ae.occ_actionable_id, -- occ_actionable_id,
+                   l_load_id,            -- dataset,
                    case
-                       when exists (select null
-                                    from trash.allocation_report ar
-                                    where ar.alloc_instr_id = ae.alloc_instr_id
-                                      and to_report = 'report') then 'skip - current alloc_instr_id'
-                       when trash.get_all_parent_alloc_instr_id(alin.alloc_instr_id, alin.date_id) &&
-                            l_alloc_instr_id_reported then 'skip alloc_instr_id has been reported'
-                       else 'report' end                        as to_report
-            FROM genesis2.allocation_instruction_entry ae
-                     JOIN genesis2.allocation_instruction alin
-                          ON alin.alloc_instr_id = ae.alloc_instr_id AND alin.is_deleted <> 'Y'
+                       when ar.date_id is not null then 'skip - current alloc_instr_id'
+                       when staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id, alin.date_id) &&
+                            l_alloc_instr_id_reported then 'skip - alloc_instr_id has been reported before'
+                       else 'report' end as to_report
+            from genesis2.allocation_instruction_entry ae
+                     join genesis2.allocation_instruction alin
+                          on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
                      inner join lateral (select tr.cmta,
                                                 tr.opt_customer_firm,
                                                 tr.last_qty
@@ -64,18 +150,23 @@ begin
                                            and aitr.date_id = alin.date_id
                                          limit 1
                 ) ftr on true
-                     JOIN genesis2.clearing_account ca
-                          ON (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
-                              AND ca.clearing_account_type = '1' AND ca.market_type = 'O')
-                     JOIN genesis2.account acc ON (acc.account_id = ca.account_id AND acc.is_deleted <> 'Y' AND
-                                                   acc.opt_report_to_mpid = 'MLCB' AND
+                     join genesis2.clearing_account ca
+                          on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
+                              and ca.clearing_account_type = '1' and ca.market_type = 'O')
+                     join genesis2.account acc ON (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and
+                                                   acc.opt_report_to_mpid = 'MLCB' and
                                                    acc.trading_firm_id <> 'cantor')
-                     JOIN genesis2.option_contract oc ON oc.instrument_id = alin.instrument_id
-                     JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
-                     JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
-            WHERE alin.date_id between in_start_date_id and in_end_date_id
+                     join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+                     join genesis2.option_series os on os.option_series_id = oc.option_series_id
+                     join genesis2.instrument i on i.instrument_id = alin.instrument_id
+                     left join lateral (select ar.date_id
+                                        from dash360.bofa_allocation_report ar
+                                        where ar.alloc_instr_id = ae.alloc_instr_id
+                                          and to_report = 'report'
+                                        limit 1) ar on true
+            where alin.date_id between in_start_date_id and in_end_date_id
               and not exists (select null
-                              from trash.allocation_report ar
+                              from dash360.bofa_allocation_report ar
                               where ar.alloc_instr_id = ae.alloc_instr_id
                                 and ar.side = alin.side
                                 and ar.date_id = alin.date_id)
@@ -86,7 +177,11 @@ begin
 
     select array_length(l_alloc_instr_id, 1) into l_row_cnt;
 
-    return l_row_cnt;
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' FINISHED ====', l_row_cnt, 'O')
+    into l_step_id;
+    
+    return l_row_cnt::text;
+
 end;
 $fn$
 ;
