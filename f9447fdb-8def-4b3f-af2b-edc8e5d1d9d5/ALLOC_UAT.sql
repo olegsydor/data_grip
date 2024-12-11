@@ -969,7 +969,7 @@ $fn$
 ;
 
 
-create or replace function staging.all_orig_trade_record_id_today(in_trade_record_id bigint, in_date_id int4)
+create function staging.all_orig_trade_record_id_today(in_trade_record_id bigint, in_date_id int4)
     returns bigint[]
     language plpgsql
 as
@@ -980,7 +980,8 @@ begin
     with recursive total (trade_record_id, orig_trade_record_id) as
                        (select tr.trade_record_id, tr.orig_trade_record_id
                         from genesis2.trade_record tr
-                        where tr.orig_trade_record_id is not null
+                        where true
+                          and tr.orig_trade_record_id is not null
                           and tr.trade_record_id = in_trade_record_id
                           and tr.date_id = in_date_id
 

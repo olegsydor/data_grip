@@ -21,8 +21,10 @@ create table if not exists dash360.bofa_allocation_report
 create index bofa_allocation_report_alloc_instr_id_idx on dash360.bofa_allocation_report (alloc_instr_id);
 create index bofa_allocation_report_date_id_idx on dash360.bofa_allocation_report (date_id);
 
+alter table dash360.bofa_allocation_report drop column trade_record_sheep;
 
-create function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer)
+drop function staging.get_all_alloc_instr_id_for_orig;
+create function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer, in_trade_record_id int8 default null)
     returns integer[]
     language plpgsql
 AS
@@ -36,11 +38,15 @@ declare
     l_trade_record_id_out int8[];
     ret_alloc_instr_ids   int4[];
 begin
-    select array_agg(distinct trade_record_id)
-    into l_trade_record_id_in
-    from genesis2.alloc_instr2trade_record
-    where alloc_instr_id = in_alloc_instr_id
-      and date_id = in_date_id;
+    if in_trade_record_id is null then
+        select array_agg(distinct trade_record_id)
+        into l_trade_record_id_in
+        from genesis2.alloc_instr2trade_record
+        where alloc_instr_id = in_alloc_instr_id
+          and date_id = in_date_id;
+    else
+        l_trade_record_id_in := array [in_trade_record_id];
+    end if;
 
     with recursive total (trade_record_id, orig_trade_record_id) as
                        (select tr.trade_record_id, tr.orig_trade_record_id
@@ -71,7 +77,7 @@ $function$
 
 
 
-create function dash360.allocation_report(in_start_date_id integer, in_end_date_id integer,
+create or replace function dash360.allocation_report(in_start_date_id integer, in_end_date_id integer,
                                           in_exec_broker text default '792'::text)
     returns table
             (
@@ -128,12 +134,15 @@ begin
                    l_load_id,            -- dataset,
                    case
                        when ar.date_id is not null then 'skip - current alloc_instr_id'
-                       when staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id, alin.date_id) &&
-                            l_alloc_instr_id_reported then 'skip - alloc_instr_id has been reported before'
+                       when or_ai.alloc_instr_ids && l_alloc_instr_id_reported then 'skip - alloc_instr_id has been reported before'
                        else 'report' end as to_report
             from genesis2.allocation_instruction_entry ae
                      join genesis2.allocation_instruction alin
                           on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+                     left join lateral (select alloc_instr_ids
+                                        from staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id,
+                                                                                     alin.date_id) as x(alloc_instr_ids)
+                                        limit 1) or_ai on true
                      inner join lateral (select tr.cmta,
                                                 tr.opt_customer_firm,
                                                 tr.last_qty
