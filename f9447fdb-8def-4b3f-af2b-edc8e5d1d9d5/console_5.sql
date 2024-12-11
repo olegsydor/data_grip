@@ -371,7 +371,7 @@ FROM (SELECT ftr.date_id                                              AS date_id
 --                         WHERE date_id between :in_start_date_id and :in_end_date_id
 --                           AND t.trade_record_id = ftr.trade_record_id)
           --and t.is_active
-
+and
 
       ) l
 GROUP BY l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
@@ -389,35 +389,124 @@ GROUP BY l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
 
 
 
-create function trash.so_allocation_second_part(in_start_date_id integer, in_end_date_id integer,
-                                          in_exec_broker text default '792'::text)
-returns int4
-language plpgsql
-as $fx$
+create or replace function trash.so_allocation_second_part(in_start_date_id integer, in_end_date_id integer)
+    returns table
+            (
+                date_id                       int4,
+                cmta                          varchar,
+                open_close                    bpchar(1),
+                order_id                      int8,
+                instrument_id                 int8,
+                side                          bpchar(1),
+                day_cum_qty                   int8,
+                avg_px                        numeric,
+                customer_or_firm_id           bpchar,
+                opt_is_fix_clfirm_processed   bpchar(1),
+                opt_customer_or_firm          bpchar(1),
+                opt_nickel_commission         numeric(12, 4),
+                opt_penny_commission          numeric(12, 4),
+                opt_is_fix_custfirm_processed bpchar(1)
+
+            )
+    language plpgsql
+as
+$fx$
 declare
-l_alloc_instr_id_reported int4[];
-    begin
+    l_alloc_instr_id_reported int4[];
+begin
     -- 0. list of reported alloc_instr_id
-    select array_agg(alloc_instr_id)
+    select array_agg(ba.alloc_instr_id)
     into l_alloc_instr_id_reported
-    from dash360.bofa_allocation_report
-    where date_id between in_start_date_id and in_end_date_id
-    and to_report = 'report';
+    from dash360.bofa_allocation_report ba
+    where ba.date_id between in_start_date_id and in_end_date_id
+      and ba.to_report = 'report';
 
     -- 0. create a list of trade records from reported alloc_instr_id
-create temp table t_trade_record_reported as
-select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id from genesis2.trade_record tr
-join genesis2.alloc_instr2trade_record aitr on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
-where aitr.alloc_instr_id = any(l_alloc_instr_id_reported);
+    drop table if exists t_trade_record_reported;
+    create temp table t_trade_record_reported as
+    select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
+    from genesis2.trade_record tr
+             join genesis2.alloc_instr2trade_record aitr
+                  on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
+    where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
 
     -- 0. find all trade_records that itself or its origs were in reported list
 
+
     -- 0. find all valid trade_records: all except the records from the prev
+    return query
+        SELECT l.date_id,
+               l.cmta,
+               l.open_close,
+               l.order_id,
+               l.instrument_id,
+               l.side,
+               sum(last_qty)                                        AS day_cum_qty,
+               CASE sum(last_qty)
+                   WHEN 0 THEN NULL
+                   ELSE sum(last_qty * last_px) / sum(last_qty) END AS avg_px,
+               max(opt_customer_firm)                               AS customer_or_firm_id,
+               l.opt_is_fix_clfirm_processed,
+               l.opt_customer_or_firm,
+               l.opt_nickel_commission,
+               l.opt_penny_commission,
+               l.opt_is_fix_custfirm_processed
+/*,
+       max(street_account_name) as street_account_name*/
+        FROM (SELECT ftr.date_id                                              AS date_id,
+                     CASE
+                         WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
+                             THEN ftr.cmta
+                         ELSE NULL END                                        AS cmta,
+                     ftr.open_close,
+                     ftr.order_id                                             AS order_id,
+                     ftr.instrument_id,
+                     ftr.account_id,
+                     ftr.side,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
+                         ELSE cie.last_qty END                                AS last_qty,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
+                         ELSE cie.last_px END                                 AS last_px,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
+                         ELSE cie.opt_customer_firm END                          opt_customer_firm,
+                     CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
+                     acc.opt_is_fix_clfirm_processed,
+                     acc.opt_customer_or_firm,
+                     acc.opt_nickel_commission,
+                     acc.opt_penny_commission,
+                     acc.opt_is_fix_custfirm_processed
+              FROM genesis2.trade_record ftr
+                       JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
+                                                     acc.is_deleted <> 'Y' AND
+                                                     acc.opt_report_to_mpid = 'MLCB' AND
+                                                     acc.trading_firm_id <> 'cantor')
+                       LEFT JOIN genesis2.clearing_instruction_entry cie
+                                 ON (cie.date_id = ftr.date_id AND
+                                     COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
+                                     ftr.trade_record_id AND cie.cmta IS NOT NULL)
+                       LEFT JOIN genesis2.clearing_instruction ci
+                                 ON (ci.clearing_instr_id =
+                                     cie.clearing_instr_entry_id AND ci.status = 'D' AND
+                                     ci.is_deleted <> 'Y')
+              WHERE ftr.date_id between in_start_date_id and in_end_date_id
+                AND is_busted = 'N'
+                AND ftr.order_id > 0
 
-
-
-
+                and not exists (select null
+                                from t_trade_record_reported rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))) l
+        GROUP BY l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
+                 l.opt_is_fix_clfirm_processed, l.opt_customer_or_firm,
+                 l.opt_nickel_commission, l.opt_penny_commission,
+                 l.opt_is_fix_custfirm_processed;
 
 end;
 
-    $fx$
+$fx$;
+
+
+select * from trash.so_allocation_second_part(in_start_date_id := 20241210, in_end_date_id := 202441211)
