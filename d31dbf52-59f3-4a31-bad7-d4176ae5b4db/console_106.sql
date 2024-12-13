@@ -149,6 +149,10 @@ select string_to_array(
        where cl.parent_order_id =18287651947;
 
 
+
+alter function dash360.get_rfr_msg_types_by_order_id rename to get_rfr_msg_types_by_order_id_old;
+alter function trash.so_get_rfr_msg_types_by_order_id set schema dash360;
+alter function dash360.so_get_rfr_msg_types_by_order_id rename to get_rfr_msg_types_by_order_id;
     select *
     from trash.so_get_rfr_msg_types_by_order_id(in_order_id := 18287651947, in_start_date_id := 20241210,
                                                 in_end_date_id := 20241210);
