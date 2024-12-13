@@ -21,7 +21,20 @@ create table if not exists dash360.bofa_allocation_report
 create index bofa_allocation_report_alloc_instr_id_idx on dash360.bofa_allocation_report (alloc_instr_id);
 create index bofa_allocation_report_date_id_idx on dash360.bofa_allocation_report (date_id);
 
-alter table dash360.bofa_allocation_report add column instrument_id int8;
+alter table dash360.bofa_allocation_report add column if not exists instrument_id int8;
+alter table dash360.bofa_allocation_report add column if not exists opt_is_fix_custfirm_processed char;
+alter table dash360.bofa_allocation_report add column if not exists opt_penny_commission numeric(12, 4);
+alter table dash360.bofa_allocation_report add column if not exists opt_nickel_commission numeric(12, 4);
+alter table dash360.bofa_allocation_report add column if not exists root_symbol varchar(10);
+alter table dash360.bofa_allocation_report add column if not exists min_tick_increment numeric(12, 4);
+alter table dash360.bofa_allocation_report add column if not exists put_call char;
+alter table dash360.bofa_allocation_report add column if not exists maturity_year int2;
+alter table dash360.bofa_allocation_report add column if not exists maturity_month int2;
+alter table dash360.bofa_allocation_report add column if not exists maturity_day int2;
+alter table dash360.bofa_allocation_report add column if not exists strike_price  numeric(12, 4);
+
+
+
 
 drop function staging.get_all_alloc_instr_id_for_orig;
 create function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer, in_trade_record_id int8 default null)
@@ -116,7 +129,10 @@ begin
         insert into dash360.bofa_allocation_report
             (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
-             occ_actionable_id, dataset, to_report)
+             occ_actionable_id, dataset, instrument_id, opt_is_fix_custfirm_processed,
+             opt_penny_commission, opt_nickel_commission, root_symbol, min_tick_increment, put_call,
+             maturity_year, maturity_month, maturity_day, strike_price,
+             to_report)
             select ftr.last_qty,
                    alin.alloc_instr_id,
                    alin.side,
@@ -132,6 +148,17 @@ begin
                    acc.opt_customer_or_firm,
                    ae.occ_actionable_id, -- occ_actionable_id,
                    l_load_id,            -- dataset,
+                   alin.instrument_id,
+                   acc.opt_is_fix_custfirm_processed, -- char
+                   acc.opt_penny_commission, -- numeric(12, 4)
+                   acc.opt_nickel_commission,-- numeric(12, 4)
+                   os.root_symbol,
+                   os.min_tick_increment,
+                   oc.put_call,
+                   oc.maturity_year,
+                   oc.maturity_month,
+                   oc.maturity_day,
+                   oc.strike_price,
                    case
                        when ar.date_id is not null then 'skip - current alloc_instr_id'
                        when or_ai.alloc_instr_ids && l_alloc_instr_id_reported then 'skip - alloc_instr_id has been reported before'

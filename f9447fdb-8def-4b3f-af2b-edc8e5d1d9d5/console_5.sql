@@ -509,64 +509,81 @@ end;
 $fx$;
 
 
-select * from trash.so_allocation_second_part(in_start_date_id := 20241210, in_end_date_id := 202441211);
+select * from trash.so_allocation_second_part(in_start_date_id := 20241212, in_end_date_id := 202441212);
 
 
-select  'DAS' || ',' ||--Branch
-               CASE
-                   WHEN gen.side = '1' THEN 'B'
-                   WHEN gen.side in ('2', '5', '6') THEN 'S'
-                   ELSE 'S'
-                   END || ',' ||--Action
-               '' || ',' ||--Symbol
-               '?' || ',' ||--Destination
-               gen.alloc_qty || ',' ||--Quantity
-               to_char(gen.avg_px, 'FM99990D009999') || ',' ||
-               coalesce(CASE
-                            WHEN gen.opt_is_fix_clfirm_processed = 'Y' THEN lpad(ftr_cmta, 5, '0')
-                            WHEN gen.opt_is_fix_clfirm_processed = 'N' THEN lpad(ca_cmta, 5, '0')
-                            ELSE ''
-                            END, '') || ',' ||
-               SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 5, 2) || '/' ||
-               SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 7, 2) || '/' ||
-               SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 3, 2) || '/' ||
-               '00/00' || ',' ||
-               'DASH' || ',' ||--Execution Venue
+
+create or replace function trash.print_allocation_report(in_dataset int8)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$fn$
+declare
+
+begin
+    return query
+        select array_to_string(ARRAY [
+                                   'DAS' , ----Branch
+                                   CASE
+                                       WHEN gen.side = '1' THEN 'B'
+                                       WHEN gen.side in ('2', '5', '6') THEN 'S'
+                                       ELSE 'S'
+                                       END , ----Action
+                                   '' , ----Symbol
+                                   '?' , ----Destination
+                                   gen.alloc_qty::text , ----Quantity
+                                   to_char(gen.avg_px, 'FM99990D009999') , --
+                                   CASE
+                                       WHEN gen.opt_is_fix_clfirm_processed = 'Y' THEN lpad(ftr_cmta, 5, '0')
+                                       WHEN gen.opt_is_fix_clfirm_processed = 'N' THEN lpad(ca_cmta, 5, '0')
+                                       END, --
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 5, 2) || '/' ||
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 7, 2) || '/' ||
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 3, 2) || '/' ||
+                                   '00/00' , --
+                                   'DASH' , ----Execution Venue
 --		street_account_name ||','||--Client Identifier
-               occ_actionable_id || ',' ||--Client Identifier
-               to_char(row_number() OVER (), 'FM0000') || ',' ||
-               to_char(((CASE coalesce(gen.min_tick_increment, 0.01)
-                             WHEN 0.01 THEN gen.opt_penny_commission
-                             WHEN 0.05 THEN gen.opt_nickel_commission END) * gen.alloc_qty), 'FM99990D0') || ',' ||--13
-               '' || ',' ||--Liquidity
-               'S' || ',' ||--Single/Basket
-               '' || ',' ||--Pass Through Fees
-               coalesce(gen.root_symbol, '') || ',' ||--Symbol
-               CASE
-                   WHEN gen.put_call = '0' THEN 'P'
-                   WHEN gen.put_call = '1' THEN 'C'
-                   END || ',' ||--Put/Call
-               gen.maturity_year || ',' ||
-               to_char(gen.maturity_month, 'FM00') || ',' ||
-               to_char(gen.MATURITY_DAY, 'FM00') || ',' ||
-               to_char(gen.strike_price, 'FM999990D0099') || ',' ||--Strike
-               gen.open_close || ',' ||
-               CASE (CASE gen.opt_is_fix_custfirm_processed
-                         WHEN 'Y' THEN coalesce(gen.opt_customer_firm, gen.opt_customer_or_firm)
-                         ELSE gen.opt_customer_or_firm END)
-                   WHEN '0' THEN 'C'
-                   WHEN '1' THEN 'F'
-                   WHEN '2' THEN 'F'
-                   WHEN '3' THEN 'C'
-                   WHEN '4' THEN 'M'
-                   WHEN '5' THEN 'M'
-                   WHEN '7' THEN 'F'
-                   WHEN '8' THEN 'C'
-                   END || ',' ||
-               '' || ','
+                                   gen.occ_actionable_id , ----Client Identifier
+                                   to_char(row_number() OVER (), 'FM0000') , --
+                                   to_char(((CASE coalesce(gen.min_tick_increment, 0.01)
+                                                 WHEN 0.01 THEN gen.opt_penny_commission
+                                                 WHEN 0.05 THEN gen.opt_nickel_commission END) * gen.alloc_qty),
+                                           'FM99990D0') , ----13
+                                   '' , ----Liquidity
+                                   'S' , ----Single/Basket
+                                   '' , ----Pass Through Fees
+                                   gen.root_symbol, ----Symbol
+                                   CASE
+                                       WHEN gen.put_call = '0' THEN 'P'
+                                       WHEN gen.put_call = '1' THEN 'C'
+                                       END , ----Put/Call
+                                   gen.maturity_year::text , --
+                                   to_char(gen.maturity_month, 'FM00') , --
+                                   to_char(gen.MATURITY_DAY, 'FM00') , --
+                                   to_char(gen.strike_price, 'FM999990D0099') , ----Strike
+                                   gen.open_close , --
+                                   CASE (CASE gen.opt_is_fix_custfirm_processed
+                                             WHEN 'Y' THEN coalesce(gen.opt_customer_firm, gen.opt_customer_or_firm)
+                                             ELSE gen.opt_customer_or_firm END)
+                                       WHEN '0' THEN 'C'
+                                       WHEN '1' THEN 'F'
+                                       WHEN '2' THEN 'F'
+                                       WHEN '3' THEN 'C'
+                                       WHEN '4' THEN 'M'
+                                       WHEN '5' THEN 'M'
+                                       WHEN '7' THEN 'F'
+                                       WHEN '8' THEN 'C'
+                                       END
+                                   ], ',', '')
                    AS rec
-from dash360.bofa_allocation_report gen
-                       JOIN genesis2.option_contract oc ON oc.instrument_id = gen.instrument_id
-                       JOIN genesis2.option_series os ON os.option_series_id = oc.option_series_id
-                       JOIN genesis2.instrument i ON i.instrument_id = alin.instrument_id
-where dataset = 13381858
+        from dash360.bofa_allocation_report gen
+        where dataset = in_dataset
+          and to_report = 'report';
+end;
+$fn$;
+
+
+select trash.print_allocation_report(in_dataset := 13381858)
