@@ -21,7 +21,7 @@ create table if not exists dash360.bofa_allocation_report
 create index bofa_allocation_report_alloc_instr_id_idx on dash360.bofa_allocation_report (alloc_instr_id);
 create index bofa_allocation_report_date_id_idx on dash360.bofa_allocation_report (date_id);
 
-alter table dash360.bofa_allocation_report drop column trade_record_sheep;
+alter table dash360.bofa_allocation_report add column instrument_id int8;
 
 drop function staging.get_all_alloc_instr_id_for_orig;
 create function staging.get_all_alloc_instr_id_for_orig(in_alloc_instr_id integer, in_date_id integer, in_trade_record_id int8 default null)
