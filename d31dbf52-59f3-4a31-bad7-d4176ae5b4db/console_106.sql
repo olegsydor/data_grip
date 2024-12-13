@@ -70,6 +70,7 @@ CREATE OR REPLACE FUNCTION trash.so_get_rfr_msg_types_by_order_id(in_order_id bi
  LANGUAGE plpgsql
 AS $function$
 -- 2024-12-09 OS added (78, 71) instead of 78 for rfr_id_arr (Slavko Dmytriv)
+-- 2024-12-13 OS
 declare
 rfr_id_arr varchar[];
 date_ids_arr int[];
