@@ -587,3 +587,5 @@ $fn$;
 
 
 select trash.print_allocation_report(in_dataset := 13381858)
+
+select * from dash360.bofa_allocation_report
