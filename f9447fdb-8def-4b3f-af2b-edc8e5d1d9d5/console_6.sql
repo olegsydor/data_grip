@@ -223,4 +223,41 @@ end;
 $fn$
 ;
 
+select dataset, to_report, count(*)
+from dash360.bofa_allocation_report
+where true
+  and dataset = 13390122
+group by dataset, to_report;
+
+
 select * from dash360.bofa_allocation_report
+             where dataset = 13390122;
+
+
+-52942
+-52943
+2346622521
+2346622513
+
+select * from staging.all_orig_trade_record_id_today(2346622521, 20241212)
+-- 2346622513
+
+
+select * from trash.get_all_parent_alloc_instr_id(-52943, 20241212)
+
+select * from genesis2.alloc_instr2trade_record
+where alloc_instr_id = -52943;
+
+
+create temp table t_reported as
+select trade_record_id, atr.alloc_instr_id, dataset
+from dash360.bofa_allocation_report bar
+         join genesis2.alloc_instr2trade_record atr
+              on atr.alloc_instr_id = bar.alloc_instr_id and atr.date_id = bar.date_id
+where true
+  and dataset < 13390122
+  and to_report = 'report'
+
+
+select * from t_reported
+where trade_record_id = any(:in_trade_record_ids)
