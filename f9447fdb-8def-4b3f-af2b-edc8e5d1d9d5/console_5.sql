@@ -588,4 +588,113 @@ $fn$;
 
 select trash.print_allocation_report(in_dataset := 13381858)
 
-select * from dash360.bofa_allocation_report
+select * from dash360.bofa_allocation_report;
+
+
+ select --array_to_string(ARRAY [
+                                   'DAS' , ----Branch
+                                   CASE
+                                       WHEN ftr.side = '1' THEN 'B'
+                                       WHEN ftr.side in ('2', '5', '6') THEN 'S'
+                                       ELSE 'S'
+                                       END , ----Action
+                                   '' , ----Symbol
+                                   '?' , ----Destination
+                                   gen.alloc_qty::text , ----Quantity
+                                   to_char(gen.avg_px, 'FM99990D009999') , --
+                                   CASE
+                                       WHEN gen.opt_is_fix_clfirm_processed = 'Y' THEN lpad(ftr_cmta, 5, '0')
+                                       WHEN gen.opt_is_fix_clfirm_processed = 'N' THEN lpad(ca_cmta, 5, '0')
+                                       END, --
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 5, 2) || '/' ||
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 7, 2) || '/' ||
+                                   SUBSTRING(TO_CHAR(gen.date_id, 'FM99999999'), 3, 2) || '/' ||
+                                   '00/00' , --
+                                   'DASH' , ----Execution Venue
+--		street_account_name ||','||--Client Identifier
+                                   gen.occ_actionable_id , ----Client Identifier
+                                   to_char(row_number() OVER (), 'FM0000') , --
+                                   to_char(((CASE coalesce(gen.min_tick_increment, 0.01)
+                                                 WHEN 0.01 THEN gen.opt_penny_commission
+                                                 WHEN 0.05 THEN gen.opt_nickel_commission END) * gen.alloc_qty),
+                                           'FM99990D0') , ----13
+                                   '' , ----Liquidity
+                                   'S' , ----Single/Basket
+                                   '' , ----Pass Through Fees
+                                   gen.root_symbol, ----Symbol
+                                   CASE
+                                       WHEN gen.put_call = '0' THEN 'P'
+                                       WHEN gen.put_call = '1' THEN 'C'
+                                       END , ----Put/Call
+                                   gen.maturity_year::text , --
+                                   to_char(gen.maturity_month, 'FM00') , --
+                                   to_char(gen.MATURITY_DAY, 'FM00') , --
+                                   to_char(gen.strike_price, 'FM999990D0099') , ----Strike
+                                   gen.open_close , --
+                                   CASE (CASE gen.opt_is_fix_custfirm_processed
+                                             WHEN 'Y' THEN coalesce(gen.opt_customer_firm, gen.opt_customer_or_firm)
+                                             ELSE gen.opt_customer_or_firm END)
+                                       WHEN '0' THEN 'C'
+                                       WHEN '1' THEN 'F'
+                                       WHEN '2' THEN 'F'
+                                       WHEN '3' THEN 'C'
+                                       WHEN '4' THEN 'M'
+                                       WHEN '5' THEN 'M'
+                                       WHEN '7' THEN 'F'
+                                       WHEN '8' THEN 'C'
+                                       END
+--                                    ], ',', '') AS rec
+                    from (SELECT ftr.date_id                                              AS date_id,
+                                             CASE
+                                                 WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
+                                                     THEN ftr.cmta
+                                                 ELSE NULL END                                        AS cmta,
+                                             ftr.open_close,
+                                             ftr.order_id                                             AS order_id,
+                                             ftr.instrument_id,
+                                             ftr.account_id,
+                                             ftr.side,
+                                             CASE
+                                                 WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
+                                                 ELSE cie.last_qty END                                AS last_qty,
+                                             CASE
+                                                 WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
+                                                 ELSE cie.last_px END                                 AS last_px,
+                                             CASE
+                                                 WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
+                                                 ELSE cie.opt_customer_firm END                          opt_customer_firm,
+                                             CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
+                                             acc.opt_is_fix_clfirm_processed,
+                                             acc.opt_customer_or_firm,
+                                             acc.opt_nickel_commission,
+                                             acc.opt_penny_commission,
+                                             acc.opt_is_fix_custfirm_processed
+                                      FROM genesis2.trade_record ftr
+                                               JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
+                                                                             acc.is_deleted <> 'Y' AND
+                                                                             acc.opt_report_to_mpid = 'MLCB' AND
+                                                                             acc.trading_firm_id <> 'cantor')
+                                               LEFT JOIN genesis2.clearing_instruction_entry cie
+                                                         ON (cie.date_id = ftr.date_id AND
+                                                             COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
+                                                             ftr.trade_record_id AND cie.cmta IS NOT NULL)
+                                               LEFT JOIN genesis2.clearing_instruction ci
+                                                         ON (ci.clearing_instr_id =
+                                                             cie.clearing_instr_entry_id AND ci.status = 'D' AND
+                                                             ci.is_deleted <> 'Y')
+                                      WHERE ftr.date_id between :in_start_date_id and :in_end_date_id
+                                        AND is_busted = 'N'
+                                        AND ftr.order_id > 0
+
+                                        and not exists (select null
+                                                        from t_trade_record_reported rp
+                                                        where rp.trade_record_id = any
+                                                              (staging.all_orig_trade_record_id_today(
+                                                                      ftr.trade_record_id, ftr.date_id)))) l
+                                GROUP BY l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
+                                         l.opt_is_fix_clfirm_processed, l.opt_customer_or_firm,
+                                         l.opt_nickel_commission, l.opt_penny_commission,
+                                         l.opt_is_fix_custfirm_processed ) ftr
+                                INNER JOIN genesis2.option_contract oc ON (oc.instrument_id = ftr.instrument_id)
+                 INNER JOIN genesis2.option_series os ON (os.option_series_id = oc.option_series_id)
+                 INNER JOIN genesis2.instrument i ON (i.instrument_id = ftr.instrument_id);
