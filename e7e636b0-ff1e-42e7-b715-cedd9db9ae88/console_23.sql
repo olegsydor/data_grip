@@ -16,6 +16,7 @@
     from staging.v_max_blaze_exec_id;
 
 alter table staging.away_trade add column account_name_gvp text null;
+alter table staging.away_trade add column mic_code text null;
 
  create temp table t_blaze
     as
@@ -254,7 +255,21 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
                                    else null
                           end
                       end
-           ) as account_name_gvp
+           )                                                                  as account_name_gvp,
+           case
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
+                   then 'XCBO'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
+                   then 'ECUT'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('FOGS', 'MID') then 'XCHI'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('C2', 'CBOE2') then 'C2OX'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') = 'SMARTR' then 'COWEN'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
+                   then 'BRKPT'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('XPSE') then 'ARCO'
+               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') = 'TO' then 'AMXO'
+               else nullif(coalesce(den1.mic_code, aw.ExDestination), '') end as mic_code
 
 
     from t_blaze aw --staging.v_away_trade aw
