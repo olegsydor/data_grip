@@ -17,6 +17,7 @@
 
 alter table staging.away_trade add column account_name_gvp text null;
 alter table staging.away_trade add column mic_code text null;
+alter table staging.away_trade add column order_id_guid text null;
 
  create temp table t_blaze
     as
@@ -29,7 +30,7 @@ alter table staging.away_trade add column mic_code text null;
 select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as          trade_record_time, -- check timezone
            to_char(coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz,
                    'YYYYMMDD')::int                                              as          date_id,           -- check timezone
-           'to do'                                                               as          is_busted,
+           aw.bustreason                                                              as          is_busted,
            case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end                       as          subsystem_id,      -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
            coalesce(aw.dashaliasid,
                     case
@@ -241,6 +242,7 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
            aw.executingbroker,
            aw.cmtafirm
             ,
+        aw.bustreason                                                              as          is_busted,
            concat(coalesce(nullif(aw.dashaliasid, ''), case
                                                            when coalesce(us.aors_user_name, us.user_login) = 'BBNTRST'
                                                                then 'NTRSCBOE'
@@ -269,9 +271,8 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
                    then 'BRKPT'
                when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('XPSE') then 'ARCO'
                when nullif(coalesce(den1.mic_code, aw.ExDestination), '') = 'TO' then 'AMXO'
-               else nullif(coalesce(den1.mic_code, aw.ExDestination), '') end as mic_code
-
-
+               else nullif(coalesce(den1.mic_code, aw.ExDestination), '') end as mic_code,
+           staging.clordid_to_guid(aw.orderid)
     from t_blaze aw --staging.v_away_trade aw
              Left join staging.d_blaze_order_status bos
                        on aw.Status = bos.enum and bos.Order_or_Report_status = 2
@@ -306,4 +307,8 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
 
 select * from trash.so_load_away_trade()
 
-drop table t_blaze
+drop table t_blaze;
+
+select * from staging.away_trade
+where order_id_guid is not null
+and (is_busted <> 'to do' or is_busted is null)
