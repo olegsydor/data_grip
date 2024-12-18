@@ -7,88 +7,129 @@ where tr.date_id = :in_date_id
   and di.instrument_type_id = 'O';
 
 
+select * from trash.so_allocation_trade_record_monitor(20241217);
 
-create temp table t_trade_record_monitor as
-select tr.trade_record_id,
-       tr.last_qty,
-       case when to_char(di.last_trade_date, 'YYYYMMDD')::int4 = :in_date_id then true else false end as expiring_today,
-       case
-           when al.alloc_instr_id is not null then 'allocated'
-           else 'unallocated' end as is_alloc,
-       case
-           when un.alloc_instr_id is not null then 'unable'
-           end                    as is_unable
-from genesis2.trade_record tr
-         join genesis2.instrument di on di.instrument_id = tr.instrument_id
-         join genesis2.account ac on tr.account_id = ac.account_id
-         left join genesis2.alloc_instr2trade_record atr
-                   on atr.trade_record_id = tr.trade_record_id and atr.date_id = tr.date_id
-         left join lateral (select atr.alloc_instr_id
-                            from genesis2.allocation_instruction ai
-                            where ai.alloc_instr_id = atr.alloc_instr_id
-                              and ai.is_deleted = 'N'
-                            limit 1) al on true
-         left join lateral ( select bar.alloc_instr_id
-                             from dash360.bofa_allocation_report bar
-                             where bar.alloc_instr_id = atr.alloc_instr_id
-                               and bar.date_id = atr.date_id
-                               and bar.to_report <> 'report'
-                             limit 1) un on true
-where true
-  and tr.is_busted <> 'Y'
-  and tr.date_id = :in_date_id
-  and di.instrument_type_id = 'O'
-;
+select * from tmp_trade_record_monitor;
+create or replace function trash.so_allocation_trade_record_monitor(in_date_id int4, in_account_ids int8[] default '{}'::int8[])
+    returns table
+            (
+                account_id                      int8,
+                trading_firm_id                 varchar(9),
+                trades_cnt                      int8,
+                trades_qty                      int8,
+                trades_principal                numeric,
+                trades_qty_expiring             int8,
+                unallocated_trades_cnt          int8,
+                unallocated_trades_qty          int8,
+                unallocated_trades_principal    numeric,
+                unallocated_trades_qty_expiring int8,
+                allocated_trades_cnt            int8,
+                allocated_trades_qty            int8,
+                allocated_trades_principal      numeric,
+                allocated_trades_qty_expiring   int8,
+                unable_trades_cnt               int8,
+                unable_trades_qty               int8,
+                unable_trades_principal         numeric
+            )
+    language plpgsql
+as
+$fn$
+declare
 
-select * from t_trade_record_monitor1
-      where true
-and tr.trade_record_id in (2346622522,2346622521,2346622513,2346622559,2346622562,2346622569);
+begin
 
--- allocated
-select *
-from genesis2.trade_record tr
-         join genesis2.alloc_instr2trade_record atr
-              on atr.trade_record_id = tr.trade_record_id and atr.date_id = tr.date_id
-         join genesis2.allocation_instruction ai on ai.alloc_instr_id = atr.alloc_instr_id
-where true
-  and tr.date_id = 20241217
-  and tr.is_busted <> 'Y'
-  and is_deleted = 'N'
-
-
--- unallocated
-select * from genesis2.trade_record tr
+    drop table if exists tmp_trade_record_monitor;
+    create temp table tmp_trade_record_monitor as
+    select ac.account_id,
+           ac.trading_firm_id,
+           tr.trade_record_id,
+           tr.last_qty,
+           tr.last_Px,
+           case
+               when to_char(di.last_trade_date, 'YYYYMMDD')::int4 = in_date_id then true
+               else false end         as expiring_today,
+           case
+               when al.alloc_instr_id is not null then 'allocated'
+               else 'unallocated' end as is_alloc,
+           case
+               when un.alloc_instr_id is not null then true
+               end                    as is_unable
+    from genesis2.trade_record tr
+             join genesis2.instrument di on di.instrument_id = tr.instrument_id
+             join genesis2.account ac on tr.account_id = ac.account_id
+             left join genesis2.alloc_instr2trade_record atr
+                       on atr.trade_record_id = tr.trade_record_id and atr.date_id = in_date_id
+             left join lateral (select atr.alloc_instr_id
+                                from genesis2.allocation_instruction ai
+                                where ai.alloc_instr_id = atr.alloc_instr_id
+                                  and ai.is_deleted = 'N'
+                                limit 1) al on true
+             left join lateral ( select bar.alloc_instr_id
+                                 from dash360.bofa_allocation_report bar
+                                 where bar.alloc_instr_id = atr.alloc_instr_id
+                                   and bar.date_id = atr.date_id
+                                   and bar.to_report <> 'report'
+                                 limit 1) un on true
     where true
-        and date_id = 20241217
-        and trade_record_reason is null
-      and is_busted <> 'Y'
-        and not exists(select null from genesis2.alloc_instr2trade_record atr where atr.trade_record_id = tr.trade_record_id and atr.date_id = tr.date_id)
+      and tr.is_busted <> 'Y'
+      and tr.date_id = in_date_id
+      and di.instrument_type_id = 'O'
+      and case when in_account_ids = '{}' then true else ac.account_id = any (in_account_ids) end;
+
+
+    return query
+        select trm.account_id,
+               trm.trading_firm_id,
+               --
+               count(trm.trade_record_id)                                                       as trades_cnt,
+               sum(trm.last_qty)                                                                as trades_qty,
+               sum(trm.last_qty + trm.last_px)                                                  as trades_principal,
+               sum(case when trm.expiring_today then 1 else 0 end)                              as trades_qty_expiring,
+               -- unallocated
+               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                    as unallocated_trades_cnt,
+               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)             as unallocated_trades_qty,
+               sum(case when trm.is_alloc = 'unallocated' then last_qty + last_px else 0 end)   as unallocated_trades_principal,
+               sum(case when trm.is_alloc = 'unallocated' and expiring_today then 1 else 0 end) as unallocated_trades_qty_expiring,
+               -- allocated
+               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                      as allocated_trades_cnt,
+               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)               as allocated_trades_qty,
+               sum(case when trm.is_alloc = 'allocated' then last_qty + last_px else 0 end)     as allocated_trades_principal,
+               sum(case when trm.is_alloc = 'allocated' and expiring_today then 1 else 0 end)   as allocated_trades_qty_expiring,
+               -- unable
+               sum(case when trm.is_unable then 1 else 0 end)                                   as unable_trades_cnt,
+               sum(case when trm.is_unable then last_qty else 0 end)                            as unable_trades_qty,
+               sum(case when trm.is_unable then last_qty + last_px else 0 end)                  as unable_trades_principal
+-- select *
+        from tmp_trade_record_monitor trm
+        group by trm.account_id, trm.trading_firm_id;
+end;
+$fn$;
+
+create table trash.so_delete as
+select account_id,
+       trading_firm_id,
+       --
+       count(trade_record_id)                                                       as trades_cnt,
+       sum(last_qty)                                                                as trades_qty,
+       sum(last_qty + last_px)                                                      as trades_principal,
+       sum(case when expiring_today then 1 else 0 end)                              as trades_qty_expiring,
+       -- unallocated
+       sum(case when is_alloc = 'unallocated' then 1 else 0 end)                    as unallocated_trades_cnt,
+       sum(case when is_alloc = 'unallocated' then last_qty else 0 end)             as unallocated_trades_qty,
+       sum(case when is_alloc = 'unallocated' then last_qty + last_px else 0 end)   as unallocated_trades_principal,
+       sum(case when is_alloc = 'unallocated' and expiring_today then 1 else 0 end) as unallocated_trades_qty_expiring,
+       -- allocated
+       sum(case when is_alloc = 'allocated' then 1 else 0 end)                      as allocated_trades_cnt,
+       sum(case when is_alloc = 'allocated' then last_qty else 0 end)               as allocated_trades_qty,
+       sum(case when is_alloc = 'allocated' then last_qty + last_px else 0 end)     as allocated_trades_principal,
+       sum(case when is_alloc = 'allocated' and expiring_today then 1 else 0 end)   as allocated_trades_qty_expiring,
+       -- unable
+       sum(case when is_unable then 1 else 0 end)                                   as unable_trades_cnt,
+       sum(case when is_unable then last_qty else 0 end)                            as unable_trades_qty,
+       sum(case when is_unable then last_qty + last_px else 0 end)                  as unable_trades_principal
+-- select *
+from t_trade_record_monitor
+group by account_id, trading_firm_id
 
 
 
-
-
--- unable to report
-select *
-from genesis2.trade_record tr
-         join genesis2.alloc_instr2trade_record atr
-              on atr.trade_record_id = tr.trade_record_id and atr.date_id = tr.date_id
-         join dash360.bofa_allocation_report bar
-              on bar.alloc_instr_id = atr.alloc_instr_id and bar.date_id = atr.date_id
-where true
-  and tr.date_id = 20241217
-  and tr.is_busted <> 'Y'
-  and bar.to_report <> 'report'
-
-select atr.trade_record_id, * from dash360.bofa_allocation_report bar
-         join genesis2.alloc_instr2trade_record atr
-              on atr.alloc_instr_id = bar.alloc_instr_id and atr.date_id = bar.date_id
-where bar.date_id = 20241212
-and bar.to_report <> 'report'
-
-select atr.alloc_instr_id, *
-from genesis2.alloc_instr2trade_record atr
-         join genesis2.allocation_instruction ai on ai.alloc_instr_id = atr.alloc_instr_id
-where atr.trade_record_id in (2346622522, 2346622521, 2346622513, 2346622559, 2346622562, 2346622569)
---   and atr.date_id = tr.date_id
-  and ai.is_deleted = 'N'
