@@ -238,11 +238,7 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
 ,;
 
     select
-        aw.expirationdate,
-        aw.strike,
-        aw.basecode,
-        staging.trailing_dot(aw.strike),
-        "left"(aw.typecode, 8),
+      reportid,
                    case
                when aw.expirationdate is not null and aw.strike IS NOT NULL
                    THEN replace(
@@ -250,7 +246,7 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
                                                    'g'::text) ||
                                     ' '::text) ||
                                    to_char(aw.expirationdate::timestamp with time zone, 'DDMonYY'::text)) ||
-                                  ' '::text) || staging.trailing_dot(aw.strike)) || "left"(aw.typecode, 8),
+                                  ' '::text) || staging.trailing_dot_away(aw.strike)) || "left"(aw.typecode, 8),
                                 CASE
                                     WHEN aw.contractdesc !~~ (aw.basecode || ' %'::text) THEN
                                         (aw.basecode || ' '::text) ||
@@ -295,15 +291,17 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
     where true
       and aw.reportid = 'k2n5qlag0000'
 
-select * from trash.so_load_away_trade()
+select * from trash.so_load_away_trade('k2kbno4k0004' ,'k2kcooo00002')
 
-drop table t_blaze;
+    drop table t_blaze;
 
 select * from staging.away_trade
 where order_id_guid is not null
 and (is_busted <> 'to do' or is_busted is null)
 
-
+delete
+FROM staging.away_trade x
+WHERE date_id >= 20241217
 select staging.trailing_dot_away(:strike);
 
 ;

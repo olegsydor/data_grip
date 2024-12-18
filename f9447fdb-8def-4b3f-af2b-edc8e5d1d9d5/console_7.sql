@@ -25,6 +25,7 @@ select * from genesis2.trade_record tr
 select *
 from genesis2.trade_record tr
          join genesis2.alloc_instr2trade_record atr
+             join allocation_instruction where is_deleted
               on atr.trade_record_id = tr.trade_record_id and atr.date_id = tr.date_id
 where true
   and tr.date_id = 20241217
