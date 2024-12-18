@@ -291,7 +291,18 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
     where true
       and aw.reportid = 'k2n5qlag0000'
 
-select * from trash.so_load_away_trade('k2kbno4k0004' ,'k2kcooo00002')
+select * from trash.so_load_away_trade('k2mnb4i00002' ,'k2mpbp340000');
+select * from trash.so_load_away_trade('k2mpbp340000' ,'k2mphidc0000');
+select * from trash.so_load_away_trade('k2mphidc0000' ,'k2mpo7q00000');
+select * from trash.so_load_away_trade('k2mpo7q00000' ,'k2mrd6580000');
+select * from trash.so_load_away_trade('k2mrd6580000' ,'k2ms3lj80000');
+select * from trash.so_load_away_trade('k2ms3lj80000' ,'k2muo7lc0000');
+select * from trash.so_load_away_trade('k2muo7lc0000' ,'k2n1bdvk0000');
+select * from trash.so_load_away_trade('k2n1bdvk0000' ,'k2n2uuo00004');
+select * from trash.so_load_away_trade('k2n2uuo00004' ,'k2n2v4jg0002');
+select * from trash.so_load_away_trade('k2n2v4jg0002' ,'k2n3tqr80004');
+select * from trash.so_load_away_trade('k2n3tqr80004' );
+
 
     drop table t_blaze;
 
