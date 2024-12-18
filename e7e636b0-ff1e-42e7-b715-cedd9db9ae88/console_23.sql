@@ -24,6 +24,7 @@ alter table staging.away_trade add column order_id_guid text null;
     select *
     from staging.v_away_trade aw
     where true
+      and orderid = 'd_1_94241217'
       and aw.reportid > 'k2iu9eis0000'
       and aw.reportid <= 'k2iufcpo0000';
 
@@ -234,45 +235,34 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
            staging.clordid_to_guid(aw.orderid)                                   as          client_order_id_guid,
            staging.execid_to_guid(aw.reportid)                                   as          report_id_guid,
            '-1'::integer * base32_to_int8(aw.reportid)                           AS          exec_id
-,
-    select aw.dashaliasid,
-           us.aors_user_name,
-           us.user_login,
-           aw.giveupfirm,
-           aw.executingbroker,
-           aw.cmtafirm
-            ,
-        aw.bustreason                                                              as          is_busted,
-           concat(coalesce(nullif(aw.dashaliasid, ''), case
-                                                           when coalesce(us.aors_user_name, us.user_login) = 'BBNTRST'
-                                                               then 'NTRSCBOE'
-                                                           else coalesce(us.aors_user_name, us.user_login)
-               end),
-                  coalesce(aw.giveupfirm, aw.executingbroker),
-                  case
-                      when coalesce(aw.giveupfirm, '') = '792'
-                          then case
-                                   when coalesce(nullif(aw.cmtafirm, ''), '949') = '949'
-                                       then 'PTA'
-                                   else null
-                          end
-                      end
-           )                                                                  as account_name_gvp,
-           case
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('CBOE-CRD NO BK', 'PAR', 'CBOIE')
-                   then 'XCBO'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('XPAR', 'PLAK', 'PARL') then 'LQPT'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('SOHO', 'KNIGHT', 'LSCI', 'NOM')
-                   then 'ECUT'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('FOGS', 'MID') then 'XCHI'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('C2', 'CBOE2') then 'C2OX'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') = 'SMARTR' then 'COWEN'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('ACT', 'BOE', 'OTC', 'lp', 'VOL')
-                   then 'BRKPT'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') in ('XPSE') then 'ARCO'
-               when nullif(coalesce(den1.mic_code, aw.ExDestination), '') = 'TO' then 'AMXO'
-               else nullif(coalesce(den1.mic_code, aw.ExDestination), '') end as mic_code,
-           staging.clordid_to_guid(aw.orderid)
+,;
+
+    select
+        aw.expirationdate,
+        aw.strike,
+        aw.basecode,
+        staging.trailing_dot(aw.strike),
+        "left"(aw.typecode, 8),
+                   case
+               when aw.expirationdate is not null and aw.strike IS NOT NULL
+                   THEN replace(
+                       COALESCE(((((regexp_replace(COALESCE(aw.basecode, ''::text), '\.|-'::text, ''::text,
+                                                   'g'::text) ||
+                                    ' '::text) ||
+                                   to_char(aw.expirationdate::timestamp with time zone, 'DDMonYY'::text)) ||
+                                  ' '::text) || staging.trailing_dot(aw.strike)) || "left"(aw.typecode, 8),
+                                CASE
+                                    WHEN aw.contractdesc !~~ (aw.basecode || ' %'::text) THEN
+                                        (aw.basecode || ' '::text) ||
+                                        replace(aw.contractdesc, aw.basecode, ''::text)
+                                    WHEN aw.legcount::integer = 1 AND aw.typecode = 'S'::text
+                                        THEN aw.contractdesc || ' Stock'::text
+                                    WHEN aw.contractdesc !~~ ' %'::text THEN aw.contractdesc || ' '::text
+                                    ELSE aw.contractdesc
+                                    END), '/'::text, ''::text)
+               ELSE regexp_replace(COALESCE(aw.rootcode, ''::text), '\.|-'::text, ''::text, 'g'::text)
+               END                                                               AS          display_instrument_id
+, *
     from t_blaze aw --staging.v_away_trade aw
              Left join staging.d_blaze_order_status bos
                        on aw.Status = bos.enum and bos.Order_or_Report_status = 2
@@ -303,7 +293,7 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
              LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.ForWhom AND lfw.systemid = 4
              LEft join staging.d_liquidity_type lt on aw.LiquidityType = lt.enum
     where true
---       and aw.reportid > coalesce(:l_last_loaded_report_id, '')
+      and aw.reportid = 'k2n5qlag0000'
 
 select * from trash.so_load_away_trade()
 
@@ -312,3 +302,25 @@ drop table t_blaze;
 select * from staging.away_trade
 where order_id_guid is not null
 and (is_busted <> 'to do' or is_busted is null)
+
+
+select staging.trailing_dot_away(:strike);
+
+;
+    create function staging.trailing_dot_away(in_numb numeric default null::numeric)
+        returns text
+        language plpgsql
+    as
+    $fx$
+        -- OS 20241218 Modified existing staging.trailing_dot for cases when input parameter is like 0.01
+        -- For these cases we need to get 0.01 - with leading zero
+    begin
+        if in_numb is null then
+            return null;
+        end if;
+        if in_numb::int = in_numb then
+            return to_char(in_numb, 'FM999999999');
+        end if;
+        return to_char(in_numb, 'FM999999990.999999');
+    end
+    $fx$;
