@@ -343,3 +343,7 @@ where us.user_login = 'NGBNPST230';
 select * from billing.tusers;
 
 select * from trash.so_load_away_trade()
+
+
+select * from staging.away_trade
+where db_create_time::date = '2024-12-19'
