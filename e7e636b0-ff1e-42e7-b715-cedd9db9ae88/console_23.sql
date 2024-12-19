@@ -24,7 +24,7 @@ alter table staging.away_trade add column order_id_guid text null;
     select *
     from staging.v_away_trade aw
     where true
-      and orderid = 'd_1_94241217'
+      and orderid = '1_82241217'
       and aw.reportid > 'k2iu9eis0000'
       and aw.reportid <= 'k2iufcpo0000';
 
@@ -35,8 +35,8 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
            case when 8 = 8 then 'OMS_EDW' else 'LPEDW' end                       as          subsystem_id,      -- ?? 8 is hardcoded in [dbo].[vNormalizeBLAZE7Orders]
            coalesce(aw.dashaliasid,
                     case
-                        when coalesce(us.aors_user_name, us.user_login) = 'BBNTRST' then 'NTRSCBOE'
-                        else coalesce(us.aors_user_name, us.user_login)
+                        when coalesce(us.aorsusername, us.login) = 'BBNTRST' then 'NTRSCBOE'
+                        else coalesce(us.aorsusername, us.login)
                         end)                                                     as          account_name,
            aw.side,
            aw.OpenClose                                                          as          open_close,
@@ -113,7 +113,7 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
            case when aw.OrigOrderID is not null then 'Y' else 'N' end            as          is_cross_order,
            case when aw.OrigOrderID is not null then 'Y' else 'N' end            as          street_is_cross_order,
            aw.ContraBroker                                                       as          contra_broker,
-           coalesce(comp.CompanyCode, us.user_login)                             as          client_id,
+           coalesce(comp.CompanyCode, us.login)                             as          client_id,
            case
                when round(aw.price::bigint / 10000.0, 4) > 99999999.9999 then 99999999.9999
                else round(aw.price::bigint / 10000.0, 4) end                     as          order_price,
@@ -234,31 +234,23 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
            aw.chain_id                                                           as          chain_id,
            staging.clordid_to_guid(aw.orderid)                                   as          client_order_id_guid,
            staging.execid_to_guid(aw.reportid)                                   as          report_id_guid,
-           '-1'::integer * base32_to_int8(aw.reportid)                           AS          exec_id
-,;
+           '-1'::integer * base32_to_int8(aw.reportid)                           AS          exec_id,
+           concat(coalesce(nullif(aw.dashaliasid, ''), case
+                                                           when coalesce(us.aorsusername, us.login) = 'BBNTRST'
+                                                               then 'NTRSCBOE'
+                                                           else coalesce(us.aorsusername, us.login)
+               end),
+                  coalesce(aw.giveupfirm, aw.executingbroker),
+                  case
+                      when coalesce(aw.giveupfirm, '') = '792'
+                          then case
+                                   when coalesce(nullif(aw.cmtafirm, ''), '949') = '949'
+                                       then 'PTA'
+                                   else null
+                          end
+                      end
+           )                                                                      as account_name_gvp
 
-    select
-      reportid,
-                   case
-               when aw.expirationdate is not null and aw.strike IS NOT NULL
-                   THEN replace(
-                       COALESCE(((((regexp_replace(COALESCE(aw.basecode, ''::text), '\.|-'::text, ''::text,
-                                                   'g'::text) ||
-                                    ' '::text) ||
-                                   to_char(aw.expirationdate::timestamp with time zone, 'DDMonYY'::text)) ||
-                                  ' '::text) || staging.trailing_dot_away(aw.strike)) || "left"(aw.typecode, 8),
-                                CASE
-                                    WHEN aw.contractdesc !~~ (aw.basecode || ' %'::text) THEN
-                                        (aw.basecode || ' '::text) ||
-                                        replace(aw.contractdesc, aw.basecode, ''::text)
-                                    WHEN aw.legcount::integer = 1 AND aw.typecode = 'S'::text
-                                        THEN aw.contractdesc || ' Stock'::text
-                                    WHEN aw.contractdesc !~~ ' %'::text THEN aw.contractdesc || ' '::text
-                                    ELSE aw.contractdesc
-                                    END), '/'::text, ''::text)
-               ELSE regexp_replace(COALESCE(aw.rootcode, ''::text), '\.|-'::text, ''::text, 'g'::text)
-               END                                                               AS          display_instrument_id
-, *
     from t_blaze aw --staging.v_away_trade aw
              Left join staging.d_blaze_order_status bos
                        on aw.Status = bos.enum and bos.Order_or_Report_status = 2
@@ -269,12 +261,14 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
                               WHEN aw.SecurityType = '1' THEN 'O'
                               WHEN aw.SecurityType = '2' THEN 'E'
                               ELSE aw.SecurityType END = lm.Security_Type
-             LEFT JOIN staging.t_users us
-                       on aw.UserID::int = us.USer_ID and us.System_ID = 2 and us.EDW_Active = 1 -- USER
+--              LEFT JOIN staging.t_users us
+--                        on aw.UserID::int = us.USer_ID and us.System_ID = 2 and us.EDW_Active = 1 -- USER
+             LEFT JOIN billing.tusers us
+                       on aw.UserID::int = us.USerID and us.SystemID = 2 and us.EDWActive = '1'::bit -- USER
              Left join staging.d_Order_Class oc on aw.SystemOrderTypeID = oc.enum
              Left join staging.l_order_type lot on oc.ID = lot.Code and lot.SystemID = 8
              LEFT JOIN billing.tCompany comp
-                       on us.Company_ID = comp.CompanyID and us.System_ID = comp.SystemID
+                       on us.CompanyID = comp.CompanyID and us.SystemID = comp.SystemID
                            and comp.EDWActive = '1'::bit -- Company
              left join billing.dash_exchange_names den
                        on den.mic_code = regexp_replace(aw.ExDestination, '(DIRECT-| Printer)', '', 'g') and
@@ -289,19 +283,20 @@ select coalesce(aw.manualexecutiontime, aw.transactiondatetime)::timestamptz as 
              LEFT JOIN billing.lforwhom lfw ON lfw.shortdesc::text = aw.ForWhom AND lfw.systemid = 4
              LEft join staging.d_liquidity_type lt on aw.LiquidityType = lt.enum
     where true
-      and aw.reportid = 'k2n5qlag0000'
+--       and aw.reportid = 'k2n5qlag0000'
+    and aw.client_order_id = '1_82241217'
 
-select * from trash.so_load_away_trade('k2mnb4i00002' ,'k2mpbp340000');
-select * from trash.so_load_away_trade('k2mpbp340000' ,'k2mphidc0000');
-select * from trash.so_load_away_trade('k2mphidc0000' ,'k2mpo7q00000');
-select * from trash.so_load_away_trade('k2mpo7q00000' ,'k2mrd6580000');
-select * from trash.so_load_away_trade('k2mrd6580000' ,'k2ms3lj80000');
-select * from trash.so_load_away_trade('k2ms3lj80000' ,'k2muo7lc0000');
-select * from trash.so_load_away_trade('k2muo7lc0000' ,'k2n1bdvk0000');
-select * from trash.so_load_away_trade('k2n1bdvk0000' ,'k2n2uuo00004');
-select * from trash.so_load_away_trade('k2n2uuo00004' ,'k2n2v4jg0002');
-select * from trash.so_load_away_trade('k2n2v4jg0002' ,'k2n3tqr80004');
-select * from trash.so_load_away_trade('k2n3tqr80004' );
+-- select * from trash.so_load_away_trade('k2mnb4i00002' ,'k2mpbp340000');
+-- select * from trash.so_load_away_trade('k2mpbp340000' ,'k2mphidc0000');
+-- select * from trash.so_load_away_trade('k2mphidc0000' ,'k2mpo7q00000');
+-- select * from trash.so_load_away_trade('k2mpo7q00000' ,'k2mrd6580000');
+-- select * from trash.so_load_away_trade('k2mrd6580000' ,'k2ms3lj80000');
+-- select * from trash.so_load_away_trade('k2ms3lj80000' ,'k2muo7lc0000');
+-- select * from trash.so_load_away_trade('k2muo7lc0000' ,'k2n1bdvk0000');
+-- select * from trash.so_load_away_trade('k2n1bdvk0000' ,'k2n2uuo00004');
+-- select * from trash.so_load_away_trade('k2n2uuo00004' ,'k2n2v4jg0002');
+-- select * from trash.so_load_away_trade('k2n2v4jg0002' ,'k2n3tqr80004');
+-- select * from trash.so_load_away_trade('k2n3tqr80004' );
 
 
     drop table t_blaze;
@@ -309,6 +304,7 @@ select * from trash.so_load_away_trade('k2n3tqr80004' );
 select * from staging.away_trade
 where order_id_guid is not null
 and (is_busted <> 'to do' or is_busted is null)
+
 
 delete
 FROM staging.away_trade x
@@ -333,3 +329,17 @@ select staging.trailing_dot_away(:strike);
         return to_char(in_numb, 'FM999999990.999999');
     end
     $fx$;
+
+
+select account_name ,* from staging.away_trade
+where client_order_id = '1_82241217'
+
+;
+
+select us.aors_user_name, us.user_login, * from staging.t_users us
+where us.user_login = 'NGBNPST230';
+
+
+select * from billing.tusers;
+
+select * from trash.so_load_away_trade()
