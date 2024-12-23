@@ -229,3 +229,7 @@ begin
 end;
 $function$
 ;
+
+
+
+select * from tmp_trade_record_monitor;
