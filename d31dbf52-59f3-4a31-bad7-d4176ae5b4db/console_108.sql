@@ -201,8 +201,8 @@ begin
                coalesce(cl.contra_cross_exec_qty::text, '') || ',' ||
                coalesce(cl.contra_cross_lp_id, '') || ',' ||
                coalesce(cl.ac_account_demo_mnemonic, '')|| ',' ||
-               coalesce(cl.par_sub_strategy_desc, '') || ',' ||
-               coalesce(cl.sub_strategy_desc, '')
+               coalesce(cl.par_sub_strategy_desc, '')-- || ',' ||
+--                coalesce(cl.sub_strategy_desc, '')
                              as rec
         from dash_reporting.imc_final cl;
     get diagnostics l_row_cnt = row_count;
@@ -218,7 +218,7 @@ begin
 		 'OpenClose,Range,CounterpartyRange,PriceQualifier,TimeQualifier,ExecInst,LiquidityIndicator,ExchangeTransactionID,ExchangeOrderID,BidSzA,BidA,AskA,AskSzA,BidSzZ,BidZ,AskZ,AskSzZ,BidSzB,BidB,AskB,AskSzB,BidSzC,BidC,AskC,AskSzC,BidSzW,BidW,AskW,AskSzW,'||
 		 'BidSzT,BidT,AskT,AskSzT,BidSzI,BidI,AskI,AskSzI,BidSzP,BidP,AskP,AskSzP,BidSzM,BidM,AskM,AskSzM,BidSzH,BidH,AskH,AskSzH,BidSzQ,BidQ,AskQ,AskSzQ,BidSzX,BidX,AskX,AskSzX,BidSzE,BidE,AskE,AskSzE,BidSzJ,BidJ,AskJ,AskSzJ,'||
 		 'BidSzR,BidR,AskR,AskSzR,BidSzD,BidD,AskD,AskSzD,BidSzS,BidS,AskS,AskSzS,BidSzU,BidU,AskU,AskSzU,CrossOrderID,AuctionType,RequestCount,BillingType,ContraBroker,ContraTrader,WhiteList,PaymentPerContract,ContraCrossExecutedQty,CrossLPID,demo_account_mnemonic'||
-         'ParentSubStrategy,SubStrategy';
+         'ParentSubStrategy';--,SubStrategy';
 
     return query
         select rec from dash_reporting.imc_pg_report
