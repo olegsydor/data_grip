@@ -1,30 +1,30 @@
-
-
+select * from dash360.bofa_allocation_report(20241223, 20241223, '792', true)
 create function dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text default '792'::text, in_is_eod bool default false)
  returns table(ret_row text)
  language plpgsql
 as $function$
 -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
---    1. Collecting data
---
+
 declare
-        l_load_id int;
-    l_step_id int;
+    l_load_id                 int;
+    l_step_id                 int;
     l_alloc_instr_id_reported int4[];
-    l_alloc_instr_id           int4[];
-    l_row_cnt                  int4;
-    l_msg_text text;
+    l_alloc_instr_id          int4[];
+    l_row_cnt                 int4;
+    l_row_cnt_eod             int4;
+    l_msg_text                text;
+    l_start_row               int4;
 
 begin
     l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || 'for ' ||
-                  case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ' ';
+                  case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ':';
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data STARTED ====', 0, 'O')
     into l_step_id;
 
-    -- preparing data
+    -- PART 1. Collecting intraday data
     -- get the list of all alloc_instr_id_reported in the chain of the reported records;
     select array_agg(alloc_instr_id)
     into l_alloc_instr_id_reported
@@ -32,10 +32,13 @@ begin
     where date_id between in_start_date_id and in_end_date_id
       and to_report = 'R';
 
-
+-- insert into the table
     with base_ins as (
         insert into dash360.bofa_allocation_report
-            (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,occ_actionable_id, dataset, instrument_id,opt_penny_commission, opt_nickel_commission, root_symbol, min_tick_increment, put_call,maturity_year, maturity_month, maturity_day, strike_price,to_report)
+            (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
+             ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
+             occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
+             min_tick_increment, put_call, maturity_year, maturity_month, maturity_day, strike_price, to_report)
             select ftr.last_qty,
                    alin.alloc_instr_id,
                    alin.side,
@@ -44,13 +47,13 @@ begin
                    alin.open_close,
                    ae.alloc_qty,
                    acc.opt_is_fix_clfirm_processed,
-                   ftr.cmta,             -- ftr_cmta,
-                   ca.cmta,              -- ca_cmta,
+                   ftr.cmta,                 -- ftr_cmta,
+                   ca.cmta,                  -- ca_cmta,
                    acc.opt_is_fix_custfirm_processed,
                    ftr.opt_customer_firm,
                    acc.opt_customer_or_firm,
-                   ae.occ_actionable_id, -- occ_actionable_id,
-                   l_load_id,            -- dataset,
+                   ae.occ_actionable_id,     -- occ_actionable_id,
+                   l_load_id,                -- dataset,
                    alin.instrument_id,
                    acc.opt_penny_commission, -- numeric(12, 4)
                    acc.opt_nickel_commission,-- numeric(12, 4)
@@ -63,7 +66,8 @@ begin
                    oc.strike_price,
                    case
                        when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
-                       when or_ai.alloc_instr_ids && l_alloc_instr_id_reported then 'S' -- 'skip - alloc_instr_id has been reported before'
+                       when or_ai.alloc_instr_ids && l_alloc_instr_id_reported
+                           then 'S' -- 'skip - alloc_instr_id has been reported before'
                        else 'R' end as to_report
             from genesis2.allocation_instruction_entry ae
                      join genesis2.allocation_instruction alin
@@ -116,7 +120,8 @@ begin
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', l_row_cnt, 'O')
     into l_step_id;
 
-     return query
+    --  PART 2. Printing the report for intraday
+    return query
         select array_to_string(ARRAY [
                                    'DAS' , ----Branch
                                    CASE
@@ -174,158 +179,163 @@ begin
         from dash360.bofa_allocation_report gen
         where dataset = l_load_id
           and to_report = 'R';
+    get diagnostics l_start_row = row_count;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' reporting completed', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' intraday reporting completed', l_start_row, 'O')
     into l_step_id;
-    ------------------------------------------------------------------------------------------------------------------
-    -- EOD part
+
+
+    -- PART 3. Printing the report for EOD
     if in_is_eod then
         l_alloc_instr_id_reported := '{}'::int4[];
         select array_agg(ba.alloc_instr_id)
-    into l_alloc_instr_id_reported
-    from dash360.bofa_allocation_report ba
-    where ba.date_id between in_start_date_id and in_end_date_id
-      and ba.to_report = 'R';
+        into l_alloc_instr_id_reported
+        from dash360.bofa_allocation_report ba
+        where ba.date_id between in_start_date_id and in_end_date_id
+          and ba.to_report = 'R';
 
-    -- create a list of trade records from reported alloc_instr_id
-    drop table if exists t_trade_record_reported;
-    create temp table t_trade_record_reported as
-    select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
-    from genesis2.trade_record tr
-             join genesis2.alloc_instr2trade_record aitr
-                  on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
-    where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
+        -- create a list of trade records from reported alloc_instr_id
+        drop table if exists t_trade_record_reported;
+        create temp table t_trade_record_reported as
+        select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
+        from genesis2.trade_record tr
+                 join genesis2.alloc_instr2trade_record aitr
+                      on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
+        where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
 
-    -- find all valid trade_records: all except the records from the prev
-    drop table if exists t_ftr;
-    create temp table t_ftr as
-    SELECT l.date_id,
-           l.cmta,
-           l.open_close,
-           l.order_id,
-           l.instrument_id,
-           l.side,
-           sum(last_qty)                                        AS day_cum_qty,
-           CASE sum(last_qty)
-               WHEN 0 THEN NULL
-               ELSE sum(last_qty * last_px) / sum(last_qty) END AS avg_px,
-           max(opt_customer_firm)                               AS customer_or_firm_id,
-           l.opt_is_fix_clfirm_processed,
-           l.opt_customer_or_firm,
-           l.opt_nickel_commission,
-           l.opt_penny_commission,
-           l.opt_is_fix_custfirm_processed
+        -- find all valid trade_records: all except the records from the prev
+        drop table if exists t_ftr;
+        create temp table t_ftr as
+        SELECT l.date_id,
+               l.cmta,
+               l.open_close,
+               l.order_id,
+               l.instrument_id,
+               l.side,
+               sum(last_qty)                                        AS day_cum_qty,
+               CASE sum(last_qty)
+                   WHEN 0 THEN NULL
+                   ELSE sum(last_qty * last_px) / sum(last_qty) END AS avg_px,
+               max(opt_customer_firm)                               AS customer_or_firm_id,
+               l.opt_is_fix_clfirm_processed,
+               l.opt_customer_or_firm,
+               l.opt_nickel_commission,
+               l.opt_penny_commission,
+               l.opt_is_fix_custfirm_processed
 /*,
        max(street_account_name) as street_account_name*/
-    FROM (SELECT ftr.date_id                                              AS date_id,
-                 CASE
-                     WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
-                         THEN ftr.cmta
-                     ELSE NULL END                                        AS cmta,
-                 ftr.open_close,
-                 ftr.order_id                                             AS order_id,
-                 ftr.instrument_id,
-                 ftr.account_id,
-                 ftr.side,
-                 CASE
-                     WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
-                     ELSE cie.last_qty END                                AS last_qty,
-                 CASE
-                     WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
-                     ELSE cie.last_px END                                 AS last_px,
-                 CASE
-                     WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
-                     ELSE cie.opt_customer_firm END                          opt_customer_firm,
-                 CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
-                 acc.opt_is_fix_clfirm_processed,
-                 acc.opt_customer_or_firm,
-                 acc.opt_nickel_commission,
-                 acc.opt_penny_commission,
-                 acc.opt_is_fix_custfirm_processed
-          FROM genesis2.trade_record ftr
-                   JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
-                                                 acc.is_deleted <> 'Y' AND
-                                                 acc.opt_report_to_mpid = 'MLCB' AND
-                                                 acc.trading_firm_id <> 'cantor')
-                   LEFT JOIN genesis2.clearing_instruction_entry cie
-                             ON (cie.date_id = ftr.date_id AND
-                                 COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
-                                 ftr.trade_record_id AND cie.cmta IS NOT NULL)
-                   LEFT JOIN genesis2.clearing_instruction ci
-                             ON (ci.clearing_instr_id =
-                                 cie.clearing_instr_entry_id AND ci.status = 'D' AND
-                                 ci.is_deleted <> 'Y')
-          WHERE ftr.date_id between in_start_date_id and in_end_date_id
-            AND is_busted = 'N'
-            AND ftr.order_id > 0
+        FROM (SELECT ftr.date_id                                              AS date_id,
+                     CASE
+                         WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
+                             THEN ftr.cmta
+                         ELSE NULL END                                        AS cmta,
+                     ftr.open_close,
+                     ftr.order_id                                             AS order_id,
+                     ftr.instrument_id,
+                     ftr.account_id,
+                     ftr.side,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
+                         ELSE cie.last_qty END                                AS last_qty,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
+                         ELSE cie.last_px END                                 AS last_px,
+                     CASE
+                         WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
+                         ELSE cie.opt_customer_firm END                          opt_customer_firm,
+                     CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
+                     acc.opt_is_fix_clfirm_processed,
+                     acc.opt_customer_or_firm,
+                     acc.opt_nickel_commission,
+                     acc.opt_penny_commission,
+                     acc.opt_is_fix_custfirm_processed
+              FROM genesis2.trade_record ftr
+                       JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
+                                                     acc.is_deleted <> 'Y' AND
+                                                     acc.opt_report_to_mpid = 'MLCB' AND
+                                                     acc.trading_firm_id <> 'cantor')
+                       LEFT JOIN genesis2.clearing_instruction_entry cie
+                                 ON (cie.date_id = ftr.date_id AND
+                                     COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
+                                     ftr.trade_record_id AND cie.cmta IS NOT NULL)
+                       LEFT JOIN genesis2.clearing_instruction ci
+                                 ON (ci.clearing_instr_id =
+                                     cie.clearing_instr_entry_id AND ci.status = 'D' AND
+                                     ci.is_deleted <> 'Y')
+              WHERE ftr.date_id between in_start_date_id and in_end_date_id
+                AND is_busted = 'N'
+                AND ftr.order_id > 0
 
-            and not exists (select null
-                            from t_trade_record_reported rp
-                            where rp.trade_record_id = any
-                                  (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))) l
-    GROUP BY l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
-             l.opt_is_fix_clfirm_processed, l.opt_customer_or_firm,
-             l.opt_nickel_commission, l.opt_penny_commission,
-             l.opt_is_fix_custfirm_processed;
+                and not exists (select null
+                                from t_trade_record_reported rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))) l
+        group by l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
+                 l.opt_is_fix_clfirm_processed, l.opt_customer_or_firm,
+                 l.opt_nickel_commission, l.opt_penny_commission,
+                 l.opt_is_fix_custfirm_processed;
 
-    return query
-        SELECT array_to_string(ARRAY [
-                                   'DAS' , ----Branch
-                                   CASE
-                                       WHEN ftr.SIDE = '1' THEN 'B'
-                                       WHEN ftr.SIDE in ('2', '5', '6') THEN 'S'
-                                       ELSE 'S' END , ----Action
-                                   '' , ----Symbol
-                                   '?' , ----Destination
-                                   ftr.day_cum_qty::text , ----Quantity
-                                   to_char(ftr.avg_px, 'FM99990D009999') , ----Avg. Price
-                                   COALESCE(lpad(ftr.cmta, 5, '0'), '') , -- -- CMTA
-                                   SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 5, 2) || '/' ||
-                                   SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 7, 2) || '/' ||
-                                   SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 3, 2) || '/' ||
-                                   '00/00' , --
-                                   'DASH' , ----Execution Venue
+        return query
+            SELECT array_to_string(ARRAY [
+                                       'DAS' , ----Branch
+                                       CASE
+                                           WHEN ftr.SIDE = '1' THEN 'B'
+                                           WHEN ftr.SIDE in ('2', '5', '6') THEN 'S'
+                                           ELSE 'S' END , ----Action
+                                       '' , ----Symbol
+                                       '?' , ----Destination
+                                       ftr.day_cum_qty::text , ----Quantity
+                                       to_char(ftr.avg_px, 'FM99990D009999') , ----Avg. Price
+                                       COALESCE(lpad(ftr.cmta, 5, '0'), '') , -- -- CMTA
+                                       SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 5, 2) || '/' ||
+                                       SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 7, 2) || '/' ||
+                                       SUBSTRING(TO_CHAR(ftr.date_id, 'FM99999999'), 3, 2) || '/' ||
+                                       '00/00' , --
+                                       'DASH' , ----Execution Venue
 --		ftr.street_account_name ||','||--Client Identifier
-                                   '' , ----Client Identifier
-                                   to_char(row_number() OVER () + in_start_row, 'FM0000') , --
-                                   to_char(((CASE coalesce(OS.MIN_TICK_INCREMENT, 0.01)
-                                                 WHEN 0.01 THEN ftr.OPT_PENNY_COMMISSION
-                                                 WHEN 0.05 THEN ftr.OPT_NICKEL_COMMISSION END) * ftr.day_cum_qty),
-                                           'FM99990D0') , ----13
-                                   '' , ----Liquidity
-                                   'S' , ----Single/BASket
-                                   '' , ----PASs Through Fees
-                                   COALESCE(OS.ROOT_SYMBOL, '') , ----Symbol
-                                   CASE WHEN OC.PUT_CALL = '0' THEN 'P' WHEN OC.PUT_CALL = '1' THEN 'C' END , ----Put/Call
-                                   OC.MATURITY_YEAR::text , --
-                                   to_char(OC.maturity_month, 'FM00') , --
-                                   to_char(OC.MATURITY_DAY, 'FM00') , --
-                                   to_char(OC.STRIKE_PRICE, 'FM999990D0099') , ----Strike
-                                   ftr.open_close , --
-                                   CASE (CASE ftr.OPT_IS_FIX_CUSTFIRM_PROCESSED
-                                             WHEN 'Y' THEN coalesce(ftr.CUSTOMER_OR_FIRM_ID, ftr.OPT_CUSTOMER_OR_FIRM)
-                                             ELSE ftr.OPT_CUSTOMER_OR_FIRM END)
-                                       WHEN '0' THEN 'C'
-                                       WHEN '1' THEN 'F'
-                                       WHEN '2' THEN 'F'
-                                       WHEN '3' THEN 'C'
-                                       WHEN '4' THEN 'M'
-                                       WHEN '5' THEN 'M'
-                                       WHEN '7' THEN 'F'
-                                       WHEN '8' THEN 'C'
-                                       END , --
-                                   ''
-                                   ], ',', '')
-        FROM t_ftr AS ftr
-                 INNER JOIN genesis2.option_contract oc ON (oc.instrument_id = ftr.instrument_id)
-                 INNER JOIN genesis2.option_series os ON (os.option_series_id = oc.option_series_id)
-                 INNER JOIN genesis2.instrument i ON (i.instrument_id = ftr.instrument_id);
+                                       '' , ----Client Identifier
+                                       to_char(row_number() OVER () + l_start_row, 'FM0000') , --
+                                       to_char(((CASE coalesce(OS.MIN_TICK_INCREMENT, 0.01)
+                                                     WHEN 0.01 THEN ftr.OPT_PENNY_COMMISSION
+                                                     WHEN 0.05 THEN ftr.OPT_NICKEL_COMMISSION END) * ftr.day_cum_qty),
+                                               'FM99990D0') , ----13
+                                       '' , ----Liquidity
+                                       'S' , ----Single/BASket
+                                       '' , ----PASs Through Fees
+                                       COALESCE(OS.ROOT_SYMBOL, '') , ----Symbol
+                                       CASE WHEN OC.PUT_CALL = '0' THEN 'P' WHEN OC.PUT_CALL = '1' THEN 'C' END , ----Put/Call
+                                       OC.MATURITY_YEAR::text , --
+                                       to_char(OC.maturity_month, 'FM00') , --
+                                       to_char(OC.MATURITY_DAY, 'FM00') , --
+                                       to_char(OC.STRIKE_PRICE, 'FM999990D0099') , ----Strike
+                                       ftr.open_close , --
+                                       CASE (CASE ftr.OPT_IS_FIX_CUSTFIRM_PROCESSED
+                                                 WHEN 'Y'
+                                                     THEN coalesce(ftr.CUSTOMER_OR_FIRM_ID, ftr.OPT_CUSTOMER_OR_FIRM)
+                                                 ELSE ftr.OPT_CUSTOMER_OR_FIRM END)
+                                           WHEN '0' THEN 'C'
+                                           WHEN '1' THEN 'F'
+                                           WHEN '2' THEN 'F'
+                                           WHEN '3' THEN 'C'
+                                           WHEN '4' THEN 'M'
+                                           WHEN '5' THEN 'M'
+                                           WHEN '7' THEN 'F'
+                                           WHEN '8' THEN 'C'
+                                           END , --
+                                       ''
+                                       ], ',', '')
+            FROM t_ftr AS ftr
+                     INNER JOIN genesis2.option_contract oc ON (oc.instrument_id = ftr.instrument_id)
+                     INNER JOIN genesis2.option_series os ON (os.option_series_id = oc.option_series_id)
+                     INNER JOIN genesis2.instrument i ON (i.instrument_id = ftr.instrument_id);
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting fo TR completed', l_row_cnt, 'O')
-    into l_step_id;
-end if;
+        get diagnostics l_row_cnt_eod = row_count;
+        select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting for TR completed', l_row_cnt_eod,
+                               'O')
+        into l_step_id;
+    end if;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' FINISHED ========', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' FINISHED ========', l_row_cnt + l_row_cnt_eod, 'O')
     into l_step_id;
 
 
