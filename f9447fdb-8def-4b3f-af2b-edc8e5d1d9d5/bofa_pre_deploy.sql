@@ -1,5 +1,5 @@
 select * from dash360.bofa_allocation_report(20241223, 20241223, '792', true)
-create function dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text default '792'::text, in_is_eod bool default false)
+create or replace function dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text default '792'::text, in_is_eod bool default false)
  returns table(ret_row text)
  language plpgsql
 as $function$
@@ -35,11 +35,11 @@ begin
 -- insert into the table
     with base_ins as (
         insert into dash360.bofa_allocation_report
-            (last_qty, alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
+            (alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
              occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
              min_tick_increment, put_call, maturity_year, maturity_month, maturity_day, strike_price, to_report)
-            select ftr.last_qty,
+            select
                    alin.alloc_instr_id,
                    alin.side,
                    alin.avg_px,
@@ -77,8 +77,7 @@ begin
                                                                                      alin.date_id) as x(alloc_instr_ids)
                                         limit 1) or_ai on true
                      inner join lateral (select tr.cmta,
-                                                tr.opt_customer_firm,
-                                                tr.last_qty
+                                                tr.opt_customer_firm
                                          from genesis2.alloc_instr2trade_record aitr
                                                   inner join genesis2.trade_record tr
                                                              on aitr.trade_record_id = tr.trade_record_id
