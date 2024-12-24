@@ -310,4 +310,5 @@ select * from staging.all_orig_trade_record_id_today(2346622521, 20241212)
          select * from trash.so_f_nonreported_trade_record_reason(2346622521, 13390122, 20241212)
 
 select *
-from dash360.bofa_allocation_report bar
+from dash360.bofa_allocation_report bar;
+
