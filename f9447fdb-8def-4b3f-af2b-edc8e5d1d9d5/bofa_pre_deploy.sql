@@ -203,76 +203,97 @@ begin
         where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
 
         -- find all valid trade_records: all except the records from the prev
+        insert into trash.so_reported_trade_record
+        (date_id, trade_record_id, dataset, cmta, open_close, order_id, instrument_id, account_id, side, last_qty,
+         last_px, opt_customer_firm, is_cleared, opt_is_fix_clfirm_processed, opt_customer_or_firm,
+         opt_nickel_commission, opt_penny_commission, opt_is_fix_custfirm_processed)
+        SELECT ftr.date_id           AS date_id,
+               ftr.trade_record_id,
+               l_load_id            as dataset,
+--                CASE
+--                    WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
+--                        THEN ftr.cmta
+--                    ELSE NULL END                                        AS cmta,
+               CASE
+                   WHEN acc.opt_is_fix_clfirm_processed = 'Y' THEN ftr.cmta
+                   ELSE NULL END     AS cmta,
+               ftr.open_close,
+               ftr.order_id          AS order_id,
+               ftr.instrument_id,
+               ftr.account_id,
+               ftr.side,
+--                CASE
+--                    WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
+--                    ELSE cie.last_qty END                                AS last_qty,
+--                CASE
+--                    WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
+--                    ELSE cie.last_px END                                 AS last_px,
+--                CASE
+--                    WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
+--                    ELSE cie.opt_customer_firm END                       as opt_customer_firm,
+--                CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
+               ftr.last_qty          AS last_qty,
+               ftr.last_px           AS last_px,
+               ftr.opt_customer_firm as opt_customer_firm,
+               0                     AS is_cleared,
+               acc.opt_is_fix_clfirm_processed,
+               acc.opt_customer_or_firm,
+               acc.opt_nickel_commission,
+               acc.opt_penny_commission,
+               acc.opt_is_fix_custfirm_processed
+        FROM genesis2.trade_record ftr
+                 join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
+                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
+                                               acc.is_deleted <> 'Y' AND
+                                               acc.opt_report_to_mpid = 'MLCB' AND
+                                               acc.trading_firm_id <> 'cantor')
+        --                  left join genesis2.clearing_instruction_entry cie
+--                            ON (cie.date_id = ftr.date_id AND
+--                                COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
+--                                ftr.trade_record_id AND cie.cmta IS NOT NULL)
+--                  left join genesis2.clearing_instruction ci
+--                            ON (ci.clearing_instr_id =
+--                                cie.clearing_instr_entry_id AND ci.status = 'D' AND
+--                                ci.is_deleted <> 'Y')
+        WHERE ftr.date_id between in_start_date_id and in_end_date_id
+          AND is_busted = 'N'
+          AND ftr.order_id > 0
+          and gi.instrument_type_id = 'O'
+          and not exists (select null
+                          from t_trade_record_reported rp
+                          where rp.trade_record_id = any
+                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
+
         drop table if exists t_ftr;
         create temp table t_ftr as
-        SELECT l.date_id,
-               l.cmta,
-               l.open_close,
-               l.order_id,
-               l.instrument_id,
-               l.side,
-               sum(last_qty)                                        AS day_cum_qty,
-               CASE sum(last_qty)
+        SELECT rtr.date_id,
+               rtr.cmta,
+               rtr.open_close,
+               rtr.order_id,
+               rtr.instrument_id,
+               rtr.side,
+               sum(rtr.last_qty)                                                AS day_cum_qty,
+               CASE sum(rtr.last_qty)
                    WHEN 0 THEN NULL
-                   ELSE sum(last_qty * last_px) / sum(last_qty) END AS avg_px,
-               max(opt_customer_firm)                               AS customer_or_firm_id,
-               l.opt_is_fix_clfirm_processed,
-               l.opt_customer_or_firm,
-               l.opt_nickel_commission,
-               l.opt_penny_commission,
-               l.opt_is_fix_custfirm_processed
+                   ELSE sum(rtr.last_qty * rtr.last_px) / sum(rtr.last_qty) END AS avg_px,
+               max(rtr.opt_customer_firm)                                       AS customer_or_firm_id,
+               rtr.opt_is_fix_clfirm_processed,
+               rtr.opt_customer_or_firm,
+               rtr.opt_nickel_commission,
+               rtr.opt_penny_commission,
+               rtr.opt_is_fix_custfirm_processed
 /*,
        max(street_account_name) as street_account_name*/
-        FROM (SELECT ftr.date_id                                              AS date_id,
-                     CASE
-                         WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
-                             THEN ftr.cmta
-                         ELSE NULL END                                        AS cmta,
-                     ftr.open_close,
-                     ftr.order_id                                             AS order_id,
-                     ftr.instrument_id,
-                     ftr.account_id,
-                     ftr.side,
-                     CASE
-                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
-                         ELSE cie.last_qty END                                AS last_qty,
-                     CASE
-                         WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
-                         ELSE cie.last_px END                                 AS last_px,
-                     CASE
-                         WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
-                         ELSE cie.opt_customer_firm END                          opt_customer_firm,
-                     CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
-                     acc.opt_is_fix_clfirm_processed,
-                     acc.opt_customer_or_firm,
-                     acc.opt_nickel_commission,
-                     acc.opt_penny_commission,
-                     acc.opt_is_fix_custfirm_processed
-              FROM genesis2.trade_record ftr
-                       JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
-                                                     acc.is_deleted <> 'Y' AND
-                                                     acc.opt_report_to_mpid = 'MLCB' AND
-                                                     acc.trading_firm_id <> 'cantor')
-                       LEFT JOIN genesis2.clearing_instruction_entry cie
-                                 ON (cie.date_id = ftr.date_id AND
-                                     COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
-                                     ftr.trade_record_id AND cie.cmta IS NOT NULL)
-                       LEFT JOIN genesis2.clearing_instruction ci
-                                 ON (ci.clearing_instr_id =
-                                     cie.clearing_instr_entry_id AND ci.status = 'D' AND
-                                     ci.is_deleted <> 'Y')
-              WHERE ftr.date_id between in_start_date_id and in_end_date_id
-                AND is_busted = 'N'
-                AND ftr.order_id > 0
-
-                and not exists (select null
-                                from t_trade_record_reported rp
-                                where rp.trade_record_id = any
-                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))) l
-        group by l.date_id, l.cmta, l.open_close, l.order_id, l.instrument_id, l.side,
-                 l.opt_is_fix_clfirm_processed, l.opt_customer_or_firm,
-                 l.opt_nickel_commission, l.opt_penny_commission,
-                 l.opt_is_fix_custfirm_processed;
+        FROM trash.so_reported_trade_record rtr
+        where date_id between in_start_date_id and in_end_date_id
+        group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
+                 rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
+                 rtr.opt_nickel_commission, rtr.opt_penny_commission,
+                 rtr.opt_is_fix_custfirm_processed;
+        get diagnostics l_row_cnt_eod = row_count;
+        select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting table for trade_record created', l_row_cnt_eod,
+                               'O')
+        into l_step_id;
 
         return query
             SELECT array_to_string(ARRAY [
@@ -326,7 +347,8 @@ begin
             FROM t_ftr AS ftr
                      INNER JOIN genesis2.option_contract oc ON (oc.instrument_id = ftr.instrument_id)
                      INNER JOIN genesis2.option_series os ON (os.option_series_id = oc.option_series_id)
-                     INNER JOIN genesis2.instrument i ON (i.instrument_id = ftr.instrument_id);
+--                      INNER JOIN genesis2.instrument gi ON (gi.instrument_id = ftr.instrument_id)
+        ;
 
         get diagnostics l_row_cnt_eod = row_count;
         select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting for TR completed', l_row_cnt_eod,
@@ -341,3 +363,17 @@ begin
 end;
 $function$
 ;
+
+
+update trash.so_reported_trade_record
+set date_id = -1*date_id
+where date_id = 20241223;
+
+
+ delete from
+
+SELECT date_id, trade_record_id, dataset, cmta, open_close, order_id, instrument_id, account_id, side, last_qty, last_px, opt_customer_firm, is_cleared, opt_is_fix_clfirm_processed, opt_customer_or_firm, opt_nickel_commission, opt_penny_commission, opt_is_fix_custfirm_processed
+FROM trash.so_reported_trade_record
+where date_id > 0
+
+ alter table trash.so_reported_trade_record add column db_create_time timestamp default clock_timestamp()
