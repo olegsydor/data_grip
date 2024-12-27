@@ -186,6 +186,7 @@ begin
 
     -- PART 3. Printing the report for EOD
     if in_is_eod then
+        -- list of reported alloc_instr_id
         l_alloc_instr_id_reported := '{}'::int4[];
         select array_agg(ba.alloc_instr_id)
         into l_alloc_instr_id_reported
@@ -193,7 +194,7 @@ begin
         where ba.date_id between in_start_date_id and in_end_date_id
           and ba.to_report = 'R';
 
-        -- create a list of trade records from reported alloc_instr_id
+        -- list of trade records from reported alloc_instr_id
         drop table if exists t_trade_record_reported;
         create temp table t_trade_record_reported as
         select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
@@ -203,10 +204,9 @@ begin
         where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
 
         -- find all valid trade_records: all except the records from the prev
-        insert into trash.so_reported_trade_record
-        (date_id, trade_record_id, dataset, cmta, open_close, order_id, instrument_id, account_id, side, last_qty,
-         last_px, opt_customer_firm, is_cleared, opt_is_fix_clfirm_processed, opt_customer_or_firm,
-         opt_nickel_commission, opt_penny_commission, opt_is_fix_custfirm_processed)
+
+        drop table if exists t_reported_trade_record;
+        create temp table t_reported_trade_record as
         SELECT ftr.date_id           AS date_id,
                ftr.trade_record_id,
                l_load_id            as dataset,
@@ -264,6 +264,9 @@ begin
                           where rp.trade_record_id = any
                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
 
+        insert into  dash360.bofa_trade_record (date_id, trade_record_id, dataset)
+        select date_id, trade_record_id, dataset from t_reported_trade_record;
+
         drop table if exists t_ftr;
         create temp table t_ftr as
         SELECT rtr.date_id,
@@ -284,7 +287,7 @@ begin
                rtr.opt_is_fix_custfirm_processed
 /*,
        max(street_account_name) as street_account_name*/
-        FROM trash.so_reported_trade_record rtr
+        FROM t_reported_trade_record rtr
         where date_id between in_start_date_id and in_end_date_id
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
                  rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
@@ -365,15 +368,15 @@ $function$
 ;
 
 
-update trash.so_reported_trade_record
-set date_id = -1*date_id
-where date_id = 20241223;
+
+create table dash360.bofa_trade_record
+(
+    date_id         int4      null,
+    trade_record_id int8      null,
+    dataset         int4      null,
+    db_create_time  timestamp not null default clock_timestamp()
+);
+create index bofa_trade_record_trade_record_date_id_idx on dash360.bofa_trade_record (date_id, trade_record_id);
 
 
- delete from
-
-SELECT date_id, trade_record_id, dataset, cmta, open_close, order_id, instrument_id, account_id, side, last_qty, last_px, opt_customer_firm, is_cleared, opt_is_fix_clfirm_processed, opt_customer_or_firm, opt_nickel_commission, opt_penny_commission, opt_is_fix_custfirm_processed
-FROM trash.so_reported_trade_record
-where date_id > 0
-
- alter table trash.so_reported_trade_record add column db_create_time timestamp default clock_timestamp()
+select * from dash360.bofa_trade_record
