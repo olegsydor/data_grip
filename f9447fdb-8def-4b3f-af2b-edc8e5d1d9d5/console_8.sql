@@ -1,9 +1,21 @@
+alter table dash360.bofa_allocation_report drop column last_qty;
+update dash360.bofa_allocation_report
+set to_report = case
+                    when to_report = 'report' then 'R'
+                    when to_report = 'skip - alloc_instr_id has been reported before' then 'U'
+                    else 'C'
+    end;
+
+alter table dash360.bofa_allocation_report
+    alter column to_report type bpchar;
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4);
 
-CREATE OR REPLACE FUNCTION dash360.so_allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                           in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                           in_reported_status bpchar(1) default null::bpchar(1))
-    RETURNS TABLE
+select * from dash360.bofa_allocation_report;
+drop function dash360.so_allocations_snapshot;
+create function dash360.so_allocations_snapshot(in_account_ids bigint[] default '{}'::bigint[],
+                                                in_date_id integer default public.get_dateid(current_date),
+                                                in_reported_status bpchar(1) default null::bpchar(1))
+    returns table
             (
                 date_id                integer,
                 trade_record_id        bigint,
@@ -26,16 +38,37 @@ CREATE OR REPLACE FUNCTION dash360.so_allocations_snapshot(in_account_ids bigint
                 client_commission_rate numeric,
                 username               character varying,
                 blaze_account_alias    character varying,
-                street_exec_time       timestamp without time zone
+                street_exec_time       timestamp without time zone,
+                expiration_date        timestamp without time zone,
+                opt_customer_firm      char,
+                reported_status        bpchar,
+                reported_time          timestamp,
+                claimed_by             text,
+                claim_status           text
             )
     LANGUAGE plpgsql
     COST 1
 AS
 $function$
-begin
     --in_date_id = 20190301;
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters and removed if-else condition for empty in_account_id
+begin
+    drop table if exists t_trade_record;
+    create temp table t_trade_record
+    as
+    select atr.trade_record_id, br.to_report, br.alloc_instr_id, br.db_create_time
+    from dash360.bofa_allocation_report br
+             join genesis2.alloc_instr2trade_record atr
+                  on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
+    where br.date_id = in_date_id
+    union all
+    select btr.trade_record_id, 'R', 0, btr.db_create_time
+    from dash360.bofa_trade_record btr
+    where btr.date_id = in_date_id;
+
+    create index on t_trade_record (trade_record_id);
+
     return query
         select tr.date_id,
                tr.trade_record_id::bigint,
@@ -63,9 +96,18 @@ begin
                    else CCRU.rate end                                      as client_commission_rate,
                null::varchar                                               as user_name,
                tr.blaze_account_alias,
-               coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time
+               coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
+               ----------------
+               i.last_trade_date                                           as expiration_date,
+               tr.opt_customer_firm,
+               coalesce(rep.to_report, 'N')                                as reported_status,
+               rep.db_create_time                                          as reported_time,
+               null::text                                                  as claimed_by,
+               null::text                                                  as claim_status
+
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 left join t_trade_record rep on rep.trade_record_id = tr.trade_record_id
                  left join genesis2.account acc on acc.account_id = tr.account_id
                  left join (select ai2tr.trade_record_id, a.alloc_instr_id
                             from genesis2.allocation_instruction a
@@ -93,39 +135,51 @@ begin
           and case when in_account_ids = '{}' then true else tr.account_id = any (in_account_ids) end
           and tr.is_busted = 'N'
           and allocated_trades.alloc_instr_id is NULL
+          and case
+                  when in_reported_status = 'R' then rep.to_report = 'R'
+                  when in_reported_status = 'U' then rep.to_report in ('U', 'C')
+                  when in_reported_status is null then true end
         union all
-        select a.date_id,
+        select ai.date_id,
                null::bigint                   as trade_record_id,
-               a.account_id::integer,
-               a.instrument_id,
-               a.side,
-               a.open_close,
-               a.avg_px,
-               a.total_qty                    as exec_qty,
+               ai.account_id::integer,
+               ai.instrument_id,
+               ai.side,
+               ai.open_close,
+               ai.avg_px,
+               ai.total_qty                   as exec_qty,
                i.display_instrument_id,
                --concat(split_part(i.display_instrument_id, ' ', 1), ' ', to_char(i.last_trade_date, 'DDMonYY'), ' ', split_part(i.display_instrument_id, ' ', 3))::character varying display_instrument_id,
                i.last_trade_date::date,
                i.instrument_type_id,
-               a.alloc_instr_id,
-               a.create_time                  as alloc_time,
+               ai.alloc_instr_id,
+               ai.create_time                 as alloc_time,
                true                           as is_allocated,
                true                           as is_bundle,
                null                           as cmta,
                null                           as exec_broker,
                case i.instrument_type_id
-                   when 'O' then a.total_qty * a.avg_px * os.contract_multiplier
-                   else a.total_qty * a.avg_px
+                   when 'O' then ai.total_qty * ai.avg_px * os.contract_multiplier
+                   else ai.total_qty * ai.avg_px
                    end                           principal_amount,
                case
                    when acc.trading_firm_id = 'cornerstn' and i.instrument_type_id = 'E' then coalesce(ccr.rate, 0)
                    else ccr.rate end          as client_commission_rate,
                coalesce(ui.user_name, 'auto') as user_name,
                ccr.blaze_account_alias,
-               null                           as street_exec_time
-        from genesis2.allocation_instruction a
-                 inner join genesis2.instrument i on (a.instrument_id = i.instrument_id)
-                 left join genesis2.account acc on acc.account_id = a.account_id
-                 left join genesis2.user_identifier ui on a.created_by_user_id = ui.user_id
+               null                           as street_exec_time,
+               -------
+               i.last_trade_date,
+               acc.opt_customer_or_firm,
+               coalesce(rep.to_report, 'N')   as reported_status,
+               rep.db_create_time             as reported_time,
+               null::text                     as claimed_by,
+               null::text                     as claim_status
+        from genesis2.allocation_instruction ai
+                 inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
+                 left join t_trade_record rep on rep.alloc_instr_id = ai.alloc_instr_id
+                 left join genesis2.account acc on acc.account_id = ai.account_id
+                 left join genesis2.user_identifier ui on ai.created_by_user_id = ui.user_id
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select sum(l1.rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as rate,
@@ -148,23 +202,22 @@ begin
                                                                   AND tl.book_record_type_id = 'CCRU'
                                                                   and tl.trade_record_id = alt.trade_record_id) l1
                                                        on true
-                                    where alt.alloc_instr_id = a.alloc_instr_id
+                                    where alt.alloc_instr_id = ai.alloc_instr_id
                                       and tr.is_busted = 'N'
                                       and (l1.rn = 1 or l1.rn is null)
             ) ccr on true
-        --		left join lateral (select sum(L1.amount)/nullif(sum(L1.amount/nullif(l1.rate,0)),0) as rate
---							from (SELECT row_number() over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn, tl.rate, tl.amount
---							        FROM trade_level_book_record tl
---							        inner join alloc_instr2trade_record  alt on tl.trade_record_id  = alt.trade_record_id
---							        inner join book_record_creator  cr on tl.book_record_creator_id  = cr.book_record_creator_id
---							        WHERE tl.date_id = in_date_id
---							        AND book_record_type_id ='CCRU'
---							        and alt.alloc_instr_id = a.alloc_instr_id  ) L1
---							where rn=1) ccr on true
-        where a.date_id = in_date_id
-          and case when in_account_ids = '{}' then true else a.account_id = any (in_account_ids) end
-          and a.is_deleted = 'N';
+
+        where ai.date_id = in_date_id
+          and case when in_account_ids = '{}' then true else ai.account_id = any (in_account_ids) end
+          and ai.is_deleted = 'N'
+          and case
+                  when in_reported_status = 'R' then rep.to_report = 'R'
+                  when in_reported_status = 'U' then rep.to_report in ('U', 'C')
+                  when in_reported_status is null then true end;
 
 end ;
 $function$
 ;
+
+
+select * from dash360.so_allocations_snapshot(in_account_ids := '{}', in_date_id := 20241224, in_reported_status := null)

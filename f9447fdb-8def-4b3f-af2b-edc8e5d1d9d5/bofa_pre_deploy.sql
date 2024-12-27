@@ -67,7 +67,7 @@ begin
                    case
                        when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
                        when or_ai.alloc_instr_ids && l_alloc_instr_id_reported
-                           then 'S' -- 'skip - alloc_instr_id has been reported before'
+                           then 'U' -- 'unable to report - alloc_instr_id has been reported before'
                        else 'R' end as to_report
             from genesis2.allocation_instruction_entry ae
                      join genesis2.allocation_instruction alin
