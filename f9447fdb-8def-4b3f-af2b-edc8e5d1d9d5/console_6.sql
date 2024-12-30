@@ -312,3 +312,40 @@ select * from staging.all_orig_trade_record_id_today(2346622521, 20241212)
 select *
 from dash360.bofa_allocation_report bar;
 
+
+drop table if exists dash360.bofa_allocation_instruction_status;
+create table if not exists dash360.bofa_allocation_instruction_status
+(
+    alloc_instr_id int4      not null
+        constraint bofa_allocation_instruction_status_pk primary key, -- link to allocation instruction
+    claimed_by     text      null,                                    -- user id (probably - foreign key to the dictionary of users
+    claim_status   bpchar    not null default 'O',                    -- status. 'O' - unclaimed (default & initial), 'C' - claimed, 'R' - resolved
+    db_update_time timestamp not null default clock_timestamp()       -- create\last update time
+);
+comment on table dash360.bofa_allocation_instruction_status is 'Table contains information on the current claim/resolve status on Allocation Instructions that are unreportable in BOFA report. Only Admins can change the satatus';
+comment on column dash360.bofa_allocation_instruction_status.alloc_instr_id is 'link to allocation instruction';
+comment on column dash360.bofa_allocation_instruction_status.claimed_by is 'user id (probably - foreign key to the dictionary of users';
+comment on column dash360.bofa_allocation_instruction_status.claim_status is $$status. 'O' - unclaimed (default & initial), 'C' - claimed, 'R' - resolved$$;
+comment on column dash360.bofa_allocation_instruction_status.db_update_time is 'create\last update time';
+
+
+create function dash360.get_status_to_bofa_allocation_instruction(in_alloc_iinstr_id int4)
+    returns table
+            (
+                alloc_instr_id int4,
+                claimed_by     text,
+                claim_status   bpchar,
+                db_update_time timestamp
+            )
+    language plpgsql
+as
+$fx$
+begin
+    return query
+        select alloc_instr_id, claimed_by, claim_status, db_update_time
+        from dash360.bofa_allocation_instruction_status
+        where alloc_instr_id = in_alloc_iinstr_id;
+end;
+$fx$;
+
+comment on function dash360.get_status_to_bofa_allocation_instruction is 'The function gets claim status for an Un-reportable Allocation Instruction ';
