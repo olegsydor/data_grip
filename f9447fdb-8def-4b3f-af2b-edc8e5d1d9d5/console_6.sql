@@ -410,8 +410,8 @@ select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -52
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53737);
 
 
-CREATE FUNCTION dash360.allocation_trade_record_monitor(in_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[])
-    RETURNS TABLE
+create or replace function dash360.allocation_trade_record_monitor(in_date_id integer, in_account_ids bigint[] default '{}'::bigint[])
+    returns table
             (
                 account_id                      bigint,
                 trading_firm_id                 character varying,
@@ -430,8 +430,8 @@ CREATE FUNCTION dash360.allocation_trade_record_monitor(in_date_id integer, in_a
                 unable_trades_cnt               bigint,
                 unable_trades_qty               bigint,
                 unable_trades_principal         numeric,
-                unresolved int4,
-                resolved int4
+                unresolved                      int4,
+                resolved                        int4
             )
     LANGUAGE plpgsql
 AS
@@ -456,7 +456,8 @@ begin
                else 'unallocated' end as is_alloc,
            case
                when un.alloc_instr_id is not null then true
-               end                    as is_unable
+               end                    as is_unable,
+           bas.claim_status
     from genesis2.trade_record tr
              join genesis2.instrument di on di.instrument_id = tr.instrument_id
              join genesis2.account ac on tr.account_id = ac.account_id
@@ -473,7 +474,8 @@ begin
                                    and bar.date_id = atr.date_id
                                    and bar.to_report <> 'report'
                                  limit 1) un on true
-    left join das_reporting.
+             left join dash_reporting.bofa_allocation_instruction_status bas
+                       on bas.date_id = atr.date_id and bas.alloc_instr_id = atr.alloc_instr_id
     where true
       and tr.is_busted <> 'Y'
       and tr.date_id = in_date_id
@@ -485,30 +487,32 @@ begin
         select trm.account_id,
                trm.trading_firm_id,
                --
-               count(trm.trade_record_id)                                                                            as trades_cnt,
-               sum(trm.last_qty)                                                                                     as trades_qty,
-               sum(trm.last_qty * trm.last_px)                                                                       as trades_principal,
-               sum(case when trm.expiring_today then 1 else 0 end)                                                   as trades_qty_expiring,
+               count(trm.trade_record_id)                                                       as trades_cnt,
+               sum(trm.last_qty)                                                                as trades_qty,
+               sum(trm.last_qty * trm.last_px)                                                  as trades_principal,
+               sum(case when trm.expiring_today then 1 else 0 end)                              as trades_qty_expiring,
                -- unallocated
-               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                                         as unallocated_trades_cnt,
-               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)                                  as unallocated_trades_qty,
+               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                    as unallocated_trades_cnt,
+               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)             as unallocated_trades_qty,
                sum(case
                        when trm.is_alloc = 'unallocated' then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                                                   as unallocated_trades_principal,
-               sum(case when trm.is_alloc = 'unallocated' and expiring_today then 1 else 0 end)                      as unallocated_trades_qty_expiring,
+                       else 0 end)                                                              as unallocated_trades_principal,
+               sum(case when trm.is_alloc = 'unallocated' and expiring_today then 1 else 0 end) as unallocated_trades_qty_expiring,
                -- allocated
-               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                                           as allocated_trades_cnt,
-               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)                                    as allocated_trades_qty,
+               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                      as allocated_trades_cnt,
+               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)               as allocated_trades_qty,
                sum(case
                        when trm.is_alloc = 'allocated' then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                                                   as allocated_trades_principal,
-               sum(case when trm.is_alloc = 'allocated' and expiring_today then 1 else 0 end)                        as allocated_trades_qty_expiring,
+                       else 0 end)                                                              as allocated_trades_principal,
+               sum(case when trm.is_alloc = 'allocated' and expiring_today then 1 else 0 end)   as allocated_trades_qty_expiring,
                -- unable
-               sum(case when trm.is_unable then 1 else 0 end)                                                        as unable_trades_cnt,
-               sum(case when trm.is_unable then last_qty else 0 end)                                                 as unable_trades_qty,
+               sum(case when trm.is_unable then 1 else 0 end)                                   as unable_trades_cnt,
+               sum(case when trm.is_unable then last_qty else 0 end)                            as unable_trades_qty,
                sum(case
                        when trm.is_unable then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                                                   as unable_trades_principal
+                       else 0 end)                                                              as unable_trades_principal,
+               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                   as unresolved,
+               sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                    as resolved
 -- select *
         from tmp_trade_record_monitor trm
                  left join genesis2.option_contract oc on oc.instrument_id = trm.instrument_id
@@ -517,3 +521,6 @@ begin
 end;
 $function$
 ;
+
+select * from dash360.allocation_trade_record_monitor(20241217);
+select * from tmp_trade_record_monitor;
