@@ -318,6 +318,7 @@ create table if not exists dash_reporting.bofa_allocation_instruction_status
 (
     alloc_instr_id int4      not null
         constraint bofa_allocation_instruction_status_pk primary key,                                                   -- link to allocation instruction
+    date_id        int4      not null,
     claimed_by     int4      null
         constraint bofa_allocation_instruction_status_user_identifier_fk references genesis2.user_identifier (user_id), -- user id (probably - foreign key to the dictionary of users
     claim_status   bpchar    not null default 'O',                                                                      -- status. 'O' - unclaimed (default & initial), 'C' - claimed, 'R' - resolved
@@ -325,6 +326,7 @@ create table if not exists dash_reporting.bofa_allocation_instruction_status
 );
 comment on table dash_reporting.bofa_allocation_instruction_status is 'Table contains information on the current claim/resolve status on Allocation Instructions that are unreportable in BOFA report. Only Admins can change the satatus';
 comment on column dash_reporting.bofa_allocation_instruction_status.alloc_instr_id is 'link to allocation instruction';
+comment on column dash_reporting.bofa_allocation_instruction_status.date_id is 'link to date_id of allocation instruction';
 comment on column dash_reporting.bofa_allocation_instruction_status.claimed_by is 'user id from genesis2.user_identifier';
 comment on column dash_reporting.bofa_allocation_instruction_status.claim_status is $$status. 'O' - unclaimed (default & initial), 'C' - claimed, 'R' - resolved$$;
 comment on column dash_reporting.bofa_allocation_instruction_status.db_update_time is 'create\last update time';
@@ -374,26 +376,26 @@ create or replace function dash360.set_status_to_bofa_allocation_instruction(in_
 as
 $fx$
     -- 20241230 SO https://dashfinancial.atlassian.net/browse/D360-15023
-
+declare
+    l_alloc_instr_id int4;
 begin
-    merge into dash_reporting.bofa_allocation_instruction_status as trg
-    using (select in_alloc_iinstr_id, in_claimed_by, in_target_claim_status) as src
-    on trg.alloc_instr_id = src.in_alloc_iinstr_id
-    when matched then
-        update
-        set claimed_by     = src.in_claimed_by,
-            claim_status   = src.in_target_claim_status,
-            db_update_time = clock_timestamp()
-    when not matched then
-        insert (alloc_instr_id, claimed_by, claim_status)
-        values (src.in_alloc_iinstr_id, src.in_claimed_by, src.in_target_claim_status);
 
+    insert into dash_reporting.bofa_allocation_instruction_status (alloc_instr_id, date_id, claimed_by, claim_status)
+    select ai.alloc_instr_id, ai.date_id, in_claimed_by, in_target_claim_status
+    from genesis2.allocation_instruction ai
+    where ai.alloc_instr_id = in_alloc_iinstr_id
+    on conflict (ai.alloc_instr_id)
+        do update
+        set claimed_by     = excluded.claimed_by,
+            claim_status   = excluded.claim_status,
+            db_update_time = clock_timestamp()
+    returning ai.alloc_instr_id into l_alloc_instr_id;
 
     return query
         select bas.alloc_instr_id, bas.claimed_by, ui.user_name::text, bas.claim_status, bas.db_update_time
         from dash_reporting.bofa_allocation_instruction_status bas
                  left join genesis2.user_identifier ui on ui.user_id = bas.claimed_by
-        where bas.alloc_instr_id = in_alloc_iinstr_id;
+        where bas.alloc_instr_id = l_alloc_instr_id;
 end;
 $fx$;
 comment on function dash360.set_status_to_bofa_allocation_instruction is 'The function sets claim status for an Un-reportable Allocation Instruction';

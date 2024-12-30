@@ -28,13 +28,13 @@ begin
     -- get the list of all alloc_instr_id_reported in the chain of the reported records;
     select array_agg(alloc_instr_id)
     into l_alloc_instr_id_reported
-    from dash360.bofa_allocation_report
+    from dash_reporting.bofa_allocation_report
     where date_id between in_start_date_id and in_end_date_id
       and to_report = 'R';
 
 -- insert into the table
     with base_ins as (
-        insert into dash360.bofa_allocation_report
+        insert into dash_reporting.bofa_allocation_report
             (alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
              occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
@@ -99,13 +99,13 @@ begin
                      join genesis2.option_series os on os.option_series_id = oc.option_series_id
                      join genesis2.instrument i on i.instrument_id = alin.instrument_id
                      left join lateral (select ar.date_id
-                                        from dash360.bofa_allocation_report ar
+                                        from dash_reporting.bofa_allocation_report ar
                                         where ar.alloc_instr_id = ae.alloc_instr_id
                                           and to_report = 'R'
                                         limit 1) ar on true
             where alin.date_id between in_start_date_id and in_end_date_id
               and not exists (select null
-                              from dash360.bofa_allocation_report ar
+                              from dash_reporting.bofa_allocation_report ar
                               where ar.alloc_instr_id = ae.alloc_instr_id
                                 and ar.side = alin.side
                                 and ar.date_id = alin.date_id)
@@ -175,7 +175,7 @@ begin
                                        END
                                    ], ',', '')
                    AS rec
-        from dash360.bofa_allocation_report gen
+        from dash_reporting.bofa_allocation_report gen
         where dataset = l_load_id
           and to_report = 'R';
     get diagnostics l_start_row = row_count;
@@ -190,7 +190,7 @@ begin
         l_alloc_instr_id_reported := '{}'::int4[];
         select array_agg(ba.alloc_instr_id)
         into l_alloc_instr_id_reported
-        from dash360.bofa_allocation_report ba
+        from dash_reporting.bofa_allocation_report ba
         where ba.date_id between in_start_date_id and in_end_date_id
           and ba.to_report = 'R';
 
@@ -264,7 +264,7 @@ begin
                           where rp.trade_record_id = any
                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
 
-        insert into  dash360.bofa_trade_record (date_id, trade_record_id, dataset)
+        insert into  dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset)
         select date_id, trade_record_id, dataset from t_reported_trade_record;
 
         drop table if exists t_ftr;
