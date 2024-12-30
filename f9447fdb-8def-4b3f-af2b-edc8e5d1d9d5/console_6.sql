@@ -388,5 +388,11 @@ end;
 $fx$;
 comment on function dash360.set_status_to_bofa_allocation_instruction is 'The function sets claim status for an Un-reportable Allocation Instruction';
 
-select * from dash360.set_status_to_bofa_allocation_instruction(2, 'SO again', 'C');
-select * from dash360.get_status_to_bofa_allocation_instruction(1)
+select * from dash360.set_status_to_bofa_allocation_instruction(2, 'SO', 'C');
+select * from dash360.get_status_to_bofa_allocation_instruction(1);
+
+select * from dash360.so_allocations_snapshot(in_account_ids := '{}', in_date_id := 20241224, in_reported_status := null);
+
+select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53720);
+select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -52631);
+select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53737);
