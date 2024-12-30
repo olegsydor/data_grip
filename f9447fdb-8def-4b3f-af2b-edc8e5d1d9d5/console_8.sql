@@ -6,7 +6,7 @@ set to_report = case
                     else 'C'
     end;
 
-alter table dash360.bofa_allocation_report
+alter table dash360.bofa_trade_record set schema dash_reporting
     alter column to_report type bpchar;
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4);
 
@@ -43,8 +43,8 @@ create function dash360.so_allocations_snapshot(in_account_ids bigint[] default 
                 opt_customer_firm      char,
                 reported_status        bpchar,
                 reported_time          timestamp,
-                claimed_by             text,
-                claim_status           text
+                claimed_by             int4,
+                claim_status           bpchar
             )
     LANGUAGE plpgsql
     COST 1
@@ -102,14 +102,14 @@ begin
                tr.opt_customer_firm,
                coalesce(rep.to_report, 'N')                                as reported_status,
                rep.db_create_time                                          as reported_time,
-               null::text                                                  as claimed_by,
-               null::text                                                  as claim_status
+               bas.claimed_by                                              as claimed_by,
+               bas.claim_status                                            as claim_status
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join t_trade_record rep on rep.trade_record_id = tr.trade_record_id
                  left join genesis2.account acc on acc.account_id = tr.account_id
-                 left join (select ai2tr.trade_record_id, a.alloc_instr_id
+                 left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
                             from genesis2.allocation_instruction a
                                      inner join genesis2.alloc_instr2trade_record ai2tr
                                                 on (a.alloc_instr_id = ai2tr.alloc_instr_id and ai2tr.date_id = a.date_id)
@@ -120,6 +120,11 @@ begin
                            on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select bas.claimed_by, bas.claim_status
+                                    from dash_reporting.bofa_allocation_instruction_status bas
+                                    where bas.alloc_instr_id = allocated_trades.alloc_instr_id
+                                      and bas.date_id = allocated_trades.date_id
+                                    limit 1) bas on true
                  left join lateral (select L1.rate
                                     from (SELECT row_number()
                                                  over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
@@ -173,8 +178,8 @@ begin
                acc.opt_customer_or_firm,
                coalesce(rep.to_report, 'N')   as reported_status,
                rep.db_create_time             as reported_time,
-               null::text                     as claimed_by,
-               null::text                     as claim_status
+               bas.claimed_by                 as claimed_by,
+               bas.claim_status               as claim_status
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join t_trade_record rep on rep.alloc_instr_id = ai.alloc_instr_id
@@ -182,6 +187,11 @@ begin
                  left join genesis2.user_identifier ui on ai.created_by_user_id = ui.user_id
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select bas.claimed_by, bas.claim_status
+                                    from dash_reporting.bofa_allocation_instruction_status bas
+                                    where bas.alloc_instr_id = ai.alloc_instr_id
+                                      and bas.date_id = ai.date_id
+                                    limit 1) bas on true
                  left join lateral (select sum(l1.rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as rate,
                                            case
                                                when count(distinct tr.blaze_account_alias) = 1
@@ -224,7 +234,7 @@ select * from dash360.so_allocations_snapshot(in_account_ids := '{}', in_date_id
 
 
 
--- DROP FUNCTION dash360.allocations_instruction_trades(int4);
+-- DROP FUNCTION dash360.so_allocations_instruction_trades;
 
 create or replace function dash360.so_allocations_instruction_trades(in_alloc_instr_id integer)
     returns table
@@ -250,8 +260,9 @@ create or replace function dash360.so_allocations_instruction_trades(in_alloc_in
                 opt_customer_firm      char,
                 reported_status        bpchar,
                 reported_time          timestamp,
-                claimed_by             text,
-                claim_status           text
+                claimed_by             int4,
+                claim_status           bpchar,
+                reported_aloc_instr_id int4[]
             )
     language plpgsql
     cost 1
@@ -286,7 +297,7 @@ begin
                case i.instrument_type_id
                    when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
                    else tr.last_qty * tr.last_px
-                   end                                                        principal_amount,
+                   end                                                     as principal_amount,
                CCRU.rate                                                   as client_commission_rate,
                tr.blaze_account_alias,
                coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
@@ -295,9 +306,16 @@ begin
                tr.opt_customer_firm,
                coalesce(bar.to_report, btr.to_report, 'N')                 as reported_status,
                coalesce(bar.db_create_time, btr.db_create_time)            as reported_time,
-               null::text                                                  as claimed_by,
-               null::text                                                  as claim_status,
-               case when bar.to_report in ('U', 'C') then (select * from dash_reporting.bofa_allocation_instruction_status) end as reported_aloc_instr_id
+               bas.claimed_by                                              as claimed_by,
+               bas.claim_status                                            as claim_status,
+               case
+                   when bar.to_report in ('U', 'C') then
+                       (select array_agg(distinct aitr.alloc_instr_id)
+                        from genesis2.alloc_instr2trade_record aitr
+                        where aitr.date_id = tr.date_id
+                          and aitr.trade_record_id = any
+                              (staging.all_orig_trade_record_id_today(tr.trade_record_id, tr.date_id)))
+                   end                                                     as reported_aloc_instr_id
 
         from trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -313,6 +331,11 @@ begin
                                     where bar.alloc_instr_id = ai2tr.alloc_instr_id
                                       and bar.date_id = ai2tr.date_id
                                     limit 1) bar on true
+                 left join lateral (select bas.claimed_by, bas.claim_status
+                                    from dash_reporting.bofa_allocation_instruction_status bas
+                                    where bas.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bas.date_id = ai2tr.date_id
+                                    limit 1) bas on true
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select L1.rate
@@ -334,6 +357,9 @@ end;
 $function$
 ;
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53720);
+
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -52631);
+
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53737);
 
+select staging.all_orig_trade_record_id_today( 2346619764, 20241210)
