@@ -329,7 +329,7 @@ comment on column dash360.bofa_allocation_instruction_status.claim_status is $$s
 comment on column dash360.bofa_allocation_instruction_status.db_update_time is 'create\last update time';
 
 
-create function dash360.get_status_to_bofa_allocation_instruction(in_alloc_iinstr_id int4)
+create or replace function dash360.get_status_to_bofa_allocation_instruction(in_alloc_iinstr_id int4)
     returns table
             (
                 alloc_instr_id int4,
@@ -340,12 +340,53 @@ create function dash360.get_status_to_bofa_allocation_instruction(in_alloc_iinst
     language plpgsql
 as
 $fx$
+    -- 20241230 SO https://dashfinancial.atlassian.net/browse/D360-15023
 begin
     return query
-        select alloc_instr_id, claimed_by, claim_status, db_update_time
-        from dash360.bofa_allocation_instruction_status
-        where alloc_instr_id = in_alloc_iinstr_id;
+        select bas.alloc_instr_id, bas.claimed_by, bas.claim_status, bas.db_update_time
+        from dash360.bofa_allocation_instruction_status bas
+        where bas.alloc_instr_id = in_alloc_iinstr_id;
 end;
 $fx$;
-
 comment on function dash360.get_status_to_bofa_allocation_instruction is 'The function gets claim status for an Un-reportable Allocation Instruction ';
+
+
+create or replace function dash360.set_status_to_bofa_allocation_instruction(in_alloc_iinstr_id int4,
+                                                                             in_claimed_by text,
+                                                                             in_target_claim_status bpchar)
+    returns table
+            (
+                alloc_instr_id int4,
+                claimed_by     text,
+                claim_status   bpchar,
+                db_update_time timestamp
+            )
+    language plpgsql
+as
+$fx$
+    -- 20241230 SO https://dashfinancial.atlassian.net/browse/D360-15023
+
+begin
+    merge into dash360.bofa_allocation_instruction_status as trg
+    using (select in_alloc_iinstr_id, in_claimed_by, in_target_claim_status) as src
+    on trg.alloc_instr_id = src.in_alloc_iinstr_id
+    when matched then
+        update
+        set claimed_by     = src.in_claimed_by,
+            claim_status   = src.in_target_claim_status,
+            db_update_time = clock_timestamp()
+    when not matched then
+        insert (alloc_instr_id, claimed_by, claim_status)
+        values (src.in_alloc_iinstr_id, src.in_claimed_by, src.in_target_claim_status);
+
+
+    return query
+        select bas.alloc_instr_id, bas.claimed_by, bas.claim_status, bas.db_update_time
+        from dash360.bofa_allocation_instruction_status bas
+        where bas.alloc_instr_id = in_alloc_iinstr_id;
+end;
+$fx$;
+comment on function dash360.set_status_to_bofa_allocation_instruction is 'The function sets claim status for an Un-reportable Allocation Instruction';
+
+select * from dash360.set_status_to_bofa_allocation_instruction(2, 'SO again', 'C');
+select * from dash360.get_status_to_bofa_allocation_instruction(1)
