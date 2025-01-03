@@ -57,7 +57,8 @@ begin
     drop table if exists t_trade_record;
     create temp table t_trade_record
     as
-    select atr.trade_record_id, br.to_report, br.alloc_instr_id, br.db_create_time
+    select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id)
+        atr.trade_record_id, br.to_report, br.alloc_instr_id, br.db_create_time
     from dash_reporting.bofa_allocation_report br
              join genesis2.alloc_instr2trade_record atr
                   on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
@@ -362,4 +363,21 @@ select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -52
 
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53737);
 
-select staging.all_orig_trade_record_id_today( 2346619764, 20241210)
+select staging.all_orig_trade_record_id_today( 2346619764, 20241210);
+
+
+select * from dash360.so_allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
+
+select count(*) from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
+
+
+    select --distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id)
+     atr.trade_record_id, br.to_report, br.alloc_instr_id, br.db_create_time
+    from dash_reporting.bofa_allocation_report br
+             join genesis2.alloc_instr2trade_record atr
+                  on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
+    where br.date_id = 20241223
+    union all
+    select btr.trade_record_id, 'R', 0, btr.db_create_time
+    from dash_reporting.bofa_trade_record btr
+    where btr.date_id = 20241223;
