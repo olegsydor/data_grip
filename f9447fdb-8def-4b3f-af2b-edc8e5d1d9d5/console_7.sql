@@ -9,7 +9,7 @@ where tr.date_id = :in_date_id
 
 select * from dash360.allocation_trade_record_monitor(20241217);
 
-
+select * from genesis2.instrument;
 -- DROP FUNCTION dash360.allocation_trade_record_monitor(int4, _int8);
 
 CREATE OR REPLACE FUNCTION dash360.allocation_trade_record_monitor(in_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[])
@@ -17,6 +17,7 @@ CREATE OR REPLACE FUNCTION dash360.allocation_trade_record_monitor(in_date_id in
             (
                 account_id                      bigint,
                 trading_firm_id                 character varying,
+                security_type                   char,
                 trades_cnt                      bigint,
                 trades_qty                      bigint,
                 trades_principal                numeric,
@@ -89,6 +90,7 @@ begin
     return query
         select trm.account_id,
                trm.trading_firm_id,
+               'O'::char, -- hardcoded
                --
                count(trm.trade_record_id)                                                       as trades_cnt,
                sum(trm.last_qty)                                                                as trades_qty,
