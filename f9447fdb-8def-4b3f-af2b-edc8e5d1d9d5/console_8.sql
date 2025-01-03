@@ -366,6 +366,6 @@ select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53
 select staging.all_orig_trade_record_id_today( 2346619764, 20241210);
 
 
-select * from dash360.so_allocations_snapshot (in_date_id:=20250103, in_account_ids:='{257078}');
+    select * from dash360.so_allocations_snapshot (in_date_id:=20250103, in_account_ids:='{257078}');
 
 select * from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
