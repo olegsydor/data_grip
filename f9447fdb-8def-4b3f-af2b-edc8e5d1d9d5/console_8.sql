@@ -101,14 +101,14 @@ begin
                ----------------
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               coalesce(rep.to_report, 'N')                                as reported_status,
+               rep.to_report                                               as reported_status,
                rep.db_create_time                                          as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-                 left join t_trade_record rep on rep.trade_record_id = tr.trade_record_id
+                 left join lateral (select rep.to_report, rep.db_create_time from t_trade_record rep where rep.trade_record_id = tr.trade_record_id limit 1) rep on true
                  left join genesis2.account acc on acc.account_id = tr.account_id
                  left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
                             from genesis2.allocation_instruction a
@@ -177,13 +177,13 @@ begin
                -------
                i.last_trade_date,
                acc.opt_customer_or_firm,
-               coalesce(rep.to_report, 'N')   as reported_status,
+               rep.to_report                  as reported_status,
                rep.db_create_time             as reported_time,
                bas.claimed_by                 as claimed_by,
                bas.claim_status               as claim_status
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
-                 left join t_trade_record rep on rep.alloc_instr_id = ai.alloc_instr_id
+                 left join lateral(select rep.to_report, rep.db_create_time from t_trade_record rep where rep.alloc_instr_id = ai.alloc_instr_id limit 1) rep on true
                  left join genesis2.account acc on acc.account_id = ai.account_id
                  left join genesis2.user_identifier ui on ai.created_by_user_id = ui.user_id
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
@@ -305,7 +305,7 @@ begin
                ----------------
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               coalesce(bar.to_report, btr.to_report, 'N')                 as reported_status,
+               coalesce(bar.to_report, btr.to_report)                      as reported_status,
                coalesce(bar.db_create_time, btr.db_create_time)            as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
@@ -366,18 +366,6 @@ select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -53
 select staging.all_orig_trade_record_id_today( 2346619764, 20241210);
 
 
-select * from dash360.so_allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
+select * from dash360.so_allocations_snapshot (in_date_id:=20250103, in_account_ids:='{257078}');
 
-select count(*) from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
-
-
-    select --distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id)
-     atr.trade_record_id, br.to_report, br.alloc_instr_id, br.db_create_time
-    from dash_reporting.bofa_allocation_report br
-             join genesis2.alloc_instr2trade_record atr
-                  on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
-    where br.date_id = 20241223
-    union all
-    select btr.trade_record_id, 'R', 0, btr.db_create_time
-    from dash_reporting.bofa_trade_record btr
-    where btr.date_id = 20241223;
+select * from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
