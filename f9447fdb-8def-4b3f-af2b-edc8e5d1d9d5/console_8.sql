@@ -222,7 +222,7 @@ begin
           and ai.is_deleted = 'N'
           and case
                   when in_reported_status = 'R' then rep.to_report = 'R'
-                  when in_reported_status = 'U' then rep.to_report in ('U', 'C')
+                  when in_reported_status = 'U' then rep.to_report in ('U', 'C') -- C the same as U
                   when in_reported_status is null then true end;
 
 end ;
