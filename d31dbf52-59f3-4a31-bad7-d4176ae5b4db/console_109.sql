@@ -222,4 +222,6 @@ from dash360.dash360_report_parent_order_metrics(account_ids := '{63887}', instr
 
 select *
 from dash360.dash360_report_parent_order_metrics(instrument_type_id := 'O',
-                                                 start_status_date_id := 20241224, end_status_date_id := 20241224)
+                                                 start_status_date_id := 20241224, end_status_date_id := 20241224);
+
+call dash_reporting.imc_report_making(in_date_id := 20250101)
