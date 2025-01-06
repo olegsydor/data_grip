@@ -108,7 +108,7 @@ begin
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-                 left join lateral (select rep.to_report, rep.db_create_time from t_trade_record rep where rep.trade_record_id = tr.trade_record_id limit 1) rep on true
+--                  left join lateral (select rep.to_report, rep.db_create_time from t_trade_record rep where rep.trade_record_id = tr.trade_record_id limit 1) rep on true
                  left join genesis2.account acc on acc.account_id = tr.account_id
                  left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
                             from genesis2.allocation_instruction a
