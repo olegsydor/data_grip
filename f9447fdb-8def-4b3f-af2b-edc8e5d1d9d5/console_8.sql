@@ -108,7 +108,6 @@ begin
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
---                  left join lateral (select rep.to_report, rep.db_create_time from t_trade_record rep where rep.trade_record_id = tr.trade_record_id limit 1) rep on true
                  left join genesis2.account acc on acc.account_id = tr.account_id
                  left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
                             from genesis2.allocation_instruction a
@@ -119,6 +118,10 @@ begin
                               and a.date_id = in_date_id
                               and a.is_deleted = 'N') allocated_trades
                            on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
+                 left join lateral (select rep.to_report, rep.db_create_time
+                                    from t_trade_record rep
+                                    where rep.trade_record_id = allocated_trades.trade_record_id
+                                    limit 1) rep on true
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select bas.claimed_by, bas.claim_status
@@ -183,7 +186,10 @@ begin
                bas.claim_status               as claim_status
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
-                 left join lateral(select rep.to_report, rep.db_create_time from t_trade_record rep where rep.alloc_instr_id = ai.alloc_instr_id limit 1) rep on true
+                 left join lateral (select rep.to_report, rep.db_create_time
+                                    from t_trade_record rep
+                                    where rep.alloc_instr_id = ai.alloc_instr_id
+                                    limit 1) rep on true
                  left join genesis2.account acc on acc.account_id = ai.account_id
                  left join genesis2.user_identifier ui on ai.created_by_user_id = ui.user_id
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
@@ -369,3 +375,5 @@ select staging.all_orig_trade_record_id_today( 2346619764, 20241210);
     select * from dash360.so_allocations_snapshot (in_date_id:=20250103, in_account_ids:='{257078}');
 
 select * from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
+
+ select * from dash360.so_allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
