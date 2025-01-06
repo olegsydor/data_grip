@@ -666,3 +666,5 @@ $function$
 select * from dash360.bofa_allocation_report(20250103, 20250104, null, true);
 
 select * from dash360.allocation_trade_record_monitor(20250106);
+
+select * from tmp_trade_record_monitor
