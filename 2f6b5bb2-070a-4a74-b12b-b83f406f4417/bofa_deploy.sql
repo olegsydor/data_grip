@@ -625,7 +625,7 @@ begin
                --
                count(trm.trade_record_id)                                                       as trades_cnt,
                sum(trm.last_qty)                                                                as trades_qty,
-               sum(trm.last_qty * trm.last_px)                                                  as trades_principal,
+               sum(trm.last_qty * trm.last_px * os.contract_multiplier)                         as trades_principal,
                sum(case when trm.expiring_today then 1 else 0 end)                              as trades_cnt_expiring,
                sum(case when trm.expiring_today then trm.last_qty else 0 end)                   as trades_qty_expiring,
                -- unallocated
