@@ -353,12 +353,12 @@ begin
         into l_alloc_instr_id_reported
         from dash_reporting.bofa_allocation_report ba
         where ba.date_id between in_start_date_id and in_end_date_id
---          and ba.to_report in ('R', 'S')
+         and ba.to_report in ('R')
         ;
 
         -- list of trade records from reported alloc_instr_id
-        drop table if exists t_trade_record_reported;
-        create temp table t_trade_record_reported as
+        drop table if exists t_trade_record_to_remove;
+        create temp table t_trade_record_to_remove as
         select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
         from genesis2.trade_record tr
                  join genesis2.alloc_instr2trade_record aitr
@@ -416,22 +416,18 @@ begin
                                                acc.is_deleted <> 'Y' AND
                                                acc.opt_report_to_mpid = 'MLCB' AND
                                                acc.trading_firm_id <> 'cantor')
-        --                  left join genesis2.clearing_instruction_entry cie
---                            ON (cie.date_id = ftr.date_id AND
---                                COALESCE(cie.new_trade_record_id, cie.trade_record_id) =
---                                ftr.trade_record_id AND cie.cmta IS NOT NULL)
---                  left join genesis2.clearing_instruction ci
---                            ON (ci.clearing_instr_id =
---                                cie.clearing_instr_entry_id AND ci.status = 'D' AND
---                                ci.is_deleted <> 'Y')
-        WHERE ftr.date_id between in_start_date_id and in_end_date_id
-          AND is_busted = 'N'
-          AND ftr.order_id > 0
+
+        where ftr.date_id between in_start_date_id and in_end_date_id
+          and is_busted = 'N'
+          and ftr.order_id > 0
           and gi.instrument_type_id = 'O'
+--           and ftr.trade_record_id not in (select trade_record_id from t_trade_record_to_remove)
           and not exists (select null
-                          from t_trade_record_reported rp
+                          from t_trade_record_to_remove rp
                           where rp.trade_record_id = any
-                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
+                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+;
+
 
         insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset)
         select date_id, trade_record_id, dataset
@@ -668,3 +664,5 @@ select * from dash360.bofa_allocation_report(20250103, 20250104, null, true);
 select * from dash360.allocation_trade_record_monitor(20250106);
 
 select * from tmp_trade_record_monitor
+
+select * from staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)
