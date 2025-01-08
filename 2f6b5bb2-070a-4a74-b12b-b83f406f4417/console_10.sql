@@ -8,6 +8,26 @@ create table inc_hft.load_finish
 );
 comment on table inc_hft.load_finish is 'The signal table. date_id is filling as soon as daily loading has been finished';
 
+
+drop function if exists inc_hft.load_finish_change_trg;
+create or replace function inc_hft.load_finish_change_trg()
+    returns trigger
+    language plpgsql
+as
+$trg$
+begin
+    perform public.send('oleh.sydor@iongroup.com', 'EOS ETL',
+                        new.date_id::text || ': ' || new.node_name || '. ' || 'Ready to reporting');
+    return new;
+end;
+$trg$;
+
+create trigger load_finish_insert_trigger
+    after insert
+    on inc_hft.load_finish
+    for each row
+    execute function inc_hft.load_finish_change_trg();
+
 create table public.mail_to_send
 (
     event_id     serial4                                   not null,
@@ -77,4 +97,6 @@ $function$
 
 select public.send('oleh.sydor@iongroup.com', 'EOS ETL', 'Ready to reporting') into ok;
 
-select * from public.mail_to_send
+select * from public.mail_to_send;
+
+select * from inc_hft.load_finish
