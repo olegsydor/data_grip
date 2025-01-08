@@ -155,16 +155,11 @@ $function$
 ;
 comment on function staging.all_orig_trade_record_id_today is 'Returns all orig_trade_records of passed trade_record for today';
 
-create or replace function dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
-                                                          in_exec_broker text default '792'::text,
-                                                          in_is_eod boolean default false)
-    returns table
-            (
-                ret_row text
-            )
-    language plpgsql
-as
-$function$
+
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text DEFAULT '792'::text, in_is_eod boolean DEFAULT false)
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
 -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
 
 declare
@@ -192,7 +187,7 @@ begin
     into l_alloc_instr_id_reported
     from dash_reporting.bofa_allocation_report
     where date_id between in_start_date_id and in_end_date_id
-      and to_report = 'R';
+         and to_report = 'R';
 
 -- insert into the table
     with base_ins as (
@@ -201,7 +196,8 @@ begin
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
              occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
              min_tick_increment, put_call, maturity_year, maturity_month, maturity_day, strike_price, to_report)
-            select alin.alloc_instr_id,
+            select
+                   alin.alloc_instr_id,
                    alin.side,
                    alin.avg_px,
                    alin.date_id,
@@ -353,12 +349,12 @@ begin
         into l_alloc_instr_id_reported
         from dash_reporting.bofa_allocation_report ba
         where ba.date_id between in_start_date_id and in_end_date_id
-         and ba.to_report in ('R')
+          and ba.to_report in ('R')
         ;
 
         -- list of trade records from reported alloc_instr_id
-        drop table if exists t_trade_record_to_remove;
-        create temp table t_trade_record_to_remove as
+        drop table if exists t_trade_record_reported;
+        create temp table t_trade_record_reported as
         select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
         from genesis2.trade_record tr
                  join genesis2.alloc_instr2trade_record aitr
@@ -367,10 +363,9 @@ begin
         union
         select aitr.trade_record_id, aitr.date_id, aitr.alloc_instr_id
         from genesis2.alloc_instr2trade_record aitr
-                 join genesis2.allocation_instruction ai
-                      on ai.alloc_instr_id = aitr.alloc_instr_id and ai.date_id = aitr.date_id
+        join genesis2.allocation_instruction ai on ai.alloc_instr_id = aitr.alloc_instr_id and ai.date_id = aitr.date_id
         where aitr.date_id between in_start_date_id and in_end_date_id
-          and ai.is_deleted = 'N';
+        and ai.is_deleted = 'N';
 
         -- find all valid trade_records: all except the records from the prev
 
@@ -378,11 +373,7 @@ begin
         create temp table t_reported_trade_record as
         SELECT ftr.date_id           AS date_id,
                ftr.trade_record_id,
-               l_load_id             as dataset,
---                CASE
---                    WHEN (ci.clearing_instr_id IS NOT NULL OR acc.opt_is_fix_clfirm_processed = 'Y')
---                        THEN ftr.cmta
---                    ELSE NULL END                                        AS cmta,
+               l_load_id            as dataset,
                CASE
                    WHEN acc.opt_is_fix_clfirm_processed = 'Y' THEN ftr.cmta
                    ELSE NULL END     AS cmta,
@@ -391,16 +382,6 @@ begin
                ftr.instrument_id,
                ftr.account_id,
                ftr.side,
---                CASE
---                    WHEN ci.clearing_instr_id IS NULL THEN ftr.last_qty
---                    ELSE cie.last_qty END                                AS last_qty,
---                CASE
---                    WHEN ci.clearing_instr_id IS NULL THEN ftr.last_px
---                    ELSE cie.last_px END                                 AS last_px,
---                CASE
---                    WHEN ci.clearing_instr_id IS NULL THEN ftr.opt_customer_firm
---                    ELSE cie.opt_customer_firm END                       as opt_customer_firm,
---                CASE WHEN ci.clearing_instr_id IS NULL THEN 0 ELSE 1 END AS is_cleared,
                ftr.last_qty          AS last_qty,
                ftr.last_px           AS last_px,
                ftr.opt_customer_firm as opt_customer_firm,
@@ -409,7 +390,14 @@ begin
                acc.opt_customer_or_firm,
                acc.opt_nickel_commission,
                acc.opt_penny_commission,
-               acc.opt_is_fix_custfirm_processed
+               acc.opt_is_fix_custfirm_processed,
+               case
+                   when exists (select null
+                                from t_trade_record_reported rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+                       then 'U'
+                   else 'R' end as to_report
         FROM genesis2.trade_record ftr
                  join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
                  JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
@@ -417,21 +405,19 @@ begin
                                                acc.opt_report_to_mpid = 'MLCB' AND
                                                acc.trading_firm_id <> 'cantor')
 
-        where ftr.date_id between in_start_date_id and in_end_date_id
-          and is_busted = 'N'
-          and ftr.order_id > 0
+        WHERE ftr.date_id between in_start_date_id and in_end_date_id
+          AND is_busted = 'N'
+          AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
---           and ftr.trade_record_id not in (select trade_record_id from t_trade_record_to_remove)
-          and not exists (select null
-                          from t_trade_record_to_remove rp
-                          where rp.trade_record_id = any
-                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
-;
+          and ftr.exec_broker = in_exec_broker
+--           and not exists (select null
+--                           from t_trade_record_reported rp
+--                           where rp.trade_record_id = any
+--                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+        ;
 
-
-        insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset)
-        select date_id, trade_record_id, dataset
-        from t_reported_trade_record;
+        insert into  dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset, to_report)
+        select date_id, trade_record_id, dataset, to_report from t_reported_trade_record;
 
         drop table if exists t_ftr;
         create temp table t_ftr as
@@ -455,13 +441,13 @@ begin
        max(street_account_name) as street_account_name*/
         FROM t_reported_trade_record rtr
         where date_id between in_start_date_id and in_end_date_id
+        and to_report = 'R'
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
                  rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
                  rtr.opt_nickel_commission, rtr.opt_penny_commission,
                  rtr.opt_is_fix_custfirm_processed;
         get diagnostics l_row_cnt_eod = row_count;
-        select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting table for trade_record created',
-                               l_row_cnt_eod,
+        select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD reporting table for trade_record created', l_row_cnt_eod,
                                'O')
         into l_step_id;
 
