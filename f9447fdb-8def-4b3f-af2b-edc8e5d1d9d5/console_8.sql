@@ -378,7 +378,8 @@ select * from dash360.allocations_snapshot (in_date_id:=20241223, in_account_ids
 
  select * from dash360.so_allocations_snapshot (in_date_id:=20241223, in_account_ids:='{257078}');
 
-
+select * from dash_reporting.bofa_allocation_report
+where alloc_instr_id = -54455
 ------------------
 
 
