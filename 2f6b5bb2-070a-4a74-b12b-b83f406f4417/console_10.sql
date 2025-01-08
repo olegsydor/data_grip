@@ -17,7 +17,7 @@ as
 $trg$
 begin
     perform public.send('oleh.sydor@iongroup.com', 'EOS ETL',
-                        new.date_id::text || ': ' || new.node_name || '. ' || 'Ready to reporting');
+                        to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS') ||'. date_id-'||new.date_id::text || ': ' || new.node_name || '. ' || 'Ready to reporting');
     return new;
 end;
 $trg$;
@@ -99,4 +99,12 @@ select public.send('oleh.sydor@iongroup.com', 'EOS ETL', 'Ready to reporting') i
 
 select * from public.mail_to_send;
 
-select * from inc_hft.load_finish
+select * from inc_hft.load_finish;
+
+insert into inc_hft.load_finish(date_id, node_name)
+values (20250108, 'node_2')
+on conflict (date_id) do nothing
+
+
+
+
