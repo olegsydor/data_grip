@@ -905,3 +905,5 @@ where aitr.date_id = 20250109
 
 select *
 from staging.all_orig_trade_record_id_today(2346652153, 20250109)
+
+
