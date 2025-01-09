@@ -841,7 +841,7 @@ begin
                              from genesis2.alloc_instr2trade_record aitr
                                       join dash_reporting.bofa_allocation_report br
                                            on br.alloc_instr_id = aitr.alloc_instr_id and
-                                              br.date_id = aitr.alloc_instr_id and br.to_report = 'R'
+                                              br.date_id = aitr.date_id and br.to_report = 'R'
                              where aitr.date_id = tr.date_id
                                and aitr.trade_record_id = any
                                    (staging.all_orig_trade_record_id_today(
@@ -893,10 +893,15 @@ select * from dash360.so_allocations_instruction_trades(-54536);
 
 select *
 from genesis2.alloc_instr2trade_record aitr
-where aitr.date_id = 20250109
+  join dash_reporting.bofa_allocation_report br
+                                           on br.alloc_instr_id = aitr.alloc_instr_id and
+                                              br.date_id = aitr.alloc_instr_id
+                                                  and br.to_report = 'R'
   and aitr.trade_record_id = any
-      (staging.all_orig_trade_record_id_today(2346652154, 20250109));
+      (staging.all_orig_trade_record_id_today(2346652154, 20250109))
+where aitr.date_id = 20250109
+2346652153
+2346652154
 
-select * from staging.all_orig_trade_record_id_today(2346652148
-                                           ,
-                                           20250109)
+select *
+from staging.all_orig_trade_record_id_today(2346652153, 20250109)
