@@ -385,15 +385,15 @@ where alloc_instr_id = -54455
 
 -- DROP FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool);
 
-create or replace function dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
-                                                          in_exec_broker text default '792'::text,
-                                                          in_is_eod boolean default false)
-    returns table
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
+                                                          in_exec_broker text DEFAULT '792'::text,
+                                                          in_is_eod boolean DEFAULT false)
+    RETURNS TABLE
             (
                 ret_row text
             )
-    language plpgsql
-as
+    LANGUAGE plpgsql
+AS
 $function$
 -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
 
@@ -563,7 +563,9 @@ begin
                                        WHEN '5' THEN 'M'
                                        WHEN '7' THEN 'F'
                                        WHEN '8' THEN 'C'
-                                       END
+                                       END,
+                                   null,
+                                   null
                                    ], ',', '')
                    AS rec
         from dash_reporting.bofa_allocation_report gen
@@ -592,10 +594,8 @@ begin
         from genesis2.trade_record tr
                  join genesis2.alloc_instr2trade_record aitr
                       on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
-        where aitr.alloc_instr_id = any (l_alloc_instr_id_reported);
-
-        drop table if exists t_trade_record_to_exclude;
-        create temp table t_trade_record_to_exclude as
+        where aitr.alloc_instr_id = any (l_alloc_instr_id_reported)
+        union
         select aitr.trade_record_id, aitr.date_id, aitr.alloc_instr_id
         from genesis2.alloc_instr2trade_record aitr
                  join genesis2.allocation_instruction ai
@@ -605,8 +605,8 @@ begin
 
         -- find all valid trade_records: all except the records from the prev
 
-        drop table if exists t_trade_record_to_report;
-        create temp table t_trade_record_to_report as
+        drop table if exists t_reported_trade_record;
+        create temp table t_reported_trade_record as
         SELECT ftr.date_id           AS date_id,
                ftr.trade_record_id,
                l_load_id             as dataset,
@@ -646,14 +646,15 @@ begin
           AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
-          and not exists (select null
-                          from t_trade_record_to_exclude rp
-                          where rp.trade_record_id = any
-                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
+        --           and not exists (select null
+--                           from t_trade_record_reported rp
+--                           where rp.trade_record_id = any
+--                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+        ;
 
         insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset, to_report)
         select date_id, trade_record_id, dataset, to_report
-        from t_trade_record_to_report;
+        from t_reported_trade_record;
 
         drop table if exists t_ftr;
         create temp table t_ftr as
@@ -675,7 +676,7 @@ begin
                rtr.opt_is_fix_custfirm_processed
 /*,
        max(street_account_name) as street_account_name*/
-        FROM t_trade_record_to_report rtr
+        FROM t_reported_trade_record rtr
         where date_id between in_start_date_id and in_end_date_id
           and to_report = 'R'
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
@@ -734,8 +735,9 @@ begin
                                            WHEN '5' THEN 'M'
                                            WHEN '7' THEN 'F'
                                            WHEN '8' THEN 'C'
-                                           END , --
-                                       ''
+                                           END,
+                                       null,
+                                       null
                                        ], ',', '')
             FROM t_ftr AS ftr
                      INNER JOIN genesis2.option_contract oc ON (oc.instrument_id = ftr.instrument_id)
