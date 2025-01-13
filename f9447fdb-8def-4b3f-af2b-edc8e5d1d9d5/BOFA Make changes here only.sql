@@ -176,7 +176,7 @@ comment on function staging.all_orig_trade_record_id_today is 'Auxilary function
 
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool);
 create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
-                                                          in_exec_broker text default '792'::text,
+                                                          in_exec_broker text,-- default '792'::text,
                                                           in_is_eod boolean default false)
     returns table
             (
