@@ -741,8 +741,7 @@ $function$
 ;
 comment on function dash360.set_status_to_bofa_allocation_instruction(int4, int4, bpchar) is 'The function sets claim status for an Un-reportable Allocation Instruction';
 
-
-drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);;
+drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
 create or replace function dash360.so_allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
                                                            in_date_id int4 default public.get_dateid(current_date),
                                                            in_reported_status character default null::character(1))
@@ -930,7 +929,7 @@ begin
                null                           as street_exec_time,
                -------
                i.last_trade_date,
-               acc.opt_customer_or_firm,
+               null                           as opt_customer_or_firm,
                rep.to_report                  as reported_status,
                rep.db_create_time             as reported_time,
                bas.claimed_by                 as claimed_by,
@@ -988,6 +987,7 @@ end ;
 $function$
 ;
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
+
 
 drop function if exists dash360.so_allocations_instruction_trades(int4);
 create or replace function dash360.so_allocations_instruction_trades(in_alloc_instr_id int4)
