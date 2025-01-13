@@ -1339,9 +1339,9 @@ $function$
 ;
 
 
-
+select * from dash360.so_allocations_snapshot('{257078}', 20250110);
 select * from t_trade_record
-where trade_record_id = 2346652249;
+where trade_record_id = 2346652260;
 
 create temp table t_trade_record
     as
@@ -1354,10 +1354,12 @@ create temp table t_trade_record
              join genesis2.alloc_instr2trade_record atr
                   on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
     where br.date_id = 20250110
+    and trade_record_id = 2346652260
     union all
     select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
     from dash_reporting.bofa_trade_record btr
-    where btr.date_id = 20250110;
+    where btr.date_id = 20250110
+and trade_record_id = 2346652260;
 
    select tr.date_id,
                tr.trade_record_id::int8,
@@ -1455,7 +1457,7 @@ create temp table t_trade_record
                   when :in_reported_status = 'R' then rep.to_report = 'R'
                   when :in_reported_status = 'U' then rep.to_report in ('U', 'C')
                   when :in_reported_status is null then true end
-        and tr.trade_record_id = 2346652249
+        and tr.trade_record_id = 2346652260
         union all
         select ai.date_id,
                null::int8                     as trade_record_id,
