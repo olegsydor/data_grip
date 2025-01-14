@@ -427,6 +427,11 @@ begin
                acc.opt_penny_commission,
                acc.opt_is_fix_custfirm_processed,
                case
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_reported trr
+                                                                     where trr.trade_record_id = ftr.trade_record_id)
+                       then 'U'
+                   when ftr.orig_trade_record_id is null then 'R'
                    when exists (select null
                                 from t_trade_record_reported rp
                                 where rp.trade_record_id = any
@@ -434,6 +439,12 @@ begin
                        then 'U'
                    else 'R' end      as to_report,
                case
+
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_to_exclude tre
+                                                                     where tre.trade_record_id = ftr.trade_record_id)
+                       then 'D'
+                   when ftr.orig_trade_record_id is null then null
                    when exists (select null
                                 from t_trade_record_to_exclude rp
                                 where rp.trade_record_id = any
