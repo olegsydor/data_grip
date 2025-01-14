@@ -201,8 +201,8 @@ declare
     l_start_row               int4;
 
 begin
-    l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || 'for ' ||
-                  case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ':';
+    l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || ' for ' ||
+                  case when in_exec_broker is null then ' all exec brokers' else in_exec_broker end || ':';
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -300,7 +300,7 @@ begin
 
     select array_length(l_alloc_instr_id, 1) into l_row_cnt;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0),  'O')
     into l_step_id;
 
     --  PART 2. Printing the report for intraday
