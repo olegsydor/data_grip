@@ -185,7 +185,7 @@ create or replace function dash360.bofa_allocation_report(in_start_date_id int4,
     language plpgsql
 as
 $function$
--- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
+    -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
 -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 -- and dash_reporting.bofa_trade_record for EOD
@@ -300,7 +300,7 @@ begin
 
     select array_length(l_alloc_instr_id, 1) into l_row_cnt;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0),  'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
 
     --  PART 2. Printing the report for intraday
@@ -395,8 +395,12 @@ begin
         from genesis2.alloc_instr2trade_record aitr
                  join genesis2.allocation_instruction ai
                       on ai.alloc_instr_id = aitr.alloc_instr_id and ai.date_id = aitr.date_id
+                 join genesis2.trade_record tr
+                      on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
         where aitr.date_id between in_start_date_id and in_end_date_id
-          and ai.is_deleted = 'N';
+          and ai.is_deleted = 'N'
+          and tr.exec_broker = in_exec_broker;
+        create index on t_trade_record_to_exclude (trade_record_id);
 
         -- find all valid trade_records: all except the records from the prev
 
@@ -428,27 +432,37 @@ begin
                                 where rp.trade_record_id = any
                                       (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
                        then 'U'
-                   else 'R' end      as to_report
+                   else 'R' end      as to_report,
+               case
+                   when exists (select null
+                                from t_trade_record_to_exclude rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+                       then 'D' end  as to_del
         FROM genesis2.trade_record ftr
                  join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
-                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
-                                               acc.is_deleted <> 'Y' AND
-                                               acc.opt_report_to_mpid = 'MLCB' AND
-                                               acc.trading_firm_id <> 'cantor')
-
+                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id)
+                 left join t_trade_record_to_exclude tex
+                           on tex.trade_record_id = ftr.trade_record_id and tex.date_id = ftr.date_id
         WHERE ftr.date_id between in_start_date_id and in_end_date_id
           AND is_busted = 'N'
           AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
-          and not exists (select null
-                          from t_trade_record_to_exclude rp
-                          where rp.trade_record_id = any
-                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
+          and tex.trade_record_id is null
+          and acc.is_deleted <> 'Y'
+          AND acc.opt_report_to_mpid = 'MLCB'
+          AND acc.trading_firm_id <> 'cantor'
+        --           and not exists (select null
+--                           from t_trade_record_to_exclude rp
+--                           where rp.trade_record_id = any
+--                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+        ;
 
         insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset, to_report)
         select date_id, trade_record_id, dataset, to_report
-        from t_trade_record_to_report;
+        from t_trade_record_to_report
+        where to_del is null;
 
         drop table if exists t_ftr;
         create temp table t_ftr as
@@ -473,6 +487,7 @@ begin
         FROM t_trade_record_to_report rtr
         where date_id between in_start_date_id and in_end_date_id
           and to_report = 'R'
+          and to_del is null
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
                  rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
                  rtr.opt_nickel_commission, rtr.opt_penny_commission,
