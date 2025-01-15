@@ -818,7 +818,7 @@ begin
         select tr.date_id,
                tr.trade_record_id::bigint,
                tr.account_id::integer,
-               tr.instrument_id,
+               tr.instrument_id::int8,
                tr.side,
                tr.open_close,
                tr.last_px                                                  as avg_px,
@@ -843,8 +843,9 @@ begin
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
                case
-                   when bar.to_report in ('U', 'C') and
-                        exists
+                   when true
+--                             and bar.to_report in ('U', 'C')
+                       and exists
                             (select null
                              from genesis2.alloc_instr2trade_record aitr
                                       join dash_reporting.bofa_allocation_report br
@@ -856,8 +857,8 @@ begin
                                            tr.trade_record_id,
                                            tr.date_id))) then true
                    else false
-                   end                                                     as is_prev_reported
-        from trade_record tr
+                   end as is_prev_reported
+        from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
                  inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
