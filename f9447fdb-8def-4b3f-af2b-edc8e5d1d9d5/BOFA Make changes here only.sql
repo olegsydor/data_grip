@@ -66,7 +66,7 @@ create table dash_reporting.bofa_allocation_instruction_status
     alloc_instr_id int4                                not null,
     date_id        int4                                not null,
     claimed_by     int4                                null,
-    claim_status   bpchar    default 'o'::bpchar       not null,
+    claim_status   bpchar    default 'O'::bpchar       not null,
     db_update_time timestamp default clock_timestamp() not null,
     constraint bofa_allocation_instruction_status_pk primary key (alloc_instr_id),
     constraint bofa_allocation_instruction_status_user_identifier_fk foreign key (claimed_by) references genesis2.user_identifier (user_id)
