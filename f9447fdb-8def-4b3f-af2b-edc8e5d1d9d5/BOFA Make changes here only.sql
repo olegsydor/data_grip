@@ -59,6 +59,7 @@ create table if not exists dash_reporting.bofa_trade_record
 create index bofa_trade_record_trade_record_date_id_idx on dash_reporting.bofa_trade_record using btree (date_id, trade_record_id);
 comment on table dash_reporting.bofa_trade_record is 'The table of bofa process EOD. The table is also used for further report generation in EOD part';
 
+
 drop table if exists dash_reporting.bofa_allocation_instruction_status;
 create table dash_reporting.bofa_allocation_instruction_status
 (
