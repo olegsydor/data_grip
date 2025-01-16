@@ -861,7 +861,7 @@ begin
                i.last_trade_date                                                            as expiration_date,
                tr.opt_customer_firm,
 --                coalesce(bar.to_report, btr.to_report)                      as reported_status,
-               case when tr.is_billed = 'R' then 'R' end                                    as reported_status,
+               case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
                case
                    when tr.is_billed = 'R' then coalesce(bar.db_create_time, (select btr.db_create_time
                                                                               from dash_reporting.bofa_trade_record btr
