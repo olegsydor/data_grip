@@ -175,6 +175,7 @@ $function$
 ;
 comment on function staging.all_orig_trade_record_id_today is 'Auxilary function for calculating all orig_trade_record_id';
 
+
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool);
 create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
                                                           in_exec_broker text,-- default '792'::text,
@@ -190,6 +191,7 @@ $function$
 -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 -- and dash_reporting.bofa_trade_record for EOD
+    -- 20250116 SO https://dashfinancial.atlassian.net/browse/DS-9313 add subscriptions
 
 declare
     l_load_id                 int;
@@ -1148,64 +1150,3 @@ $function$
 ;
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
-
-
-select cl.ex_exchange_id,
-       cl.ex_trade_liquidity_indicator,
-       (select array_agg(distinct upper(description))
-        from dwh.d_liquidity_indicator li
-        where true
-          and li.trade_liquidity_indicator = cl.ex_trade_liquidity_indicator
-        limit 1)                                                        as descr,
---               cl.par_t9730,
---               cl.str_t9730,
---               CL.CROSS_TYPE,
-       CL.STRATEGY_DECISION_REASON_CODE,
-       substring(cl.par_t9730, 2, 1),
-       substring(cl.str_t9730, 2, 1),
-       case
-           when --cl.STRATEGY_DECISION_REASON_CODE in ('74') and
-               cl.ex_exchange_id in
-               ('AMEX', 'BOX', 'CBOE', 'EDGO', 'GEMINI', 'ISE', 'MCRY', 'MIAX', 'NQBXO', 'PHLX')
-                   and exists (select upper(description)
-                               from dwh.d_liquidity_indicator li
-                               where (upper(description) like '%FLASH%'
-                                   or upper(description) like '%EXPOSURE%'
---                                           or upper(description) like '%REMOVE%'
-                                   )
-                                 and li.trade_liquidity_indicator = cl.ex_trade_liquidity_indicator)
-               then 'FLASH'
-           when cl.ex_exchange_id in ('AMEXP')
-               and exists (select upper(description)
-                           from dwh.d_liquidity_indicator li
-                           where (upper(description) like '%BOLD REMOVE%'
-                               )
-                             and li.trade_liquidity_indicator = cl.ex_trade_liquidity_indicator)
-               then 'FLASH'
-           when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(cl.par_t9730, 2, 1) in ('B', 'b', 's')
-               then 'FLASH'
-           when CL.STRATEGY_DECISION_REASON_CODE in ('74') and substring(cl.str_t9730, 2, 1) in ('B', 'b', 's')
-               then 'FLASH'
---                   when CL.STRATEGY_DECISION_REASON_CODE in ('32', '62', '96', '99') then 'FLASH'
-           when Cl.CROSS_TYPE = 'P' then 'PIM'
-           when Cl.CROSS_TYPE = 'Q' then 'QCC'
-           when Cl.CROSS_TYPE = 'F' then 'Facilitation'
-           when Cl.CROSS_TYPE = 'S' then 'Solicitation'
-           else coalesce(CL.CROSS_TYPE, '') end                         as Auc_type,
-
-
-       coalesce(cl.request_count, '')                                   as Req_count,
-       coalesce(cl.billing_code, '')                                    as Billing_Code,
-       coalesce(cl.contra_broker, '')                                   as ContraBroker,
-       coalesce(cl.contra_trader, '')                                   as ContraTrader,
-       coalesce(cl.white_list, '')                                      as WhiteList,
-       coalesce(staging.trailing_dot(cl.cons_payment_per_contract), '') as cons_payment_per_contract,
-       coalesce(cl.contra_cross_exec_qty::text, '')                     as contra_cross_exec_qty,
-       coalesce(cl.contra_cross_lp_id, '')                              as contra_cross_lp_id,
-       coalesce(cl.ac_account_demo_mnemonic, '')                        as ac_account_demo_mnemonic
-from trash.imc_final cl
-where true
-  and cl.ex_exchange_id in ('AMEXP')
-
-
-select 1/0
