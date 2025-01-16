@@ -29,7 +29,7 @@ create table if not exists dash_reporting.bofa_allocation_report
     opt_customer_or_firm          bpchar(1)                           null,
     occ_actionable_id             varchar(10)                         null,
     dataset                       int4                                null,
-    to_report                     bpchar                              null,
+    to_report                     bpchar                              null, -- R
     db_create_time                timestamp default clock_timestamp() not null,
     instrument_id                 int8                                null,
     opt_penny_commission          numeric(12, 4)                      null,
@@ -600,6 +600,7 @@ comment on function dash360.bofa_allocation_report is 'The main function based o
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
 
+
 drop function if exists dash360.allocation_trade_record_monitor(int4, int8[]);
 create or replace function dash360.allocation_trade_record_monitor(in_date_id int4, in_account_ids int8[] default '{}'::int8[])
     returns table
@@ -720,6 +721,7 @@ end;
 $function$
 ;
 comment on function dash360.allocation_trade_record_monitor is 'The monitor. It is expected to be run every 1 minute';
+
 
 drop function if exists dash360.get_status_to_bofa_allocation_instruction(int4);
 create or replace function dash360.get_status_to_bofa_allocation_instruction(in_alloc_instr_id int4)
@@ -859,23 +861,23 @@ begin
                coalesce(bar.to_report, btr.to_report)                      as reported_status,
                coalesce(bar.db_create_time, btr.db_create_time)            as reported_time,
                bas.claimed_by                                              as claimed_by,
-               bas.claim_status                                            as claim_status,
-               case
-                   when true
---                             and bar.to_report in ('U', 'C')
-                       and exists
-                            (select null
-                             from genesis2.alloc_instr2trade_record aitr
-                                      join dash_reporting.bofa_allocation_report br
-                                           on br.alloc_instr_id = aitr.alloc_instr_id and
-                                              br.date_id = aitr.date_id and br.to_report = 'R'
-                             where aitr.date_id = tr.date_id
-                               and aitr.trade_record_id = any
-                                   (staging.all_orig_trade_record_id_today(
-                                           tr.trade_record_id,
-                                           tr.date_id))) then true
-                   else false
-                   end as is_prev_reported
+               bas.claim_status                                            as claim_status
+--                case
+--                    when true
+-- --                             and bar.to_report in ('U', 'C')
+--                        and exists
+--                             (select null
+--                              from genesis2.alloc_instr2trade_record aitr
+--                                       join dash_reporting.bofa_allocation_report br
+--                                            on br.alloc_instr_id = aitr.alloc_instr_id and
+--                                               br.date_id = aitr.date_id and br.to_report = 'R'
+--                              where aitr.date_id = tr.date_id
+--                                and aitr.trade_record_id = any
+--                                    (staging.all_orig_trade_record_id_today(
+--                                            tr.trade_record_id,
+--                                            tr.date_id))) then true
+--                    else false
+--                    end as is_prev_reported
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
@@ -1165,3 +1167,7 @@ $function$
 ;
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
+select * from genesis2.trade_record
+where true
+    and trade_record_reason = 'L'
+and date_id = 20250115
