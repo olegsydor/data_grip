@@ -959,6 +959,7 @@ $function$
     --in_date_id = 20190301;
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters and removed if-else condition for empty in_account_id
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 is_prev_reported will use is_billed
 begin
     drop table if exists t_trade_record;
     create temp table t_trade_record
@@ -1014,22 +1015,23 @@ begin
                rep.db_create_time                                          as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
-               case
-                   when exists
-                       (select null
-                        from genesis2.alloc_instr2trade_record aitr
-                                 join t_trade_record br -- reused created temp table instaed of dash_reporting.bofa_allocation_report
-                                      on br.alloc_instr_id = aitr.alloc_instr_id
---                                               br.date_id = aitr.date_id
-                                          and br.to_report = 'R'
-                                          and alloc_rep_type = 'B'
-                        where aitr.date_id = tr.date_id
-                          and aitr.trade_record_id = any
-                              (staging.all_orig_trade_record_id_today(
-                                      tr.trade_record_id,
-                                      tr.date_id))) then true
-                   else false
-                   end                                                     as is_prev_reported
+--                case
+--                    when exists
+--                        (select null
+--                         from genesis2.alloc_instr2trade_record aitr
+--                                  join t_trade_record br -- reused created temp table instaed of dash_reporting.bofa_allocation_report
+--                                       on br.alloc_instr_id = aitr.alloc_instr_id
+-- --                                               br.date_id = aitr.date_id
+--                                           and br.to_report = 'R'
+--                                           and alloc_rep_type = 'B'
+--                         where aitr.date_id = tr.date_id
+--                           and aitr.trade_record_id = any
+--                               (staging.all_orig_trade_record_id_today(
+--                                       tr.trade_record_id,
+--                                       tr.date_id))) then true
+--                    else false
+--                    end                                                     as is_prev_reported
+               case when tr.is_billed = 'R' then true end                  as is_prev_reported
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -1053,7 +1055,7 @@ begin
                                     from dash_reporting.bofa_allocation_instruction_status bas
                                     where bas.alloc_instr_id = allocated_trades.alloc_instr_id
                                       and bas.date_id = allocated_trades.date_id
-                                    and 1=2
+                                      and 1 = 2
                                     limit 1) bas on true
                  left join lateral (select L1.rate
                                     from (SELECT row_number()

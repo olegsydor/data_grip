@@ -1731,6 +1731,7 @@ where btr.date_id = in_date_id
 
 
 
+drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
 create or replace function dash360.so_allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
                                                            in_date_id int4 default public.get_dateid(current_date),
                                                            in_reported_status character default null::character(1))
@@ -1773,6 +1774,7 @@ $function$
     --in_date_id = 20190301;
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters and removed if-else condition for empty in_account_id
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 is_prev_reported will use is_billed
 begin
     drop table if exists t_trade_record;
     create temp table t_trade_record
@@ -1844,7 +1846,8 @@ begin
 --                                       tr.date_id))) then true
 --                    else false
 --                    end                                                     as is_prev_reported
-           case when tr.is_billed = 'R' then true end as is_prev_reported
+               case when tr.is_billed = 'R' then true end                  as is_prev_reported
+
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join genesis2.account acc on acc.account_id = tr.account_id
@@ -1867,7 +1870,7 @@ begin
                                     from dash_reporting.bofa_allocation_instruction_status bas
                                     where bas.alloc_instr_id = allocated_trades.alloc_instr_id
                                       and bas.date_id = allocated_trades.date_id
-                                    and 1=2
+                                      and 1 = 2
                                     limit 1) bas on true
                  left join lateral (select L1.rate
                                     from (SELECT row_number()
@@ -1976,6 +1979,11 @@ begin
 end ;
 $function$
 ;
+    select alloc_instr_id
+    from dash_reporting.bofa_allocation_report
+    where date_id between :in_start_date_id and :in_end_date_id
+      and to_report = 'R';
 
 
-select 9999999999999999::int8
+select * from dash_reporting.bofa_allocation_report
+where date_id = 20250116
