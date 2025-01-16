@@ -1206,3 +1206,6 @@ select cl.ex_exchange_id,
 from trash.imc_final cl
 where true
   and cl.ex_exchange_id in ('AMEXP')
+
+
+select 1/0
