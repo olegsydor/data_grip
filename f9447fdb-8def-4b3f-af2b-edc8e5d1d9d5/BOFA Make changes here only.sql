@@ -863,15 +863,17 @@ begin
 --                coalesce(bar.to_report, btr.to_report)                      as reported_status,
                case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
                case
-                   when tr.is_billed = 'R' then coalesce(bar.db_create_time, (select btr.db_create_time
-                                                                              from dash_reporting.bofa_trade_record btr
-                                                                                       join genesis2.trade_record tri
-                                                                                            on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
-                                                                              where true
-                                                                                and tri.exch_exec_id = tr.exch_exec_id
-                                                                                and tri.is_billed = 'R'
-                                                                              order by 1
-                                                                              limit 1)) end as reported_time,
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1)) end                                                       as reported_time,
                bas.claimed_by                                                               as claimed_by,
                bas.claim_status                                                             as claim_status,
                case when tr.is_billed = 'R' then true else false end                        as is_prev_reported
@@ -1012,10 +1014,12 @@ begin
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
                coalesce(rep.to_report, nullif(tr.is_billed, 'N'))          as reported_status,
-               coalesce(rep.db_create_time, (select btr.db_create_time
-                        from dash_reporting.bofa_trade_record btr
+               coalesce(rep.db_create_time, (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
                                  join genesis2.trade_record tri
-                                      on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
                         where true
                           and tri.exch_exec_id = tr.exch_exec_id
                           and tri.is_billed = 'R'
@@ -1323,10 +1327,12 @@ begin
                case when tr.is_billed = 'R' then 'R' end                   as reported_status,
                case
                    when tr.is_billed = 'R' then
-                       (select btr.db_create_time
-                        from dash_reporting.bofa_trade_record btr
+                       (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
                                  join genesis2.trade_record tri
-                                      on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
                         where true
                           and tri.exch_exec_id = tr.exch_exec_id
                           and tri.is_billed = 'R'

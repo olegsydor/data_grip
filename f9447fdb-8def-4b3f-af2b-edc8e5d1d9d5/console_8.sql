@@ -2531,3 +2531,29 @@ end ;
 $function$
 ;
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
+
+
+select is_billed, exch_exec_id, exec_id, * from trade_record
+where date_id = 20250116
+and true
+--    and trade_record_id = 2346664790
+and exch_exec_id = '610194084386'
+and is_billed = 'R'
+select * from dash_reporting.bofa_allocation_report
+where date_id = 20250116
+
+
+select tri.is_billed, bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = '610194084386'
+--                           and tri.is_billed = 'R'
+                        order by 1
+                        limit 1
+
+select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -55460);
+
