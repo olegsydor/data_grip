@@ -1573,3 +1573,17 @@ select jsonb_build_object(tr.trade_record_id, jsonb_build_object('clearing_accou
 	      and aitr.date_id = :l_date_id;
 
                         ))
+
+
+
+perform genesis2.etl_subscribe(in_load_batch_id => dataset,
+                                in_row_cnt=>1,
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_allocation_report',
+                                in_date_id => date_id);
+
+ perform genesis2.etl_subscribe(in_load_batch_id => dataset,
+                                in_row_cnt=>1,
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_trade_record',
+                                in_date_id => date_id)

@@ -303,6 +303,13 @@ begin
 
     select array_length(l_alloc_instr_id, 1) into l_row_cnt;
 
+    -- Subscription (for ONLY THESE trade_record_id with  R in alloc_instr_id)
+    perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
+                                in_row_cnt=>coalesce(l_row_cnt, 0),
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_allocation_report',
+                                in_date_id => in_start_date_id);
+
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
 
@@ -477,6 +484,14 @@ begin
         select date_id, trade_record_id, dataset, to_report
         from t_trade_record_to_report
         where to_del is null;
+        get diagnostics l_row_cnt = row_count;
+
+        -- Subscription
+        perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
+                                in_row_cnt=>coalesce(l_row_cnt, 0),
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_trade_record',
+                                in_date_id => in_start_date_id);
 
         drop table if exists t_ftr;
         create temp table t_ftr as
