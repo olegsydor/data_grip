@@ -43,7 +43,7 @@ create table if not exists dash_reporting.bofa_allocation_report
     strike_price                  numeric(12, 4)                      null
 );
 create index bofa_allocation_report_alloc_instr_id_idx on dash_reporting.bofa_allocation_report using btree (alloc_instr_id);
-create index bofa_allocation_report_date_id_idx on dash_reporting.bofa_allocation_report using btree (date_id);
+create index if not exists bofa_allocation_report_date_id_dataset_to_report_idx on dash_reporting.bofa_allocation_report using btree (date_id, dataset, to_report);
 comment on table dash_reporting.bofa_allocation_report is 'The main table of bofa process intraday. The table is also used for further report generation in intraday part';
 
 
@@ -486,6 +486,8 @@ begin
         where to_del is null;
         get diagnostics l_row_cnt = row_count;
 
+
+
         -- Subscription
         perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
                                 in_row_cnt=>coalesce(l_row_cnt, 0),
@@ -789,7 +791,6 @@ comment on function dash360.set_status_to_bofa_allocation_instruction(int4, int4
 
 
 drop function if exists dash360.so_allocations_instruction_trades(int4);
-
 create or replace function dash360.so_allocations_instruction_trades(in_alloc_instr_id integer)
     returns table
             (
@@ -825,6 +826,7 @@ $function$
     --l_date_id := in_date_id;
     --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 changes in report_time using is_billed in trade_record
 declare
     l_date_id integer;
 begin
@@ -841,8 +843,8 @@ begin
                tr.instrument_id::int8,
                tr.side,
                tr.open_close,
-               tr.last_px                                                  as avg_px,
-               tr.last_qty                                                 as exec_qty,
+               tr.last_px                                                                   as avg_px,
+               tr.last_qty                                                                  as exec_qty,
                i.display_instrument_id,
                i.last_trade_date::date,
                i.instrument_type_id,
@@ -851,33 +853,28 @@ begin
                case i.instrument_type_id
                    when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
                    else tr.last_qty * tr.last_px
-                   end                                                     as principal_amount,
-               CCRU.rate                                                   as client_commission_rate,
+                   end                                                                      as principal_amount,
+               CCRU.rate                                                                    as client_commission_rate,
                tr.blaze_account_alias,
-               coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
+               coalesce(tr.street_trade_record_time, tr.trade_record_time)                  as street_exec_time,
                ----------------
-               i.last_trade_date                                           as expiration_date,
+               i.last_trade_date                                                            as expiration_date,
                tr.opt_customer_firm,
-               coalesce(bar.to_report, btr.to_report)                      as reported_status,
-               coalesce(bar.db_create_time, btr.db_create_time)            as reported_time,
-               bas.claimed_by                                              as claimed_by,
-               bas.claim_status                                            as claim_status
---                case
---                    when true
--- --                             and bar.to_report in ('U', 'C')
---                        and exists
---                             (select null
---                              from genesis2.alloc_instr2trade_record aitr
---                                       join dash_reporting.bofa_allocation_report br
---                                            on br.alloc_instr_id = aitr.alloc_instr_id and
---                                               br.date_id = aitr.date_id and br.to_report = 'R'
---                              where aitr.date_id = tr.date_id
---                                and aitr.trade_record_id = any
---                                    (staging.all_orig_trade_record_id_today(
---                                            tr.trade_record_id,
---                                            tr.date_id))) then true
---                    else false
---                    end as is_prev_reported
+--                coalesce(bar.to_report, btr.to_report)                      as reported_status,
+               case when tr.is_billed = 'R' then 'R' end                                    as reported_status,
+               case
+                   when tr.is_billed = 'R' then coalesce(bar.db_create_time, (select btr.db_create_time
+                                                                              from dash_reporting.bofa_trade_record btr
+                                                                                       join genesis2.trade_record tri
+                                                                                            on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
+                                                                              where true
+                                                                                and tri.exch_exec_id = tr.exch_exec_id
+                                                                                and tri.is_billed = 'R'
+                                                                              order by 1
+                                                                              limit 1)) end as reported_time,
+               bas.claimed_by                                                               as claimed_by,
+               bas.claim_status                                                             as claim_status,
+               case when tr.is_billed = 'R' then true else false end                        as is_prev_reported
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
