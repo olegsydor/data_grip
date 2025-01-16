@@ -1011,26 +1011,18 @@ begin
                ----------------
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               rep.to_report                                               as reported_status,
-               rep.db_create_time                                          as reported_time,
+               coalesce(rep.to_report, nullif(tr.is_billed, 'N'))          as reported_status,
+               coalesce(rep.db_create_time, (select btr.db_create_time
+                        from dash_reporting.bofa_trade_record btr
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1))                                          as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
---                case
---                    when exists
---                        (select null
---                         from genesis2.alloc_instr2trade_record aitr
---                                  join t_trade_record br -- reused created temp table instaed of dash_reporting.bofa_allocation_report
---                                       on br.alloc_instr_id = aitr.alloc_instr_id
--- --                                               br.date_id = aitr.date_id
---                                           and br.to_report = 'R'
---                                           and alloc_rep_type = 'B'
---                         where aitr.date_id = tr.date_id
---                           and aitr.trade_record_id = any
---                               (staging.all_orig_trade_record_id_today(
---                                       tr.trade_record_id,
---                                       tr.date_id))) then true
---                    else false
---                    end                                                     as is_prev_reported
                case when tr.is_billed = 'R' then true end                  as is_prev_reported
 
         from genesis2.trade_record tr
@@ -1164,6 +1156,7 @@ begin
 end ;
 $function$
 ;
+
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
 
@@ -1189,7 +1182,8 @@ create or replace function dash360.so_allocations_instruction_delete(in_alloc_in
                 orig_trade_record_id   bigint,
                 street_exec_time       timestamp without time zone,
                 opt_customer_firm      character,
-                is_prev_reported       boolean
+                reported_status        character,
+                reported_time          timestamp without time zone
             )
     language plpgsql
 as
@@ -1326,10 +1320,18 @@ begin
                tr.orig_trade_record_id::bigint,
                coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
                tr.opt_customer_firm,
+               case when tr.is_billed = 'R' then 'R' end                   as reported_status,
                case
-                   when tr.is_billed = 'R' then true
-                   end                                                     as is_prev_reported
-
+                   when tr.is_billed = 'R' then
+                       (select btr.db_create_time
+                        from dash_reporting.bofa_trade_record btr
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = btr.date_id and tri.trade_record_id = btr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1) end                                       as reported_time
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
