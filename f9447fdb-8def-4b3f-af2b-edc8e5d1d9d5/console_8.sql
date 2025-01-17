@@ -2609,7 +2609,7 @@ select bar.db_create_time
 select * from dash360.so_allocations_instruction_delete(in_alloc_instr_id := -55600, in_user_id := 6789);
 
 select * from trash.report_alloc_instr_trade_record(20250117);
-create function trash.report_alloc_instr_trade_record(in_date_id integer default public.get_dateid(current_date))
+create or replace function trash.report_alloc_instr_trade_record(in_date_id integer default public.get_dateid(current_date))
     returns table
             (
                 exec_broker     varchar(32),
@@ -2650,11 +2650,13 @@ begin
                bar.root_symbol as symbol,
                bar.side,
                bar.open_close,
-               -1              as exec_qty,
+               ai.total_qty    as exec_qty,
                bar.avg_px,
                'reported'      as reported_status,
                '?'             as is_busted
         from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
                  join genesis2.alloc_instr2trade_record aitr
                       on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
                  join lateral (select *
@@ -2671,16 +2673,17 @@ begin
                ac.account_name,
                null         as alloc_instr_id,
                btr.trade_record_id,
-               '??'         as symbol,
+               di.symbol    as symbol,
                tr.side,
                tr.open_close,
-               -1           as exec_qty,
-               tr.last_px   AS avg_px,
+               tr.last_qty  as exec_qty,
+               tr.last_px   as avg_px,
                'reported'   as reported_status,
                tr.is_busted as is_busted
         from dash_reporting.bofa_trade_record btr
                  join genesis2.trade_record tr using (trade_record_id, date_id)
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = tr.instrument_id
         where btr.date_id = in_date_id
           and btr.to_report = 'R';
     get diagnostics l_row_cnt = row_count;
