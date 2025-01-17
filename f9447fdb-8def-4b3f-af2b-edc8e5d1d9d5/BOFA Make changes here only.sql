@@ -1012,7 +1012,7 @@ begin
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
                coalesce(nullif(tr.is_billed, 'N'), rep.to_report)          as reported_status,
-               coalesce(/*rep.db_create_time,*/ (select bar.db_create_time
+               coalesce((select bar.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
@@ -1022,7 +1022,7 @@ begin
                           and tri.exch_exec_id = tr.exch_exec_id
                           and tri.is_billed = 'R'
                         order by 1
-                        limit 1))                                          as reported_time,
+                        limit 1), rep.db_create_time)                      as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
                case when tr.is_billed = 'R' then true end                  as is_prev_reported
