@@ -486,8 +486,6 @@ begin
         where to_del is null;
         get diagnostics l_row_cnt = row_count;
 
-
-
         -- Subscription
         perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
                                 in_row_cnt=>coalesce(l_row_cnt, 0),
