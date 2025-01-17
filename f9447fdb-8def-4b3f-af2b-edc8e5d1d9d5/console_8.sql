@@ -2557,3 +2557,38 @@ select tri.is_billed, bar.db_create_time
 
 select * from dash360.so_allocations_instruction_trades(in_alloc_instr_id := -55460);
 
+
+    select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
+                                                                              br.to_report,
+                                                                              br.alloc_instr_id,
+                                                                              br.db_create_time,
+                                                                              'B' as alloc_rep_type
+    from dash_reporting.bofa_allocation_report br
+             join genesis2.alloc_instr2trade_record atr
+                  on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
+    where br.date_id = :in_date_id
+    and atr.trade_record_id = 2346662470
+    union all
+    select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
+    from dash_reporting.bofa_trade_record btr
+    where btr.date_id = in_date_id;
+
+
+select is_billed, exch_exec_id, * from genesis2.trade_record
+where trade_record_id = 2346666041;
+
+
+select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = '610194084418'
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1;
+
+
+select * from dash360.so_allocations_instruction_delete(in_alloc_instr_id := -55600, in_user_id := 6789);

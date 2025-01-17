@@ -1013,8 +1013,8 @@ begin
                ----------------
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               coalesce(rep.to_report, nullif(tr.is_billed, 'N'))          as reported_status,
-               coalesce(rep.db_create_time, (select bar.db_create_time
+               coalesce(nullif(tr.is_billed, 'N'), rep.to_report)          as reported_status,
+               coalesce(/*rep.db_create_time,*/ (select bar.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
@@ -1324,10 +1324,11 @@ begin
                tr.orig_trade_record_id::bigint,
                coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
                tr.opt_customer_firm,
-               case when tr.is_billed = 'R' then 'R' end                   as reported_status,
+               case when tr.is_billed = 'R' then 'R'::char end             as reported_status,
                case
-                   when tr.is_billed = 'R' then
-                       (select bar.db_create_time
+                   when true
+                       and tr.is_billed = 'R'
+                       then (select bar.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
