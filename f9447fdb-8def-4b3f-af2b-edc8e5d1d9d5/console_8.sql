@@ -2592,3 +2592,24 @@ select bar.db_create_time
 
 
 select * from dash360.so_allocations_instruction_delete(in_alloc_instr_id := -55600, in_user_id := 6789);
+
+
+select * from dash_reporting.bofa_allocation_report bar
+    join genesis2.alloc_instr2trade_record aitr on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+
+
+
+     ;
+- exec_broker --# list of all exec_broker from trades releated to AI. e.g. 333, 733, 792
+	- type # show `allocation` if we generat line from allocation, `trade` if from trade record
+	- account_name # taken from account_id
+	- alloc_instr_id # only for ai
+	- trade_record_id # only for trade records
+	- sybmol # display_instrument_v2
+	- side #
+	- open_close
+	- exec_qty
+	- avg_px
+	- reported_status #const Reported
+	- reported_time
+	- is_busted # if we reported AI, but after deleted it
