@@ -861,14 +861,15 @@ begin
 --                coalesce(bar.to_report, btr.to_report)                      as reported_status,
                case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
                case
-                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select htind.db_create_time
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
                                  join genesis2.trade_record tri
                                       on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
                         where true
-                          and tri.exch_exec_id = tr.exch_exec_id
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
                           and tri.is_billed = 'R'
                         order by 1
                         limit 1)) end                                                       as reported_time,
@@ -1019,7 +1020,8 @@ begin
                                  join genesis2.trade_record tri
                                       on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
                         where true
-                          and tri.exch_exec_id = tr.exch_exec_id
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
                           and tri.is_billed = 'R'
                         order by 1
                         limit 1), rep.db_create_time)                      as reported_time,
@@ -1333,7 +1335,8 @@ begin
                                  join genesis2.trade_record tri
                                       on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
                         where true
-                          and tri.exch_exec_id = tr.exch_exec_id
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
                           and tri.is_billed = 'R'
                         order by 1
                         limit 1) end                                       as reported_time

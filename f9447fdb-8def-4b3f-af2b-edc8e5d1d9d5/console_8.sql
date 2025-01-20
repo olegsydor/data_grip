@@ -2697,20 +2697,95 @@ $function$
 ;
 
 
-     ;
-- exec_broker --# list of all exec_broker from trades releated to AI. e.g. 333, 733, 792
-	- type # show `allocation` if we generat line from allocation, `trade` if from trade record
-	- account_name # taken from account_id
-	- alloc_instr_id # only for ai
-	- trade_record_id # only for trade records
-	- sybmol # display_instrument_v2
-	- side #
-	- open_close
-	- exec_qty
-	- avg_px
-	- reported_status #const Reported
-	- reported_time
-	- is_busted # if we reported AI, but after deleted it
+
+        select tr.date_id,
+               tr.trade_record_id::bigint,
+               tr.account_id::integer,
+               tr.instrument_id::int8,
+               tr.side,
+               tr.open_close,
+               tr.last_px                                                                   as avg_px,
+               tr.last_qty                                                                  as exec_qty,
+               i.display_instrument_id,
+               i.last_trade_date::date,
+               i.instrument_type_id,
+               tr.cmta,
+               tr.exec_broker,
+               case i.instrument_type_id
+                   when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
+                   else tr.last_qty * tr.last_px
+                   end                                                                      as principal_amount,
+               CCRU.rate                                                                    as client_commission_rate,
+               tr.blaze_account_alias,
+               coalesce(tr.street_trade_record_time, tr.trade_record_time)                  as street_exec_time,
+               ----------------
+               i.last_trade_date                                                            as expiration_date,
+               tr.opt_customer_firm,
+--                coalesce(bar.to_report, btr.to_report)                      as reported_status,
+               case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
+               case
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1)) end                                                       as reported_time,
+               null::int4                                                                   as claimed_by,
+               null::character                                                              as claim_status,
+               case when tr.is_billed = 'R' then true else false end                        as is_prev_reported
+        from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
+                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select to_report, bar.db_create_time
+                                    from dash_reporting.bofa_allocation_report bar
+                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bar.date_id = ai2tr.date_id
+                                    limit 1) bar on true
+--                  left join lateral (select bas.claimed_by, bas.claim_status
+--                                     from dash_reporting.bofa_allocation_instruction_status bas
+--                                     where bas.alloc_instr_id = ai2tr.alloc_instr_id
+--                                       and bas.date_id = ai2tr.date_id
+--                                     limit 1) bas on true
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select L1.rate
+                                    from (SELECT row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 tl.rate
+                                          FROM trade_level_book_record tl
+                                                   inner join book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          WHERE tl.date_id = :l_date_id
+                                            AND book_record_type_id = 'CCRU'
+                                            and tl.trade_record_id = tr.trade_record_id) L1
+                                    where rn = 1) CCRU on true
+        where tr.is_busted = 'N'
+          and tr.date_id = :l_date_id
+          and a.alloc_instr_id = :in_alloc_instr_id;
+
+select is_billed, exch_exec_id, exec_id, * from genesis2.trade_record
+where trade_record_id between 2346667162 and 2346667171
 
 
-
+select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+                          and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
