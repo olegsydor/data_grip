@@ -861,7 +861,7 @@ begin
 --                coalesce(bar.to_report, btr.to_report)                      as reported_status,
                case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
                case
-                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select htind.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
@@ -872,8 +872,8 @@ begin
                           and tri.is_billed = 'R'
                         order by 1
                         limit 1)) end                                                       as reported_time,
-               bas.claimed_by                                                               as claimed_by,
-               bas.claim_status                                                             as claim_status,
+               null::int4                                                                   as claimed_by,
+               null::character                                                              as claim_status,
                case when tr.is_billed = 'R' then true else false end                        as is_prev_reported
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -889,11 +889,11 @@ begin
                                     where bar.alloc_instr_id = ai2tr.alloc_instr_id
                                       and bar.date_id = ai2tr.date_id
                                     limit 1) bar on true
-                 left join lateral (select bas.claimed_by, bas.claim_status
-                                    from dash_reporting.bofa_allocation_instruction_status bas
-                                    where bas.alloc_instr_id = ai2tr.alloc_instr_id
-                                      and bas.date_id = ai2tr.date_id
-                                    limit 1) bas on true
+--                  left join lateral (select bas.claimed_by, bas.claim_status
+--                                     from dash_reporting.bofa_allocation_instruction_status bas
+--                                     where bas.alloc_instr_id = ai2tr.alloc_instr_id
+--                                       and bas.date_id = ai2tr.date_id
+--                                     limit 1) bas on true
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select L1.rate
