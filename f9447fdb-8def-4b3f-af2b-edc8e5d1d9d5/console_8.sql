@@ -2711,3 +2711,6 @@ $function$
 	- reported_status #const Reported
 	- reported_time
 	- is_busted # if we reported AI, but after deleted it
+
+
+
