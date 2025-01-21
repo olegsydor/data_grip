@@ -1013,6 +1013,7 @@ begin
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
                coalesce(nullif(tr.is_billed, 'N'), rep.to_report)          as reported_status,
+               case when coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R' then
                coalesce((select bar.db_create_time
                         from dash_reporting.bofa_allocation_report bar
                                  join genesis2.alloc_instr2trade_record aitr
@@ -1024,7 +1025,7 @@ begin
                           and tri.exec_id = tr.exec_id
                           and tri.is_billed = 'R'
                         order by 1
-                        limit 1), rep.db_create_time)                      as reported_time,
+                        limit 1), rep.db_create_time) end                  as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
                case when tr.is_billed = 'R' then true end                  as is_prev_reported
@@ -1368,3 +1369,102 @@ end;
 
 $function$
 ;
+
+
+create or replace function trash.report_alloc_instr_trade_record(in_date_id integer default public.get_dateid(current_date))
+    returns table
+            (
+                exec_broker     varchar(32),
+                report_type     text,
+                account_name    varchar(30),
+                alloc_instr_id  int4,
+                trade_record_id int8,
+                symbol          varchar,
+                side            bpchar(1),
+                open_close      bpchar(1),
+                exec_qty        int4,
+                avg_px          numeric,
+                reported_status text,
+                reported_time timestamp,
+                is_busted       bpchar,
+                is_deleted      bpchar,
+                
+            )
+    language plpgsql
+as
+$function$
+    -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
+declare
+    l_load_id int;
+    l_step_id int;
+    l_row_cnt int;
+
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_alloc_instr_trade_record for ' || in_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+    return query
+        select tr.exec_broker,
+               'allocation'    as report_type,
+               ac.account_name,
+               bar.alloc_instr_id,
+               null::int8      as trade_record_id,
+               bar.root_symbol as symbol,
+               bar.side,
+               bar.open_close,
+               ai.total_qty    as exec_qty,
+               bar.avg_px,
+               'reported'      as reported_status,
+
+               ''              as is_busted
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join genesis2.alloc_instr2trade_record aitr
+                      on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                 join lateral (select *
+                               from genesis2.trade_record tr
+                               where tr.trade_record_id = aitr.trade_record_id
+                                 and tr.date_id = aitr.date_id
+                               limit 1) tr on true
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+        where bar.date_id = in_date_id
+          and bar.to_report = 'R'
+        union all
+        select tr.exec_broker,
+               'trade'      as report_type,
+               ac.account_name,
+               null         as alloc_instr_id,
+               btr.trade_record_id,
+               di.symbol    as symbol,
+               tr.side,
+               tr.open_close,
+               tr.last_qty  as exec_qty,
+               tr.last_px   as avg_px,
+               'reported'   as reported_status,
+               tr.is_busted as is_busted
+        from dash_reporting.bofa_trade_record btr
+                 join genesis2.trade_record tr using (trade_record_id, date_id)
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = tr.instrument_id
+        where btr.date_id = in_date_id
+          and btr.to_report = 'R';
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_alloc_instr_trade_record for ' || in_date_id::text ||
+                           ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
+end;
+$function$
+;
+
+-- exec_broker
+-- reported_time
+-- is deleted for allocation
+-- delete time
+-- deleted by user id for allocation
+

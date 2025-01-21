@@ -2653,7 +2653,7 @@ begin
                ai.total_qty    as exec_qty,
                bar.avg_px,
                'reported'      as reported_status,
-               '?'             as is_busted
+               ''              as is_busted
         from dash_reporting.bofa_allocation_report bar
                  join genesis2.allocation_instruction ai
                       on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
@@ -2696,6 +2696,11 @@ end;
 $function$
 ;
 
+-- exec_broker
+-- reported_time
+-- is deleted for allocation
+-- delete time
+-- deleted by user id for allocation
 
 
         select tr.date_id,
