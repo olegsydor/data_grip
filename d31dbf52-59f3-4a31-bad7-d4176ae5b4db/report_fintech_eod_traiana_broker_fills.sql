@@ -111,7 +111,7 @@ begin
 --           and ex.exec_type not in ('3', 'a', '5', 'E')
           and ex.exec_type in ('0', '4', 'W', '5')
           and cl.trans_type <> 'F'
-          and case when in_exec_broker is null then true else ex.exec_broker = in_exec_broker end
+--           and case when in_exec_broker is null then true else ex.exec_broker = in_exec_broker end
         order by cl.order_id, ex.exec_id;
     get diagnostics l_row_cnt = row_count;
 
@@ -124,14 +124,16 @@ $function$
 ;
 select *
 from dash360.report_fintech_eod_traiana_broker_fills(in_start_date_id := 20241101, in_end_date_id := 20241102,
-                                                     in_account_ids := '{70621}', in_exec_broker := 'DASH');
+                                                     in_account_ids := '{7670}', in_exec_broker := '333');
 select * from dash360.report_fintech_eod_traiana_broker_fills(20241101, 20241102,'{70621}'), 'DASH')
 select exec_broker from execution;
 
 select exec_id from dwh.flat_trade_record;
 
+select * from dwh.d_exec_type
 
 select array_to_string(array [ex.exec_broker,
+    cl.account_id::text,
                                    to_char(ex.exec_time, 'YYYYMMDD'), -- as "Trade date",
                                    cl.order_id::text, -- as "Trade Ref",
                                    cl.client_order_id, -- as "Order ID",
@@ -170,7 +172,7 @@ select array_to_string(array [ex.exec_broker,
                                            then ftr.tcce_account_dash_commission_amount::text end -- as "Commission
                                    ], ',', '')
         from dwh.client_order cl
-                 inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
+--                  inner join dwh.d_fix_connection fc on (fc.fix_connection_id = cl.fix_connection_id)
                  join dwh.d_instrument di on di.instrument_id = cl.instrument_id
                  inner join dwh.execution ex on cl.order_id = ex.order_id and ex.exec_date_id >= cl.create_date_id
                  left join dwh.d_exchange exc on exc.exchange_id = cl.exchange_id and exc.is_active
@@ -194,4 +196,8 @@ select array_to_string(array [ex.exec_broker,
 --           and ex.exec_type not in ('3', 'a', '5', 'E')
           and ex.exec_type in ('0', '4', 'W', '5')
           and cl.trans_type <> 'F'
-and ex.exec_broker is not null
+and ex.exec_broker = 'DASH'
+limit 5
+
+select array_agg(distinct opt_exec_broker ) from dwh.d_opt_exec_broker
+where opt_exec_broker > '600'
