@@ -2794,3 +2794,37 @@ select bar.db_create_time
                           and tri.exch_exec_id = tr.exch_exec_id
                           and tri.is_billed = 'R'
                         order by 1
+
+
+;
+ select tr.exec_broker,
+               'allocation'       as report_type,
+               ac.account_name,
+               bar.alloc_instr_id,
+               null::int8         as trade_record_id,
+               bar.root_symbol    as symbol,
+               bar.side,
+               bar.open_close,
+               ai.total_qty       as exec_qty,
+               bar.avg_px,
+               'reported'         as reported_status,
+               bar.db_create_time as reported_time,
+               ''                 as is_busted,
+               ai.is_deleted,
+               ai.delete_time,
+               ui.user_name
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join genesis2.alloc_instr2trade_record aitr
+                      on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                 join lateral (select *
+                               from genesis2.trade_record tr
+                               where tr.trade_record_id = aitr.trade_record_id
+                                 and tr.date_id = aitr.date_id
+--                                  and tr.exec_broker = in_exec_broker
+                               limit 1) tr on true
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+        where bar.date_id = :in_date_id
+          and bar.to_report = 'R'

@@ -1370,30 +1370,37 @@ end;
 $function$
 ;
 
-
-create or replace function trash.report_alloc_instr_trade_record(in_date_id integer default public.get_dateid(current_date))
+drop function if exists trash.report_alloc_instr_trade_record;
+create or replace function trash.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
     returns table
+        -- select
+        -- exec_broker as "Exec Broker", type as "Type", account_name as "Account Name", alloc_instr_id # only as "Alloc Instr ID", trade_record_id as "Trade Record ID",
+        -- sybmol as "Symbol", side  as "Side", open_close as "O/C", exec_qty as "Exec Qty", avg_px as "Avg Px", reported_status as "Reported Status",
+        -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
+        --
             (
-                exec_broker     varchar(32),
-                report_type     text,
-                account_name    varchar(30),
-                alloc_instr_id  int4,
-                trade_record_id int8,
-                symbol          varchar,
-                side            bpchar(1),
-                open_close      bpchar(1),
-                exec_qty        int4,
-                avg_px          numeric,
-                reported_status text,
-                reported_time timestamp,
-                is_busted       bpchar,
-                is_deleted      bpchar,
-                
+                "Exec Broker"      varchar(32),
+                "Type"             text,
+                "Account Name"     varchar(30),
+                "Alloc Instr ID"   int4,
+                "Trade Record ID"  int8,
+                "Symbol"           varchar,
+                "Side"             bpchar(1),
+                "O/C"              bpchar(1),
+                "Exec Qty"         int4,
+                "Avg Px"           numeric,
+                "Reported Status"  text,
+                "Reported Time"    timestamp,
+                "Trade is busted"  bpchar,
+                "Alloc is deleted" bpchar,
+                "Deleted time"     timestamp,
+                "Deleted by User"  varchar(30)
             )
     language plpgsql
 as
 $function$
     -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
+    -- 2025-01-21 OS https://dashfinancial.atlassian.net/browse/DS-9441 add new columns reported_time, is_deleted, delete_time, user_name
 declare
     l_load_id int;
     l_step_id int;
@@ -1408,18 +1415,21 @@ begin
 
     return query
         select tr.exec_broker,
-               'allocation'    as report_type,
+               'allocation',
                ac.account_name,
                bar.alloc_instr_id,
-               null::int8      as trade_record_id,
-               bar.root_symbol as symbol,
+               null::int8,
+               bar.root_symbol,
                bar.side,
                bar.open_close,
-               ai.total_qty    as exec_qty,
+               ai.total_qty,
                bar.avg_px,
-               'reported'      as reported_status,
-
-               ''              as is_busted
+               'reported',
+               bar.db_create_time,
+               '',
+               ai.is_deleted,
+               ai.delete_time,
+               ui.user_name
         from dash_reporting.bofa_allocation_report bar
                  join genesis2.allocation_instruction ai
                       on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
@@ -1429,29 +1439,48 @@ begin
                                from genesis2.trade_record tr
                                where tr.trade_record_id = aitr.trade_record_id
                                  and tr.date_id = aitr.date_id
+                                 and tr.exec_broker = in_exec_broker
                                limit 1) tr on true
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
         where bar.date_id = in_date_id
           and bar.to_report = 'R'
         union all
         select tr.exec_broker,
-               'trade'      as report_type,
+               'trade',
                ac.account_name,
-               null         as alloc_instr_id,
+               null,
                btr.trade_record_id,
-               di.symbol    as symbol,
+               di.symbol,
                tr.side,
                tr.open_close,
-               tr.last_qty  as exec_qty,
-               tr.last_px   as avg_px,
-               'reported'   as reported_status,
-               tr.is_busted as is_busted
+               tr.last_qty,
+               tr.last_px,
+               'reported',
+               coalesce((select bar.db_create_time
+                         from dash_reporting.bofa_allocation_report bar
+                                  join genesis2.alloc_instr2trade_record aitr
+                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                  join genesis2.trade_record tri
+                                       on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                         where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                           and tri.exec_id = tr.exec_id
+                           and tri.is_billed = 'R'
+                         order by 1
+                         limit 1), tr.db_create_time),
+               tr.is_busted,
+               null,
+               null,
+               null
+
         from dash_reporting.bofa_trade_record btr
                  join genesis2.trade_record tr using (trade_record_id, date_id)
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = tr.instrument_id
         where btr.date_id = in_date_id
-          and btr.to_report = 'R';
+          and btr.to_report = 'R'
+          and tr.exec_broker = in_exec_broker;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
@@ -1461,10 +1490,7 @@ begin
 end;
 $function$
 ;
+select *
+from trash.report_alloc_instr_trade_record(in_date_id := 20250117, in_exec_broker := '792')
 
--- exec_broker
--- reported_time
--- is deleted for allocation
--- delete time
--- deleted by user id for allocation
 
