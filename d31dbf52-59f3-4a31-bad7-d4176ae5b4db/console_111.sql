@@ -81,7 +81,7 @@ left join lateral (
 where
 'AAC4751-20240802:VERITION';
 
-
+select 1/0
 select *--ex.*
 from trash.ob_collect_root_order_tree_but_street_topo_sorted(317968166) co
          JOIN LATERAL ( SELECT e.exec_id, e.exec_date_id, e.exec_time, e.fix_message_id
