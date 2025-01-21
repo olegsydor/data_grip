@@ -1,4 +1,4 @@
--- DROP FUNCTION dash360.report_fintech_eod_traiana_broker_fills(int4, int4, _int4, _varchar);
+-- DROP FUNCTION dash360.report_fintech_eod_traiana_broker_fills
 
 create function dash360.report_fintech_eod_traiana_broker_fills(in_start_date_id integer default public.get_dateid(current_date),
                                                                 in_end_date_id integer default public.get_dateid(current_date),
@@ -59,7 +59,7 @@ begin
                                        when 'W' then 'Amend' -- Replace
                                        end, -- as "Action",
 
-                                   'DASH', -- as "Executing Broker",
+                                   in_exec_broker, -- as "Executing Broker",
                                    upper(cl.trading_firm_id), -- as "Client",
                                    case cl.side
                                        when '1' then 'Buy'
@@ -124,7 +124,12 @@ $function$
 ;
 select *
 from dash360.report_fintech_eod_traiana_broker_fills(in_start_date_id := 20241101, in_end_date_id := 20241102,
-                                                     in_account_ids := '{7670}', in_exec_broker := '333');
+                                                     in_account_ids := '{7670}', in_exec_broker := 'DASH');
+
+select *
+from dash360.report_fintech_eod_traiana_broker_fills(in_start_date_id := 20241101, in_end_date_id := 20241102,
+                                                     in_account_ids := '{7670}', in_exec_broker := 'OTHER');
+
 select * from dash360.report_fintech_eod_traiana_broker_fills(20241101, 20241102,'{70621}'), 'DASH')
 select exec_broker from execution;
 

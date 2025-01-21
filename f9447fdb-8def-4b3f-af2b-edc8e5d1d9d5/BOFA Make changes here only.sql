@@ -667,7 +667,7 @@ begin
                                  from dash_reporting.bofa_allocation_report bar
                                  where bar.alloc_instr_id = atr.alloc_instr_id
                                    and bar.date_id = atr.date_id
-                                   and bar.to_report <> 'report'
+                                   and bar.to_report <> 'R'
                                  limit 1) un on true
              left join dash_reporting.bofa_allocation_instruction_status bas
                        on bas.date_id = atr.date_id and bas.alloc_instr_id = atr.alloc_instr_id
