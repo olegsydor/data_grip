@@ -688,34 +688,38 @@ begin
                trm.trading_firm_id,
                'O'::char, -- hardcoded
                --
-               count(trm.trade_record_id)                                                       as trades_cnt,
-               sum(trm.last_qty)                                                                as trades_qty,
-               sum(trm.last_qty * trm.last_px)                                                  as trades_principal,
-               sum(case when trm.expiring_today then 1 else 0 end)                              as trades_cnt_expiring,
-               sum(case when trm.expiring_today then trm.last_qty else 0 end)                   as trades_qty_expiring,
+               count(trm.trade_record_id)                                                              as trades_cnt,
+               sum(trm.last_qty)                                                                       as trades_qty,
+               sum(trm.last_qty * trm.last_px)                                                         as trades_principal,
+               sum(case when trm.expiring_today then 1 else 0 end)                                     as trades_cnt_expiring,
+               sum(case when trm.expiring_today then trm.last_qty else 0 end)                          as trades_qty_expiring,
                -- unallocated
-               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                    as unallocated_trades_cnt,
-               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)             as unallocated_trades_qty,
+               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                           as unallocated_trades_cnt,
+               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)                    as unallocated_trades_qty,
                sum(case
                        when trm.is_alloc = 'unallocated' then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                              as unallocated_trades_principal,
-               sum(case when trm.is_alloc = 'unallocated' and expiring_today then 1 else 0 end) as unallocated_trades_qty_expiring,
+                       else 0 end)                                                                     as unallocated_trades_principal,
+               sum(case
+                       when trm.is_alloc = 'unallocated' and expiring_today then last_qty
+                       else 0 end)                                                                     as unallocated_trades_qty_expiring,
                -- allocated
-               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                      as allocated_trades_cnt,
-               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)               as allocated_trades_qty,
+               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                             as allocated_trades_cnt,
+               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)                      as allocated_trades_qty,
                sum(case
                        when trm.is_alloc = 'allocated' then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                              as allocated_trades_principal,
-               sum(case when trm.is_alloc = 'allocated' and expiring_today then 1 else 0 end)   as allocated_trades_qty_expiring,
+                       else 0 end)                                                                     as allocated_trades_principal,
+               sum(case
+                       when trm.is_alloc = 'allocated' and expiring_today then last_qty
+                       else 0 end)                                                                     as allocated_trades_qty_expiring,
                -- unable
-               sum(case when trm.is_unable then 1 else 0 end)                                   as unable_trades_cnt,
-               sum(case when trm.is_unable then last_qty else 0 end)                            as unable_trades_qty,
+               sum(case when trm.is_unable then 1 else 0 end)                                          as unable_trades_cnt,
+               sum(case when trm.is_unable then last_qty else 0 end)                                   as unable_trades_qty,
                sum(case
                        when trm.is_unable then last_qty * last_px * os.contract_multiplier
-                       else 0 end)                                                              as unable_trades_principal,
+                       else 0 end)                                                                     as unable_trades_principal,
 
-               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                   as unresolved,
-               sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                    as resolved
+               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                          as unresolved,
+               sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                           as resolved
 
 -- select *
         from tmp_trade_record_monitor trm
@@ -904,13 +908,13 @@ begin
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select L1.rate
                                     from (SELECT row_number()
-                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 over (partition by tl.trade_record_id , tl.book_record_type_id , tl.billing_entity order by cr.priority ) as rn,
                                                  tl.rate
-                                          FROM trade_level_book_record tl
-                                                   inner join book_record_creator cr
+                                          FROM genesis2.trade_level_book_record tl
+                                                   inner join genesis2.book_record_creator cr
                                                               on tl.book_record_creator_id = cr.book_record_creator_id
                                           WHERE tl.date_id = l_date_id
-                                            AND book_record_type_id = 'CCRU'
+                                            AND tl.book_record_type_id = 'CCRU'
                                             and tl.trade_record_id = tr.trade_record_id) L1
                                     where rn = 1) CCRU on true
         where tr.is_busted = 'N'

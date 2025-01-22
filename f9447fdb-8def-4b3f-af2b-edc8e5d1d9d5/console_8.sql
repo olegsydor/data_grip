@@ -2863,3 +2863,123 @@ select bar.db_create_time
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
         where bar.date_id = :in_date_id
           and bar.to_report = 'R'
+
+
+
+create temp table tmp_trade_record_monitor as
+select ac.account_id,
+           ac.trading_firm_id,
+           tr.trade_record_id,
+           tr.last_qty,
+           tr.last_px,
+           tr.instrument_id,
+           case
+               when to_char(di.last_trade_date, 'YYYYMMDD')::int4 = :in_date_id then true
+               else false end         as expiring_today,
+           case
+               when al.alloc_instr_id is not null then 'allocated'
+               else 'unallocated' end as is_alloc,
+           case
+               when un.alloc_instr_id is not null then true
+               end                    as is_unable,
+           bas.claim_status
+    from genesis2.trade_record tr
+             join genesis2.instrument di on di.instrument_id = tr.instrument_id
+             join genesis2.account ac on tr.account_id = ac.account_id
+        and ac.is_deleted <> 'Y' and ac.opt_report_to_mpid = 'MLCB' and ac.trading_firm_id <> 'cantor'
+             left join genesis2.alloc_instr2trade_record atr
+                       on atr.trade_record_id = tr.trade_record_id and atr.date_id = :in_date_id
+             left join lateral (select atr.alloc_instr_id
+                                from genesis2.allocation_instruction ai
+                                where ai.alloc_instr_id = atr.alloc_instr_id
+                                  and ai.is_deleted = 'N'
+                                limit 1) al on true
+             left join lateral ( select bar.alloc_instr_id
+                                 from dash_reporting.bofa_allocation_report bar
+                                 where bar.alloc_instr_id = atr.alloc_instr_id
+                                   and bar.date_id = atr.date_id
+                                   and bar.to_report <> 'R'
+                                 limit 1) un on true
+             left join dash_reporting.bofa_allocation_instruction_status bas
+                       on bas.date_id = atr.date_id and bas.alloc_instr_id = atr.alloc_instr_id
+    where true
+      and tr.is_busted <> 'Y'
+      and tr.date_id = :in_date_id
+      and di.instrument_type_id = 'O'
+      and case when :in_account_ids = '{}' then true else ac.account_id = any (:in_account_ids) end;
+
+
+
+        select trm.account_id,
+               trm.trading_firm_id,
+               'O'::char, -- hardcoded
+               --
+               count(trm.trade_record_id)                                                       as trades_cnt,
+               sum(trm.last_qty)                                                                as trades_qty,
+               sum(trm.last_qty * trm.last_px)                                                  as trades_principal,
+               sum(case when trm.expiring_today then 1 else 0 end)                              as trades_cnt_expiring,
+               sum(case when trm.expiring_today then trm.last_qty else 0 end)                   as trades_qty_expiring,
+               -- unallocated
+               sum(case when trm.is_alloc = 'unallocated' then 1 else 0 end)                    as unallocated_trades_cnt,
+               sum(case when trm.is_alloc = 'unallocated' then last_qty else 0 end)             as unallocated_trades_qty,
+               sum(case
+                       when trm.is_alloc = 'unallocated' then last_qty * last_px * os.contract_multiplier
+                       else 0 end)                                                              as unallocated_trades_principal,
+               sum(case when trm.is_alloc = 'unallocated' and expiring_today then last_qty else 0 end) as unallocated_trades_qty_expiring,
+               -- allocated
+               sum(case when trm.is_alloc = 'allocated' then 1 else 0 end)                      as allocated_trades_cnt,
+               sum(case when trm.is_alloc = 'allocated' then last_qty else 0 end)               as allocated_trades_qty,
+               sum(case
+                       when trm.is_alloc = 'allocated' then last_qty * last_px * os.contract_multiplier
+                       else 0 end)                                                              as allocated_trades_principal,
+               sum(case when trm.is_alloc = 'allocated' and expiring_today then 1 else 0 end)   as allocated_trades_qty_expiring,
+               -- unable
+               sum(case when trm.is_unable then 1 else 0 end)                                   as unable_trades_cnt,
+               sum(case when trm.is_unable then last_qty else 0 end)                            as unable_trades_qty,
+               sum(case
+                       when trm.is_unable then last_qty * last_px * os.contract_multiplier
+                       else 0 end)                                                              as unable_trades_principal,
+
+               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                   as unresolved,
+               sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                    as resolved
+
+-- select *
+        from tmp_trade_record_monitor trm
+                 left join genesis2.option_contract oc on oc.instrument_id = trm.instrument_id
+                 left join genesis2.option_series os on os.option_series_id = oc.option_series_id
+        group by trm.account_id, trm.trading_firm_id;
+
+
+select is_billed, orig_trade_record_id, * from genesis2.trade_record
+where trade_record_id in (2346670640, 2346670630, 2346670620, 2346670517, 2346670425, 2346670367);
+
+select * from genesis2.alloc_instr2trade_record atr
+where trade_record_id in (2346670640, 2346670630, 2346670620, 2346670517, 2346670425, 2346670367);
+
+
+select * from dash_reporting.bofa_allocation_report
+where alloc_instr_id in (-55875, -55876) -- 13589067
+select * from genesis2.etl_subscriptions
+where load_batch_id = 13589067
+
+
+select distinct trade_record_id
+								from dash_reporting.bofa_allocation_report alr
+								   join genesis2.alloc_instr2trade_record aitr on aitr.date_id = alr.date_id and aitr.alloc_instr_id = alr.alloc_instr_id
+								where alr.to_report = 'R'
+								  and alr.date_id = 20250122
+								  and alr.dataset = 13589067;
+
+select is_billed, * from genesis2.trade_record
+    where trade_record_id in (
+2346670619,
+2346670620,
+2346670621,
+2346670622,
+2346670623,
+2346670624,
+2346670625,
+2346670626,
+2346670627,
+2346670628,
+2346670629)
