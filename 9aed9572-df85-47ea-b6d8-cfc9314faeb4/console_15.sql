@@ -168,4 +168,12 @@ where x._db_create_time >= to_date('"+context.p_date_id+"', 'YYYYMMDD')
 order by exec_id
 limit 20000
 
-
+select *
+FROM blaze7.tprices_edw as x
+where x._db_create_time >= to_date('"+context.p_date_id+"', 'YYYYMMDD')
+  and x._db_create_time < to_date('"+context.p_date_id+"', 'YYYYMMDD') + interval '1 day'
+  and (reportid > '"+context.max_exec_id+"'
+    or
+       x._db_create_time::timestamp > '"+context.max_processed_time_price+"'::timestamp at time zone 'US/Central')
+order by exec_id
+limit 20000
