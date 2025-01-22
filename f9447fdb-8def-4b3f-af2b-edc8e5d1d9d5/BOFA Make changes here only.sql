@@ -1424,7 +1424,7 @@ begin
                                                case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                                                ai.total_qty,
                                                bar.avg_px,
-                                               'REPORTED',
+                                               'Reported',
                                                bar.db_create_time,
                                                '',
                                                ai.is_deleted,
@@ -1457,7 +1457,7 @@ begin
                case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                tr.last_qty,
                tr.last_px,
-               'REPORTED',
+               'Reported',
                coalesce((select bar.db_create_time
                          from dash_reporting.bofa_allocation_report bar
                                   join genesis2.alloc_instr2trade_record aitr
