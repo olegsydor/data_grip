@@ -8,6 +8,10 @@ function dash360.bofa_allocation_report(int4, int4, text, bool);
 function dash360.allocation_trade_record_monitor(int4, int8[]);
 function dash360.get_status_to_bofa_allocation_instruction(int4);
 function dash360.set_status_to_bofa_allocation_instruction(int4, int4, bpchar);
+function dash360.so_allocations_instruction_trades(int4)
+function dash360.so_allocations_snapshot(int8[], int4, bpchar)
+function dash360.so_allocations_instruction_delete(int4, int4)
+function trash.report_alloc_instr_trade_record(int4, text)
 */
 -----------------
 -- TABLES
@@ -174,9 +178,10 @@ $function$
 ;
 comment on function staging.all_orig_trade_record_id_today is 'Auxilary function for calculating all orig_trade_record_id';
 
+
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool);
 create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
-                                                          in_exec_broker text default '792'::text,
+                                                          in_exec_broker text,-- default '792'::text,
                                                           in_is_eod boolean default false)
     returns table
             (
@@ -185,10 +190,11 @@ create or replace function dash360.bofa_allocation_report(in_start_date_id int4,
     language plpgsql
 as
 $function$
--- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
+    -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
 -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 -- and dash_reporting.bofa_trade_record for EOD
+    -- 20250116 SO https://dashfinancial.atlassian.net/browse/DS-9313 add subscriptions
 
 declare
     l_load_id                 int;
@@ -201,8 +207,8 @@ declare
     l_start_row               int4;
 
 begin
-    l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || 'for ' ||
-                  case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ':';
+    l_msg_text := 'allocation_report for ' || in_start_date_id::text || '-' || in_end_date_id::text || ' for ' ||
+                  case when in_exec_broker is null then ' all exec brokers' else in_exec_broker end || ':';
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -300,7 +306,14 @@ begin
 
     select array_length(l_alloc_instr_id, 1) into l_row_cnt;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', l_row_cnt, 'O')
+    -- Subscription (for ONLY THESE trade_record_id with  R in alloc_instr_id)
+    perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
+                                in_row_cnt=>coalesce(l_row_cnt, 0),
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_allocation_report',
+                                in_date_id => in_start_date_id);
+
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
 
     --  PART 2. Printing the report for intraday
@@ -395,8 +408,12 @@ begin
         from genesis2.alloc_instr2trade_record aitr
                  join genesis2.allocation_instruction ai
                       on ai.alloc_instr_id = aitr.alloc_instr_id and ai.date_id = aitr.date_id
+                 join genesis2.trade_record tr
+                      on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
         where aitr.date_id between in_start_date_id and in_end_date_id
-          and ai.is_deleted = 'N';
+          and ai.is_deleted = 'N'
+          and tr.exec_broker = in_exec_broker;
+        create index on t_trade_record_to_exclude (trade_record_id);
 
         -- find all valid trade_records: all except the records from the prev
 
@@ -423,32 +440,61 @@ begin
                acc.opt_penny_commission,
                acc.opt_is_fix_custfirm_processed,
                case
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_reported trr
+                                                                     where trr.trade_record_id = ftr.trade_record_id)
+                       then 'U'
+                   when ftr.orig_trade_record_id is null then 'R'
                    when exists (select null
                                 from t_trade_record_reported rp
                                 where rp.trade_record_id = any
                                       (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
                        then 'U'
-                   else 'R' end      as to_report
+                   else 'R' end      as to_report,
+               case
+
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_to_exclude tre
+                                                                     where tre.trade_record_id = ftr.trade_record_id)
+                       then 'D'
+                   when ftr.orig_trade_record_id is null then null
+                   when exists (select null
+                                from t_trade_record_to_exclude rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+                       then 'D' end  as to_del
         FROM genesis2.trade_record ftr
                  join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
-                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id AND
-                                               acc.is_deleted <> 'Y' AND
-                                               acc.opt_report_to_mpid = 'MLCB' AND
-                                               acc.trading_firm_id <> 'cantor')
-
+                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id)
+                 left join t_trade_record_to_exclude tex
+                           on tex.trade_record_id = ftr.trade_record_id and tex.date_id = ftr.date_id
         WHERE ftr.date_id between in_start_date_id and in_end_date_id
           AND is_busted = 'N'
           AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
-          and not exists (select null
-                          from t_trade_record_to_exclude rp
-                          where rp.trade_record_id = any
-                                (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)));
+          and tex.trade_record_id is null
+          and acc.is_deleted <> 'Y'
+          AND acc.opt_report_to_mpid = 'MLCB'
+          AND acc.trading_firm_id <> 'cantor'
+        --           and not exists (select null
+--                           from t_trade_record_to_exclude rp
+--                           where rp.trade_record_id = any
+--                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+        ;
 
         insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset, to_report)
         select date_id, trade_record_id, dataset, to_report
-        from t_trade_record_to_report;
+        from t_trade_record_to_report
+        where to_del is null;
+        get diagnostics l_row_cnt = row_count;
+
+        -- Subscription
+        perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
+                                in_row_cnt=>coalesce(l_row_cnt, 0),
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_trade_record',
+                                in_date_id => in_start_date_id);
 
         drop table if exists t_ftr;
         create temp table t_ftr as
@@ -473,6 +519,7 @@ begin
         FROM t_trade_record_to_report rtr
         where date_id between in_start_date_id and in_end_date_id
           and to_report = 'R'
+          and to_del is null
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
                  rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
                  rtr.opt_nickel_commission, rtr.opt_penny_commission,
@@ -556,6 +603,7 @@ comment on function dash360.bofa_allocation_report is 'The main function based o
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
 
+
 drop function if exists dash360.allocation_trade_record_monitor(int4, int8[]);
 create or replace function dash360.allocation_trade_record_monitor(in_date_id int4, in_account_ids int8[] default '{}'::int8[])
     returns table
@@ -611,6 +659,7 @@ begin
     from genesis2.trade_record tr
              join genesis2.instrument di on di.instrument_id = tr.instrument_id
              join genesis2.account ac on tr.account_id = ac.account_id
+        and ac.is_deleted <> 'Y' and ac.opt_report_to_mpid = 'MLCB' and ac.trading_firm_id <> 'cantor'
              left join genesis2.alloc_instr2trade_record atr
                        on atr.trade_record_id = tr.trade_record_id and atr.date_id = in_date_id
              left join lateral (select atr.alloc_instr_id
@@ -622,7 +671,7 @@ begin
                                  from dash_reporting.bofa_allocation_report bar
                                  where bar.alloc_instr_id = atr.alloc_instr_id
                                    and bar.date_id = atr.date_id
-                                   and bar.to_report <> 'report'
+                                   and bar.to_report <> 'R'
                                  limit 1) un on true
              left join dash_reporting.bofa_allocation_instruction_status bas
                        on bas.date_id = atr.date_id and bas.alloc_instr_id = atr.alloc_instr_id
@@ -676,6 +725,7 @@ end;
 $function$
 ;
 comment on function dash360.allocation_trade_record_monitor is 'The monitor. It is expected to be run every 1 minute';
+
 
 drop function if exists dash360.get_status_to_bofa_allocation_instruction(int4);
 create or replace function dash360.get_status_to_bofa_allocation_instruction(in_alloc_instr_id int4)
@@ -741,6 +791,136 @@ $function$
 ;
 comment on function dash360.set_status_to_bofa_allocation_instruction(int4, int4, bpchar) is 'The function sets claim status for an Un-reportable Allocation Instruction';
 
+
+drop function if exists dash360.so_allocations_instruction_trades(int4);
+create or replace function dash360.so_allocations_instruction_trades(in_alloc_instr_id integer)
+    returns table
+            (
+                date_id                integer,
+                trade_record_id        bigint,
+                account_id             integer,
+                instrument_id          bigint,
+                side                   character,
+                open_close             character,
+                avg_px                 numeric,
+                exec_qty               integer,
+                display_instrument_id  character varying,
+                last_trade_date        date,
+                instrument_type_id     character,
+                cmta                   character varying,
+                exec_broker            character varying,
+                principal_amount       numeric,
+                client_commission_rate numeric,
+                blaze_account_alias    character varying,
+                street_exec_time       timestamp without time zone,
+                expiration_date        timestamp without time zone,
+                opt_customer_firm      character,
+                reported_status        character,
+                reported_time          timestamp without time zone,
+                claimed_by             integer,
+                claim_status           character,
+                is_prev_reported       boolean
+            )
+    language plpgsql
+    cost 1
+as
+$function$
+    --l_date_id := in_date_id;
+    --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
+    -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 changes in report_time using is_billed in trade_record
+declare
+    l_date_id integer;
+begin
+
+    select ai.date_id
+    from genesis2.allocation_instruction ai
+    where ai.alloc_instr_id = in_alloc_instr_id
+    into l_date_id;
+
+    return query
+        select tr.date_id,
+               tr.trade_record_id::bigint,
+               tr.account_id::integer,
+               tr.instrument_id::int8,
+               tr.side,
+               tr.open_close,
+               tr.last_px                                                                   as avg_px,
+               tr.last_qty                                                                  as exec_qty,
+               i.display_instrument_id,
+               i.last_trade_date::date,
+               i.instrument_type_id,
+               tr.cmta,
+               tr.exec_broker,
+               case i.instrument_type_id
+                   when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
+                   else tr.last_qty * tr.last_px
+                   end                                                                      as principal_amount,
+               CCRU.rate                                                                    as client_commission_rate,
+               tr.blaze_account_alias,
+               coalesce(tr.street_trade_record_time, tr.trade_record_time)                  as street_exec_time,
+               ----------------
+               i.last_trade_date                                                            as expiration_date,
+               tr.opt_customer_firm,
+--                coalesce(bar.to_report, btr.to_report)                      as reported_status,
+               case when tr.is_billed = 'R' then 'R'::char end                              as reported_status,
+               case
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1)) end                                                       as reported_time,
+               null::int4                                                                   as claimed_by,
+               null::character                                                              as claim_status,
+               case when tr.is_billed = 'R' then true else false end                        as is_prev_reported
+        from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
+                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select to_report, bar.db_create_time
+                                    from dash_reporting.bofa_allocation_report bar
+                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bar.date_id = ai2tr.date_id
+                                    limit 1) bar on true
+--                  left join lateral (select bas.claimed_by, bas.claim_status
+--                                     from dash_reporting.bofa_allocation_instruction_status bas
+--                                     where bas.alloc_instr_id = ai2tr.alloc_instr_id
+--                                       and bas.date_id = ai2tr.date_id
+--                                     limit 1) bas on true
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select L1.rate
+                                    from (SELECT row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 tl.rate
+                                          FROM trade_level_book_record tl
+                                                   inner join book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          WHERE tl.date_id = l_date_id
+                                            AND book_record_type_id = 'CCRU'
+                                            and tl.trade_record_id = tr.trade_record_id) L1
+                                    where rn = 1) CCRU on true
+        where tr.is_busted = 'N'
+          and tr.date_id = l_date_id
+          and a.alloc_instr_id = in_alloc_instr_id;
+
+end;
+$function$
+;
+
+
 drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
 create or replace function dash360.so_allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
                                                            in_date_id int4 default public.get_dateid(current_date),
@@ -784,6 +964,7 @@ $function$
     --in_date_id = 20190301;
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters and removed if-else condition for empty in_account_id
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 is_prev_reported will use is_billed
 begin
     drop table if exists t_trade_record;
     create temp table t_trade_record
@@ -835,26 +1016,23 @@ begin
                ----------------
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               rep.to_report                                               as reported_status,
-               rep.db_create_time                                          as reported_time,
+               coalesce(nullif(tr.is_billed, 'N'), rep.to_report)          as reported_status,
+               case when coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R' then
+               coalesce((select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1), rep.db_create_time) end                  as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
-               case
-                   when exists
-                       (select null
-                        from genesis2.alloc_instr2trade_record aitr
-                                 join t_trade_record br -- reused created temp table instaed of dash_reporting.bofa_allocation_report
-                                      on br.alloc_instr_id = aitr.alloc_instr_id
---                                               br.date_id = aitr.date_id
-                                          and br.to_report = 'R'
-                                          and alloc_rep_type = 'B'
-                        where aitr.date_id = tr.date_id
-                          and aitr.trade_record_id = any
-                              (staging.all_orig_trade_record_id_today(
-                                      tr.trade_record_id,
-                                      tr.date_id))) then true
-                   else false
-                   end                                                     as is_prev_reported
+               case when tr.is_billed = 'R' then true end                  as is_prev_reported
 
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -870,7 +1048,7 @@ begin
                            on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
                  left join lateral (select rep.to_report, rep.db_create_time
                                     from t_trade_record rep
-                                    where rep.trade_record_id = allocated_trades.trade_record_id
+                                    where rep.trade_record_id = tr.trade_record_id
                                     limit 1) rep on true
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
@@ -878,6 +1056,7 @@ begin
                                     from dash_reporting.bofa_allocation_instruction_status bas
                                     where bas.alloc_instr_id = allocated_trades.alloc_instr_id
                                       and bas.date_id = allocated_trades.date_id
+                                      and 1 = 2
                                     limit 1) bas on true
                  left join lateral (select L1.rate
                                     from (SELECT row_number()
@@ -986,21 +1165,21 @@ begin
 end ;
 $function$
 ;
+
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
 
-drop function if exists dash360.so_allocations_instruction_trades(int4);
-create or replace function dash360.so_allocations_instruction_trades(in_alloc_instr_id int4)
+create or replace function dash360.so_allocations_instruction_delete(in_alloc_instr_id integer, in_user_id integer)
     returns table
             (
-                date_id                int4,
-                trade_record_id        int8,
-                account_id             int4,
-                instrument_id          int8,
+                date_id                integer,
+                trade_record_id        bigint,
+                account_id             integer,
+                instrument_id          bigint,
                 side                   character,
                 open_close             character,
                 avg_px                 numeric,
-                exec_qty               int4,
+                exec_qty               bigint,
                 display_instrument_id  character varying,
                 last_trade_date        date,
                 instrument_type_id     character,
@@ -1009,41 +1188,134 @@ create or replace function dash360.so_allocations_instruction_trades(in_alloc_in
                 principal_amount       numeric,
                 client_commission_rate numeric,
                 blaze_account_alias    character varying,
+                orig_trade_record_id   bigint,
                 street_exec_time       timestamp without time zone,
-                expiration_date        timestamp without time zone,
                 opt_customer_firm      character,
                 reported_status        character,
-                reported_time          timestamp without time zone,
-                claimed_by             int4,
-                claim_status           character,
-                is_prev_reported       boolean
+                reported_time          timestamp without time zone
             )
     language plpgsql
-    cost 1
 as
 $function$
-    --l_date_id := in_date_id;
-    --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
-    -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
-declare
-    l_date_id int4;
-begin
 
-    select ai.date_id
-    from genesis2.allocation_instruction ai
-    where ai.alloc_instr_id = in_alloc_instr_id
-    into l_date_id;
+-- SY 20210531 DS-3420 return type has been changed from id into query
+-- The logic to modify trade_record has been implemented
+-- SY 20210617 https://dashfinancial.atlassian.net/browse/DS-3642 CMTA field has been added to revertion process
+-- VP 20231130 https://dashfinancial.atlassian.net/browse/DS-7591 Added field street_exec_time
+-- SO 20250116 https://dashfinancial.atlassian.net/browse/DS-9407 Add new fields is_prev_reported, opt_customer_firm
+declare
+    l_user_id              int;
+    l_system_id            varchar;
+    l_revert_vector        jsonb;
+    l_new_trade_record_ids bigint[];
+    l_date_id              int;
+    l_load_batch_id        bigint;
+    l_step_id              int;
+begin
+    l_step_id := 0;
+
+    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocations_instruction_delete STARTED =====', 0,
+                             'S'::char)
+    into l_step_id;
+
+    with ct as ( update genesis2.allocation_instruction ai
+        set
+            is_deleted = 'Y',
+            delete_time = 'now'::timestamp,
+            deleted_by_user_id = in_user_id
+        where alloc_instr_id = in_alloc_instr_id
+        returning ai.created_by_user_id, ai.created_by_subsystem_id, ai.date_id)
+    select ct.created_by_user_id, ct.created_by_subsystem_id, ct.date_id
+    into l_user_id, l_system_id, l_date_id
+    from ct;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'genesis2.allocation_instruction updated', 0, 'S'::char)
+    into l_step_id;
+
+
+--  raise info '%: l_user_id=%, l_system_id=%, date_id = %', clock_timestamp(),l_user_id, l_system_id, l_date_id ;
+
+ if l_user_id is null and l_system_id = 'RPS'
+  then l_new_trade_record_ids := array[]::bigint[];
+  else
+   /* UNALLOCATE MANUAL ALLOCATION with reverting trade_record changes*/
+		  select ('{'||string_agg('"'||tr.trade_record_id||'":[{"clearing_account_number":"'||coalesce(orig_tr.clearing_account_number, 'NULL')||'"
+															  , "account_nickname":"'       ||coalesce(orig_tr.account_nickname, 'NULL')||'"
+															  , "street_account_name":"'    ||coalesce(orig_tr.street_account_name,'NULL')||'"
+															  , "cmta":"'                   ||coalesce(orig_tr.cmta,'NULL')||'"
+		      												  , "allocation_avg_price":"NULL"
+															  , "trade_record_reason":"U"
+															  , "user_id":'                 ||in_user_id||'}]', ',')||'}')::jsonb
+          into l_revert_vector
+          from alloc_instr2trade_record aitr
+                   inner join trade_record tr on aitr.trade_record_id = tr.trade_record_id and tr.is_busted = 'N' and
+                                                 tr.date_id = aitr.date_id and trade_record_reason = 'L'
+                   inner join trade_record orig_tr
+                              on tr.orig_trade_record_id = orig_tr.trade_record_id and tr.date_id = orig_tr.date_id
+          where aitr.alloc_instr_id = in_alloc_instr_id
+            and aitr.date_id = l_date_id;
+
+          select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_revert_vector defined ', 0, 'S'::char)
+          into l_step_id;
+
+          raise info 'Revert vector is %', l_revert_vector;
+
+          if l_revert_vector is not null
+          then
+              l_new_trade_record_ids := dash360.ptm_process_trades(l_date_id, in_user_id, l_revert_vector);
+--        then l_new_trade_record_ids:=trash.so_ptm_process_trades(l_date_id, in_user_id, l_revert_vector);
+
+              select genesis2.load_log(l_load_batch_id::int, l_step_id, 'cardinality(l_new_trade_record_ids): ',
+                                       cardinality(l_new_trade_record_ids), 'S'::char)
+              into l_step_id;
+
+              perform dash360.trade_record_update_ccru(in_user_id =>in_user_id, in_date_id => l_date_id,
+                                                       in_trade_record_id =>l.trade_record_id, in_rate => l.rate,
+                                                       in_amount=>l.amount, in_load_batch_id =>l_load_batch_id::int)
+              from (select tr.trade_record_id::bigint,
+                           tlbr.rate,
+                           tr.last_qty * tlbr.rate                                                                                 as amount,
+                           row_number()
+                           over (partition by tr.trade_record_id, tlbr.trade_record_id, tlbr.billing_entity order by brc.priority) as rn
+                    from genesis2.trade_record tr
+                             inner join genesis2.trade_level_book_record tlbr
+                                        on tlbr.date_id = tr.date_id and
+                                           tlbr.trade_record_id = tr.orig_trade_record_id and
+                                           book_record_type_id = 'CCRU'
+                             inner join genesis2.book_record_creator brc
+                                        on tlbr.book_record_creator_id = brc.book_record_creator_id
+                    where tr.date_id = l_date_id
+                      and tr.trade_record_id = any (array [l_new_trade_record_ids])) l
+              where rn = 1;
+
+          else
+              select array_agg(trade_record_id::bigint)
+              into l_new_trade_record_ids
+              from alloc_instr2trade_record a
+              where a.date_id = l_date_id
+                and a.alloc_instr_id = in_alloc_instr_id;
+          end if;
+          select genesis2.load_log(l_load_batch_id::int, l_step_id, 'After IF ', 0, 'S'::char)
+          into l_step_id;
+
+ end if;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocations_instruction_delete returning query', 0,
+                             'S'::char)
+    into l_step_id;
 
     return query
         select tr.date_id,
-               tr.trade_record_id::int8,
-               tr.account_id::int4,
-               tr.instrument_id,
+               tr.trade_record_id::bigint,
+               tr.account_id::integer,
+               tr.instrument_id::bigint,
                tr.side,
                tr.open_close,
                tr.last_px                                                  as avg_px,
-               tr.last_qty                                                 as exec_qty,
-               i.display_instrument_id,
+               tr.last_qty::bigint                                         as exec_qty,
+               i.display_instrument_id2,
                i.last_trade_date::date,
                i.instrument_type_id,
                tr.cmta,
@@ -1054,48 +1326,27 @@ begin
                    end                                                     as principal_amount,
                CCRU.rate                                                   as client_commission_rate,
                tr.blaze_account_alias,
+               tr.orig_trade_record_id::bigint,
                coalesce(tr.street_trade_record_time, tr.trade_record_time) as street_exec_time,
-               ----------------
-               i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
-               coalesce(bar.to_report, btr.to_report)                      as reported_status,
-               coalesce(bar.db_create_time, btr.db_create_time)            as reported_time,
-               bas.claimed_by                                              as claimed_by,
-               bas.claim_status                                            as claim_status,
+               case when tr.is_billed = 'R' then 'R'::char end             as reported_status,
                case
-                   when bar.to_report in ('U', 'C') and
-                        exists
-                            (select null
-                             from genesis2.alloc_instr2trade_record aitr
-                                      join dash_reporting.bofa_allocation_report br
-                                           on br.alloc_instr_id = aitr.alloc_instr_id and
-                                              br.date_id = aitr.date_id and br.to_report = 'R'
-                             where aitr.date_id = tr.date_id
-                               and aitr.trade_record_id = any
-                                   (staging.all_orig_trade_record_id_today(
-                                           tr.trade_record_id,
-                                           tr.date_id))) then true
-                   else false
-                   end                                                     as is_prev_reported
-        from trade_record tr
+                   when true
+                       and tr.is_billed = 'R'
+                       then (select bar.db_create_time
+                        from dash_reporting.bofa_allocation_report bar
+                                 join genesis2.alloc_instr2trade_record aitr
+                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                 join genesis2.trade_record tri
+                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                        where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                          and tri.exec_id = tr.exec_id
+                          and tri.is_billed = 'R'
+                        order by 1
+                        limit 1) end                                       as reported_time
+        from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
-                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
-                 left join lateral (select to_report, btr.db_create_time
-                                    from dash_reporting.bofa_trade_record btr
-                                    where btr.trade_record_id = tr.trade_record_id
-                                      and btr.date_id = tr.date_id
-                                    limit 1) btr on true
-                 left join lateral (select to_report, bar.db_create_time
-                                    from dash_reporting.bofa_allocation_report bar
-                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
-                                      and bar.date_id = ai2tr.date_id
-                                    limit 1) bar on true
-                 left join lateral (select bas.claimed_by, bas.claim_status
-                                    from dash_reporting.bofa_allocation_instruction_status bas
-                                    where bas.alloc_instr_id = ai2tr.alloc_instr_id
-                                      and bas.date_id = ai2tr.date_id
-                                    limit 1) bas on true
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
                  left join lateral (select L1.rate
@@ -1109,11 +1360,138 @@ begin
                                             AND book_record_type_id = 'CCRU'
                                             and tl.trade_record_id = tr.trade_record_id) L1
                                     where rn = 1) CCRU on true
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
         where tr.is_busted = 'N'
           and tr.date_id = l_date_id
-          and a.alloc_instr_id = in_alloc_instr_id;
+          and tr.trade_record_id = any (l_new_trade_record_ids);
 
+end;
+
+$function$
+;
+
+drop function if exists trash.report_alloc_instr_trade_record;
+create or replace function trash.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
+    returns table
+        -- select
+        -- exec_broker as "Exec Broker", type as "Type", account_name as "Account Name", alloc_instr_id # only as "Alloc Instr ID", trade_record_id as "Trade Record ID",
+        -- sybmol as "Symbol", side  as "Side", open_close as "O/C", exec_qty as "Exec Qty", avg_px as "Avg Px", reported_status as "Reported Status",
+        -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
+        --
+            (
+                "Exec Broker"      varchar(32),
+                "Type"             text,
+                "Account Name"     varchar(30),
+                "Alloc Instr ID"   int4,
+                "Trade Record ID"  int8,
+                "Symbol"           varchar,
+                "Side"             text,
+                "O/C"              text,
+                "Exec Qty"         int4,
+                "Avg Px"           numeric,
+                "Reported Status"  text,
+                "Reported Time"    timestamp,
+                "Trade is busted"  bpchar,
+                "Alloc is deleted" bpchar,
+                "Deleted time"     timestamp,
+                "Deleted by User"  varchar(30)
+            )
+    language plpgsql
+as
+$function$
+    -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
+    -- 2025-01-21 OS https://dashfinancial.atlassian.net/browse/DS-9441 add new columns reported_time, is_deleted, delete_time, user_name
+declare
+    l_load_id int;
+    l_step_id int;
+    l_row_cnt int;
+
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_alloc_instr_trade_record for ' || in_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+    return query
+        select distinct on (ai.alloc_instr_id) tr.exec_broker,
+                                               'allocation',
+                                               ac.account_name,
+                                               bar.alloc_instr_id,
+                                               null::int8,
+                                               bar.root_symbol,
+                                               case bar.side when '1' then 'Buy' when '2' then 'Sell' end,
+                                               case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end,
+                                               ai.total_qty,
+                                               bar.avg_px,
+                                               'Reported',
+                                               bar.db_create_time,
+                                               '',
+                                               ai.is_deleted,
+                                               ai.delete_time,
+                                               ui.user_name
+
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join genesis2.alloc_instr2trade_record aitr
+                      on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                 join lateral (select tr.exec_broker, tr.account_id
+                               from genesis2.trade_record tr
+                               where tr.trade_record_id = aitr.trade_record_id
+                                 and tr.date_id = in_date_id
+                                 and tr.exec_broker = in_exec_broker
+                               limit 1) tr on true
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+        where bar.date_id = in_date_id
+          and bar.to_report = 'R'
+        union all
+        select tr.exec_broker,
+               'trade',
+               ac.account_name,
+               null,
+               btr.trade_record_id,
+               di.symbol,
+               case tr.side when '1' then 'Buy' when '2' then 'Sell' end,
+               case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
+               tr.last_qty,
+               tr.last_px,
+               'Reported',
+               coalesce((select bar.db_create_time
+                         from dash_reporting.bofa_allocation_report bar
+                                  join genesis2.alloc_instr2trade_record aitr
+                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                  join genesis2.trade_record tri
+                                       on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                         where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                           and tri.exec_id = tr.exec_id
+                           and tri.is_billed = 'R'
+                         order by 1
+                         limit 1), tr.db_create_time),
+               tr.is_busted,
+               null,
+               null,
+               null
+
+        from dash_reporting.bofa_trade_record btr
+                 join genesis2.trade_record tr using (trade_record_id, date_id)
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = tr.instrument_id
+        where btr.date_id = in_date_id
+          and btr.to_report = 'R'
+          and tr.exec_broker = in_exec_broker;
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_alloc_instr_trade_record for ' || in_date_id::text ||
+                           ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
 end;
 $function$
 ;
-comment on function dash360.so_allocations_instruction_trades is 'The report allocations_instruction_trades temp nsme with the prefix os_ until it is tested';

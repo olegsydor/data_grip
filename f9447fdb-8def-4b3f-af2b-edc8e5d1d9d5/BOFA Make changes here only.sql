@@ -8,6 +8,10 @@ function dash360.bofa_allocation_report(int4, int4, text, bool);
 function dash360.allocation_trade_record_monitor(int4, int8[]);
 function dash360.get_status_to_bofa_allocation_instruction(int4);
 function dash360.set_status_to_bofa_allocation_instruction(int4, int4, bpchar);
+function dash360.so_allocations_instruction_trades(int4)
+function dash360.so_allocations_snapshot(int8[], int4, bpchar)
+function dash360.so_allocations_instruction_delete(int4, int4)
+function trash.report_alloc_instr_trade_record(int4, text)
 */
 -----------------
 -- TABLES
@@ -656,6 +660,7 @@ begin
     from genesis2.trade_record tr
              join genesis2.instrument di on di.instrument_id = tr.instrument_id
              join genesis2.account ac on tr.account_id = ac.account_id
+        and ac.is_deleted <> 'Y' and ac.opt_report_to_mpid = 'MLCB' and ac.trading_firm_id <> 'cantor'
              left join genesis2.alloc_instr2trade_record atr
                        on atr.trade_record_id = tr.trade_record_id and atr.date_id = in_date_id
              left join lateral (select atr.alloc_instr_id
