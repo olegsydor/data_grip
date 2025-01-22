@@ -2827,4 +2827,38 @@ select bar.db_create_time
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
         where bar.date_id = :in_date_id
+          and bar.to_report = 'R';
+
+
+
+        select tr.exec_broker,
+               'allocation',
+               ac.account_name,
+               bar.alloc_instr_id,
+               null::int8,
+               bar.root_symbol,
+               bar.side,
+               bar.open_close,
+               ai.total_qty,
+               bar.avg_px,
+               'reported',
+               bar.db_create_time,
+               '',
+               ai.is_deleted,
+               ai.delete_time,
+               ui.user_name
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join genesis2.alloc_instr2trade_record aitr
+                      on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                 join lateral (select *
+                               from genesis2.trade_record tr
+                               where tr.trade_record_id = aitr.trade_record_id
+                                 and tr.date_id = aitr.date_id
+                                 and tr.exec_broker = :in_exec_broker
+                               limit 1) tr on true
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+        where bar.date_id = :in_date_id
           and bar.to_report = 'R'
