@@ -1385,8 +1385,8 @@ create or replace function trash.report_alloc_instr_trade_record(in_date_id inte
                 "Alloc Instr ID"   int4,
                 "Trade Record ID"  int8,
                 "Symbol"           varchar,
-                "Side"             bpchar(1),
-                "O/C"              bpchar(1),
+                "Side"             text,
+                "O/C"              text,
                 "Exec Qty"         int4,
                 "Avg Px"           numeric,
                 "Reported Status"  text,
@@ -1414,31 +1414,32 @@ begin
     into l_step_id;
 
     return query
-        select tr.exec_broker,
-               'allocation',
-               ac.account_name,
-               bar.alloc_instr_id,
-               null::int8,
-               bar.root_symbol,
-               bar.side,
-               bar.open_close,
-               ai.total_qty,
-               bar.avg_px,
-               'reported',
-               bar.db_create_time,
-               '',
-               ai.is_deleted,
-               ai.delete_time,
-               ui.user_name
+        select distinct on (ai.alloc_instr_id) tr.exec_broker,
+                                               'allocation',
+                                               ac.account_name,
+                                               bar.alloc_instr_id,
+                                               null::int8,
+                                               bar.root_symbol,
+                                               case bar.side when '1' then 'Buy' when '2' then 'Sell' end,
+                                               case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end,
+                                               ai.total_qty,
+                                               bar.avg_px,
+                                               'REPORTED',
+                                               bar.db_create_time,
+                                               '',
+                                               ai.is_deleted,
+                                               ai.delete_time,
+                                               ui.user_name
+
         from dash_reporting.bofa_allocation_report bar
                  join genesis2.allocation_instruction ai
                       on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
                  join genesis2.alloc_instr2trade_record aitr
                       on (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
-                 join lateral (select *
+                 join lateral (select tr.exec_broker, tr.account_id
                                from genesis2.trade_record tr
                                where tr.trade_record_id = aitr.trade_record_id
-                                 and tr.date_id = aitr.date_id
+                                 and tr.date_id = in_date_id
                                  and tr.exec_broker = in_exec_broker
                                limit 1) tr on true
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
@@ -1452,11 +1453,11 @@ begin
                null,
                btr.trade_record_id,
                di.symbol,
-               tr.side,
-               tr.open_close,
+               case tr.side when '1' then 'Buy' when '2' then 'Sell' end,
+               case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                tr.last_qty,
                tr.last_px,
-               'reported',
+               'REPORTED',
                coalesce((select bar.db_create_time
                          from dash_reporting.bofa_allocation_report bar
                                   join genesis2.alloc_instr2trade_record aitr
@@ -1491,6 +1492,6 @@ end;
 $function$
 ;
 select *
-from trash.report_alloc_instr_trade_record(in_date_id := 20250117, in_exec_broker := '792')
+from trash.report_alloc_instr_trade_record(in_date_id := 20250114, in_exec_broker := '792')
 
 
