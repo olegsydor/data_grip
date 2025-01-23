@@ -2993,10 +2993,10 @@ select * from dash_reporting.bofa_allocation_instruction_status;
 select alloc_instr_id, date_id, to_report, dataset, *
 from dash_reporting.bofa_allocation_report
 where date_id = 20250123
-  and alloc_instr_id = -56013;
+  and alloc_instr_id = -56011;
 
-select --*
-    array_agg(trade_record_id)
+select *
+--     array_agg(trade_record_id)
     from genesis2.alloc_instr2trade_record aitr
 where aitr.alloc_instr_id in (-56013,-56012,-56011)
 
@@ -3004,25 +3004,27 @@ with tr as (select unnest('{2346674834,2346674835,2346674836,2346674837}'::int8[
 select staging.all_orig_trade_record_id_today(tr.trade_record_id, 20250123)
 from tr
 
-select is_billed, trade_record_time, *
+select is_billed, trade_record_time, is_busted, *
 from genesis2.trade_record
-    where trade_record_id in
+    where trade_record_id in (2346674812,2346674811);
+
+
           (2346674834,2346674835,2346674836,2346674837,2346674815,2346674816,2346674817,2346674812,2346674811)
           (2346674647,2346674834,2346674648,2346674835,2346674646,2346674815,2346674831,2346674836,2346674645,2346674812,2346674814,2346674817,2346674833,2346674837)
 
 
 select * from genesis2.etl_subscriptions
-where load_batch_id = 13596507
+where load_batch_id = 13596476
 
 
-select *
+select trade_record_id, *
 from dash_reporting.bofa_allocation_report alr
---          join genesis2.alloc_instr2trade_record aitr
---               on aitr.date_id = alr.date_id and aitr.alloc_instr_id = alr.alloc_instr_id
+         join genesis2.alloc_instr2trade_record aitr
+              on aitr.date_id = alr.date_id and aitr.alloc_instr_id = alr.alloc_instr_id
 where true
---   and alr.to_report = 'R'
+  and alr.to_report = 'R'
   and alr.date_id = 20250123
-  and alr.dataset = 13596507;
+  and alr.dataset = 13596476
 
 
     select array_agg(alloc_instr_id)
@@ -3103,4 +3105,4 @@ select *
 from staging.get_all_alloc_instr_id_for_orig(-56013,
                                              20250123)
 
-selec *
+select * from dash360.so_allocations_instruction_trades(-56013);
