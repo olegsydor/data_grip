@@ -2987,4 +2987,120 @@ select is_billed, * from genesis2.trade_record
 2346670629)
 
 
-select * from dash_reporting.bofa_allocation_instruction_status
+select * from dash_reporting.bofa_allocation_instruction_status;
+
+
+select alloc_instr_id, date_id, to_report, dataset, *
+from dash_reporting.bofa_allocation_report
+where date_id = 20250123
+  and alloc_instr_id = -56013;
+
+select --*
+    array_agg(trade_record_id)
+    from genesis2.alloc_instr2trade_record aitr
+where aitr.alloc_instr_id in (-56013,-56012,-56011)
+
+with tr as (select unnest('{2346674834,2346674835,2346674836,2346674837}'::int8[]) as trade_record_id)
+select staging.all_orig_trade_record_id_today(tr.trade_record_id, 20250123)
+from tr
+
+select is_billed, trade_record_time, *
+from genesis2.trade_record
+    where trade_record_id in
+          (2346674834,2346674835,2346674836,2346674837,2346674815,2346674816,2346674817,2346674812,2346674811)
+          (2346674647,2346674834,2346674648,2346674835,2346674646,2346674815,2346674831,2346674836,2346674645,2346674812,2346674814,2346674817,2346674833,2346674837)
+
+
+select * from genesis2.etl_subscriptions
+where load_batch_id = 13596507
+
+
+select *
+from dash_reporting.bofa_allocation_report alr
+--          join genesis2.alloc_instr2trade_record aitr
+--               on aitr.date_id = alr.date_id and aitr.alloc_instr_id = alr.alloc_instr_id
+where true
+--   and alr.to_report = 'R'
+  and alr.date_id = 20250123
+  and alr.dataset = 13596507;
+
+
+    select array_agg(alloc_instr_id)
+--     into l_alloc_instr_id_reported
+    from dash_reporting.bofa_allocation_report
+    where date_id between :in_start_date_id and :in_end_date_id
+      and to_report = 'R';
+
+
+                select alin.alloc_instr_id,
+                   alin.side,
+                   alin.avg_px,
+                   alin.date_id,
+                   alin.open_close,
+                   ae.alloc_qty,
+                   acc.opt_is_fix_clfirm_processed,
+                   ftr.cmta,                 -- ftr_cmta,
+                   ca.cmta,                  -- ca_cmta,
+                   acc.opt_is_fix_custfirm_processed,
+                   ftr.opt_customer_firm,
+                   acc.opt_customer_or_firm,
+                   ae.occ_actionable_id,     -- occ_actionable_id,
+--                    l_load_id,                -- dataset,
+                   alin.instrument_id,
+                   acc.opt_penny_commission, -- numeric(12, 4)
+                   acc.opt_nickel_commission,-- numeric(12, 4)
+                   os.root_symbol,
+                   os.min_tick_increment,
+                   oc.put_call,
+                   oc.maturity_year,
+                   oc.maturity_month,
+                   oc.maturity_day,
+                   oc.strike_price,
+                   case
+                       when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
+                       when or_ai.alloc_instr_ids && :l_alloc_instr_id_reported
+                           then 'U' -- 'unable to report - alloc_instr_id has been reported before'
+                       else 'R' end as to_report
+            from genesis2.allocation_instruction_entry ae
+                     join genesis2.allocation_instruction alin
+                          on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+                     left join lateral (select alloc_instr_ids
+                                        from staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id, -- -56013
+                                                                                     alin.date_id) as x(alloc_instr_ids)
+                                        limit 1) or_ai on true
+                     inner join lateral (select tr.cmta,
+                                                tr.opt_customer_firm
+                                         from genesis2.alloc_instr2trade_record aitr
+                                                  inner join genesis2.trade_record tr
+                                                             on aitr.trade_record_id = tr.trade_record_id
+                                                                 and aitr.date_id = tr.date_id
+                                                                 and tr.is_busted = 'N'
+--                                                                  and tr.exec_broker = in_exec_broker
+                                                                 and tr.exec_broker is not null
+                                         where aitr.alloc_instr_id = alin.alloc_instr_id
+                                           and aitr.date_id = alin.date_id
+                                         limit 1
+                ) ftr on true
+                     join genesis2.clearing_account ca
+                          on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
+                              and ca.clearing_account_type = '1' and ca.market_type = 'O')
+                     join genesis2.account acc ON (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and
+                                                   acc.opt_report_to_mpid = 'MLCB' and
+                                                   acc.trading_firm_id <> 'cantor')
+                     join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+                     join genesis2.option_series os on os.option_series_id = oc.option_series_id
+                     join genesis2.instrument i on i.instrument_id = alin.instrument_id
+                     left join lateral (select ar.date_id
+                                        from dash_reporting.bofa_allocation_report ar
+                                        where ar.alloc_instr_id = ae.alloc_instr_id
+                                          and to_report = 'R'
+                                        limit 1) ar on true
+            where alin.date_id between :in_start_date_id and :in_end_date_id
+
+
+
+select *
+from staging.get_all_alloc_instr_id_for_orig(-56013,
+                                             20250123)
+
+selec *
