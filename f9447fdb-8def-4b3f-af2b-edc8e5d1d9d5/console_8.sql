@@ -2865,7 +2865,7 @@ select bar.db_create_time
           and bar.to_report = 'R'
 
 
-
+drop table if exists tmp_trade_record_monitor;
 create temp table tmp_trade_record_monitor as
 select ac.account_id,
            ac.trading_firm_id,
@@ -2940,7 +2940,7 @@ select ac.account_id,
                        when trm.is_unable then last_qty * last_px * os.contract_multiplier
                        else 0 end)                                                              as unable_trades_principal,
 
-               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                   as unresolved,
+               sum(case when trm.is_unable and trm.claim_status is distinct from  'R' then 1 else 0 end)::int4                   as unresolved,
                sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                    as resolved
 
 -- select *
@@ -2949,6 +2949,8 @@ select ac.account_id,
                  left join genesis2.option_series os on os.option_series_id = oc.option_series_id
         group by trm.account_id, trm.trading_firm_id;
 
+select * from dash360.allocation_trade_record_monitor(20250123)
+select * from tmp_trade_record_monitor
 
 select is_billed, orig_trade_record_id, * from genesis2.trade_record
 where trade_record_id in (2346670640, 2346670630, 2346670620, 2346670517, 2346670425, 2346670367);
@@ -2983,3 +2985,6 @@ select is_billed, * from genesis2.trade_record
 2346670627,
 2346670628,
 2346670629)
+
+
+select * from dash_reporting.bofa_allocation_instruction_status

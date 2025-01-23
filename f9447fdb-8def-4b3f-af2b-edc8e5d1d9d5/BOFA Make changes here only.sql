@@ -76,7 +76,7 @@ create table dash_reporting.bofa_allocation_instruction_status
     constraint bofa_allocation_instruction_status_user_identifier_fk foreign key (claimed_by) references genesis2.user_identifier (user_id)
 );
 comment on table dash_reporting.bofa_allocation_instruction_status is 'Table contains information on the current claim/resolve status on Allocation Instructions that are unreportable in BOFA report. Only Admins can change the satatus';
-
+alter table
 -- Column comments
 
 comment on column dash_reporting.bofa_allocation_instruction_status.alloc_instr_id is 'link to allocation instruction';
@@ -718,8 +718,9 @@ begin
                        when trm.is_unable then last_qty * last_px * os.contract_multiplier
                        else 0 end)                                                                     as unable_trades_principal,
 
-               sum(case when trm.claim_status != 'R' then 1 else 0 end)::int4                          as unresolved,
-               sum(case when trm.claim_status = 'R' then 1 else 0 end)::int4                           as resolved
+               sum(case when trm.is_unable
+                                 and trm.claim_status is distinct from 'R' then 1 else 0 end)::int4    as unresolved,
+               sum(case when coalesce(trm.claim_status, 'NO') = 'R' then 1 else 0 end)::int4           as resolved
 
 -- select *
         from tmp_trade_record_monitor trm
