@@ -1389,22 +1389,23 @@ create or replace function trash.report_alloc_instr_trade_record(in_date_id inte
         -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
         --
             (
-                "Exec Broker"      varchar(32),
-                "Type"             text,
-                "Account Name"     varchar(30),
-                "Alloc Instr ID"   int4,
-                "Trade Record ID"  int8,
-                "Symbol"           varchar,
-                "Side"             text,
-                "O/C"              text,
-                "Exec Qty"         int4,
-                "Avg Px"           numeric,
-                "Reported Status"  text,
-                "Reported Time"    timestamp,
-                "Trade is busted"  bpchar,
-                "Alloc is deleted" bpchar,
-                "Deleted time"     timestamp,
-                "Deleted by User"  varchar(30)
+                "Exec Broker"       varchar(32),
+                "Type"              text,
+                "Account Name"      varchar(30),
+                "Trading Firm Name" varchar(60),
+                "Alloc Instr ID"    int4,
+                "Trade Record ID"   int8,
+                "Symbol"            varchar,
+                "Side"              text,
+                "O/C"               text,
+                "Exec Qty"          int4,
+                "Avg Px"            numeric,
+                "Reported Status"   text,
+                "Reported Time"     timestamp,
+                "Trade is busted"   bpchar,
+                "Alloc is deleted"  bpchar,
+                "Deleted Time"      timestamp,
+                "Deleted by User"   varchar(30)
             )
     language plpgsql
 as
@@ -1427,9 +1428,10 @@ begin
         select distinct on (ai.alloc_instr_id) tr.exec_broker,
                                                'allocation',
                                                ac.account_name,
+                                               tf.trading_firm_name,
                                                bar.alloc_instr_id,
                                                null::int8,
-                                               bar.root_symbol,
+                                               di.display_instrument_id2,
                                                case bar.side when '1' then 'Buy' when '2' then 'Sell' end,
                                                case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                                                ai.total_qty,
@@ -1453,6 +1455,8 @@ begin
                                  and tr.exec_broker = in_exec_broker
                                limit 1) tr on true
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = bar.instrument_id
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
         where bar.date_id = in_date_id
           and bar.to_report = 'R'
@@ -1460,9 +1464,10 @@ begin
         select tr.exec_broker,
                'trade',
                ac.account_name,
+               tf.trading_firm_name,
                null,
                btr.trade_record_id,
-               di.symbol,
+               di.display_instrument_id2,
                case tr.side when '1' then 'Buy' when '2' then 'Sell' end,
                case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                tr.last_qty,
@@ -1488,6 +1493,7 @@ begin
         from dash_reporting.bofa_trade_record btr
                  join genesis2.trade_record tr using (trade_record_id, date_id)
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = tr.instrument_id
         where btr.date_id = in_date_id
           and btr.to_report = 'R'
