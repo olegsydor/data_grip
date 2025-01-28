@@ -3143,4 +3143,5 @@ where date_id = 20250127
              where tri.date_id = 20250127
                and tri.exec_id = tr.exec_id
                and tri.is_billed = 'R'
-               and tri.trade_record_id > tr.trade_record_id)
+               and tri.trade_record_id < tr.trade_record_id);
+
