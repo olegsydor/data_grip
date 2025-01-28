@@ -12,6 +12,7 @@ function dash360.so_allocations_instruction_trades(int4)
 function dash360.so_allocations_snapshot(int8[], int4, bpchar)
 function dash360.so_allocations_instruction_delete(int4, int4)
 function trash.report_alloc_instr_trade_record(int4, text)
+function staging.zabbix_monitor_ptm_missed_r(int4)
 */
 -----------------
 -- TABLES
