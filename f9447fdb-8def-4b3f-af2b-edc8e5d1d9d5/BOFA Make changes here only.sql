@@ -1511,3 +1511,28 @@ select *
 from trash.report_alloc_instr_trade_record(in_date_id := 20250114, in_exec_broker := '792')
 
 
+create function staging.zabbix_monitor_ptm_missed_r(in_date_id int4 default public.get_dateid(current_date))
+    returns int4
+    language plpgsql
+as
+$fx$
+declare
+
+begin
+    return case
+               when exists (select tr.is_billed, tr.trade_record_id, tr.orig_trade_record_id, tr.exec_id
+                            from genesis2.trade_record tr
+                            where date_id = in_date_id
+                              and tr.is_billed = 'N'
+                              and tr.orig_trade_record_id is not null
+                              and exists(select null
+                                         from genesis2.trade_record tri
+                                         where tri.date_id = in_date_id
+                                           and tri.exec_id = tr.exec_id
+                                           and tri.is_billed = 'R'
+                                           and tri.trade_record_id < tr.trade_record_id)) then 1
+               else 0 end;
+end;
+
+$fx$;
+comment on function staging.zabbix_monitor_ptm_missed_r is 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
