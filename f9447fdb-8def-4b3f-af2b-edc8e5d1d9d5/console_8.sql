@@ -3157,7 +3157,7 @@ end;
 $fx$;
 comment on function staging.zabbix_monitor_ptm_missed_r is 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
 
-
+select * from staging.zabbix_monitor_ptm_missed_r();
 
 select tr.is_billed, tr.trade_record_id, tr.orig_trade_record_id, tr.exec_id
 from genesis2.trade_record tr
