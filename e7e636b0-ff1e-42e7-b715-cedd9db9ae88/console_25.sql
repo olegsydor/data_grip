@@ -48,3 +48,72 @@ with ct as (select :in_json_values::json as jsn),
            l.value ->> 'blaze_account_alias'
     from tr_values,
          json_array_elements(tr_values.val_arr) l;
+
+
+
+
+ select ci.clearing_instr_id,
+           ci.date_id,
+           ci.status,
+           ci.remarks,
+           ci.create_time,
+           ci.created_by_user_id,
+           ci.claim_time,
+           ci.claimed_by_user_id,
+           ci.process_time,
+           claim_user.user_name  claimed_by_user_name,
+           create_user.user_name created_by_user_name,
+           ci.modification_type
+    from genesis2.clearing_instruction ci
+             inner join genesis2.user_identifier create_user on create_user.user_id = ci.created_by_user_id
+             left join genesis2.user_identifier claim_user on claim_user.user_id = ci.claimed_by_user_id
+        -->> add
+             left join lateral (select --ce.clearing_instr_id,
+                                       count(*)::int                                                                as total_cnt,
+                                       sum(case when electronic_report_status is not null then 1 else 0 end)::int   as status_sent,
+                                       sum(case when electronic_report_status in ('I', 'R') then 1 else 0 end)::int as status_rejected,
+                                       sum(case when electronic_report_status = 'P' then 1 else 0 end)::int         as status_pending,
+                                       sum(case when electronic_report_status = 'A' then 1 else 0 end)::int         as status_accepted,
+                                       sum(case when electronic_report_status is null then 1 else 0 end)::int       as status_null
+                                from genesis2.clearing_instruction_entry ce
+                                where true
+                                  and ce.clearing_instr_id = ci.clearing_instr_id
+                                limit 1) ce on true
+    --<<
+    where ci.is_deleted = 'N'
+      and case
+              when :start_status_date is not null and :end_status_date is not null
+                  then ci.create_time between :start_status_date and :end_status_date
+              else true end
+      and case
+              when :clearing_instruction_id is not null then ci.clearing_instr_id = :l_clearing_instruction_id
+              else true end
+      and case
+              when :l_user_id is not null then exists (select null
+                                                      from genesis2.user_identifier ua
+                                                      where ua.user_id = :l_user_id
+                                                        and ua.user_role = 'A'
+                                                        and ua.is_deleted = 'N')
+                  or (ci.clearing_instr_id in (select e.clearing_instr_id
+                                               from genesis2.clearing_instruction_entry e
+                                                        left join staging.user2account ua
+                                                                  on e.account_id = ua.account_id and
+                                                                     ua.user_id = :l_user_id and ua.user_role = 'P'
+                                               group by e.clearing_instr_id
+                                               having count(e.account_id) = count(ua.account_id))
+                      or
+                      ci.clearing_instr_id in (select e.clearing_instr_id
+                                               from genesis2.clearing_instruction_entry e
+                                                        left join (select acc.account_id
+                                                                   from staging.trading_firm_admin tf
+                                                                            inner join genesis2.account acc
+                                                                                       on tf.trading_firm_id = acc.trading_firm_id and acc.is_deleted = 'N'
+                                                                            inner join genesis2.user_identifier ui
+                                                                                       on ui.user_id = tf.user_id and ui.is_deleted = 'N'
+                                                                   where ui.user_role = 'T'
+                                                                     and tf.user_id = :l_user_id) l
+                                                                  on e.account_id = l.account_id
+                                               group by e.clearing_instr_id
+                                               having count(e.account_id) = count(l.account_id))
+                                                  )
+              else true end;

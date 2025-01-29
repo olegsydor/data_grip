@@ -8,10 +8,10 @@ function dash360.bofa_allocation_report(int4, int4, text, bool);
 function dash360.allocation_trade_record_monitor(int4, int8[]);
 function dash360.get_status_to_bofa_allocation_instruction(int4);
 function dash360.set_status_to_bofa_allocation_instruction(int4, int4, bpchar);
-function dash360.so_allocations_instruction_trades(int4)
-function dash360.so_allocations_snapshot(int8[], int4, bpchar)
-function dash360.so_allocations_instruction_delete(int4, int4)
-function trash.report_alloc_instr_trade_record(int4, text)
+function dash360.so_allocations_instruction_trades(int4) -> dash360.allocations_instruction_trades(int4) | (dash360.allocations_instruction_trades_bkp)
+function dash360.so_allocations_snapshot(int8[], int4, bpchar) -> dash360.allocations_snapshot(int8[], int4, bpchar) | dash360.allocations_snapshot_bkp(int8[], int4, bpchar)
+function dash360.so_allocations_instruction_delete(int4, int4) -> dash360.allocations_instruction_delete(int4, int4) | dash360.so_allocations_instruction_delete_bkp(int4, int4)
+function trash.report_alloc_instr_trade_record(int4, text) -> dash360.report_alloc_instr_trade_record(int4, text)
 function staging.zabbix_monitor_ptm_missed_r(int4)
 */
 -----------------
@@ -1172,7 +1172,6 @@ begin
 end ;
 $function$
 ;
-
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
 
@@ -1543,3 +1542,16 @@ end;
 
 $fx$;
 comment on function staging.zabbix_monitor_ptm_missed_r is 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
+
+-- drop function if exists dash360.allocations_instruction_trades_bkp(int4);
+-- alter function dash360.allocations_instruction_trades rename to allocations_instruction_trades_bkp;
+-- alter function dash360.so_allocations_instruction_trades(int4) rename to allocations_instruction_trades;
+--
+-- drop function dash360.allocations_snapshot_bkp(int8[], int4);
+-- alter function dash360.allocations_snapshot(int8[], int4) rename to allocations_snapshot_bkp;
+-- alter function dash360.so_allocations_snapshot(int8[], int4, bpchar) rename to allocations_snapshot;
+--
+-- alter function dash360.allocations_instruction_delete(int4, int4) rename to allocations_instruction_delete_bkp;
+-- alter function dash360.so_allocations_instruction_delete(int4, int4) rename to allocations_instruction_delete;
+--
+-- alter function trash.report_alloc_instr_trade_record(int4, text) set schema dash360;
