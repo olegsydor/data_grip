@@ -3315,4 +3315,7 @@ begin
 end;
 $function$
 ;
-select * from trash.report_alloc_instr_trade_record(20250127, '792')
+select * from trash.report_alloc_instr_trade_record(20250127, '792');
+
+
+select * from dash360.allocations_instruction_trades(-56401);

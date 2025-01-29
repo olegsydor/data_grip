@@ -1,119 +1,110 @@
-select '{"3966498997": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966498997, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.008838-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499038": [{"cmta": "275", "last_px": 0.2, "last_qty": 44, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499038, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.06187-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966499084": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499084, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.288885-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966499089": [{"cmta": "275", "last_px": 0.2, "last_qty": 3, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499089, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.483222-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966499091": [{"cmta": "275", "last_px": 0.2, "last_qty": 4, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499091, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:20.427515-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "1"}], "3966499112": [{"cmta": "275", "last_px": 0.2, "last_qty": 44, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499112, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.06044-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966499143": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499143, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.024367-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499144": [{"cmta": "275", "last_px": 0.2, "last_qty": 22, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499144, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.027965-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "55"}], "3966499147": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499147, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.066995-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499184": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499184, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.257992-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966499185": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "trade_text": "R129: Partial Fill", "exec_broker": "161", "trade_record_id": 3966499185, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.287847-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}], "3966499229": [{"cmta": "275", "last_px": 0.2, "last_qty": 3, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499229, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.289498-05:00", "street_exec_broker": "7DS2", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966499230": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499230, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.479998-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966499300": [{"cmta": "275", "last_px": 0.2, "last_qty": 10, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499300, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.261842-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966499304": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "trade_text": "R128: Fill", "exec_broker": "161", "trade_record_id": 3966499304, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.292539-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}], "3966499336": [{"cmta": "275", "last_px": 0.2, "last_qty": 12, "account_id": 70367, "open_close": "C", "trade_text": "R129: Partial Fill", "exec_broker": "161", "trade_record_id": 3966499336, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.017261-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}], "3966499338": [{"cmta": "275", "last_px": 0.2, "last_qty": 5, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499338, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.03506-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "21"}], "3966499341": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499341, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.286617-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499371": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499371, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.050005-05:00", "street_exec_broker": "MRRL", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "PP"}], "3966499402": [{"cmta": "275", "last_px": 0.2, "last_qty": 10, "account_id": 70367, "open_close": "C", "trade_text": "R129: Partial Fill", "exec_broker": "161", "trade_record_id": 3966499402, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.026654-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}], "3966499476": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499476, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.022402-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499478": [{"cmta": "275", "last_px": 0.2, "last_qty": 10, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499478, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.261224-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966499514": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499514, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:19.049192-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966499997": [{"cmta": "275", "last_px": 0.2, "last_qty": 5, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966499997, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.630658-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "1"}], "3966500023": [{"cmta": "275", "last_px": 0.2, "last_qty": 8, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500023, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.312154-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "BB"}], "3966500026": [{"cmta": "275", "last_px": 0.2, "last_qty": 14, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500026, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.61956-05:00", "street_exec_broker": "7DS2", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500054": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500054, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.394026-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500056": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500056, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.591357-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966500090": [{"cmta": "275", "last_px": 0.2, "last_qty": 11, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500090, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.626991-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "1"}], "3966500118": [{"cmta": "275", "last_px": 0.2, "last_qty": 11, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500118, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.595211-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966500143": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500143, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.369235-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500151": [{"cmta": "275", "last_px": 0.21, "last_qty": 24, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500151, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.653779-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966500186": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500186, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.636501-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "21"}], "3966500211": [{"cmta": "275", "last_px": 0.2, "last_qty": 2, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500211, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.375325-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500219": [{"cmta": "275", "last_px": 0.2, "last_qty": 5, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500219, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.632295-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "1"}], "3966500253": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500253, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.393444-05:00", "street_exec_broker": "MRRL", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "PP"}], "3966500256": [{"cmta": "275", "last_px": 0.2, "last_qty": 2, "account_id": 70367, "open_close": "C", "trade_text": "R129: Partial Fill", "exec_broker": "161", "trade_record_id": 3966500256, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.618079-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}], "3966500284": [{"cmta": "275", "last_px": 0.2, "last_qty": 2, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500284, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.367988-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500286": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500286, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.594591-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966500287": [{"cmta": "275", "last_px": 0.2, "last_qty": 3, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500287, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.598213-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966500407": [{"cmta": "275", "last_px": 0.2, "last_qty": 8, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500407, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.303271-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "BB"}], "3966500433": [{"cmta": "275", "last_px": 0.2, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500433, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:35.365591-05:00", "street_exec_broker": "MRRL", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "PP"}], "3966500489": [{"cmta": "275", "last_px": 0.21, "last_qty": 4, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500489, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.236515-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966500550": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500550, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.212361-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500551": [{"cmta": "275", "last_px": 0.21, "last_qty": 13, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500551, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.21691-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966500553": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500553, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.22639-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500601": [{"cmta": "275", "last_px": 0.21, "last_qty": 19, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500601, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.211261-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966500675": [{"cmta": "275", "last_px": 0.21, "last_qty": 16, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500675, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.183545-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "PP"}], "3966500709": [{"cmta": "275", "last_px": 0.21, "last_qty": 17, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500709, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.191142-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "BB"}], "3966500782": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500782, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.221236-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500813": [{"cmta": "275", "last_px": 0.21, "last_qty": 11, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500813, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.213418-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "2"}], "3966500858": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500858, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.182989-05:00", "street_exec_broker": "24DF", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "T"}], "3966500902": [{"cmta": "275", "last_px": 0.21, "last_qty": 8, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500902, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.200836-05:00", "street_exec_broker": "7DS2", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500936": [{"cmta": "275", "last_px": 0.21, "last_qty": 18, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500936, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.203753-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500939": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500939, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.238251-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966500944": [{"cmta": "275", "last_px": 0.21, "last_qty": 2, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500944, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.436377-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966500945": [{"cmta": "275", "last_px": 0.21, "last_qty": 23, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966500945, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.436932-05:00", "street_exec_broker": "161", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "10"}], "3966501016": [{"cmta": "275", "last_px": 0.21, "last_qty": 3, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966501016, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.189284-05:00", "street_exec_broker": "MLCO", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "PP"}], "3966501017": [{"cmta": "275", "last_px": 0.21, "last_qty": 11, "account_id": 70367, "open_close": "C", "exec_broker": "161", "trade_record_id": 3966501017, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.204281-05:00", "street_exec_broker": "MLB", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "R"}], "3966501066": [{"cmta": "275", "last_px": 0.21, "last_qty": 1, "account_id": 70367, "open_close": "C", "trade_text": "R129: Partial Fill", "exec_broker": "161", "trade_record_id": 3966501066, "opt_customer_firm": "8", "trade_record_time": "2025-01-28T13:28:47.194792-05:00", "street_exec_broker": "DASH", "blaze_account_alias": "BOFA_CASEYDESK", "street_account_name": "CLIENT", "client_commission_rate": 0.0, "trade_liquidity_indicator": "RI"}]}'::json;
+select
+	real_exch.exchange_name as exchange_name,
+	i.display_instrument_id2 as symbol,
+	i.last_trade_date as expiration_date,
+	tr.side,
+	cie.open_close,
+	cie.last_px as last_px,
+	cie.exec_broker as gup,
+	cie.cmta,
+	cie.opt_customer_firm,
+	cie.clearing_account_number,
+	cie.sub_account,
+	cie.account_id,
+	tr.client_id,
+	sum(cie.last_qty) as last_qty, -- affected qty
+    sum(cie.last_qty) + sum(coalesce(t.last_qty, 0))::bigint total_qty, -- total qty
+    cie.electronic_report_status report_status,
+    cie.street_account_name,
+    cie.street_exec_broker,
+    cie.client_commission_rate,
+    real_exch.exchange_id as exchange_id,
+    i.instrument_type_id,
+    cie.branch_sequence_number,
+    cie.trade_text,
+    cie.frequent_trader_id
+	from clearing_instruction_entry cie
+	--inner join clearing_instruction ci on ci.clearing_instr_id = cie.clearing_instr_id
+    inner join trade_record tr on tr.trade_record_id = cie.trade_record_id
+	left join instrument i on i.instrument_id = tr.instrument_id
+    left join exchange exch on 	exch.exchange_id = tr.exchange_id
+    left join exchange real_exch on real_exch.exchange_id = exch.real_exchange_id
+-- Commented due to performnce improvement https://dashfinancial.atlassian.net/browse/DS-284
+--    left join lateral (select sum(total.last_qty) last_qty
+--	                   from trade_record total
+--						where total.date_id = tr.date_id
+--						  and date_id = l_date_id
+--						  and total.is_busted = 'N'
+--						  and total.trade_record_id not in (select	trade_record_id
+--															from clearing_instruction_entry
+--															where clearing_instr_id = cie.clearing_instr_id)
+--						  and total.orig_trade_record_id not in (select	trade_record_id
+--																 from clearing_instruction_entry
+--																 where clearing_instr_id = cie.clearing_instr_id)
+--						  and total.account_id = cie.account_id
+--						  and total.instrument_id = tr.instrument_id
+--						  and total.side = tr.side
+--						  and total.last_px = cie.last_px
+--						  and coalesce(total.open_close, '')= coalesce(cie.open_close, '')
+--						  and coalesce(total.client_id, '')= coalesce(tr.client_id, '')
+--						  and coalesce(total.exec_broker, '')= coalesce(cie.exec_broker, '')
+--						  and coalesce(total.cmta, '')= coalesce(cie.cmta, '')
+--						  and coalesce(total.opt_customer_firm, '')= coalesce(cie.opt_customer_firm, '') ) t on
+--						1 = 1
+    left join  (select total.account_id, total.instrument_id , total.side, total.last_px,
+						coalesce(total.open_close, '') as open_close
+					  , coalesce(total.client_id, '') as client_id
+					  , coalesce(total.exec_broker, '') as exec_broker
+					  , coalesce(total.cmta, '') cmta
+					  , coalesce(total.opt_customer_firm, '') opt_customer_firm
+				      , sum(total.last_qty)last_qty
+	                   from trade_record total
+						where total.date_id = :l_date_id
+						  and date_id = :l_date_id
+						  and total.is_busted = 'N'
+						  and total.trade_record_id not in (select	trade_record_id
+															from clearing_instruction_entry
+															where clearing_instr_id = :in_clearing_instr_id)
+						  and total.orig_trade_record_id not in (select	trade_record_id
+																 from clearing_instruction_entry
+																 where clearing_instr_id = :in_clearing_instr_id)
 
+			             group by total.account_id, total.instrument_id , total.side, total.last_px,
+						coalesce(total.open_close, '')
+					  , coalesce(total.client_id, '')
+					  , coalesce(total.exec_broker, '')
+					  , coalesce(total.cmta, '')
+					  , coalesce(total.opt_customer_firm, '')) t on	(t.account_id = cie.account_id
+																  and t.instrument_id = tr.instrument_id
+																  and t.side = tr.side
+																  and t.last_px = cie.last_px
+																  and t.open_close= coalesce(cie.open_close, '')
+																  and t.client_id= coalesce(tr.client_id, '')
+																  and t.exec_broker= coalesce(cie.exec_broker, '')
+																  and t.cmta= coalesce(cie.cmta, '')
+																  and t.opt_customer_firm= coalesce(cie.opt_customer_firm, ''))
 
-with ct as (select :in_json_values::json as jsn),
-     trd_ids as (select json_object_keys(jsn) as old_trade_record_id
-                 from ct),
-     tr_values as (select trd_ids.old_trade_record_id,
-                          ct.jsn -> trd_ids.old_trade_record_id val_arr
-                   from ct,
-                        trd_ids)
---     insert
---     into genesis2.clearing_instruction_entry (clearing_instr_entry_id, date_id, clearing_instr_id, new_trade_record_id,
---                                               trade_record_id, account_id, opt_customer_firm, open_close, last_qty,
---                                               last_px, exec_broker, cmta, clearing_account_number,
---                                               trade_liquidity_indicator, sub_account, remarks, trade_record_time,
---                                               electronic_report_status, street_account_name, street_exec_broker,
---                                               client_commission_rate, trade_text, branch_sequence_number,
---                                               frequent_trader_id, box_additional_firm, electronic_report_error_text,
---                                               cboe_reason_code, box_additional_client_memo, blaze_account_alias)
-    select --nextval('clearing_instruction_clearing_instr_entry_id_seq'::regclass),
---            in_date_id,
---            l_clearing_instr_id,
-           (l.value ->> 'new_trade_record_id')::bigint,
-           tr_values.old_trade_record_id::bigint,
-           (l.value ->> 'account_id')::int,
-           (l.value ->> 'opt_customer_firm')::bpchar,
-           (l.value ->> 'open_close')::bpchar,
-           (l.value ->> 'last_qty')::int,
-           (l.value ->> 'last_px')::numeric,
-           (l.value ->> 'exec_broker')::varchar,
-           (l.value ->> 'cmta')::varchar,
-           (l.value ->> 'clearing_account_number')::varchar,
-           (l.value ->> 'trade_liquidity_indicator')::varchar,
-           (l.value ->> 'sub_account')::varchar,
-           (l.value ->> 'remarks')::varchar,
-           (l.value ->> 'trade_record_time')::timestamp,
-           (l.value ->> 'electronic_report_time')::varchar,
-           (l.value ->> 'street_account_name')::varchar,
-           (l.value ->> 'street_exec_broker')::varchar,
-           (l.value ->> 'client_commission_rate')::numeric,
-           (l.value ->> 'trade_text')::varchar,
-           (l.value ->> 'branch_sequence_number')::varchar,
-           (l.value ->> 'frequent_trader_id')::varchar,
-           (l.value ->> 'box_additional_firm')::varchar,
-           (l.value ->> 'electronic_report_error_text')::varchar,
-           (l.value ->> 'cboe_reason_code')::varchar as r,
-           (l.value ->> 'box_additional_client_memo')::varchar,
-           l.value ->> 'blaze_account_alias'
-    from tr_values,
-         json_array_elements(tr_values.val_arr) l;
-
-
-
-
- select ci.clearing_instr_id,
-           ci.date_id,
-           ci.status,
-           ci.remarks,
-           ci.create_time,
-           ci.created_by_user_id,
-           ci.claim_time,
-           ci.claimed_by_user_id,
-           ci.process_time,
-           claim_user.user_name  claimed_by_user_name,
-           create_user.user_name created_by_user_name,
-           ci.modification_type
-    from genesis2.clearing_instruction ci
-             inner join genesis2.user_identifier create_user on create_user.user_id = ci.created_by_user_id
-             left join genesis2.user_identifier claim_user on claim_user.user_id = ci.claimed_by_user_id
-        -->> add
-             left join lateral (select --ce.clearing_instr_id,
-                                       count(*)::int                                                                as total_cnt,
-                                       sum(case when electronic_report_status is not null then 1 else 0 end)::int   as status_sent,
-                                       sum(case when electronic_report_status in ('I', 'R') then 1 else 0 end)::int as status_rejected,
-                                       sum(case when electronic_report_status = 'P' then 1 else 0 end)::int         as status_pending,
-                                       sum(case when electronic_report_status = 'A' then 1 else 0 end)::int         as status_accepted,
-                                       sum(case when electronic_report_status is null then 1 else 0 end)::int       as status_null
-                                from genesis2.clearing_instruction_entry ce
-                                where true
-                                  and ce.clearing_instr_id = ci.clearing_instr_id
-                                limit 1) ce on true
-    --<<
-    where ci.is_deleted = 'N'
-      and case
-              when :start_status_date is not null and :end_status_date is not null
-                  then ci.create_time between :start_status_date and :end_status_date
-              else true end
-      and case
-              when :clearing_instruction_id is not null then ci.clearing_instr_id = :l_clearing_instruction_id
-              else true end
-      and case
-              when :l_user_id is not null then exists (select null
-                                                      from genesis2.user_identifier ua
-                                                      where ua.user_id = :l_user_id
-                                                        and ua.user_role = 'A'
-                                                        and ua.is_deleted = 'N')
-                  or (ci.clearing_instr_id in (select e.clearing_instr_id
-                                               from genesis2.clearing_instruction_entry e
-                                                        left join staging.user2account ua
-                                                                  on e.account_id = ua.account_id and
-                                                                     ua.user_id = :l_user_id and ua.user_role = 'P'
-                                               group by e.clearing_instr_id
-                                               having count(e.account_id) = count(ua.account_id))
-                      or
-                      ci.clearing_instr_id in (select e.clearing_instr_id
-                                               from genesis2.clearing_instruction_entry e
-                                                        left join (select acc.account_id
-                                                                   from staging.trading_firm_admin tf
-                                                                            inner join genesis2.account acc
-                                                                                       on tf.trading_firm_id = acc.trading_firm_id and acc.is_deleted = 'N'
-                                                                            inner join genesis2.user_identifier ui
-                                                                                       on ui.user_id = tf.user_id and ui.is_deleted = 'N'
-                                                                   where ui.user_role = 'T'
-                                                                     and tf.user_id = :l_user_id) l
-                                                                  on e.account_id = l.account_id
-                                               group by e.clearing_instr_id
-                                               having count(e.account_id) = count(l.account_id))
-                                                  )
-              else true end;
+	where cie.clearing_instr_id = :in_clearing_instr_id
+	and tr.date_id =:l_date_id
+	group by cie.account_id,
+			real_exch.exchange_id,
+			i.instrument_id,
+			i.instrument_type_id,
+			i.last_trade_date,
+			tr.side,
+			tr.client_id,
+			cie.open_close,
+			cie.last_px,
+			cie.exec_broker,
+			cie.cmta,
+			cie.opt_customer_firm,
+			cie.clearing_account_number,
+			cie.sub_account,
+			real_exch.exchange_name,
+		    cie.electronic_report_status,
+		    cie.street_account_name,
+            cie.street_exec_broker,
+            cie.client_commission_rate,
+            cie.branch_sequence_number,
+            cie.trade_text,
+            cie.frequent_trader_id;
