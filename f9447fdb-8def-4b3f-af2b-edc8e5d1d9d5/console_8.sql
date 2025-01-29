@@ -3132,7 +3132,7 @@ where trade_record_id = any('{2346679798,2346679807,2346679809,2346679811,234667
 
 select * from dash360.so_allocations_instruction_trades(-56217);
 
-
+select * from staging.zabbix_monitor_ptm_missed_r(20250127);
 create or replace function staging.zabbix_monitor_ptm_missed_r(in_date_id int4 default public.get_dateid(current_date))
     returns int4
     language plpgsql
@@ -3141,8 +3141,7 @@ $fx$
 declare
 
 begin
-    return case
-               when exists (select tr.is_billed, tr.trade_record_id, tr.orig_trade_record_id, tr.exec_id
+    return count(*) from (select tr.is_billed, tr.trade_record_id, tr.orig_trade_record_id, tr.exec_id
                             from genesis2.trade_record tr
                                      join lateral (select null
                                                    from genesis2.trade_record tri
@@ -3153,10 +3152,8 @@ begin
                                                    limit 1) tri on true
                             where tr.date_id = in_date_id
                               and tr.is_billed = 'N'
-                              and tr.orig_trade_record_id is not null) then 1
-               else 0 end;
+                              and tr.orig_trade_record_id is not null) x;
 end;
-
 $fx$;
 comment on function staging.zabbix_monitor_ptm_missed_r is 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
 
@@ -3183,6 +3180,7 @@ select aitr.trade_record_id, *  from dash_reporting.bofa_allocation_report bar
 where bar.alloc_instr_id = -56205
 
 drop function if exists trash.report_alloc_instr_trade_record;
+-- alter function trash.report_alloc_instr_trade_record rename to report_alloc_instr_trade_record_old;
 create or replace function trash.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
     returns table
         -- select
@@ -3191,24 +3189,24 @@ create or replace function trash.report_alloc_instr_trade_record(in_date_id inte
         -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
         --
             (
-                "Exec Broker"       varchar(32),
+                "Exec Broker"       text,
                 "Type"              text,
-                "Account Name"      varchar(30),
-                "Trading Firm Name" varchar(60),
+                "Account Name"      text,
+                "Trading Firm Name" text,
                 "Alloc Instr ID"    int4,
                 "Trade Record ID"   int8,
-                "Symbol"            varchar,
+                "Symbol"            text,
                 "Side"              text,
                 "O/C"               text,
                 "Exec Qty"          int4,
                 "Avg Px"            numeric,
-                ---- customer_opt
+                "Capacity"          text,
                 "Reported Status"   text,
                 "Reported Time"     timestamp,
                 "Trade is busted"   bpchar,
                 "Alloc is deleted"  bpchar,
                 "Deleted Time"      timestamp,
-                "Deleted by User"   varchar(30)
+                "Deleted by User"   text
             )
     language plpgsql
 as
@@ -3239,7 +3237,7 @@ begin
                min(case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end),
                min(ai.total_qty),
                min(bar.avg_px),
-               array_agg(distinct cst.customer_or_firm_name),
+               string_agg(distinct concat_ws(': ', cst.customer_or_firm_id, cst.customer_or_firm_name), ', '),
 
                'Reported',
                min(bar.db_create_time),
@@ -3262,13 +3260,14 @@ begin
                  left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = bar.instrument_id
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
-        where bar.date_id = :in_date_id
+        where bar.date_id = in_date_id
           and bar.to_report = 'R'
         group by bar.alloc_instr_id
+
         union all
 
 
-        select tr.exec_broker,
+        select tr.exec_broker::varchar(32),
                'trade',
                ac.account_name,
                tf.trading_firm_name,
@@ -3279,6 +3278,7 @@ begin
                case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
                tr.last_qty,
                tr.last_px,
+               concat_ws(': ', tr.opt_customer_firm, cst.customer_or_firm_name),
                'Reported',
                coalesce((select bar.db_create_time
                          from dash_reporting.bofa_allocation_report bar
@@ -3302,6 +3302,7 @@ begin
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
                  left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = tr.instrument_id
+                 left join genesis2.customer_or_firm cst on cst.customer_or_firm_id = tr.opt_customer_firm
         where btr.date_id = in_date_id
           and btr.to_report = 'R'
           and tr.exec_broker = in_exec_broker;
@@ -3314,3 +3315,4 @@ begin
 end;
 $function$
 ;
+select * from trash.report_alloc_instr_trade_record(20250127, '792')
