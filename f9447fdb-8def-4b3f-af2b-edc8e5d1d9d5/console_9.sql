@@ -31,7 +31,7 @@ declare
     l_row_cnt                 int4;
 
 begin
-    l_msg_text := 'allocation_report for ' || in_date_id::text || ', clearing status: ' || in_clearing_status ||
+    l_msg_text := 'clearing_instruction_create for ' || in_date_id::text || ', clearing status: ' || in_clearing_status ||
                   ', user_id: ' || in_user_id::text || ', modification_type: ' || in_modification_type ||'. ';
 
     select nextval('public.load_timing_seq') into l_load_id;
@@ -134,3 +134,4 @@ begin
 end;
 $function$
 ;
+
