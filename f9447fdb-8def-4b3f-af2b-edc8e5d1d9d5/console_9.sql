@@ -3,11 +3,18 @@
 
 -- DROP FUNCTION dash360.clearing_instruction_create(int4, bpchar, int4, bpchar, varchar);
 
-CREATE OR REPLACE FUNCTION dash360.clearing_instruction_create(in_date_id integer, in_clearing_status character, in_user_id integer, in_modification_type character, in_json_values character varying)
- RETURNS TABLE(trade_json character varying[], clearing_json character varying[])
- LANGUAGE plpgsql
- COST 1
-AS $function$
+CREATE OR REPLACE FUNCTION dash360.clearing_instruction_create(in_date_id integer, in_clearing_status character,
+                                                               in_user_id integer, in_modification_type character,
+                                                               in_json_values character varying)
+    RETURNS TABLE
+            (
+                trade_json    character varying[],
+                clearing_json character varying[]
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
 -- AK 20231129 : https://dashfinancial.atlassian.net/browse/D360-12491 added cboe_reason_code field to insert into genesis2.clearing_instruction_entry
 -- PD 20240530 : https://dashfinancial.atlassian.net/browse/DS-8362 added box_additional_client_memo field to insert statement
 -- OS 20241202 https://dashfinancial.atlassian.net/browse/DS-9047 added blaze_account_alias to output
@@ -21,12 +28,11 @@ declare
     l_msg_text                text;
     l_load_id                 int;
     l_step_id                 int;
-        l_row_cnt                 int4;
+    l_row_cnt                 int4;
 
 begin
-    l_msg_text := 'allocation_report for ' || in_date_id::text || ', clearing status: ' || in_clearing_status::text ||
-                  ', user_id: ' ||
-                  in_user_id::text || '. ';
+    l_msg_text := 'allocation_report for ' || in_date_id::text || ', clearing status: ' || in_clearing_status ||
+                  ', user_id: ' || in_user_id::text || ', modification_type: ' || in_modification_type ||'. ';
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -40,8 +46,10 @@ begin
     values (nextval('clearing_instruction_clearing_instr_id_seq'::regclass), in_date_id, in_clearing_status, in_user_id,
             in_modification_type)
     returning clearing_instr_id into l_clearing_instr_id;
+    get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 1 - insert into genesis2.clearing_instruction', 0, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 1 - insert into genesis2.clearing_instruction',
+                           l_row_cnt, 'I')
     into l_step_id;
     /*INSERT INTO genesis2.clearing_instruction_entry
     (clearing_instr_entry_id, date_id, clearing_instr_id, trade_record_id, account_id, opt_customer_firm, open_close, last_qty, last_px, exec_broker, cmta, clearing_account_number, sub_account, remarks, trade_record_time, street_exec_broker, client_commission_rate, branch_sequence_number, trade_text, frequent_trader_id)
@@ -98,7 +106,8 @@ begin
          json_array_elements(tr_values.val_arr) l;
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 2 - insert into genesis2.clearing_instruction_entry', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id,
+                           l_msg_text || '  Step 2 - insert into genesis2.clearing_instruction_entry', l_row_cnt, 'I')
     into l_step_id;
 
     select array_agg(row_to_json(cte))
@@ -106,7 +115,8 @@ begin
     from (select l_clearing_instr_id as clearing_instr_id, *
           from dash360.clearing_instruction_modifications(l_clearing_instr_id)) cte;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 3 - clearing_instruction_modifications', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 3 - clearing_instruction_modifications',
+                           l_row_cnt, 'O')
     into l_step_id;
 
     select array_agg(row_to_json(cte))
@@ -114,7 +124,7 @@ begin
     from (select *
           from dash360.clearing_get_change_requests(clearing_instruction_id=>l_clearing_instr_id)) cte;
 
-    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 4 - clearing_get_change_requests', 0, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg_text || '  Step 4 - clearing_get_change_requests and COMPLETED ========', 0, 'O')
     into l_step_id;
 
     return query
