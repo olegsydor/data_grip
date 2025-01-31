@@ -933,7 +933,8 @@ $function$
 
 
 drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
-create or replace function dash360.so_allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
+drop function if exists dash360.allocations_snapshot(int8[], int4, bpchar);
+create or replace function dash360.allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
                                                            in_date_id int4 default public.get_dateid(current_date),
                                                            in_reported_status character default null::character(1))
     returns table
@@ -1176,10 +1177,11 @@ begin
 end ;
 $function$
 ;
-comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
+comment on function dash360.allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
-
-create or replace function dash360.so_allocations_instruction_delete(in_alloc_instr_id integer, in_user_id integer)
+drop function if exists dash360.so_allocations_instruction_delete(int4, int4);
+drop function if exists dash360.allocations_instruction_delete(int4, int4);
+create or replace function dash360.allocations_instruction_delete(in_alloc_instr_id integer, in_user_id integer)
     returns table
             (
                 date_id                integer,
@@ -1384,14 +1386,11 @@ end;
 $function$
 ;
 
-drop function if exists trash.report_alloc_instr_trade_record;
+
+drop function if exists trash.report_alloc_instr_trade_record(int4, text);
+drop function if exists dash360.report_alloc_instr_trade_record(int4, text);
 create or replace function trash.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
     returns table
-        -- select
-        -- exec_broker as "Exec Broker", type as "Type", account_name as "Account Name", alloc_instr_id # only as "Alloc Instr ID", trade_record_id as "Trade Record ID",
-        -- sybmol as "Symbol", side  as "Side", open_close as "O/C", exec_qty as "Exec Qty", avg_px as "Avg Px", reported_status as "Reported Status",
-        -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
-        --
             (
                 "Exec Broker"       text,
                 "Type"              text,
@@ -1521,7 +1520,7 @@ end;
 $function$
 ;
 
-
+drop function if exists staging.zabbix_monitor_ptm_missed_r(int4);
 create function staging.zabbix_monitor_ptm_missed_r(in_date_id int4 default public.get_dateid(current_date))
     returns int4
     language plpgsql
@@ -1548,7 +1547,7 @@ end;
 $fx$;
 comment on function staging.zabbix_monitor_ptm_missed_r is 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
 
-
+drop function if exists staging.fix_ptm_missed_r(int4);
 create or replace function staging.fix_ptm_missed_r(in_date_id int4 default public.get_dateid(current_date))
     returns int4
     language plpgsql

@@ -28,3 +28,7 @@ from training.t1
          left join training.t2 on t2.t1_id = t1.id
 
 
+select * from dwh.d_account
+-- where account_name not in ('ITAC','CACEIS','dashautotest6')
+where account_name not ilike all ('{ITAC, CACEIS, DASHAUTOTEST6}')
+
