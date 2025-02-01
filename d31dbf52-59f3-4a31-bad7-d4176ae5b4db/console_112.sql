@@ -97,10 +97,12 @@ join dwh.d_trading_firm dtf on dtf.trading_firm_id = cl.trading_firm_id;
 
 
 
-select * from trash.non_working_hours_account
+select date_id, trading_firm_id, sum(case_1) as case_1, sum(case_2) as case_2, sum(case_3) as case_3
+from trash.non_working_hours_account
+group by date_id, trading_firm_id;
 
-
-
+select *
+from trash.non_working_hours_account;
 ----------------------------
 
 select string_agg(foreign_table_schema||'.'||foreign_table_name,'%,%')
