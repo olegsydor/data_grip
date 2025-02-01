@@ -20,11 +20,27 @@ where da.account_id in (select distinct cl.account_id
                           and (cl.create_time::time between '03:00'::time and '09:30'::time
                             or cl.create_time::time between '16:00'::time and '20:00'::time));
 
+select cl.account_id, ac.account_name, cl.trading_firm_id, tf.trading_firm_name,
+       case when cl.create_time between '03:00'::time and '09:30'::time then 1 else 0 end as case_1,
+       case when cl.create_time between '16:00'::time and '20:00'::time then 1 else 0 end as case_2,
+       case when cl.create_time > '09:30'::time and cl.create_time < '16:00'::time and not exists (select null from dwh.execution ex where ex.exec_date_id = :in_date_id and )
+from dwh.client_order cl
+join dwh.d_account ac on ac.account_id = cl.account_id
+join dwh.d_trading_firm tf on tf.trading_firm_id = cl.trading_firm_id
+
+
 
 select cl.*, da.account_name, dtf.trading_firm_name from t_01 cl
 join dwh.d_account da on da.account_id = cl.account_id
 join dwh.d_trading_firm dtf on dtf.trading_firm_id = cl.trading_firm_id;
 
+
+
+
+
+
+
+----------------------------
 
 select string_agg(foreign_table_schema||'.'||foreign_table_name,'%,%')
 from information_schema.foreign_tables
