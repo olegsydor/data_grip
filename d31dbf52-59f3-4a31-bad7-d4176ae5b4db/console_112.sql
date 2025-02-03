@@ -105,8 +105,24 @@ select *
 from trash.non_working_hours_account;
 ----------------------------
 
-select string_agg(foreign_table_schema||'.'||foreign_table_name,'%,%')
+select string_agg(foreign_table_schema || '.' || foreign_table_name, '%,%')
 from information_schema.foreign_tables
 where foreign_server_name = 'oracle_prod'
-and foreign_table_schema not in ('trash')
+  and foreign_table_schema not in ('trash')
+  and foreign_table_name ilike any
+      ('{CLIENT_ORDER,CONDITIONAL_ORDER,CLIENT_ORDER_LEG,CLIENT_ORDER2AUCTION,CROSS_ORDER,CROSS_ORDER_NO,EXECUTION,CONDITIONAL_EXECUTION,FIX_MESSAGE_JSON,l1_snapshot,REQUEST_FOR_QUOTE,REQUEST_FOR_QUOTE_LEG,strategy_transaction_output,historic_order_algo_parameters}')
 
+
+select distinct routines.routine_schema || '.' || routines.routine_name--, parameters.data_type, parameters.ordinal_position, *
+from information_schema.routines
+         left join information_schema.parameters on routines.specific_name = parameters.specific_name
+where true
+  and routines.routine_schema in ('dash360', 'dash_reporting')
+  and routine_definition ilike any
+      ('{%staging.client_order%,%staging.client_order2auction%,%staging.conditional_order%,%staging.conditional_execution%,%staging.cross_order%,%staging.execution%,%staging.request_for_quote%,%staging.strategy_transaction_output%}')
+
+
+select *
+from pg_views
+where definition ilike any
+      ('{%staging.client_order%,%staging.client_order2auction%,%staging.conditional_order%,%staging.conditional_execution%,%staging.cross_order%,%staging.execution%,%staging.request_for_quote%,%staging.strategy_transaction_output%}')
