@@ -36,10 +36,10 @@ begin
     return query
         select array_to_string(ARRAY [
                                    tf.trading_firm_name, -- Trading Firm
-                                   coalesce(t_10147, acc.account_name), -- Account
+                                   coalesce(t_10147::text, acc.account_name), -- Account
                                    tr.street_client_order_id,-- Cl Ord ID
                                    tr.client_order_id, -- Parent Cl Ord ID
-                                   to_char(tr.trade_record_time, 'MM/DD/YYYY'), -- Date,
+                                   to_char(tr.trade_record_time, 'MM/DD/YY'), -- Date,
                                    to_char(tr.trade_record_time, 'HH24:MI:SS.US'), -- Time,
                                    case
                                        when tr.instrument_type_id = 'E' then 'Equity'
@@ -48,37 +48,41 @@ begin
                                    tr.ex_destination,-- Ex Dest,
                                    tr.sub_strategy,-- Sub Strategy,
                                    tr.fee_sensitivity::text,-- Fee Sensitivity,
-                                   tr.side,-- Side,
-                                   tr.open_close, -- O/C,
-                                   i.symbol, -- Symbol,
+                                   case tr.side
+                                       when '1' then 'Buy'
+                                       when '2' then 'Sell'
+                                       when '5' then 'Sell Short'
+                                       else tr.side::text end , -- Side
+                                   case tr.open_close when 'O' then 'Open' when 'C' then 'Close' else '' end, -- O/C,
+                                   i.display_instrument_id, -- Symbol,
                                    tr.last_qty::text, -- Last Qty,
-                                   tr.last_px::text, -- Last Px,
+                                   to_char(round(tr.last_px, 4), 'FM999990.0000'), -- Last Px,
                                    lm.last_mkt_name, -- Last Mkt,
                                    real_exch.exchange_name, -- Real Exchange Name,
                                    e.exchange_name, -- Exchange Name,
                                    tr.routing_time_bid_qty::text,-- Bid Qty,
-                                   tr.routing_time_bid_price::text, -- Bid Px,
-                                   tr.routing_time_ask_price::text, -- Ask Px,
+                                   to_char(tr.routing_time_bid_price, 'FM999990.0099'), -- Bid Px
+                                   to_char(tr.routing_time_ask_price, 'FM999990.0099'), -- Ask Px,
                                    tr.routing_time_ask_qty::text, -- Ask Qty,
                                    tr.bid_qty::text, -- Exec Bid Qty,
-                                   tr.bid_price::text, -- Exec Bid Px,
-                                   tr.ask_price::text, -- Exec Ask Px,
+                                   to_char(tr.bid_price, 'FM999990.0099'), -- Exec Bid Px,
+                                   to_char(tr.ask_price, 'FM999990.0099'), -- Exec Ask Px,
                                    tr.ask_qty::text, -- Exec Ask Qty,
                                    tr.trade_liquidity_indicator,-- Liquidity Ind,
                                    li.description,-- Liq Ind Description,
                                    cf.customer_or_firm_name,-- Cust/Firm,
                                    tr.exec_broker,-- Exec Broker,
                                    tr.cmta, -- CMTA,
-                                   dss.sub_system_id, -- Sub System,
+                                   dss.sub_system_id, -- Sub System, -- ???
                                    tr.street_mpid, -- MPID,
                                    tr.client_id,-- Client ID,
                                    case
                                        when tr.instrument_type_id = 'O'
-                                           then
-                                           to_char(oc.maturity_month, 'FM00') || '/' ||
-                                           to_char(oc.maturity_day, 'FM00') || '/' || oc.maturity_year
+                                           then to_char(to_date(oc.maturity_year::text || '.' ||
+                                                                oc.maturity_month::text || '.' || oc.maturity_day::text,
+                                                                'YYYY.MM.DD'), 'DD Mon YY')
                                        end , -- Expiration Date-- Expiration Day,
-                                   oc.opra_symbol, -- Root Symbol,
+                                   i.symbol, -- Root Symbol,
                                    tr.exec_id::text,-- DB Exec ID,
                                    tr.exch_exec_id,-- Dash Exec ID,
                                    tr.secondary_exch_exec_id,-- Exch Exec ID,
@@ -90,37 +94,38 @@ begin
                                    tr.fix_comp_id,-- Sending Firm,
                                    tr.principal_amount::text, -- Principal Amount,
                                    tr.tcce_maker_taker_fee_amount::text,-- M/T Fee,
-            -- M/T Fee/Unit,
-                                   tr.tcce_transaction_fee_amount::text,-- Transaction Fee,
+                                   '-1',-- M/T Fee/Unit,
+                                   to_char(round(tr.tcce_transaction_fee_amount, 4), 'FM999990.0000'),-- Transaction Fee,
                                    tr.tcce_trade_Processing_Fee_Amount::text,-- Trade Processing Fee,
                                    tr.tcce_royalty_fee_amount::text,-- Royalty Fee,
                                    tr.tcce_mss_fee_amount::text,-- MSS Fee,
-            -- MSS Fee/Unit,
-                                   tr.tcce_option_regulatory_fee_amount::text,-- Option Reg Fee,
-                                   tr.tcce_occ_fee_amount::text, -- OCC Fee,
-                                   tr.tcce_sec_fee_amount::text, -- SEC Fee,
-                                   tr.tcce_account_dash_commission_amount::text,-- Account Dash Commission,
-                                   tr.tcce_account_execution_cost::text,-- Account Exec Cost,
-            -- Account Exec Cost/Unit,
-                                   tr.tcce_firm_dash_commission_amount::text,-- Firm Dash Commission,
-                                   tr.tcce_firm_execution_cost::text,-- Firm Exec Cost,
-            -- Firm Exec Cost/Unit'
-
--------------------------------------
-                                   tr.trade_record_id::text,
-                                   tr.orig_trade_record_id::text,
-                                   tr.trade_record_time::text,
-                                   tr.order_id::text,
-                                   tr.street_order_id::text,
-                                   i.display_instrument_id,
-                                   i.last_trade_date::text,
-                                   coalesce(e.real_exchange_id, e.exchange_id), --  as real_exchange_id,
-                                   tr.trade_record_reason,
-                                   tr.optional_data,
-                                   tr.compliance_id,
-                                   oc.put_call, -- as put_call,
-                                   oc.strike_price::text -- as strike_px
-                                   ], ',', '')
+                                   '-1', -- MSS Fee/Unit,
+                                   to_char(round(tr.tcce_option_regulatory_fee_amount, 4), 'FM999990.0000'),-- Option Reg Fee,
+                                   to_char(round(tr.tcce_occ_fee_amount, 4), 'FM999990.0000'), -- OCC Fee,
+                                   to_char(round(tr.tcce_sec_fee_amount, 4), 'FM999990.0000'), -- SEC Fee,
+                                   to_char(round(tr.tcce_account_dash_commission_amount, 4), 'FM999990.0000'),-- Account Dash Commission,
+                                   to_char(round(tr.tcce_account_execution_cost, 4), 'FM999990.0000'),-- Account Exec Cost,
+                                   '-1', -- Account Exec Cost/Unit,
+                                   to_char(round(tr.tcce_firm_dash_commission_amount, 4), 'FM999990.0000'),-- Firm Dash Commission,
+                                   to_char(round(tr.tcce_firm_execution_cost, 4), 'FM999990.0000'),-- Firm Exec Cost,
+                                   '-1',-- Firm Exec Cost/Unit'
+                                   ''
+                                   -------------------------------------
+--                                    tr.trade_record_id::text,
+--                                    tr.orig_trade_record_id::text,
+--                                    tr.trade_record_time::text,
+--                                    tr.order_id::text,
+--                                    tr.street_order_id::text,
+--                                    i.display_instrument_id,
+--                                    i.last_trade_date::text,
+--                                    coalesce(e.real_exchange_id, e.exchange_id), --  as real_exchange_id,
+--                                    tr.trade_record_reason,
+--                                    tr.optional_data,
+--                                    tr.compliance_id,
+--                                    oc.put_call, -- as put_call,
+--                                    oc.strike_price::text -- as strike_px
+                                   ], ',', ''),
+               *
         from dwh.flat_trade_record tr
                  inner join dwh.d_account acc on (tr.account_id = acc.account_id and acc.is_active)
                  inner join dwh.d_instrument i on (i.instrument_id = tr.instrument_id)
@@ -142,12 +147,13 @@ begin
                                     where fmj.fix_message_id = tr.street_order_fix_message_id
                                       and fmj.date_id = to_char(tr.street_order_process_time, 'YYYYMMDD')::int4
                                     limit 1) fmj on true
-                 left join dwh.d_sub_system dss on dss.sub_system_unq_id = tr.subsystem_id and dss.is_active
+                 left join dwh.d_sub_system dss on dss.sub_system_id = tr.subsystem_id and dss.is_active
         where tr.date_id between :in_start_date_id and :in_end_date_id
           and i.symbol not in
               ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
           and tr.is_busted = 'N'
-          and tr.account_id = any (:l_account_ids)
+--           and tr.account_id = any (:l_account_ids)
+          and tr.exec_id = 62444091583
         order by tr.trade_record_time;
     get diagnostics l_row_cnt = row_count;
 
@@ -161,4 +167,7 @@ $function$
 
 
 select * from dwh.execution
-where exec_id =  62444091583
+where exec_id =  62444091583;
+
+
+select to_date(:maturity_year::text||'.'||:maturity_month::text||'.'||:maturity_day::text, 'YYYY.MM.DD')
