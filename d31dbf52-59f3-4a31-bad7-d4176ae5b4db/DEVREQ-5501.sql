@@ -34,69 +34,79 @@ begin
     return query
     select 'Trading Firm,Account,Cl Ord ID,Parent Cl Ord ID,Date,Time,Sec Type,Ex Dest,Sub Strategy,Fee Sensitivity,Side,O/C,Symbol,Last Qty,Last Px,Last Mkt,Real Exchange Name,Exchange Name,Bid Qty,Bid Px,Ask Px,Ask Qty,Exec Bid Qty,Exec Bid Px,Exec Ask Px, Exec Ask Qty,Liquidity Ind,Liq Ind Description,Cust/Firm,Exec Broker,CMTA,Sub System,MPID,Client ID,Expiration Day,Root Symbol,DB Exec ID,Dash Exec ID,Exch Exec ID,Is MLEG,Is Cross,Sending Firm,Principal Amount,M/T Fee,M/T Fee/Unit,Transaction Fee,Trade Processing Fee,Royalty Fee,MSS Fee,MSS Fee/Unit,Option Reg Fee,OCC Fee,SEC Fee,Account Dash Commission,Account Exec Cost,Account Exec Cost/Unit,Firm Dash Commission,Firm Exec Cost,Firm Exec Cost/Unit';
     return query
-        select
-            array_to_string(ARRAY [
-               tf.trading_firm_name, -- Trading Firm
-               coalesce(t_10147, acc.account_name), -- Account
-                tr.street_client_order_id,-- Cl Ord ID
-                tr.client_order_id, -- Parent Cl Ord ID
-                -- Date,
-                -- Time,
-                -- Sec Type,
-                -- Ex Dest,
-                -- Sub Strategy,
-                -- Fee Sensitivity,
-                               tr.side,-- Side,
-                            tr.open_close,   -- O/C,
-                  i.symbol,             -- Symbol,
-               tr.last_qty::text,                -- Last Qty,
-               tr.last_px::text,                -- Last Px,
-                  lm.last_mkt_name,             -- Last Mkt,
-                           real_exch.exchange_name,    -- Real Exchange Name,
-                 e.exchange_name,              -- Exchange Name,
-                -- Bid Qty,
-                -- Bid Px,
-                -- Ask Px,
-                -- Ask Qty,
-               tr.bid_qty::text, -- Exec Bid Qty,
-               tr.bid_price::text, -- Exec Bid Px,
-               tr.ask_price::text, -- Exec Ask Px,
-               tr.ask_qty::text, -- Exec Ask Qty,
-                -- Liquidity Ind,
-                -- Liq Ind Description,
-                -- Cust/Firm,
-                -- Exec Broker,
-                tr.cmta,               -- CMTA,
-                -- Sub System,
-                -- MPID,
-                -- Client ID,
-                -- Expiration Day,
-                -- Root Symbol,
-                -- DB Exec ID,
-                -- Dash Exec ID,
-                -- Exch Exec ID,
-                -- Is MLEG,
-                -- Is Cross,
-                -- Sending Firm,
-                tr.principal_amount::text,               -- Principal Amount,
-                tr.tcce_maker_taker_fee_amount::text,-- M/T Fee,
-                -- M/T Fee/Unit,
-                -- Transaction Fee,
-                -- Trade Processing Fee,
-                -- Royalty Fee,
-                -- MSS Fee,
-                -- MSS Fee/Unit,
-                -- Option Reg Fee,
-tr.tcce_occ_fee_amount::text,                -- OCC Fee,
-                tr.tcce_sec_fee_amount::text,               -- SEC Fee,
-                -- Account Dash Commission,
-                -- Account Exec Cost,
-                -- Account Exec Cost/Unit,
-                -- Firm Dash Commission,
-                tr.tcce_firm_execution_cost::text,-- Firm Exec Cost,
-                -- Firm Exec Cost/Unit'
+        select array_to_string(ARRAY [
+                                   tf.trading_firm_name, -- Trading Firm
+                                   coalesce(t_10147, acc.account_name), -- Account
+                                   tr.street_client_order_id,-- Cl Ord ID
+                                   tr.client_order_id, -- Parent Cl Ord ID
+                                   to_char(tr.trade_record_time, 'MM/DD/YYYY'), -- Date,
+                                   to_char(tr.trade_record_time, 'HH24:MI:SS.US'), -- Time,
+                                   case
+                                       when tr.instrument_type_id = 'E' then 'Equity'
+                                       when tr.instrument_type_id = 'O' then 'Option'
+                                       end,-- Sec Type,
+                                   tr.ex_destination,-- Ex Dest,
+                                   tr.sub_strategy,-- Sub Strategy,
+                                   tr.fee_sensitivity::text,-- Fee Sensitivity,
+                                   tr.side,-- Side,
+                                   tr.open_close, -- O/C,
+                                   i.symbol, -- Symbol,
+                                   tr.last_qty::text, -- Last Qty,
+                                   tr.last_px::text, -- Last Px,
+                                   lm.last_mkt_name, -- Last Mkt,
+                                   real_exch.exchange_name, -- Real Exchange Name,
+                                   e.exchange_name, -- Exchange Name,
+                                   tr.routing_time_bid_qty::text,-- Bid Qty,
+                                   tr.routing_time_bid_price::text, -- Bid Px,
+                                   tr.routing_time_ask_price::text, -- Ask Px,
+                                   tr.routing_time_ask_qty::text, -- Ask Qty,
+                                   tr.bid_qty::text, -- Exec Bid Qty,
+                                   tr.bid_price::text, -- Exec Bid Px,
+                                   tr.ask_price::text, -- Exec Ask Px,
+                                   tr.ask_qty::text, -- Exec Ask Qty,
+                                   tr.trade_liquidity_indicator,-- Liquidity Ind,
+                                   li.description,-- Liq Ind Description,
+                                   cf.customer_or_firm_name,-- Cust/Firm,
+                                   tr.exec_broker,-- Exec Broker,
+                                   tr.cmta, -- CMTA,
+                                   dss.sub_system_id, -- Sub System,
+                                   tr.street_mpid, -- MPID,
+                                   tr.client_id,-- Client ID,
+                                   case
+                                       when tr.instrument_type_id = 'O'
+                                           then
+                                           to_char(oc.maturity_month, 'FM00') || '/' ||
+                                           to_char(oc.maturity_day, 'FM00') || '/' || oc.maturity_year
+                                       end , -- Expiration Date-- Expiration Day,
+                                   oc.opra_symbol, -- Root Symbol,
+            -- DB Exec ID,
+            -- Dash Exec ID,
+            -- Exch Exec ID,
+                                   case
+                                       when tr.multileg_reporting_type = '1' then 'N'
+                                       when tr.multileg_reporting_type = '2'
+                                           then 'Y' end,-- Is MLEG,
+                                   tr.is_cross_order,-- Is Cross,
+                                   tr.fix_comp_id,-- Sending Firm,
+                                   tr.principal_amount::text, -- Principal Amount,
+                                   tr.tcce_maker_taker_fee_amount::text,-- M/T Fee,
+            -- M/T Fee/Unit,
+                                   tr.tcce_transaction_fee_amount::text,-- Transaction Fee,
+                                   tr.tcce_trade_Processing_Fee_Amount::text,-- Trade Processing Fee,
+                                   tr.tcce_royalty_fee_amount::text,-- Royalty Fee,
+                                   tr.tcce_mss_fee_amount::text,-- MSS Fee,
+            -- MSS Fee/Unit,
+                                   tr.tcce_option_regulatory_fee_amount::text,-- Option Reg Fee,
+                                   tr.tcce_occ_fee_amount::text, -- OCC Fee,
+                                   tr.tcce_sec_fee_amount::text, -- SEC Fee,
+                                   tr.tcce_account_dash_commission_amount::text,-- Account Dash Commission,
+                                   tr.tcce_account_execution_cost::text,-- Account Exec Cost,
+            -- Account Exec Cost/Unit,
+                                   tr.tcce_firm_dash_commission_amount::text,-- Firm Dash Commission,
+                                   tr.tcce_firm_execution_cost::text,-- Firm Exec Cost,
+            -- Firm Exec Cost/Unit'
 
-
+-------------------------------------
 
 
 
@@ -109,58 +119,31 @@ tr.tcce_occ_fee_amount::text,                -- OCC Fee,
                tr.client_order_id,
 
 
---                acc.account_name,
 
-
-
-
-
- --                             as last_mkt,
-               tr.trade_liquidity_indicator,
-               li.description, --                               as trade_liquidity_indicator_text,
-               tr.ex_destination,
-               tr.sub_strategy,
-               cf.customer_or_firm_name,
-               tr.exec_broker,
-
-               tr.client_id,
                tr.multileg_reporting_type,
-               tr.is_cross_order,
+
                tr.exch_exec_id,
                tr.secondary_exch_exec_id,
-               tr.fix_comp_id,
-               tr.tcce_account_dash_commission_amount::text,
-               tr.tcce_account_execution_cost::text,
-               tr.tcce_firm_dash_commission_amount::text,
-
-               tr.tcce_mss_fee_amount::text,
 
 
-               tr.tcce_option_regulatory_fee_amount::text,
-               tr.tcce_royalty_fee_amount::text,
 
-               tr.tcce_transaction_fee_amount::text,
-               tr.tcce_trade_Processing_Fee_Amount::text,
+
+
+
+
+
+
+
+
+
+
                i.instrument_type_id, --                         as sec_type,
 
                i.display_instrument_id,
                i.last_trade_date::text,
                coalesce(e.real_exchange_id, e.exchange_id), --  as real_exchange_id,
-
- --                      as real_exchange_name,
-
-                --                                 as execution_time_ask_price,
-                --                                 as execution_time_bid_price,
-                --                                   as execution_time_ask_qty,
-                --                                   as execution_time_bid_qty,
-               tr.routing_time_ask_price::text,
-               tr.routing_time_bid_price::text,
-               tr.routing_time_ask_qty::text,
-               tr.routing_time_bid_qty::text,
                tr.trade_record_reason,
-               tr.fee_sensitivity::text,
                tr.optional_data,
-               oc.opra_symbol,
                tr.compliance_id,
                oc.put_call, -- as put_call,
                oc.strike_price::text                             -- as strike_px
@@ -186,6 +169,7 @@ tr.tcce_occ_fee_amount::text,                -- OCC Fee,
                                     where fmj.fix_message_id = tr.street_order_fix_message_id
                                       and fmj.date_id = to_char(tr.street_order_process_time, 'YYYYMMDD')::int4
                                     limit 1) fmj on true
+        left join dwh.d_sub_system dss on dss.sub_system_unq_id = tr.subsystem_id and dss.is_active
         where tr.date_id between :in_start_date_id and :in_end_date_id
           and i.symbol not in
               ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
