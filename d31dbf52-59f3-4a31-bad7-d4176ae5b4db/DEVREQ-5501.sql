@@ -32,7 +32,7 @@ begin
     where trading_firm_id = 'OFP0058';
 
     return query
-    select 'Trading Firm,Account,Cl Ord ID,Parent Cl Ord ID,Date,Time,Sec Type,Ex Dest,Sub Strategy,Fee Sensitivity,Side,O/C,Symbol,Last Qty,Last Px,Last Mkt,Real Exchange Name,Exchange Name,Bid Qty,Bid Px,Ask Px,Ask Qty,Exec Bid Qty,Exec Bid Px,Exec Ask Px, Exec Ask Qty,Liquidity Ind,Liq Ind Description,Cust/Firm,Exec Broker,CMTA,Sub System,MPID,Client ID,Expiration Day,Root Symbol,DB Exec ID,Dash Exec ID,Exch Exec ID,Is MLEG,Is Cross,Sending Firm,Principal Amount,M/T Fee,M/T Fee/Unit,Transaction Fee,Trade Processing Fee,Royalty Fee,MSS Fee,MSS Fee/Unit,Option Reg Fee,OCC Fee,SEC Fee,Account Dash Commission,Account Exec Cost,Account Exec Cost/Unit,Firm Dash Commission,Firm Exec Cost,Firm Exec Cost/Unit';
+        select 'Trading Firm,Account,Cl Ord ID,Parent Cl Ord ID,Date,Time,Sec Type,Ex Dest,Sub Strategy,Fee Sensitivity,Side,O/C,Symbol,Last Qty,Last Px,Last Mkt,Real Exchange Name,Exchange Name,Bid Qty,Bid Px,Ask Px,Ask Qty,Exec Bid Qty,Exec Bid Px,Exec Ask Px, Exec Ask Qty,Liquidity Ind,Liq Ind Description,Cust/Firm,Exec Broker,CMTA,Sub System,MPID,Client ID,Expiration Day,Root Symbol,DB Exec ID,Dash Exec ID,Exch Exec ID,Is MLEG,Is Cross,Sending Firm,Principal Amount,M/T Fee,M/T Fee/Unit,Transaction Fee,Trade Processing Fee,Royalty Fee,MSS Fee,MSS Fee/Unit,Option Reg Fee,OCC Fee,SEC Fee,Account Dash Commission,Account Exec Cost,Account Exec Cost/Unit,Firm Dash Commission,Firm Exec Cost,Firm Exec Cost/Unit';
     return query
         select array_to_string(ARRAY [
                                    tf.trading_firm_name, -- Trading Firm
@@ -79,9 +79,9 @@ begin
                                            to_char(oc.maturity_day, 'FM00') || '/' || oc.maturity_year
                                        end , -- Expiration Date-- Expiration Day,
                                    oc.opra_symbol, -- Root Symbol,
-            -- DB Exec ID,
-            -- Dash Exec ID,
-            -- Exch Exec ID,
+                                   tr.exec_id::text,-- DB Exec ID,
+                                   tr.exch_exec_id,-- Dash Exec ID,
+                                   tr.secondary_exch_exec_id,-- Exch Exec ID,
                                    case
                                        when tr.multileg_reporting_type = '1' then 'N'
                                        when tr.multileg_reporting_type = '2'
@@ -107,47 +107,20 @@ begin
             -- Firm Exec Cost/Unit'
 
 -------------------------------------
-
-
-
-            tr.trade_record_id::text,
-               tr.orig_trade_record_id::text,
-               tr.trade_record_time::text,
-               tr.exec_id::text,
-               tr.order_id::text,
-               tr.street_order_id::text,
-               tr.client_order_id,
-
-
-
-               tr.multileg_reporting_type,
-
-               tr.exch_exec_id,
-               tr.secondary_exch_exec_id,
-
-
-
-
-
-
-
-
-
-
-
-
-
-               i.instrument_type_id, --                         as sec_type,
-
-               i.display_instrument_id,
-               i.last_trade_date::text,
-               coalesce(e.real_exchange_id, e.exchange_id), --  as real_exchange_id,
-               tr.trade_record_reason,
-               tr.optional_data,
-               tr.compliance_id,
-               oc.put_call, -- as put_call,
-               oc.strike_price::text                             -- as strike_px
-                ], ',', '')
+                                   tr.trade_record_id::text,
+                                   tr.orig_trade_record_id::text,
+                                   tr.trade_record_time::text,
+                                   tr.order_id::text,
+                                   tr.street_order_id::text,
+                                   i.display_instrument_id,
+                                   i.last_trade_date::text,
+                                   coalesce(e.real_exchange_id, e.exchange_id), --  as real_exchange_id,
+                                   tr.trade_record_reason,
+                                   tr.optional_data,
+                                   tr.compliance_id,
+                                   oc.put_call, -- as put_call,
+                                   oc.strike_price::text -- as strike_px
+                                   ], ',', '')
         from dwh.flat_trade_record tr
                  inner join dwh.d_account acc on (tr.account_id = acc.account_id and acc.is_active)
                  inner join dwh.d_instrument i on (i.instrument_id = tr.instrument_id)
@@ -169,7 +142,7 @@ begin
                                     where fmj.fix_message_id = tr.street_order_fix_message_id
                                       and fmj.date_id = to_char(tr.street_order_process_time, 'YYYYMMDD')::int4
                                     limit 1) fmj on true
-        left join dwh.d_sub_system dss on dss.sub_system_unq_id = tr.subsystem_id and dss.is_active
+                 left join dwh.d_sub_system dss on dss.sub_system_unq_id = tr.subsystem_id and dss.is_active
         where tr.date_id between :in_start_date_id and :in_end_date_id
           and i.symbol not in
               ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
@@ -184,3 +157,8 @@ begin
 end;
 $function$
 ;
+
+
+
+select * from dwh.execution
+where exec_id =  62444091583
