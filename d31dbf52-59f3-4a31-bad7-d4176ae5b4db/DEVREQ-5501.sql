@@ -1,3 +1,4 @@
+drop function dash360.report_fintech_eod_ofp0058_trades;
 create function dash360.report_fintech_eod_ofp0058_trades(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
@@ -92,23 +93,27 @@ begin
                                            then 'Y' end,-- Is MLEG,
                                    tr.is_cross_order,-- Is Cross,
                                    tr.fix_comp_id,-- Sending Firm,
-                                   tr.principal_amount::text, -- Principal Amount,
-                                   tr.tcce_maker_taker_fee_amount::text,-- M/T Fee,
-                                   to_char(round(-1, 4), 'FM999990.0000'),-- M/T Fee/Unit,
+                                   to_char(round(tr.principal_amount, 4), 'FM999990.0000'), -- Principal Amount,
+                                   to_char(round(tr.tcce_maker_taker_fee_amount, 4), 'FM999990.0000'),-- M/T Fee,
+                                   to_char(round(tr.tcce_maker_taker_fee_amount / nullif(tr.last_qty, 0), 4),
+                                           'FM999990.0000'), -- M/T Fee/Unit,
                                    to_char(round(tr.tcce_transaction_fee_amount, 4), 'FM999990.0000'),-- Transaction Fee,
-                                   tr.tcce_trade_Processing_Fee_Amount::text,-- Trade Processing Fee,
-                                   tr.tcce_royalty_fee_amount::text,-- Royalty Fee,
-                                   tr.tcce_mss_fee_amount::text,-- MSS Fee,
-                                   to_char(round(-1, 4), 'FM999990.0000'), -- MSS Fee/Unit,
+                                   to_char(round(tr.tcce_trade_Processing_Fee_Amount, 4), 'FM999990.0000'),-- Trade Processing Fee,
+                                   to_char(round(tr.tcce_royalty_fee_amount, 4), 'FM999990.0000'),-- Royalty Fee,
+                                   to_char(round(tr.tcce_mss_fee_amount, 4), 'FM999990.0000'),-- MSS Fee,
+                                   to_char(round(tr.tcce_mss_fee_amount / nullif(tr.last_qty, 0), 4),
+                                           'FM999990.0000'), -- MSS Fee/Unit,
                                    to_char(round(tr.tcce_option_regulatory_fee_amount, 4), 'FM999990.0000'),-- Option Reg Fee,
                                    to_char(round(tr.tcce_occ_fee_amount, 4), 'FM999990.0000'), -- OCC Fee,
                                    to_char(round(tr.tcce_sec_fee_amount, 4), 'FM999990.0000'), -- SEC Fee,
                                    to_char(round(tr.tcce_account_dash_commission_amount, 4), 'FM999990.0000'),-- Account Dash Commission,
                                    to_char(round(tr.tcce_account_execution_cost, 4), 'FM999990.0000'),-- Account Exec Cost,
-                                   to_char(round(-1, 4), 'FM999990.0000'), -- Account Exec Cost/Unit,
+                                   to_char(round(tr.tcce_account_execution_cost / nullif(tr.last_qty, 0), 4),
+                                           'FM999990.0000'), -- Account Exec Cost/Unit,
                                    to_char(round(tr.tcce_firm_dash_commission_amount, 4), 'FM999990.0000'),-- Firm Dash Commission,
                                    to_char(round(tr.tcce_firm_execution_cost, 4), 'FM999990.0000'),-- Firm Exec Cost,
-                                   to_char(round(-1, 4), 'FM999990.0000') -- Firm Exec Cost/Unit'
+                                   to_char(round(tr.tcce_firm_execution_cost / nullif(tr.last_qty, 0), 4),
+                                           'FM999990.0000') -- Firm Exec Cost/Unit'
 
             -------------------------------------
 --                                    tr.trade_record_id::text,
@@ -162,7 +167,7 @@ end;
 $function$
 ;
 
-select * from dash360.report_fintech_eod_ofp0058_trades(20250128, 20250128)
+select * from dash360.report_fintech_eod_ofp0058_trades(20250203, 20250203)
 
 
 select * from dwh.execution
