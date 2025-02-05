@@ -21,7 +21,7 @@ where da.account_id in (select distinct cl.account_id
                             or cl.create_time::time between '16:00'::time and '20:00'::time));
 
 
-
+drop function trash.so_non_working_time_account;
 create function trash.so_non_working_time_account(in_date_id int4)
     returns table
             (
@@ -32,7 +32,8 @@ create function trash.so_non_working_time_account(in_date_id int4)
                 trading_firm_name varchar(60),
                 case_1            int8,
                 case_2            int8,
-                case_3            int8
+                case_3            int8,
+                sub_strategy_desc text
             )
     language plpgsql
 as
@@ -41,7 +42,7 @@ declare
 
 begin
     return query
-        select :in_date_id,
+        select in_date_id,
                cl.account_id,
                ac.account_name,
                cl.trading_firm_id,
@@ -52,28 +53,31 @@ begin
                        when cl.create_time::time > '09:30'::time and cl.create_time::time < '16:00'::time and
                             not exists (select null
                                         from dwh.execution ex
-                                        where ex.exec_date_id = :in_date_id
+                                        where ex.exec_date_id = in_date_id
                                           and ex.exec_type in ('4', 'F', '8'))
                            then 1
-                       else 0 end)                                                                           as case_3
-
+                       else 0 end)                                                                           as case_3,
+            cl.sub_strategy_desc::text
         from dwh.client_order cl
                  join dwh.d_account ac on ac.account_id = cl.account_id
                  join dwh.d_trading_firm tf on tf.trading_firm_id = cl.trading_firm_id
                  join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.instrument_type_id = 'E'
-        where cl.create_date_id = :in_date_id
+        where cl.create_date_id = in_date_id
+        and di.instrument_type_id = 'E'
+             and cl.sub_strategy_desc ilike '%sensor%'
         group by cl.account_id,
                  ac.account_name,
                  cl.trading_firm_id,
                  tf.trading_firm_name,
-                 :in_date_id
+                 cl.sub_strategy_desc,
+                 in_date_id
         having (sum(case when cl.create_time::time between '03:00'::time and '09:30'::time then 1 else 0 end) > 0
             or sum(case when cl.create_time::time between '16:00'::time and '20:00'::time then 1 else 0 end) > 0
             or sum(case
                        when cl.create_time::time > '09:30'::time and cl.create_time::time < '16:00'::time and
                             not exists (select null
                                         from dwh.execution ex
-                                        where ex.exec_date_id = :in_date_id
+                                        where ex.exec_date_id = in_date_id
                                           and ex.exec_type in ('4', 'F', '8'))
                            then 1
                        else 0 end) > 0
@@ -81,6 +85,8 @@ begin
 end;
 $fx$;
 
+select * from data_marts.d_sub_strategy
+    where sub_strategy ilike 'sensor'
 
 insert into trash.non_working_hours_account
 select *
