@@ -29,32 +29,32 @@ create table creator.limit_status
     status_id       int4      not null,
     db_create_time  timestamp not null default clock_timestamp()
 );
-insert into creator.department (department_id, department_name)
-values (1, 'first department'), (2, 'second department'), (3, 'third department');
+insert into creator.department (department_id,department_name)
+values (1,'first department'),(2,'second department'),(3,'third department');
 
-insert into creator.limit_rq (department_id, limit_amount, is_public)
-values (1, 10000, true), (2, 100, false), (3, 1000000000, false);
+insert into creator.limit_rq (department_id,limit_amount,is_public)
+values (1,10000,true),(2,100,false),(3,1000000000,false);
 
-insert into creator.limit_status (limit_rq_id, status_id)
-values (1, 1), (2, 1), (3, 1);
+insert into creator.limit_status (limit_rq_id,status_id)
+values (1,1),(2,1),(3,1);
 
-insert into creator.limit_status (limit_rq_id, status_id)
-values (1, 2), (2, 2), (3, 2);
+insert into creator.limit_status (limit_rq_id,status_id)
+values (1,2),(2,2),(3,2);
 
-insert into creator.limit_status (limit_rq_id, status_id)
-values (1, 3);
+insert into creator.limit_status (limit_rq_id,status_id)
+values (1,3);
 
-insert into creator.limit_status (limit_rq_id, status_id)
-values (1, 4);
+insert into creator.limit_status (limit_rq_id,status_id)
+values (1,4);
 
 
-select limit_amount, dp.department_id, ls.limit_rq_id, * from creator.limit_rq rq
+select limit_amount,dp.department_id,ls.limit_rq_id,* from creator.limit_rq rq
 join creator.limit_status ls on ls.limit_rq_id = rq.limit_rq_id
 join creator.department dp on dp.department_id = rq.department_id
-order by rq.department_id, ls.status_id;
+order by rq.department_id,ls.status_id;
 
 
-select '{"complexFilter": [{"departmentId": [1, 2, 3], "limitAmount": [999, 10001]}, {"limitRequestId": [6, 4, 5]}, {}], "is_public": true}'::jsonb;
+select '{"complexFilter": [{"departmentId": [1,2,3],"limitAmount": [999,10001]},{"limitRequestId": [6,4,5]},{}],"is_public": true}'::jsonb;
 
 
 create type creator.t_complex_filter as
@@ -67,17 +67,17 @@ create type creator.t_complex_filter as
 
 drop table t_join;
 create temp table t_join as
-select (jsonb_populate_record(null::creator.t_complex_filter, j_complex_filter)).*
+select (jsonb_populate_record(null::creator.t_complex_filter,j_complex_filter)).*
 from jsonb_array_elements(:in_jsn::jsonb -> 'complexFilter') as j_complex_filter;
 
 select * from t_join;
 
 
-with base as (select limit_amount, dp.department_id, ls.limit_rq_id
+with base as (select limit_amount,dp.department_id,ls.limit_rq_id
               from creator.limit_rq rq
                        join creator.limit_status ls on ls.limit_rq_id = rq.limit_rq_id
                        join creator.department dp on dp.department_id = rq.department_id
-              order by rq.department_id, ls.status_id)
+              order by rq.department_id,ls.status_id)
 select *
 from base
          join t_join flt on (true
@@ -85,3 +85,42 @@ from base
     and case when flt."departmentId" is not null then base.department_id = any (flt."departmentId") else true end
     and case when flt."limitRequestId" is not null then base.limit_rq_id = any (flt."limitRequestId") else true end
              );
+
+
+
+except
+select unnest('{aostb01,chapdel,deutsche,elevation,eroom01,haywood01,meridian,ofp0055,rwbaird01,srtamex,sunrise01,tfsnova,triadsc01,coexparis,wexats,erudite,natixis01,OFP0031,ctcht,grponeht,janestht,jonesdftd,opcoht,sfght,OFP0132,OFP0131,wolvrnht}'::text[])
+except
+select unnest('{aostb01,chapdel,deutsche,elevation,eroom01,haywood01,meridian,ofp0055,rwbaird01,srtamex,sunrise01,tfsnova,triadsc01,coexparis,wexats,erudite,natixis01,OFP0031,ctcht,grponeht,janestht,jonesdftd,opcoht,sfght,OFP0132,OFP0131,wolvrnht}'::text[])
+           declare
+
+
+
+select unnest(array['aostb01','chapdel','deutsche','elevation','eroom01','haywood01','meridian',
+		'ofp0055','rwbaird01','srtamex','sunrise01','tfsnova','triadsc01','coexparis','wexats',
+			'erudite', 'natixis01', 'OFP0031', 'ctcht','grponeht','janestht','jonesdftd', -- added feb 4 2025
+			'opcoht','opcoht','sfght','sfght','OFP0132','OFP0131','wolvrnht'])
+except
+select unnest('{aostb01,chapdel,deutsche,elevation,eroom01,haywood01,meridian,ofp0055,
+                 rwbaird01,srtamex,sunrise01,tfsnova,triadsc01,coexparis,wexats,erudite,natixis01,
+                 OFP0031,ctcht,grponeht,janestht,jonesdftd,opcoht,sfght,OFP0132,OFP0131,wolvrnht}'::text[])
+except
+select unnest(array['aostb01','chapdel','deutsche','elevation','eroom01','haywood01','meridian',
+		'ofp0055','rwbaird01','srtamex','sunrise01','tfsnova','triadsc01','coexparis','wexats',
+			'erudite', 'natixis01', 'OFP0031', 'ctcht','grponeht','janestht','jonesdftd', -- added feb 4 2025
+			'opcoht','opcoht','sfght','sfght','OFP0132','OFP0131','wolvrnht'])
+
+select unnest(array['3ifund',	'3ifund2','buckpac','caceisb01','dftdesk04','dftdesk03','dashdesk','dftdesk02',
+				'famco01','hudson02','ionicap02','murchnsn2',	'peak6ht','sarasindf','schafer01',
+				'sgcap02','socgenlon','tornoht','wiltrht'
+				,'clearprop', 'scalpats', 'trellus01' , '3icboe', 'citadel02' , 'ftrust'])
+except
+select unnest('{3ifund, 3ifund2, buckpac, caceisb01, dftdesk04, dftdesk03, dashdesk,
+                 dftdesk02, famco01, hudson02, ionicap02, murchnsn2,
+                 peak6ht, sarasindf, schafer01, sgcap02, socgenlon, tornoht, wiltrht,
+                 clearprop, scalpats, trellus01 , 3icboe, citadel02 , ftrust}'::text[])
+except
+select unnest(array['3ifund',	'3ifund2','buckpac','caceisb01','dftdesk04','dftdesk03','dashdesk','dftdesk02',
+				'famco01','hudson02','ionicap02','murchnsn2',	'peak6ht','sarasindf','schafer01',
+				'sgcap02','socgenlon','tornoht','wiltrht'
+				,'clearprop', 'scalpats', 'trellus01' , '3icboe', 'citadel02' , 'ftrust'])
