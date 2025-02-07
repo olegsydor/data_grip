@@ -272,3 +272,23 @@ from dash360.report_compliance_order_blotter_reg(in_start_date_id := 20230103, i
                                                           in_client_order_ids := '{"0180000122", "0180000123"}');
 
 select * from t_os
+
+
+select cl.trading_firm_id, ac.trading_firm_id, tf.trading_firm_id, * from dwh.client_order cl
+join dwh.d_account ac on ac.account_id = cl.account_id
+join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+where create_date_id = 20250206;
+
+
+select * from dash_reporting.imc_base
+         join dwh.gtc_order_status gtc on gtc.order_id = imc_base.order_id
+where order_daily = 'G'
+and (gtc.close_date_id is null
+or gtc.close_date_id >= 2025026)
+
+select current_date - '2024-04-03';
+
+select * from dwh.gtc_order_status gtc
+where true
+and (gtc.close_date_id is null
+or gtc.close_date_id >= 20250206)
