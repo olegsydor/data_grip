@@ -124,3 +124,8 @@ select unnest(array['3ifund',	'3ifund2','buckpac','caceisb01','dftdesk04','dftde
 				'famco01','hudson02','ionicap02','murchnsn2',	'peak6ht','sarasindf','schafer01',
 				'sgcap02','socgenlon','tornoht','wiltrht'
 				,'clearprop', 'scalpats', 'trellus01' , '3icboe', 'citadel02' , 'ftrust'])
+
+
+select unnest(array[1, 2, 2, 3])
+except
+select unnest(array[1, 3])
