@@ -291,4 +291,22 @@ select current_date - '2024-04-03';
 select * from dwh.gtc_order_status gtc
 where true
 and (gtc.close_date_id is null
-or gtc.close_date_id >= 20250206)
+or gtc.close_date_id >= 20250206);
+
+select min(cl.create_date_id)
+into l_retention_date_id
+from dwh.client_order cl
+         join dwh.gtc_order_status gtc on gtc.order_id = cl.order_id and gtc.create_date_id = cl.create_date_id
+         inner join dwh.d_fix_connection fc
+                    on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
+         inner join lateral (select 1
+                             from dwh.d_trading_firm tf
+                             where tf.trading_firm_id = cl.trading_firm_id
+                               and tf.is_eligible4consolidator = 'Y'
+                             limit 1) tf on true
+where true
+    and gtc.close_date_id is null
+   or gtc.close_date_id >= in_date_id;
+
+
+call trash.imc_report_making(20250206)
