@@ -68,10 +68,15 @@ create type creator.t_complex_filter as
 );
 
 
+select * from dwh.d_account
+         left join t_join on true
+    where account_name ilike '%'||:fnd||'%'
+
 drop table t_join;
 create temp table t_join as
 select (jsonb_populate_record(null::creator.t_complex_filter,j_complex_filter)).*
-from jsonb_array_elements(:in_jsn::jsonb -> 'complexFilter') as j_complex_filter;
+from jsonb_array_elements(:in_jsn::jsonb -> 'complexFilter') as j_complex_filter
+where 1=2;
 
 select * from t_join;
 
