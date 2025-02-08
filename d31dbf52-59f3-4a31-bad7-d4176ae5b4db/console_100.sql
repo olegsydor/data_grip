@@ -308,5 +308,8 @@ where true
     and gtc.close_date_id is null
    or gtc.close_date_id >= in_date_id;
 
+select * from trash.imc_final
+    except
+select * from dash_reporting.imc_final
 
 call trash.imc_report_making(20250206)
