@@ -56,6 +56,9 @@ order by rq.department_id,ls.status_id;
 
 select '{"complexFilter": [{"departmentId": [1,2,3],"limitAmount": [999,10001]},{"limitRequestId": [6,4,5]},{}],"is_public": true}'::jsonb;
 
+select '{"departmentId": [1,2,3], "id": 5}'::jsonb -> 'departmentId'
+
+
 
 create type creator.t_complex_filter as
 (
