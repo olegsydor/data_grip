@@ -312,4 +312,8 @@ select * from trash.imc_final
     except
 select * from dash_reporting.imc_final
 
-call trash.imc_report_making(20250206)
+call trash.imc_report_making(20250206);
+
+select * from trash.imc_final imc
+join dwh.d_account ac on ac.account_id = imc.ac_account_id
+where ac.is_active <> 'Y'

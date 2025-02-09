@@ -74,9 +74,25 @@ select * from dwh.d_account
 
 drop table t_join;
 create temp table t_join as
-select (jsonb_populate_record(null::creator.t_complex_filter,j_complex_filter)).*
+select (jsonb_populate_record(null::creator.t_complex_filter,value)).*
 from jsonb_array_elements(:in_jsn::jsonb -> 'complexFilter') as j_complex_filter
 where 1=2;
+
+SELECT
+    jsonb_path_query_array(f.elem, '$.limitAmount') AS limit_amount,
+    jsonb_path_query_array(f.elem, '$.departmentId') AS department_id,
+    jsonb_path_query_array(f.elem, '$.limitRequestId') AS limit_request_id
+FROM jsonb_array_elements(
+    '{"is_public": true, "complexFilter": [
+        {"limitAmount": [999, 10001], "departmentId": [1, 2, 3]},
+        {"limitRequestId": [6, 4, 5]}
+    ]}'::jsonb -> 'complexFilter'
+) AS f(elem);
+
+with base as (select *
+from jsonb_array_elements(:in_jsn::jsonb -> 'complexFilter') as j_complex_filter)
+select jsonb_to_record(value) as x("limitAmount" int4[], "departmentId" int4[], "limitRequestId" int4[])
+from base;
 
 select * from t_join;
 
@@ -94,7 +110,8 @@ from base
     and case when flt."limitRequestId" is not null then base.limit_rq_id = any (flt."limitRequestId") else true end
              );
 
-
+select (jsonb_populate_record(null::creator.t_complex_filter,value)).*
+from jsonb_array_elements('[{"departmentId": [1,2,3],"limitAmount": [999,10001]},{"limitRequestId": [6,4,5]},{}]'::jsonb) as j_complex_filter
 
 except
 select unnest('{aostb01,chapdel,deutsche,elevation,eroom01,haywood01,meridian,ofp0055,rwbaird01,srtamex,sunrise01,tfsnova,triadsc01,coexparis,wexats,erudite,natixis01,OFP0031,ctcht,grponeht,janestht,jonesdftd,opcoht,sfght,OFP0132,OFP0131,wolvrnht}'::text[])
