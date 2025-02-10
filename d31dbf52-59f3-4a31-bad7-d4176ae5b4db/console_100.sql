@@ -316,4 +316,27 @@ call trash.imc_report_making(20250206);
 
 select * from trash.imc_final imc
 join dwh.d_account ac on ac.account_id = imc.ac_account_id
-where ac.is_active <> 'Y'
+where ac.is_active <> 'Y';
+
+
+
+select date_id,
+       tg,
+       tg1
+from dwh.flat_trade_record ftr
+         inner join dwh.d_account acc on acc.account_id = ftr.account_id and acc.is_active
+         inner join dwh.d_instrument i on i.instrument_id = ftr.instrument_id and i.is_active
+         join lateral (select jsn.fix_message ->> '10445' as tg, jsn.fix_message ->> '10109' as tg1
+                            from fix_capture.fix_message_json jsn
+                            where jsn.date_id >= public.get_dateid(ftr.order_process_time::date)
+                              and jsn.fix_message_id = ftr.order_fix_message_id
+                             and coalesce(fix_message ->> '10445', '--') = any ('{202, 233, 1, 2}')
+                            limit 1) jsn on true
+where is_busted = 'N'
+                and acc.account_id = any ('{22369, 58771,20872}')
+  and ftr.date_id between 20220701 and 20220704
+--   and coalesce(jsn.tg, '--') = any ('{202, 233, 1, 2}')
+  and i.instrument_type_id = 'O'
+limit 10
+--                 and case when in_client_ids <> '{}' then ftr.client_id = any (in_client_ids) else true end
+              group by ftr.order_id, ftr.client_order_id
