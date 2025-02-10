@@ -339,4 +339,10 @@ where is_busted = 'N'
   and i.instrument_type_id = 'O'
 limit 10
 --                 and case when in_client_ids <> '{}' then ftr.client_id = any (in_client_ids) else true end
-              group by ftr.order_id, ftr.client_order_id
+              group by ftr.order_id, ftr.client_order_id;
+
+
+select *
+from dash360.report_fintech_eod_traiana_broker_fills(in_start_date_id := 20241101, in_end_date_id := 20241102,
+                                                     in_account_ids := '{70621}', in_exec_broker := 'DASH',
+                                                     in_comm_rate := 1)
