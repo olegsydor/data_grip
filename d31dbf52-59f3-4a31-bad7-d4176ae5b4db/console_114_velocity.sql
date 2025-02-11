@@ -190,3 +190,8 @@ begin
 end;
 $fx$
 
+
+select * from d_exec_type et
+    where et.exec_type in ('0', '4', '5', 'W')
+or
+        et.exec_type in ('F', '4', '5', 'W')
