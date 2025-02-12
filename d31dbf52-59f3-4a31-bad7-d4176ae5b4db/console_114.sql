@@ -1,12 +1,22 @@
 -- DROP FUNCTION dash360.report_fintech_eod_traiana_broker_fills(int4, int4, _int4, _varchar, text, numeric);
 
-CREATE FUNCTION dash360.report_fintech_eod_traiana_broker_fills_(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE), in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT NULL::integer[], in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_exec_broker text DEFAULT NULL::text, in_comm_rate numeric DEFAULT 0)
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+CREATE or replace FUNCTION dash360.report_fintech_eod_traiana_broker_fills_(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                                            in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                                            in_account_ids integer[] DEFAULT NULL::integer[],
+                                                                            in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                            in_exec_broker text DEFAULT NULL::text,
+                                                                            in_comm_rate numeric DEFAULT 0)
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 2024-11-25 OS https://dashfinancial.atlassian.net/browse/DEVREQ-4978
     -- 2025-01-21 OS added new parameters
     -- 2025-02-07 OS added in_comm_rate
+    -- 2025-02-12 OS changed logic into using flat_trade_record
 declare
     l_load_id     int;
     l_step_id     int;
@@ -68,18 +78,24 @@ begin
                                    to_char(OC.maturity_month, 'FM00'), -- as "Prompt",
                                    oc.strike_price::text, -- as "Strike",
                                    case oc.put_call when '0' then 'Put' when '1' then 'Call' end, -- as "Put/Call",
-                                   ftr.order_qty::text, -- as "Quantity",
-                                   ftr.last_px::text, -- as "Price",
+                                   ex.last_qty::text, -- as "Quantity",
+                                   ex.last_px::text, -- as "Price",
                                    to_char(OC.maturity_year, 'FM0000') || to_char(OC.maturity_month, 'FM00') ||
                                    to_char(OC.maturity_day, 'FM00'), -- as "Expiry"
 --                                   case
 --                                       when in_exec_broker is not distinct from 'DASH'
 --                                           then ftr.tcce_account_dash_commission_amount::text end -- as "Commission
                                    to_char(in_comm_rate, 'FM999990.0099')
+--                                    , ex.*
                                    ], ',', '')
         from dwh.flat_trade_record ftr
                  join dwh.d_instrument di on di.instrument_id = ftr.instrument_id
---                  inner join dwh.execution ex on cl.order_id = ex.order_id and ex.exec_date_id >= cl.create_date_id
+                 left join lateral (select ex.last_qty, ex.last_px
+                                    from dwh.execution ex
+                                    where ftr.order_id = ex.order_id
+                                      and ex.exec_id = ftr.exec_id
+                                      and ex.exec_date_id = ftr.date_id
+                                    limit 1) ex on true
                  left join dwh.d_exchange exc on exc.exchange_id = ftr.exchange_id and exc.is_active
                  inner join dwh.d_option_contract oc on (oc.instrument_id = ftr.instrument_id)
                  inner join dwh.d_option_series os on (oc.option_series_id = os.option_series_id)
@@ -91,7 +107,8 @@ begin
 --           and cl.parent_order_id is null
           and ftr.multileg_reporting_type in ('1', '2')
           and di.instrument_type_id = 'O'
-        order by ftr.order_id, ftr.exec_id;
+--         and ftr.order_id = 17751341583
+        order by ftr.order_id, ftr.exec_id, case when is_busted = 'N' then 1 else 2 end;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
@@ -105,4 +122,10 @@ $function$
 select *
 from dash360.report_fintech_eod_traiana_broker_fills_(in_start_date_id := 20241101, in_end_date_id := 20241102,
                                                      in_account_ids := '{70621}', in_exec_broker := 'DASH',
-                                                     in_comm_rate := 1)
+                                                     in_comm_rate := 1);
+
+
+select * from dwh.execution
+where true
+    and exec_date_id = 20241101
+    and order_id = 17751341583
