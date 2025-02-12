@@ -126,7 +126,10 @@ as $fx$
 join genesis2.trade_record tr on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
 where atr.date_id = in_date_id
         and atr.alloc_instr_id = in_alloc_instr_id
-        an 
+        an
     end;
-    $fx$
+    $fx$;
+
+
+ 
 

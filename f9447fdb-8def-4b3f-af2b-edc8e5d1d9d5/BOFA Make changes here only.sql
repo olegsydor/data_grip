@@ -1027,19 +1027,21 @@ begin
                i.last_trade_date                                           as expiration_date,
                tr.opt_customer_firm,
                coalesce(nullif(tr.is_billed, 'N'), rep.to_report)          as reported_status,
-               case when coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R' then
-               coalesce((select bar.db_create_time
-                        from dash_reporting.bofa_allocation_report bar
-                                 join genesis2.alloc_instr2trade_record aitr
-                                      on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
-                                 join genesis2.trade_record tri
-                                      on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
-                        where true
+               case
+                   when coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R' then
+                       coalesce((select bar.db_create_time
+                                 from dash_reporting.bofa_allocation_report bar
+                                          join genesis2.alloc_instr2trade_record aitr
+                                               on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                          join genesis2.trade_record tri
+                                               on tri.date_id = bar.date_id and
+                                                  tri.trade_record_id = aitr.trade_record_id
+                                 where true
 --                           and tri.exch_exec_id = tr.exch_exec_id
-                          and tri.exec_id = tr.exec_id
-                          and tri.is_billed = 'R'
-                        order by 1
-                        limit 1), rep.db_create_time) end                  as reported_time,
+                                   and tri.exec_id = tr.exec_id
+                                   and tri.is_billed = 'R'
+                                 order by 1
+                                 limit 1), rep.db_create_time) end         as reported_time,
                bas.claimed_by                                              as claimed_by,
                bas.claim_status                                            as claim_status,
                case when tr.is_billed = 'R' then true end                  as is_prev_reported
@@ -1105,7 +1107,7 @@ begin
                true                           as is_allocated,
                true                           as is_bundle,
                null                           as cmta,
-               null                           as exec_broker,
+               ccr.exec_broker                as exec_broker,
                case i.instrument_type_id
                    when 'O' then ai.total_qty * ai.avg_px * os.contract_multiplier
                    else ai.total_qty * ai.avg_px
@@ -1123,7 +1125,7 @@ begin
                rep.db_create_time             as reported_time,
                bas.claimed_by                 as claimed_by,
                bas.claim_status               as claim_status,
-               null::boolean
+               null::boolean                  as is_prev_reported
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join lateral (select rep.to_report, rep.db_create_time
@@ -1145,7 +1147,8 @@ begin
                                                    then max(tr.blaze_account_alias)
                                                when count(distinct tr.blaze_account_alias) > 1 then '-'
                                                else null
-                                               end                                                  as blaze_account_alias
+                                               end                                                  as blaze_account_alias,
+                                           string_agg(distinct tr.exec_broker, ', ')                as exec_broker
                                     from genesis2.alloc_instr2trade_record alt
                                              inner join genesis2.trade_record tr
                                                         on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
@@ -1175,8 +1178,7 @@ begin
 end ;
 $function$
 ;
-
-comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
+comment on function dash360.allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
 
 create or replace function dash360.so_allocations_instruction_delete(in_alloc_instr_id integer, in_user_id integer)
