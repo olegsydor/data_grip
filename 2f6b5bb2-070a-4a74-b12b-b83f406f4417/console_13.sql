@@ -12,7 +12,7 @@ from
 select *
 from tbloom
 where true
---   and i2 = 576628
+  and i2 = 414360
 --   and i5 = 730493
   and i3 = 40;
 
