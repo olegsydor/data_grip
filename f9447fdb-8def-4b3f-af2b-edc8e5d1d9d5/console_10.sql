@@ -131,5 +131,6 @@ where atr.date_id = in_date_id
     $fx$;
 
 
- 
+ select *
+ from dash360.allocations_snapshot(in_date_id := 20250211)
 
