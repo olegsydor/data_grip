@@ -99,3 +99,34 @@ string_agg(distinct tr.exec_broker, ', ') as exec_broker
                   when in_reported_status = 'R' then rep.to_report = 'R'
                   when in_reported_status = 'U' then rep.to_report in ('U', 'C') -- C the same as U
                   when in_reported_status is null then true end;
+
+
+select tr.is_billed, atr.alloc_instr_id, atr.trade_record_id, *
+from genesis2.alloc_instr2trade_record atr
+join genesis2.trade_record tr on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
+where atr.date_id = 20250211
+order by atr.alloc_instr_id;
+
+
+select atr.alloc_instr_id, count(distinct tr.is_billed)
+from genesis2.alloc_instr2trade_record atr
+join genesis2.trade_record tr on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
+where atr.date_id = 20250211
+group by atr.alloc_instr_id;
+
+create function staging.get_fully_reported_trade(in_alloc_instr_id int4, in_trade_record_id int8, in_date_id int4)
+returns boolean
+language plpgsql
+as $fx$
+    declare
+
+    begin
+        select count(distinct tr.is_billed)
+        from genesis2.alloc_instr2trade_record atr
+join genesis2.trade_record tr on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
+where atr.date_id = in_date_id
+        and atr.alloc_instr_id = in_alloc_instr_id
+        an 
+    end;
+    $fx$
+

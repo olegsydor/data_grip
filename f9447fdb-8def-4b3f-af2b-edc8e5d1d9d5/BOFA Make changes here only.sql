@@ -930,23 +930,24 @@ $function$
 
 
 drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
-create or replace function dash360.so_allocations_snapshot(in_account_ids int8[] default '{}'::int8[],
-                                                           in_date_id int4 default public.get_dateid(current_date),
-                                                           in_reported_status character default null::character(1))
-    returns table
+-- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
+CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                        in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                        in_reported_status character DEFAULT NULL::character(1))
+    RETURNS TABLE
             (
-                date_id                int4,
-                trade_record_id        int8,
-                account_id             int4,
-                instrument_id          int8,
+                date_id                integer,
+                trade_record_id        bigint,
+                account_id             integer,
+                instrument_id          bigint,
                 side                   character,
                 open_close             character,
                 avg_px                 numeric,
-                exec_qty               int4,
+                exec_qty               integer,
                 display_instrument_id  character varying,
                 last_trade_date        date,
                 instrument_type_id     character,
-                alloc_instr_id         int4,
+                alloc_instr_id         integer,
                 alloc_time             timestamp without time zone,
                 is_allocated           boolean,
                 is_bundle              boolean,
@@ -961,7 +962,7 @@ create or replace function dash360.so_allocations_snapshot(in_account_ids int8[]
                 opt_customer_firm      character,
                 reported_status        character,
                 reported_time          timestamp without time zone,
-                claimed_by             int4,
+                claimed_by             integer,
                 claim_status           character,
                 is_prev_reported       boolean
             )
@@ -973,6 +974,7 @@ $function$
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters and removed if-else condition for empty in_account_id
     -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 is_prev_reported will use is_billed
+    -- OS 20250212 https://dashfinancial.atlassian.net/browse/DS-9550 Add "GUP" (exec_broker) column to Allocations procedure
 begin
     drop table if exists t_trade_record;
     create temp table t_trade_record
@@ -1173,6 +1175,7 @@ begin
 end ;
 $function$
 ;
+
 comment on function dash360.so_allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
 
