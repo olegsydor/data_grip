@@ -1386,39 +1386,39 @@ end;
 $function$
 ;
 
-drop function if exists trash.report_alloc_instr_trade_record;
-create or replace function trash.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
+create or replace function dash360.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
     returns table
-        -- select
-        -- exec_broker as "Exec Broker", type as "Type", account_name as "Account Name", alloc_instr_id # only as "Alloc Instr ID", trade_record_id as "Trade Record ID",
-        -- sybmol as "Symbol", side  as "Side", open_close as "O/C", exec_qty as "Exec Qty", avg_px as "Avg Px", reported_status as "Reported Status",
-        -- reported_time as "Reported Time", is_deleted as "Alloc is deleted", is_busted as "Trade is busted", deleted_by_user_name as "Deleted by User", deleted_time as "Deleted time"
-        --
             (
                 "Exec Broker"       text,
                 "Type"              text,
-                "Account Name"      text,
                 "Trading Firm Name" text,
-                "Alloc Instr ID"    int4,
-                "Trade Record ID"   int8,
+                "Account Name"      text,
+                "Alloc Instr ID"    integer,
+                "Trade Record ID"   bigint,
                 "Symbol"            text,
                 "Side"              text,
                 "O/C"               text,
-                "Exec Qty"          int4,
+                "Exec Qty"          integer,
                 "Avg Px"            numeric,
+                "CMTA"              text,
+                "OCC AID"           text,
                 "Capacity"          text,
                 "Reported Status"   text,
-                "Reported Time"     timestamp,
-                "Trade is busted"   bpchar,
-                "Alloc is deleted"  bpchar,
-                "Deleted Time"      timestamp,
+                "Reported Time"     timestamp without time zone,
+                "Trade is busted"   character,
+                "Created Time"      timestamp without time zone,
+                "Created by User"   text,
+                "Alloc is deleted"  character,
+                "Deleted Time"      timestamp without time zone,
                 "Deleted by User"   text
             )
     language plpgsql
-as
+     security definer
+AS
 $function$
     -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
     -- 2025-01-21 OS https://dashfinancial.atlassian.net/browse/DS-9441 add new columns reported_time, is_deleted, delete_time, user_name
+    -- 2025-02-12 OS https://dashfinancial.atlassian.net/browse/DS-9572 add new columns
 declare
     l_load_id int;
     l_step_id int;
@@ -1432,25 +1432,30 @@ begin
     into l_step_id;
 
     return query
-        select min(tr.exec_broker)  as exec_broker,
-               'allocation',
-               min(ac.account_name) as account_name,
-               min(tf.trading_firm_name),
-               bar.alloc_instr_id,
-               null::int8,
-               min(di.display_instrument_id2),
-               min(case bar.side when '1' then 'Buy' when '2' then 'Sell' end),
-               min(case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end),
-               min(ai.total_qty),
-               min(bar.avg_px),
-               string_agg(distinct concat_ws(': ', cst.customer_or_firm_id, cst.customer_or_firm_name), ', '),
+        select min(tr.exec_broker)  as exec_broker,                                     -- "Exec Broker"
+               'allocation',                                                            -- "Type"
+               min(tf.trading_firm_name),                                               -- "Trading Firm Name"
+               min(ac.account_name) as account_name,                                    -- "Account Name"
+               bar.alloc_instr_id,                                                      -- "Alloc Instr ID"
+               null::int8,                                                              -- "Trade Record ID"
+               min(di.display_instrument_id2),                                          -- "Symbol"
+               min(case bar.side when '1' then 'Buy' when '2' then 'Sell' end),         -- "Side"
+               min(case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end), -- "O/C"
+               min(ai.total_qty),                                                       -- "Exec Qty"
+               min(bar.avg_px),                                                         -- "Avg Px"
+               min(bar.ca_cmta),                                                        -- "CMTA"
+               min(bar.occ_actionable_id),                                              -- "OCC AID"
+               string_agg(distinct concat_ws(': ', cst.customer_or_firm_id, cst.customer_or_firm_name),
+                          ', '),                                                        -- "Capacity"
 
-               'Reported',
-               min(bar.db_create_time),
-               '',
-               min(ai.is_deleted),
-               min(ai.delete_time),
-               min(ui.user_name)
+               'Reported',                                                              -- "Reported Status"
+               min(bar.db_create_time),                                                 -- "Reported Time"
+               '',                                                                      -- "Trade is busted"
+               min(ai.create_time),                                                     -- "Created Time"
+               min(uic.user_name),                                                      -- "Created by User"
+               min(ai.is_deleted),                                                      -- "Alloc is deleted"
+               min(ai.delete_time),                                                     -- "Deleted Time"
+               min(ui.user_name)                                                        -- "Deleted by User"
 
         from dash_reporting.bofa_allocation_report bar
                  join genesis2.allocation_instruction ai
@@ -1466,6 +1471,7 @@ begin
                  left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = bar.instrument_id
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+                 left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and ui.is_deleted <> 'Y'
         where bar.date_id = in_date_id
           and bar.to_report = 'R'
         group by bar.alloc_instr_id
@@ -1473,19 +1479,21 @@ begin
         union all
 
 
-        select tr.exec_broker::varchar(32),
-               'trade',
-               ac.account_name,
-               tf.trading_firm_name,
-               null,
-               btr.trade_record_id,
-               di.display_instrument_id2,
-               case tr.side when '1' then 'Buy' when '2' then 'Sell' end,
-               case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,
-               tr.last_qty,
-               tr.last_px,
-               concat_ws(': ', tr.opt_customer_firm, cst.customer_or_firm_name),
-               'Reported',
+        select tr.exec_broker::varchar(32),                                                  -- "Exec Broker"
+               'trade',                                                                      -- "Type"
+               tf.trading_firm_name,                                                         -- "Trading Firm Name"
+               ac.account_name,                                                              -- "Account Name"
+               null,                                                                         -- "Alloc Instr ID"
+               btr.trade_record_id,                                                          -- "Trade Record ID"
+               di.display_instrument_id2,                                                    -- "Symbol"
+               case tr.side when '1' then 'Buy' when '2' then 'Sell' end,                    -- "Side"
+               case tr.open_close when 'O' then 'Open' when 'C' then 'Close' end,            -- "O/C"
+               tr.last_qty,                                                                  -- "Exec Qty"
+               tr.last_px,                                                                   -- "Avg Px"
+               null,                                                                         -- "CMTA"
+               null,                                                                         -- "OCC AID"
+               concat_ws(': ', tr.opt_customer_firm, cst.customer_or_firm_name),             -- "Capacity"
+               'Reported',                                                                   -- "Reported Status"
                coalesce((select bar.db_create_time
                          from dash_reporting.bofa_allocation_report bar
                                   join genesis2.alloc_instr2trade_record aitr
@@ -1497,11 +1505,13 @@ begin
                            and tri.exec_id = tr.exec_id
                            and tri.is_billed = 'R'
                          order by 1
-                         limit 1), tr.db_create_time),
-               tr.is_busted,
-               null,
-               null,
-               null
+                         limit 1), tr.db_create_time),                                         -- "Reported Time"
+               tr.is_busted,                                                                   -- "Trade is busted"
+               null,                                                                           -- "Created Time"
+               null,                                                                           -- "Created by User"
+               null,                                                                           -- "Alloc is deleted"
+               null,                                                                           -- "Deleted Time"
+               null                                                                            -- "Deleted by User"
 
         from dash_reporting.bofa_trade_record btr
                  join genesis2.trade_record tr using (trade_record_id, date_id)
@@ -1521,6 +1531,9 @@ begin
 end;
 $function$
 ;
+grant execute on function dash360.report_alloc_instr_trade_record(int4, text) to oandrusik;
+grant execute on function dash360.report_alloc_instr_trade_record(int4, text) to osemenchenko;
+grant execute on function dash360.report_alloc_instr_trade_record(int4, text) to vchankseliani;
 
 
 create function staging.zabbix_monitor_ptm_missed_r(in_date_id int4 default public.get_dateid(current_date))
@@ -1593,16 +1606,3 @@ end;
 $fx$;
 comment on function staging.fix_ptm_missed_r is 'The script fix the issue when trade_records exist with missed status R';
 
-
--- drop function if exists dash360.allocations_instruction_trades_bkp(int4);
--- alter function dash360.allocations_instruction_trades rename to allocations_instruction_trades_bkp;
--- alter function dash360.so_allocations_instruction_trades(int4) rename to allocations_instruction_trades;
---
--- drop function dash360.allocations_snapshot_bkp(int8[], int4);
--- alter function dash360.allocations_snapshot(int8[], int4) rename to allocations_snapshot_bkp;
--- alter function dash360.so_allocations_snapshot(int8[], int4, bpchar) rename to allocations_snapshot;
---
--- alter function dash360.allocations_instruction_delete(int4, int4) rename to allocations_instruction_delete_bkp;
--- alter function dash360.so_allocations_instruction_delete(int4, int4) rename to allocations_instruction_delete;
---
--- alter function trash.report_alloc_instr_trade_record(int4, text) set schema dash360;
