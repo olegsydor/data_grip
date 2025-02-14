@@ -1613,3 +1613,4 @@ end;
 $fx$;
 comment on function staging.fix_ptm_missed_r is 'The script fix the issue when trade_records exist with missed status R';
 
+select * from staging.fix_ptm_missed_r()
