@@ -1,9 +1,10 @@
 -- DROP PROCEDURE trash.imc_report_making(int4);
 
 CREATE OR REPLACE PROCEDURE trash.imc_report_making(IN in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
- LANGUAGE plpgsql
-AS $procedure$
--- 20240821 SO https://dashfinancial.atlassian.net/browse/DS-8299
+    LANGUAGE plpgsql
+AS
+$procedure$
+    -- 20240821 SO https://dashfinancial.atlassian.net/browse/DS-8299
 -- permanent tables instead of temp ones is used to be able reviewing potential incidents after finishing the report
 declare
     l_load_id           int;
@@ -67,7 +68,7 @@ begin
            cl.is_originator,
            cl.orig_order_id,
            cl.client_order_id,
-           cl.exchange_id                                                               as cl_exchange_id,
+           cl.exchange_id                 as cl_exchange_id,
            cl.sub_strategy_id,
            cl.sub_strategy_desc,
            cl.sub_system_unq_id,
@@ -92,50 +93,50 @@ begin
            cl.multileg_order_id,
            cl.dash_rfr_id,
            rn.leg_number,
-           ex.exec_id                                                                   as ex_exec_id,
-           ex.exec_time                                                                 as ex_exec_time,
-           ex.exec_type                                                                 as ex_exec_type,
-           ex.cum_qty                                                                   as ex_cum_qty,
-           ex.order_status                                                              as ex_order_status,
-           ex.last_px                                                                   as ex_last_px,
-           ex.last_qty                                                                  as ex_last_qty,
-           ex.contra_account_capacity                                                   as ex_contra_account_capacity,
-           ex.trade_liquidity_indicator                                                 as ex_trade_liquidity_indicator,
-           ex.exch_exec_id                                                              as ex_exch_exec_id,
-           ex.exchange_id                                                               as ex_exchange_id,
-           ex.contra_broker                                                             as ex_contra_broker,
-           ex.contra_trader                                                             as ex_contra_trader,
-           ex.secondary_order_id                                                        as ex_secondary_order_id,
-           ex.secondary_exch_exec_id                                                    as ex_secondary_exch_exec_id,
-           ex.exec_date_id                                                              as ex_exec_date_id,
-           ex.fix_message_id                                                            as ex_fix_message_id,
-           ac.trading_firm_id                                                           as ac_trading_firm_id,
-           ac.opt_is_fix_clfirm_processed                                               as ac_opt_is_fix_clfirm_processed,
-           ac.opt_customer_or_firm                                                      as ac_opt_customer_or_firm,
-           ac.account_id                                                                as ac_account_id,
-           ac.account_demo_mnemonic                                                     as ac_account_demo_mnemonic,
-           opx.opt_exec_broker                                                          as opx_opt_exec_broker,
-           fc.acceptor_id                                                               as fc_acceptor_id,
-           par.order_id                                                                 as par_order_id,
-           par.client_order_id                                                          as par_client_order_id,
-           par.create_date_id                                                           as par_create_date_id,
-           par.sub_strategy_desc                                                        as par_sub_strategy_desc,
-           par.order_type_id                                                            as par_order_type_id,
-           par.time_in_force_id                                                         as par_time_in_force_id,
-           par.exch_order_id                                                            as par_exch_order_id,
-           par.orig_order_id                                                            as par_orig_order_id,
-           str.cons_payment_per_contract                                                as str_cons_payment_per_contract,
-           str.order_id                                                                 as str_order_id,
-           str.cross_order_id                                                           as str_cross_order_id,
-           str.strtg_decision_reason_code                                               as str_strtg_decision_reason_code,
-           str.request_number                                                           as str_request_number,
-           str.create_date_id                                                           as str_create_date_id,
-           es.FIX_MESSAGE_ID                                                            as es_fix_message_id,
-           es.exec_id                                                                   as es_exec_id,
-           es.contra_broker                                                             as es_contra_broker,
-           es.contra_account_capacity                                                   as es_contra_account_capacity,
-           es.contra_trader                                                             as es_contra_trader,
-           es.exchange_id                                                               as es_exchange_id,
+           ex.exec_id                     as ex_exec_id,
+           ex.exec_time                   as ex_exec_time,
+           ex.exec_type                   as ex_exec_type,
+           ex.cum_qty                     as ex_cum_qty,
+           ex.order_status                as ex_order_status,
+           ex.last_px                     as ex_last_px,
+           ex.last_qty                    as ex_last_qty,
+           ex.contra_account_capacity     as ex_contra_account_capacity,
+           ex.trade_liquidity_indicator   as ex_trade_liquidity_indicator,
+           ex.exch_exec_id                as ex_exch_exec_id,
+           ex.exchange_id                 as ex_exchange_id,
+           ex.contra_broker               as ex_contra_broker,
+           ex.contra_trader               as ex_contra_trader,
+           ex.secondary_order_id          as ex_secondary_order_id,
+           ex.secondary_exch_exec_id      as ex_secondary_exch_exec_id,
+           ex.exec_date_id                as ex_exec_date_id,
+           ex.fix_message_id              as ex_fix_message_id,
+           ac.trading_firm_id             as ac_trading_firm_id,
+           ac.opt_is_fix_clfirm_processed as ac_opt_is_fix_clfirm_processed,
+           ac.opt_customer_or_firm        as ac_opt_customer_or_firm,
+           ac.account_id                  as ac_account_id,
+           ac.account_demo_mnemonic       as ac_account_demo_mnemonic,
+           opx.opt_exec_broker            as opx_opt_exec_broker,
+           fc.acceptor_id                 as fc_acceptor_id,
+           par.order_id                   as par_order_id,
+           par.client_order_id            as par_client_order_id,
+           par.create_date_id             as par_create_date_id,
+           par.sub_strategy_desc          as par_sub_strategy_desc,
+           par.order_type_id              as par_order_type_id,
+           par.time_in_force_id           as par_time_in_force_id,
+           par.exch_order_id              as par_exch_order_id,
+           par.orig_order_id              as par_orig_order_id,
+           str.cons_payment_per_contract  as str_cons_payment_per_contract,
+           str.order_id                   as str_order_id,
+           str.cross_order_id             as str_cross_order_id,
+           str.strtg_decision_reason_code as str_strtg_decision_reason_code,
+           str.request_number             as str_request_number,
+           str.create_date_id             as str_create_date_id,
+           es.FIX_MESSAGE_ID              as es_fix_message_id,
+           es.exec_id                     as es_exec_id,
+           es.contra_broker               as es_contra_broker,
+           es.contra_account_capacity     as es_contra_account_capacity,
+           es.contra_trader               as es_contra_trader,
+           es.exchange_id                 as es_exchange_id,
            case
                when cl.parent_order_id is not null and ac.trading_firm_id = 'imc01' then
                    (select max(parent_order_id)
@@ -143,14 +144,16 @@ begin
                     where co.cross_order_id = cl.cross_order_id
                       and co.is_originator <> cl.is_originator
                       and co.create_date_id >= l_retention_date_id)
-               else null end                                                            as max_orig_parent_order_id
+               else null end              as max_orig_parent_order_id,
+           'D'                            as src
     from dwh.client_order cl
              inner join dwh.execution ex on ex.order_id = cl.order_id
              inner join dwh.d_fix_connection fc
                         on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
              inner join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              inner join dwh.d_trading_firm tf
-                        on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y' and tf.is_active)
+                        on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y' and
+                            tf.is_active)
              left join lateral (
         select leg_number
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
@@ -196,7 +199,7 @@ begin
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F'
       and ex.exec_id between l_min_exec_id and l_max_exec_id
---      and cl.order_id = 18718877729
+    --      and cl.order_id = 18718877729
 --      and ex.exchange_id ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%'])
     ;
     get diagnostics l_row_cnt = row_count;
@@ -208,48 +211,55 @@ begin
     into l_step_id;
 
 -- counting missed orders
-    drop table if exists t_left_orders;
-    create temp table t_left_orders as
-    select order_id
-    from dwh.execution
-    where exec_date_id = in_date_id
-      and is_busted = 'N'
-      and exec_type not in ('E', 'S', 'D', 'y')
-      and exec_id between l_min_exec_id and l_max_exec_id
+    drop table if exists t_left_orders_gtc;
+    create temp table t_left_orders_gtc as
+    select order_id, create_date_id, account_id
+    from dwh.gtc_order_status
+    where ((close_date_id is null)
+        or (close_date_id is not null and close_date_id >= in_date_id))
     except
-    select order_id
+    select order_id, in_date_id, ac_account_id
     from trash.imc_base;
 
---     create index on t_left_orders (order_id);
-    analyze t_left_orders;
+    analyze t_left_orders_gtc;
 
     drop table if exists t_ex;
     create temp table t_ex as
-    select ex.exec_id,
-       ex.exec_time,
-       ex.exec_type,
-       ex.cum_qty,
-       ex.order_status,
-       ex.last_px,
-       ex.last_qty,
-       ex.contra_account_capacity,
-       ex.trade_liquidity_indicator,
-       ex.exch_exec_id,
-       ex.exchange_id,
-       ex.contra_broker,
-       ex.contra_trader,
-       ex.secondary_order_id,
-       ex.secondary_exch_exec_id,
-       ex.exec_date_id,
-       ex.fix_message_id,
-       ex.order_id,
-       ex.order_create_date_id
-from t_left_orders tlo
-         join dwh.execution ex on ex.order_id = tlo.order_id and ex.exec_date_id = in_date_id
-where true
-  and ex.is_busted = 'N'
-  and ex.exec_type not in ('E', 'S', 'D', 'y')
-  and ex.exec_id between l_min_exec_id and l_max_exec_id;
+    select tlo.create_date_id,
+           ex.exec_id,
+           ex.exec_time,
+           ex.exec_type,
+           ex.cum_qty,
+           ex.order_status,
+           ex.last_px,
+           ex.last_qty,
+           ex.contra_account_capacity,
+           ex.trade_liquidity_indicator,
+           ex.exch_exec_id,
+           ex.exchange_id,
+           ex.contra_broker,
+           ex.contra_trader,
+           ex.secondary_order_id,
+           ex.secondary_exch_exec_id,
+           ex.exec_date_id,
+           ex.fix_message_id,
+           ex.order_id,
+           ex.order_create_date_id
+    from t_left_orders_gtc tlo
+             join dwh.execution ex on ex.order_id = tlo.order_id and ex.exec_date_id = in_date_id
+             inner join dwh.d_account ac on ac.account_id = tlo.account_id and ac.is_active
+             inner join lateral (select 1
+                                 from dwh.d_trading_firm tf
+                                 where tf.trading_firm_id = ac.trading_firm_id
+                                   and tf.is_eligible4consolidator = 'Y'
+                                   and tf.is_active
+                                 limit 1) tf on true
+    where true
+      and ex.is_busted = 'N'
+      and ex.exec_type not in ('E', 'S', 'D', 'y')
+      and ex.exec_id between l_min_exec_id and l_max_exec_id;
+
+    analyse t_ex;
 
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: non daily orders selected',
                            0, 'O')
@@ -268,7 +278,7 @@ where true
            cl.is_originator,
            cl.orig_order_id,
            cl.client_order_id,
-           cl.exchange_id                                                                                 as cl_exchange_id,
+           cl.exchange_id                 as cl_exchange_id,
            cl.sub_strategy_id,
            cl.sub_strategy_desc,
            cl.sub_system_unq_id,
@@ -293,50 +303,50 @@ where true
            cl.multileg_order_id,
            cl.dash_rfr_id,
            rn.leg_number,
-           ex.exec_id                                                                                     as ex_exec_id,
-           ex.exec_time                                                                                   as ex_exec_time,
-           ex.exec_type                                                                                   as ex_exec_type,
-           ex.cum_qty                                                                                     as ex_cum_qty,
-           ex.order_status                                                                                as ex_order_status,
-           ex.last_px                                                                                     as ex_last_px,
-           ex.last_qty                                                                                    as ex_last_qty,
-           ex.contra_account_capacity                                                                     as ex_contra_account_capacity,
-           ex.trade_liquidity_indicator                                                                   as ex_trade_liquidity_indicator,
-           ex.exch_exec_id                                                                                as ex_exch_exec_id,
-           ex.exchange_id                                                                                 as ex_exchange_id,
-           ex.contra_broker                                                                               as ex_contra_broker,
-           ex.contra_trader                                                                               as ex_contra_trader,
-           ex.secondary_order_id                                                                          as ex_secondary_order_id,
-           ex.secondary_exch_exec_id                                                                      as ex_secondary_exch_exec_id,
-           ex.exec_date_id                                                                                as ex_exec_date_id,
-           ex.fix_message_id                                                                              as ex_fix_message_id,
-           ac.trading_firm_id                                                                             as ac_trading_firm_id,
-           ac.opt_is_fix_clfirm_processed                                                                 as ac_opt_is_fix_clfirm_processed,
-           ac.opt_customer_or_firm                                                                        as ac_opt_customer_or_firm,
-           ac.account_id                                                                                  as ac_account_id,
-           ac.account_demo_mnemonic                                                                       as ac_account_demo_mnemonic,
-           opx.opt_exec_broker                                                                            as opx_opt_exec_broker,
-           fc.acceptor_id                                                                                 as fc_acceptor_id,
-           par.order_id                                                                                   as par_order_id,
-           par.client_order_id                                                                            as par_client_order_id,
-           par.create_date_id                                                                             as par_create_date_id,
-           par.sub_strategy_desc                                                                          as par_sub_strategy_desc,
-           par.order_type_id                                                                              as par_order_type_id,
-           par.time_in_force_id                                                                           as par_time_in_force_id,
-           par.exch_order_id                                                                              as par_exch_order_id,
-           par.orig_order_id                                                                              as par_orig_order_id,
-           str.cons_payment_per_contract                                                                  as str_cons_payment_per_contract,
-           str.order_id                                                                                   as str_order_id,
-           str.cross_order_id                                                                             as str_cross_order_id,
-           str.strtg_decision_reason_code                                                                 as str_strtg_decision_reason_code,
-           str.request_number                                                                             as str_request_number,
-           str.create_date_id                                                                             as str_create_date_id,
-           es.FIX_MESSAGE_ID                                                                              as es_fix_message_id,
-           es.exec_id                                                                                     as es_exec_id,
-           es.contra_broker                                                                               as es_contra_broker,
-           es.contra_account_capacity                                                                     as es_contra_account_capacity,
-           es.contra_trader                                                                               as es_contra_trader,
-           es.exchange_id                                                                                 as es_exchange_id,
+           ex.exec_id                     as ex_exec_id,
+           ex.exec_time                   as ex_exec_time,
+           ex.exec_type                   as ex_exec_type,
+           ex.cum_qty                     as ex_cum_qty,
+           ex.order_status                as ex_order_status,
+           ex.last_px                     as ex_last_px,
+           ex.last_qty                    as ex_last_qty,
+           ex.contra_account_capacity     as ex_contra_account_capacity,
+           ex.trade_liquidity_indicator   as ex_trade_liquidity_indicator,
+           ex.exch_exec_id                as ex_exch_exec_id,
+           ex.exchange_id                 as ex_exchange_id,
+           ex.contra_broker               as ex_contra_broker,
+           ex.contra_trader               as ex_contra_trader,
+           ex.secondary_order_id          as ex_secondary_order_id,
+           ex.secondary_exch_exec_id      as ex_secondary_exch_exec_id,
+           ex.exec_date_id                as ex_exec_date_id,
+           ex.fix_message_id              as ex_fix_message_id,
+           ac.trading_firm_id             as ac_trading_firm_id,
+           ac.opt_is_fix_clfirm_processed as ac_opt_is_fix_clfirm_processed,
+           ac.opt_customer_or_firm        as ac_opt_customer_or_firm,
+           ac.account_id                  as ac_account_id,
+           ac.account_demo_mnemonic       as ac_account_demo_mnemonic,
+           opx.opt_exec_broker            as opx_opt_exec_broker,
+           fc.acceptor_id                 as fc_acceptor_id,
+           par.order_id                   as par_order_id,
+           par.client_order_id            as par_client_order_id,
+           par.create_date_id             as par_create_date_id,
+           par.sub_strategy_desc          as par_sub_strategy_desc,
+           par.order_type_id              as par_order_type_id,
+           par.time_in_force_id           as par_time_in_force_id,
+           par.exch_order_id              as par_exch_order_id,
+           par.orig_order_id              as par_orig_order_id,
+           str.cons_payment_per_contract  as str_cons_payment_per_contract,
+           str.order_id                   as str_order_id,
+           str.cross_order_id             as str_cross_order_id,
+           str.strtg_decision_reason_code as str_strtg_decision_reason_code,
+           str.request_number             as str_request_number,
+           str.create_date_id             as str_create_date_id,
+           es.FIX_MESSAGE_ID              as es_fix_message_id,
+           es.exec_id                     as es_exec_id,
+           es.contra_broker               as es_contra_broker,
+           es.contra_account_capacity     as es_contra_account_capacity,
+           es.contra_trader               as es_contra_trader,
+           es.exchange_id                 as es_exchange_id,
            case
                when cl.parent_order_id is not null and ac.trading_firm_id = 'imc01' then
                    (select max(parent_order_id)
@@ -344,18 +354,27 @@ where true
                     where co.cross_order_id = cl.cross_order_id
                       and co.is_originator <> cl.is_originator
                       and co.create_date_id >= l_retention_date_id)
-               else null end                                                                              as max_orig_parent_order_id
+               else null end              as max_orig_parent_order_id,
+           'G'
+    --     from t_left_orders_gtc tlo
+--              join dwh.client_order cl on tlo.create_date_id = cl.create_date_id and tlo.order_id = cl.order_id --ex.order_id = cl.order_id and ex.order_create_date_id = cl.create_date_id
+--              join dwh.execution ex on ex.order_id = tlo.order_id and ex.exec_date_id = in_date_id
     from t_ex ex
-             inner join dwh.client_order cl on ex.order_id = cl.order_id and ex.order_create_date_id = cl.create_date_id
-             inner join dwh.d_fix_connection fc
-                        on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
-             inner join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
---             inner join dwh.d_trading_firm tf
+             inner join dwh.client_order cl on (ex.order_id = cl.order_id and ex.create_date_id = cl.create_date_id
+        and cl.multileg_reporting_type in ('1', '2')
+        and cl.trans_type <> 'F'
+        and cl.create_date_id >= l_retention_date_id)
+             join dwh.d_fix_connection fc
+                  on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
+             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
+        --             inner join dwh.d_trading_firm tf
 --                        on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
-             inner join lateral(select 1 from dwh.d_trading_firm tf
-                        where tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y'
-                        and tf.is_active
-                        limit 1) tf on true
+             join lateral (select 1
+                           from dwh.d_trading_firm tf
+                           where tf.trading_firm_id = ac.trading_firm_id
+                             and tf.is_eligible4consolidator = 'Y'
+                             and tf.is_active
+                           limit 1) tf on true
              left join lateral (
         select leg_number
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
@@ -401,17 +420,7 @@ where true
                                     and es.exec_date_id >= l_retention_date_id
                                           )
                                 limit 1) es on true
-    where true
---       and ex.exec_date_id = in_date_id
---   and cl.create_date_id = in_date_id
-      and cl.multileg_reporting_type in ('1', '2')
---       and ex.is_busted = 'N'
---       and ex.exec_type not in ('E', 'S', 'D', 'y')
-      and cl.trans_type <> 'F'
-      and cl.create_date_id >= l_retention_date_id
---      and ex.exchange_id  ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%'])
---      and cl.order_id = 18718877729
-;
+    where true;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: non daily orders counted',
                            l_row_cnt, 'O')
@@ -459,7 +468,7 @@ where true
     where atp.lp_symbol_list_id is null
       and atp.is_active
       and al.is_active;
-    create index on t_providers(account_id);
+    create index on t_providers (account_id);
 
 
     drop table if exists trash.imc_base_ext;
@@ -497,8 +506,8 @@ where true
            cl.instrument_id,
            cl.create_date_id,
            cl.fix_connection_id,
-           coalesce(lnb.no_legs, 1)         as no_legs,
-           cl.leg_number                    as leg_number,
+           coalesce(lnb.no_legs, 1)      as no_legs,
+           cl.leg_number                 as leg_number,
            cl.side,
            cl.ex_exec_id,
            cl.ex_exec_time,
@@ -549,9 +558,9 @@ where true
                      from dwh.client_order co
                               join dwh.client_order orig on co.orig_order_id = orig.order_id
                      where co.order_id = cl.max_orig_parent_order_id
-                     and co.create_date_id >= l_retention_date_id
-                     and orig.create_date_id >= l_retention_date_id)
-               end as ORIG_RFR_ID,--orig_rfr_id
+                       and co.create_date_id >= l_retention_date_id
+                       and orig.create_date_id >= l_retention_date_id)
+               end                       as ORIG_RFR_ID,--orig_rfr_id
 
            case
                when cl.ex_exec_type in ('S', 'W') then orig.client_order_id
@@ -619,14 +628,15 @@ where true
                                 where fmj.fix_message_id = cl.ex_fix_message_id
                                   and fmj.date_id = in_date_id
                                 limit 1) fmj_p on true
-             left join dash_reporting.matched_cross_trades_pg mct on mct.orig_exec_id = coalesce(cl.es_exec_id, cl.ex_exec_id)
+             left join dash_reporting.matched_cross_trades_pg mct
+                       on mct.orig_exec_id = coalesce(cl.es_exec_id, cl.ex_exec_id)
              left join lateral (select orig.client_order_id, exch_order_id
                                 from dwh.client_order orig
                                 where orig.order_id = cl.orig_order_id
 --                                   and cl.ex_exec_type in ('S', 'W')
                                   and orig.create_date_id <= in_date_id
                                   and cl.orig_order_id is not null
-                                and orig.create_date_id >= l_retention_date_id
+                                  and orig.create_date_id >= l_retention_date_id
                                 order by orig.create_date_id desc
                                 limit 1) orig on true
              left join lateral (select cxl.client_order_id as client_order_id
@@ -643,7 +653,7 @@ where true
                                 from dwh.client_order cnl
                                 where cnl.order_id = cl.multileg_order_id
 --                                   and cnl.create_date_id = in_date_id --??
-                                      and cnl.create_date_id >= l_retention_date_id
+                                  and cnl.create_date_id >= l_retention_date_id
                                 limit 1) lnb on true
 
              left join lateral (select string_agg(LP_DEMO_MNEMONIC, ' ') as t_alp_agg
@@ -914,7 +924,8 @@ where true
                when tbs.ex_exec_type = 'F' then
                    case
 --                       when tbs.ex_exchange_id ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%']) then substr(str_t9730, 2, 1)
-                       when tbs.ex_exchange_id ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%']) then substr(coalesce(str_t9730,par_t9730), 2, 1)
+                       when tbs.ex_exchange_id ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%'])
+                           then substr(coalesce(str_t9730, par_t9730), 2, 1)
                        when tbs.par_order_id is not null then tbs.ex_contra_account_capacity
                        else tbs.es_contra_account_capacity
                        end
@@ -1005,21 +1016,22 @@ where true
                when tbs.ex_EXEC_TYPE = 'F' and
                     (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
                      coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
-                   and dash_reporting.get_lp_list(tbs.ac_account_id, i.symbol, tbs.create_time::date) -- equal staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is NOT null
+                   and dash_reporting.get_lp_list(tbs.ac_account_id, i.symbol,
+                                                  tbs.create_time::date) -- equal staging.get_lp_list_tmp(ac.ACCOUNT_ID, I.SYMBOL, in_date_id::text::date) is NOT null
                    then 'Exhaust'
                when tbs.ex_EXEC_TYPE = 'F' and
                     (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
                      coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
                    and staging.get_lp_list_lite(tbs.ac_ACCOUNT_ID, OS.ROOT_SYMBOL,
-                                                    case tbs.MULTILEG_REPORTING_TYPE
-                                                        when '1' then 'O'
-                                                        when '2' then 'M' end) is not null
+                                                case tbs.MULTILEG_REPORTING_TYPE
+                                                    when '1' then 'O'
+                                                    when '2' then 'M' end) is not null
                    then 'Exhaust'
                when tbs.ex_EXEC_TYPE = 'F' and
                     (coalesce(tbs.par_SUB_STRATEGY_desc, tbs.SUB_STRATEGY_desc) not in ('DMA', 'CSLDTR', 'RETAIL') or
                      coalesce(tbs.request_number, tbs.str_request_number, -1) = -1)
                    then 'Exhaust_IMC'
-               end as BILLING_CODE,
+               end                                                                                     as BILLING_CODE,
            tbs.ac_account_demo_mnemonic,
 
            tbs.str_t9730,
@@ -1135,6 +1147,6 @@ where true
     select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: all data was prepared',
                            l_row_cnt, 'O')
     into l_step_id;
-    end;
-    $procedure$
+end;
+$procedure$
 ;
