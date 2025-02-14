@@ -187,8 +187,7 @@ drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool, i
 create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
                                                           in_exec_broker text,-- default '792'::text,
                                                           in_is_eod boolean default false,
-                                                          in_removed_account_ids int4[] default '{}'::int4[]
---                                                               '{257165,263022,62810,62887,62923,63787,67949}'::int4[]
+                                                          in_removed_account_ids int4[] default '{263022,62810,62887,62923,63787,67949}'::int4[]
 )
     returns table
             (

@@ -713,3 +713,153 @@ with b as (select *
            where account_id != all ('{}'))
 select * from b
 where account_id = 16435
+
+
+select date_id, is_billed, trade_record_id, exec_broker, tr.account_id, ac.opt_report_to_mpid, ac.trading_firm_id, *
+from genesis2.trade_record tr
+join genesis2.account ac on tr.account_id = ac.account_id
+where trade_record_id in (2346726833,2346726834,2346726835,2346726836,2346726837);
+
+
+
+        -- list of reported alloc_instr_id
+        l_alloc_instr_id_reported := '{}'::int4[];
+        select array_agg(ba.alloc_instr_id)
+--         into l_alloc_instr_id_reported
+        from dash_reporting.bofa_allocation_report ba
+        where ba.date_id between :in_start_date_id and :in_end_date_id
+          and ba.to_report in ('R');
+
+        -- list of trade records from reported alloc_instr_id
+        drop table if exists t_trade_record_reported;
+        create temp table t_trade_record_reported as
+        select tr.trade_record_id, tr.date_id, aitr.alloc_instr_id
+        from genesis2.trade_record tr
+                 join genesis2.alloc_instr2trade_record aitr
+                      on tr.trade_record_id = aitr.trade_record_id and aitr.date_id = tr.date_id
+        where aitr.alloc_instr_id = any (:l_alloc_instr_id_reported);
+
+        drop table if exists t_trade_record_to_exclude;
+        create temp table t_trade_record_to_exclude as
+        select aitr.trade_record_id, aitr.date_id, aitr.alloc_instr_id
+        from genesis2.alloc_instr2trade_record aitr
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = aitr.alloc_instr_id and ai.date_id = aitr.date_id
+                 join genesis2.trade_record tr
+                      on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+        where aitr.date_id between :in_start_date_id and :in_end_date_id
+          and ai.is_deleted = 'N'
+          and tr.exec_broker = :in_exec_broker;
+        create index on t_trade_record_to_exclude (trade_record_id);
+
+        -- find all valid trade_records: all except the records from the prev
+
+        drop table if exists t_trade_record_to_report;
+        create temp table t_trade_record_to_report as
+        SELECT ftr.order_id,
+            ftr.date_id           AS date_id,
+               ftr.trade_record_id,
+               :l_load_id             as dataset,
+               CASE
+                   WHEN acc.opt_is_fix_clfirm_processed = 'Y' THEN ftr.cmta
+                   ELSE NULL END     AS cmta,
+               ftr.open_close,
+               ftr.order_id          AS order_id,
+               ftr.instrument_id,
+               ftr.account_id,
+               ftr.side,
+               ftr.last_qty          AS last_qty,
+               ftr.last_px           AS last_px,
+               ftr.opt_customer_firm as opt_customer_firm,
+               0                     AS is_cleared,
+               acc.opt_is_fix_clfirm_processed,
+               acc.opt_customer_or_firm,
+               acc.opt_nickel_commission,
+               acc.opt_penny_commission,
+               acc.opt_is_fix_custfirm_processed,
+               case
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_reported trr
+                                                                     where trr.trade_record_id = ftr.trade_record_id)
+                       then 'U'
+                   when ftr.orig_trade_record_id is null then 'R'
+                   when exists (select null
+                                from t_trade_record_reported rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+                       then 'U'
+                   else 'R' end      as to_report,
+               case
+
+                   when ftr.orig_trade_record_id is null and exists (select null
+                                                                     from t_trade_record_to_exclude tre
+                                                                     where tre.trade_record_id = ftr.trade_record_id)
+                       then 'D'
+                   when ftr.orig_trade_record_id is null then null
+                   when exists (select null
+                                from t_trade_record_to_exclude rp
+                                where rp.trade_record_id = any
+                                      (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+                       then 'D' end  as to_del
+        FROM genesis2.trade_record ftr
+                 join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
+                 JOIN genesis2.account acc ON (acc.account_id = ftr.account_id)
+                 left join t_trade_record_to_exclude tex
+                           on tex.trade_record_id = ftr.trade_record_id and tex.date_id = ftr.date_id
+        WHERE ftr.trade_record_id in (2346726833,2346726834,2346726835,2346726836,2346726837)
+            and ftr.date_id between :in_start_date_id and :in_end_date_id
+          AND is_busted = 'N'
+--           AND ftr.order_id > 0
+          and gi.instrument_type_id = 'O'
+          and ftr.exec_broker = :in_exec_broker
+          and tex.trade_record_id is null
+          and acc.is_deleted <> 'Y'
+          AND acc.opt_report_to_mpid = 'MLCB'
+          AND acc.trading_firm_id <> 'cantor'
+        --           and not exists (select null
+--                           from t_trade_record_to_exclude rp
+--                           where rp.trade_record_id = any
+--                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
+        ;
+
+        insert into dash_reporting.bofa_trade_record (date_id, trade_record_id, dataset, to_report)
+        select date_id, trade_record_id, dataset, to_report
+        from t_trade_record_to_report
+        where to_del is null;
+        get diagnostics l_row_cnt = row_count;
+
+        -- Subscription
+        perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
+                                in_row_cnt=>coalesce(l_row_cnt, 0),
+                                in_subscription_name => 'trade_record',
+                                in_source_table_name => 'bofa_trade_record',
+                                in_date_id => in_start_date_id);
+
+        drop table if exists t_ftr;
+        create temp table t_ftr as
+        SELECT rtr.date_id,
+               rtr.cmta,
+               rtr.open_close,
+               rtr.order_id,
+               rtr.instrument_id,
+               rtr.side,
+               sum(rtr.last_qty)                                                AS day_cum_qty,
+               CASE sum(rtr.last_qty)
+                   WHEN 0 THEN NULL
+                   ELSE sum(rtr.last_qty * rtr.last_px) / sum(rtr.last_qty) END AS avg_px,
+               max(rtr.opt_customer_firm)                                       AS customer_or_firm_id,
+               rtr.opt_is_fix_clfirm_processed,
+               rtr.opt_customer_or_firm,
+               rtr.opt_nickel_commission,
+               rtr.opt_penny_commission,
+               rtr.opt_is_fix_custfirm_processed
+/*,
+       max(street_account_name) as street_account_name*/
+        FROM t_trade_record_to_report rtr
+        where date_id between in_start_date_id and in_end_date_id
+          and to_report = 'R'
+          and to_del is null
+        group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
+                 rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
+                 rtr.opt_nickel_commission, rtr.opt_penny_commission,
+                 rtr.opt_is_fix_custfirm_processed;
