@@ -183,9 +183,13 @@ comment on function staging.all_orig_trade_record_id_today is 'Auxilary function
 
 
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool);
+drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool, int4[]);
 create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
                                                           in_exec_broker text,-- default '792'::text,
-                                                          in_is_eod boolean default false)
+                                                          in_is_eod boolean default false,
+                                                          in_removed_account_ids int4[] default '{}'::int4[]
+--                                                               '{257165,263022,62810,62887,62923,63787,67949}'::int4[]
+)
     returns table
             (
                 ret_row text
@@ -194,10 +198,11 @@ create or replace function dash360.bofa_allocation_report(in_start_date_id int4,
 as
 $function$
     -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
--- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
--- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
--- and dash_reporting.bofa_trade_record for EOD
+      -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
+      -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
+      -- and dash_reporting.bofa_trade_record for EOD
     -- 20250116 SO https://dashfinancial.atlassian.net/browse/DS-9313 add subscriptions
+    -- 20250214 SO https://dashfinancial.atlassian.net/browse/DS-9590 add in_removed_account_ids - list of accounts ignored during intraday
 
 declare
     l_load_id                 int;
@@ -285,9 +290,11 @@ begin
                      join genesis2.clearing_account ca
                           on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                               and ca.clearing_account_type = '1' and ca.market_type = 'O')
-                     join genesis2.account acc ON (acc.account_id = ca.account_id and acc.is_deleted <> 'Y' and
-                                                   acc.opt_report_to_mpid = 'MLCB' and
-                                                   acc.trading_firm_id <> 'cantor')
+                     join genesis2.account acc ON (acc.account_id = ca.account_id and acc.is_deleted <> 'Y'
+                and acc.opt_report_to_mpid = 'MLCB'
+                and acc.trading_firm_id <> 'cantor'
+                and case when in_is_eod then true else acc.account_id != all (in_removed_account_ids) end
+                )
                      join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
                      join genesis2.option_series os on os.option_series_id = oc.option_series_id
                      join genesis2.instrument i on i.instrument_id = alin.instrument_id
@@ -602,6 +609,7 @@ begin
 end;
 $function$
 ;
+
 comment on function dash360.bofa_allocation_report is 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
