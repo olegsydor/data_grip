@@ -1135,7 +1135,7 @@ begin
                null::boolean                  as is_prev_reported
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
-                 left join lateral (select rep.to_report, rep.db_create_time
+                 left join lateral (select case when rep.to_report = 'U' and staging.get_fully_reported_trade, rep.db_create_time
                                     from t_trade_record rep
                                     where rep.alloc_instr_id = ai.alloc_instr_id
                                     limit 1) rep on true
