@@ -1,6 +1,5 @@
--- DROP PROCEDURE trash.imc_report_making(int4);
-
-CREATE OR REPLACE PROCEDURE trash.imc_report_making(IN in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
+-- compare 1 PROD
+CREATE OR REPLACE PROCEDURE dash_reporting.imc_report_making(IN in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
     LANGUAGE plpgsql
 AS
 $procedure$
@@ -10,25 +9,24 @@ declare
     l_load_id           int;
     l_row_cnt           int;
     l_step_id           int;
-    l_retention_date_id int4;
+    l_retention_date_id int4 := 20230901;
     l_min_exec_id       int8;
     l_max_exec_id       int8;
 
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id,
-                           'get_consolidator_eod_pg (trash) for ' || in_date_id::text || ' STARTED ===',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg for ' || in_date_id::text || ' STARTED ===',
                            0, 'O')
     into l_step_id;
 
---    call dash_reporting.match_cross_trades_pg(in_date_id);
+    call dash_reporting.match_cross_trades_pg(in_date_id);
 
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): match_cross_trades_pg finished',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: match_cross_trades_pg finished',
                            0, 'O')
     into l_step_id;
 
-
+    -- retention date
     select min(cl.create_date_id)
     into l_retention_date_id
     from dwh.client_order cl
@@ -43,21 +41,20 @@ begin
     where true
       and (gtc.close_date_id is null
         or gtc.close_date_id >= in_date_id);
-
     select min(exec_id), max(exec_id)
     into l_min_exec_id, l_max_exec_id
     from dwh.execution
     where exec_date_id = in_date_id;
 
     select public.load_log(l_load_id, l_step_id,
-                           'get_consolidator_eod_pg (trash): retention_date_id = ' || l_retention_date_id::text ||
+                           'get_consolidator_eod_pg: retention_date_id = ' || l_retention_date_id::text ||
                            '. exec_id between ' || l_min_exec_id::text || ' and ' || l_max_exec_id::text,
                            0, 'O')
     into l_step_id;
 
 -- Daily orders
-    drop table if exists trash.imc_base;
-    create table trash.imc_base as
+    drop table if exists dash_reporting.imc_base;
+    create table dash_reporting.imc_base as
     select cl.order_id,
            cl.create_date_id,
            cl.transaction_id,
@@ -199,15 +196,12 @@ begin
       and ex.is_busted = 'N'
       and ex.exec_type not in ('E', 'S', 'D', 'y')
       and cl.trans_type <> 'F'
-      and ex.exec_id between l_min_exec_id and l_max_exec_id
-    --      and cl.order_id = 18718877729
---      and ex.exchange_id ~~* any (array ['%MIAX%', '%EMLD%','%SPHR%', '%MPRL%'])
-    ;
+      and ex.exec_id between l_min_exec_id and l_max_exec_id;
     get diagnostics l_row_cnt = row_count;
 
-    create index on trash.imc_base (order_id, ex_exec_id);
+    create index on dash_reporting.imc_base (order_id, ex_exec_id);
 
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): daily orders counted',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: daily orders counted',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -220,7 +214,7 @@ begin
         or (close_date_id is not null and close_date_id >= in_date_id))
     except
     select order_id, in_date_id, ac_account_id
-    from trash.imc_base;
+    from dash_reporting.imc_base;
 
     analyze t_left_orders_gtc;
 
@@ -261,13 +255,12 @@ begin
       and ex.exec_id between l_min_exec_id and l_max_exec_id;
 
     analyse t_ex;
-
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): non daily orders selected',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: non daily orders selected',
                            0, 'O')
     into l_step_id;
 
 -- non daily orders
-    insert into trash.imc_base
+    insert into dash_reporting.imc_base
     select cl.order_id,
            cl.create_date_id,
            cl.transaction_id,
@@ -362,17 +355,15 @@ begin
         and cl.multileg_reporting_type in ('1', '2')
         and cl.trans_type <> 'F'
         and cl.create_date_id >= l_retention_date_id)
-             join dwh.d_fix_connection fc
-                  on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
-             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
-        --             inner join dwh.d_trading_firm tf
---                        on (tf.trading_firm_id = ac.trading_firm_id and tf.is_eligible4consolidator = 'Y')
-             join lateral (select 1
-                           from dwh.d_trading_firm tf
-                           where tf.trading_firm_id = ac.trading_firm_id
-                             and tf.is_eligible4consolidator = 'Y'
-                             and tf.is_active
-                           limit 1) tf on true
+             inner join dwh.d_fix_connection fc
+                        on (fc.fix_connection_id = cl.fix_connection_id and fc.fix_comp_id <> 'IMCCONS')
+             inner join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
+             inner join lateral (select 1
+                                 from dwh.d_trading_firm tf
+                                 where tf.trading_firm_id = ac.trading_firm_id
+                                   and tf.is_eligible4consolidator = 'Y'
+                                   and tf.is_active
+                                 limit 1) tf on true
              left join lateral (
         select leg_number
         from (select order_id, dense_rank() over (partition by co.multileg_order_id order by co.order_id) as leg_number
@@ -420,13 +411,13 @@ begin
                                 limit 1) es on true
     where true;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): non daily orders counted',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: non daily orders counted',
                            l_row_cnt, 'O')
     into l_step_id;
 
     drop table if exists t_left_orders_gtc;
     drop table if exists t_ex;
-    analyze trash.imc_base;
+    analyze dash_reporting.imc_base;
 
     drop table if exists t_alp;
 
@@ -469,8 +460,8 @@ begin
     create index on t_providers (account_id);
 
 
-    drop table if exists trash.imc_base_ext;
-    create table trash.imc_base_ext as
+    drop table if exists dash_reporting.imc_base_ext;
+    create table dash_reporting.imc_base_ext as
     select cl.order_id,
            cl.transaction_id,
            cl.create_time,
@@ -615,7 +606,7 @@ begin
            fmj.t9730                     as str_t9730,
            fmj_p.t9730                   as par_t9730
 
-    from trash.imc_base cl
+    from dash_reporting.imc_base cl
              left join lateral (select fix_message ->> '9730' as t9730
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.es_fix_message_id
@@ -671,17 +662,17 @@ begin
                                 group by cc.cross_order_id
                                 limit 1) cc on true;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): extended table created',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: extended table created',
                            l_row_cnt, 'O')
     into l_step_id;
-    analyze trash.imc_base_ext;
+    analyze dash_reporting.imc_base_ext;
 
     drop table if exists t_alp;
 
-    drop table if exists trash.imc_base_ext_md;
-    create table trash.imc_base_ext_md as
+    drop table if exists dash_reporting.imc_base_ext_md;
+    create table dash_reporting.imc_base_ext_md as
     select *
-    from trash.imc_base_ext cl
+    from dash_reporting.imc_base_ext cl
              left join lateral (select
                                     -- AMEX
                                     max(case when ls.exchange_id = 'AMEX' then ls.ask_price end)      as amex_ask_price,
@@ -780,7 +771,7 @@ begin
                                 limit 1
         ) md on true;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): market_data was added',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: market_data was added',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -800,7 +791,7 @@ begin
          where clp.liquidity_provider_id = 'IMC');
     analyze t_wht;
     analyze t_blk;
-    analyze trash.imc_base_ext_md;
+    analyze dash_reporting.imc_base_ext_md;
 
 ------------------
     drop table if exists t_clearing_account;
@@ -821,8 +812,8 @@ begin
     analyze t_opt_exec_broker;
 
 
-    drop table if exists trash.imc_final;
-    create table trash.imc_final as
+    drop table if exists dash_reporting.imc_final;
+    create table dash_reporting.imc_final as
     with white as (select symbol, instrument_type_id from t_wht)
        , black as (select symbol, instrument_type_id from t_blk)
     select tbs.transaction_id,
@@ -1125,7 +1116,7 @@ begin
            tbs.mxop_ask_price                                                                          as AskU,
            tbs.mxop_ask_quantity                                                                       as AskSzU
 
-    from trash.imc_base_ext_md tbs
+    from dash_reporting.imc_base_ext_md tbs
              inner join dwh.d_instrument i on i.instrument_id = tbs.instrument_id
              left join dwh.cross_order cro on cro.cross_order_id = tbs.cross_order_id
              left join dwh.d_exchange exc on exc.exchange_id = tbs.cl_exchange_id and exc.is_active
@@ -1142,7 +1133,7 @@ begin
              left join dwh.d_sub_system dss on dss.sub_system_unq_id = tbs.sub_system_unq_id
     where true;
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg (trash): all data was prepared',
+    select public.load_log(l_load_id, l_step_id, 'get_consolidator_eod_pg: all data was prepared',
                            l_row_cnt, 'O')
     into l_step_id;
 end;
