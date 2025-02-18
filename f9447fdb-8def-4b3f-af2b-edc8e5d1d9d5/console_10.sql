@@ -1132,3 +1132,16 @@ end ;
 $function$
 ;
 comment on function dash360.allocations_snapshot is 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
+
+
+select subsystem_id, *
+from genesis2.trade_record
+where true
+--      and order_id is null
+and date_id >= 20240101
+and exec_id < 0
+-- and subsystem_id = 'OMS_EDW'
+
+
+select * from staging.trade_record_missed_lp
+where date_id = 20250214;

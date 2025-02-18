@@ -184,25 +184,23 @@ comment on function staging.all_orig_trade_record_id_today is 'Auxilary function
 
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool);
 drop function if exists dash360.bofa_allocation_report(int4, int4, text, bool, int4[]);
-create or replace function dash360.bofa_allocation_report(in_start_date_id int4, in_end_date_id int4,
-                                                          in_exec_broker text,-- default '792'::text,
-                                                          in_is_eod boolean default false,
-                                                          in_removed_account_ids int4[] default '{263022,62810,62887,62923,63787,67949}'::int4[]
-)
-    returns table
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
+                                                          in_exec_broker text, in_is_eod boolean DEFAULT false,
+                                                          in_removed_account_ids integer[] DEFAULT '{263022,62810,62887,62923,63787,67949}'::integer[])
+    RETURNS TABLE
             (
                 ret_row text
             )
-    language plpgsql
-as
+    LANGUAGE plpgsql
+AS
 $function$
     -- 20241224 SO https://dashfinancial.atlassian.net/browse/DS-9237
-      -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
-      -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
-      -- and dash_reporting.bofa_trade_record for EOD
+    -- The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
+    -- and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
+    -- and dash_reporting.bofa_trade_record for EOD
     -- 20250116 SO https://dashfinancial.atlassian.net/browse/DS-9313 add subscriptions
     -- 20250214 SO https://dashfinancial.atlassian.net/browse/DS-9590 add in_removed_account_ids - list of accounts ignored during intraday
-
+    -- 20250218 SO https://dashfinancial.atlassian.net/browse/D360-15295 removed condition order_id > 0 in the EOD part (about 290 row)
 declare
     l_load_id                 int;
     l_step_id                 int;
@@ -317,10 +315,10 @@ begin
 
     -- Subscription (for ONLY THESE trade_record_id with  R in alloc_instr_id)
     perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
-                                in_row_cnt=>coalesce(l_row_cnt, 0),
-                                in_subscription_name => 'trade_record',
-                                in_source_table_name => 'bofa_allocation_report',
-                                in_date_id => in_start_date_id);
+                                   in_row_cnt=>coalesce(l_row_cnt, 0),
+                                   in_subscription_name => 'trade_record',
+                                   in_source_table_name => 'bofa_allocation_report',
+                                   in_date_id => in_start_date_id);
 
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed', coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
@@ -479,7 +477,7 @@ begin
                            on tex.trade_record_id = ftr.trade_record_id and tex.date_id = ftr.date_id
         WHERE ftr.date_id between in_start_date_id and in_end_date_id
           AND is_busted = 'N'
-          AND ftr.order_id > 0
+--          AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
           and tex.trade_record_id is null
@@ -500,10 +498,10 @@ begin
 
         -- Subscription
         perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
-                                in_row_cnt=>coalesce(l_row_cnt, 0),
-                                in_subscription_name => 'trade_record',
-                                in_source_table_name => 'bofa_trade_record',
-                                in_date_id => in_start_date_id);
+                                       in_row_cnt=>coalesce(l_row_cnt, 0),
+                                       in_subscription_name => 'trade_record',
+                                       in_source_table_name => 'bofa_trade_record',
+                                       in_date_id => in_start_date_id);
 
         drop table if exists t_ftr;
         create temp table t_ftr as
