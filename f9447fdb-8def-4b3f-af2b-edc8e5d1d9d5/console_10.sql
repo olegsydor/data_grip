@@ -875,7 +875,7 @@ where trade_record_id in (2346726833,2346726834,2346726835,2346726836,2346726837
 select *
 from staging.get_fully_reported_trade(-57801, 20250214);
 
-drop function if exists dash360.so_allocations_snapshot(int8[], int4, bpchar);
+drop function if exists dash360.allocations_snapshot(int8[], int4, bpchar);
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
 CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),

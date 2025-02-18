@@ -1611,4 +1611,26 @@ end;
 $fx$;
 comment on function staging.fix_ptm_missed_r is 'The script fix the issue when trade_records exist with missed status R';
 
+
+drop function staging.get_fully_reported_trade;
+create function staging.get_fully_reported_trade(in_alloc_instr_id int4, in_date_id int4)
+    returns int4
+    language plpgsql
+as
+$fx$
+declare
+    l_ret_cnt int4;
+begin
+    select count(distinct tr.is_billed)
+    into l_ret_cnt
+    from genesis2.alloc_instr2trade_record atr
+             join genesis2.trade_record tr on tr.trade_record_id = atr.trade_record_id and tr.date_id = atr.date_id
+    where atr.date_id = in_date_id
+      and atr.alloc_instr_id = in_alloc_instr_id;
+
+    return l_ret_cnt;
+
+end;
+$fx$;
+
 select * from staging.fix_ptm_missed_r()
