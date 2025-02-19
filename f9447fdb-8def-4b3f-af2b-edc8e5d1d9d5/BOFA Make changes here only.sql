@@ -1454,7 +1454,7 @@ begin
                  left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = bar.instrument_id
                  left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
-                 left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and ui.is_deleted <> 'Y'
+                 left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and uic.is_deleted <> 'Y'
         where bar.date_id = in_date_id
           and bar.to_report = 'R'
         group by bar.alloc_instr_id

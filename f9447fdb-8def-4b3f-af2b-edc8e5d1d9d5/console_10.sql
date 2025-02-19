@@ -1146,4 +1146,74 @@ and exec_id < 0
 select * from staging.trade_record_missed_lp
 where date_id = 20250214;
 
-select * from genesis2.cu
+select * from genesis2.customer_or_firm;
+
+
+        select min(tr.exec_broker)  as exec_broker,                                     -- "Exec Broker"
+               'allocation',                                                            -- "Type"
+               min(tf.trading_firm_name),                                               -- "Trading Firm Name"
+               min(ac.account_name) as account_name,                                    -- "Account Name"
+               bar.alloc_instr_id,                                                      -- "Alloc Instr ID"
+               null::int8,                                                              -- "Trade Record ID"
+               min(di.display_instrument_id2),                                          -- "Symbol"
+               min(case bar.side when '1' then 'Buy' when '2' then 'Sell' end),         -- "Side"
+               min(case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end), -- "O/C"
+               min(ai.total_qty),                                                       -- "Exec Qty"
+               min(bar.avg_px),                                                         -- "Avg Px"
+               min(bar.ca_cmta),                                                        -- "CMTA"
+               min(bar.occ_actionable_id),                                              -- "OCC AID"
+               string_agg(distinct concat_ws(': ', cst.customer_or_firm_id, cst.customer_or_firm_name),
+                          ', '),                                                        -- "Capacity"
+
+               'Reported',                                                              -- "Reported Status"
+               min(bar.db_create_time),                                                 -- "Reported Time"
+               '',                                                                      -- "Trade is busted"
+               min(ai.create_time),                                                     -- "Created Time"
+               min(uic.user_name),                                                      -- "Created by User"
+               min(ai.is_deleted),                                                      -- "Alloc is deleted"
+               min(ai.delete_time),                                                     -- "Deleted Time"
+               min(ui.user_name)                                                        -- "Deleted by User"
+,min(ai.created_by_user_id)
+        , min(ai.deleted_by_user_id)
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join lateral (select tr.exec_broker, tr.account_id
+                               from genesis2.alloc_instr2trade_record aitr
+                                        join genesis2.trade_record tr using (trade_record_id, date_id)
+                               where (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                               and tr.exec_broker = :in_exec_broker
+                               limit 1) tr on true
+                 left join genesis2.customer_or_firm cst on cst.customer_or_firm_id = bar.opt_customer_or_firm
+
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = bar.instrument_id
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+                 left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and uic.is_deleted <> 'Y'
+        where bar.date_id = :in_date_id
+          and bar.to_report = 'R'
+        group by bar.alloc_instr_id;
+
+
+
+-- list of tables with specific column names
+select distinct t.table_schema
+                , t.table_name
+--                 , c.column_name
+--                , data_type
+from information_schema.tables t
+         inner join information_schema.columns c on (c.table_name = t.table_name and c.table_schema = t.table_schema)
+where true
+and t.table_schema not in
+      ('trash', 'information_schema', 'pg_catalog', 'dm_partitions', 'ot_partitions', 'partitions', 'cmp_partitions',
+       'md_partitions', 'fc_partitions', 'fc_partitions_tmp_hft', 'external_data_partitions')
+  and t.table_name ilike '%customer_or_firm%'
+--  and t.table_schema in ('dwh', 'staging', 'public')
+  and c.column_name ilike '%billing_type%'
+  or c.column_name ilike '%max\_%')
+  and c.column_name ilike '%royalty%'
+  and t.table_type = 'BASE TABLE';
+select * from genesis2.cust_or_firm
+
+select * from staging.customer_or_firm
