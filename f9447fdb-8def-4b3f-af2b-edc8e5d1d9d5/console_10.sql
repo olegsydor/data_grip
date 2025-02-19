@@ -1145,3 +1145,5 @@ and exec_id < 0
 
 select * from staging.trade_record_missed_lp
 where date_id = 20250214;
+
+select * from genesis2.cu

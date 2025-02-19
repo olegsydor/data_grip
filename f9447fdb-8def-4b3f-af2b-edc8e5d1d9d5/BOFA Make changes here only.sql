@@ -1391,36 +1391,13 @@ end;
 $function$
 ;
 
-create or replace function dash360.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
-    returns table
-            (
-                "Exec Broker"       text,
-                "Type"              text,
-                "Trading Firm Name" text,
-                "Account Name"      text,
-                "Alloc Instr ID"    integer,
-                "Trade Record ID"   bigint,
-                "Symbol"            text,
-                "Side"              text,
-                "O/C"               text,
-                "Exec Qty"          integer,
-                "Avg Px"            numeric,
-                "CMTA"              text,
-                "OCC AID"           text,
-                "Capacity"          text,
-                "Reported Status"   text,
-                "Reported Time"     timestamp without time zone,
-                "Trade is busted"   character,
-                "Created Time"      timestamp without time zone,
-                "Created by User"   text,
-                "Alloc is deleted"  character,
-                "Deleted Time"      timestamp without time zone,
-                "Deleted by User"   text
-            )
-    language plpgsql
-     security definer
-AS
-$function$
+-- DROP FUNCTION dash360.report_alloc_instr_trade_record(int4, text);
+
+CREATE OR REPLACE FUNCTION dash360.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
+ RETURNS TABLE("Exec Broker" text, "Type" text, "Trading Firm Name" text, "Account Name" text, "Alloc Instr ID" integer, "Trade Record ID" bigint, "Symbol" text, "Side" text, "O/C" text, "Exec Qty" integer, "Avg Px" numeric, "CMTA" text, "OCC AID" text, "Capacity" text, "Reported Status" text, "Reported Time" timestamp without time zone, "Trade is busted" character, "Created Time" timestamp without time zone, "Created by User" text, "Alloc is deleted" character, "Deleted Time" timestamp without time zone, "Deleted by User" text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
     -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
     -- 2025-01-21 OS https://dashfinancial.atlassian.net/browse/DS-9441 add new columns reported_time, is_deleted, delete_time, user_name
     -- 2025-02-12 OS https://dashfinancial.atlassian.net/browse/DS-9572 add new columns
@@ -1469,6 +1446,7 @@ begin
                                from genesis2.alloc_instr2trade_record aitr
                                         join genesis2.trade_record tr using (trade_record_id, date_id)
                                where (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+                               and tr.exec_broker = in_exec_broker
                                limit 1) tr on true
                  left join genesis2.customer_or_firm cst on cst.customer_or_firm_id = bar.opt_customer_or_firm
 
