@@ -1611,4 +1611,106 @@ begin
 end;
 $fx$;
 
+
+create or replace function dash360.get_reported_allocation_data_by_ids(in_date_id integer, in_alloc_instr_ids int4[])
+    returns table
+            (
+                "Exec Broker"       text, -- 1
+                "Type"              text,
+                "Trading Firm Name" text,
+                "Account Name"      text,
+                "Alloc Instr ID"    integer, -- 5
+                "Trade Record ID"   bigint,
+                "Symbol"            text,
+                "Side"              text,
+                "O/C"               text,
+                "Exec Qty"          integer, -- 10
+                "Avg Px"            numeric,
+                "CMTA"              text,
+                "OCC AID"           text,
+                "Capacity"          text,
+                "Reported Status"   text, -- 15
+                "Reported Time"     timestamp without time zone,
+                "Trade is busted"   character,
+                "Created Time"      timestamp without time zone,
+                "Created by User"   text,
+                "Alloc is deleted"  character, -- 20
+                "Deleted Time"      timestamp without time zone,
+                "Deleted by User"   text
+            )
+    language plpgsql
+    security definer
+as
+$function$
+    -- 2025-01-17 OS https://dashfinancial.atlassian.net/browse/DS-9441
+    -- 2025-01-21 OS https://dashfinancial.atlassian.net/browse/DS-9441 add new columns reported_time, is_deleted, delete_time, user_name
+    -- 2025-02-12 OS https://dashfinancial.atlassian.net/browse/DS-9572 add new columns
+    -- 2025-02-20 OS https://dashfinancial.atlassian.net/browse/DS-9607 inherited from the old report
+declare
+    l_load_id int;
+    l_step_id int;
+    l_row_cnt int;
+
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'get_reported_allocation_data_by_ids for ' || in_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+    return query
+        select min(tr.exec_broker)  as exec_broker,                                     -- "Exec Broker" -- 1
+               'allocation',                                                            -- "Type"
+               min(tf.trading_firm_name),                                               -- "Trading Firm Name"
+               min(ac.account_name) as account_name,                                    -- "Account Name"
+               bar.alloc_instr_id,                                                      -- "Alloc Instr ID" -- 5
+               null::int8,                                                              -- "Trade Record ID"
+               min(di.display_instrument_id2),                                          -- "Symbol"
+               min(case bar.side when '1' then 'Buy' when '2' then 'Sell' end),         -- "Side"
+               min(case bar.open_close when 'O' then 'Open' when 'C' then 'Close' end), -- "O/C"
+               min(ai.total_qty),                                                       -- "Exec Qty" -- 10
+               min(bar.avg_px),                                                         -- "Avg Px"
+               min(bar.ca_cmta),                                                        -- "CMTA"
+               min(bar.occ_actionable_id),                                              -- "OCC AID"
+               string_agg(distinct concat_ws(': ', cst.customer_or_firm_id, cst.customer_or_firm_name),
+                          ', '),                                                        -- "Capacity"
+
+               'Reported',                                                              -- "Reported Status" -- 15
+               min(bar.db_create_time),                                                 -- "Reported Time"
+               ''::character,                                                           -- "Trade is busted"
+               min(ai.create_time),                                                     -- "Created Time"
+               min(uic.user_name),                                                      -- "Created by User"
+               min(ai.is_deleted),                                                      -- "Alloc is deleted" -- 20
+               min(ai.delete_time),                                                     -- "Deleted Time"
+               min(ui.user_name)                                                        -- "Deleted by User"
+
+        from dash_reporting.bofa_allocation_report bar
+                 join genesis2.allocation_instruction ai
+                      on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
+                 join lateral (select tr.exec_broker, tr.account_id
+                               from genesis2.alloc_instr2trade_record aitr
+                                        join genesis2.trade_record tr using (trade_record_id, date_id)
+                               where (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
+--                                and tr.exec_broker = in_exec_broker
+                               limit 1) tr on true
+                 left join genesis2.customer_or_firm cst on cst.customer_or_firm_id = bar.opt_customer_or_firm
+
+                 join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
+                 left join genesis2.trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_deleted <> 'Y'
+                 join genesis2.instrument di on di.instrument_id = bar.instrument_id
+                 left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
+                 left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and uic.is_deleted <> 'Y'
+        where bar.date_id = in_date_id
+          and bar.to_report = 'R'
+        and bar.alloc_instr_id = any(in_alloc_instr_ids)
+        group by bar.alloc_instr_id;
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'get_reported_allocation_data_by_ids for ' || in_date_id::text ||
+                           ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
+end;
+$function$
+;
 select * from staging.fix_ptm_missed_r()

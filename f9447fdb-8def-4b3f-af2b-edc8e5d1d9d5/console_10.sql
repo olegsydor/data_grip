@@ -1221,7 +1221,8 @@ select * from genesis2.customer_or_firm;
 get_reported_allocation_data_by_ids
 -- DROP FUNCTION dash360.report_alloc_instr_trade_record(int4, text);
 
-create or replace function dash360.get_reported_allocation_data_by_ids(in_date_id integer, in_exec_broker text, in_alloc_instr_ids int4[])
+drop function dash360.get_reported_allocation_data_by_ids
+create or replace function dash360.get_reported_allocation_data_by_ids(in_date_id integer, in_alloc_instr_ids int4[])
     returns table
             (
                 "Exec Broker"       text, -- 1
@@ -1300,7 +1301,7 @@ begin
                                from genesis2.alloc_instr2trade_record aitr
                                         join genesis2.trade_record tr using (trade_record_id, date_id)
                                where (aitr.alloc_instr_id = bar.alloc_instr_id and aitr.date_id = bar.date_id)
-                               and tr.exec_broker = in_exec_broker
+--                                and tr.exec_broker = in_exec_broker
                                limit 1) tr on true
                  left join genesis2.customer_or_firm cst on cst.customer_or_firm_id = bar.opt_customer_or_firm
 
@@ -1346,4 +1347,4 @@ from dash_reporting.bofa_allocation_report bar
         and bar.alloc_instr_id = any(in_alloc_instr_ids)
         group by bar.alloc_instr_id;
 
-select * from dash360.get_reported_allocation_data_by_ids(20250218, '111', '{-57808,-57809,-57810,-57811,-57812}')
+select * from dash360.get_reported_allocation_data_by_ids(20250218, '{-57808,-57809,-57810,-57811,-57812}')
