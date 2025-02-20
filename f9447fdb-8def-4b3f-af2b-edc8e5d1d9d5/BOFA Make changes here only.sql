@@ -78,7 +78,7 @@ create table dash_reporting.bofa_allocation_instruction_status
     constraint bofa_allocation_instruction_status_user_identifier_fk foreign key (claimed_by) references genesis2.user_identifier (user_id)
 );
 comment on table dash_reporting.bofa_allocation_instruction_status is 'Table contains information on the current claim/resolve status on Allocation Instructions that are unreportable in BOFA report. Only Admins can change the satatus';
-alter table
+
 -- Column comments
 
 comment on column dash_reporting.bofa_allocation_instruction_status.alloc_instr_id is 'link to allocation instruction';
@@ -1714,3 +1714,4 @@ end;
 $function$
 ;
 select * from staging.fix_ptm_missed_r()
+
