@@ -1216,4 +1216,6 @@ and t.table_schema not in
   and t.table_type = 'BASE TABLE';
 select * from genesis2.cust_or_firm
 
-select * from genesis2.customer_or_firm
+select * from genesis2.customer_or_firm;
+
+get_reported_allocation_data_by_ids
