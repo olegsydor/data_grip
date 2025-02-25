@@ -1,8 +1,11 @@
 select * from tmp_ats_cons_details
 
 -- DROP FUNCTION data_marts.load_ats_cons_inc(_int8, int4);
-SELECT * FROM trash.load_ats_cons_inc();
-CREATE OR REPLACE FUNCTION trash.load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer)
+alter FUNCTION data_marts.load_ats_cons_inc rename to load_ats_cons_inc_bkp;
+alter FUNCTION data_marts.load_ats_cons_inc_bkp set schema trash;
+SELECT * FROM data_marts.load_ats_cons_inc();
+
+CREATE OR REPLACE FUNCTION data_marts.load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer)
  RETURNS integer
  LANGUAGE plpgsql
 AS $function$
@@ -148,7 +151,7 @@ BEGIN
     -- 1-st execution on the next day should find all gaps if they'll be found...
      l_local_rfq_id  := ( select coalesce(max(q.rfq_id), -1) as local_rfq_id
                           from data_marts.f_rfq_details q
-                          where q.auction_date_id = l_cur_date_id ) - 100000;
+                          where q.auction_date_id = l_cur_date_id ) - 100000; -- why this 10000 is here if we do not have on conflict update later in insert?
      l_max_rfq_id := (select max(r.rfq_id) FROM dwh.request_for_quote r
                                            where r.auction_date_id = l_cur_date_id);
 
