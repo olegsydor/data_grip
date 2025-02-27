@@ -286,7 +286,7 @@ BEGIN
           and r.auction_date_id >= l_etl_min_date_id
           and r.rfq_leg_id = v.rfq_leg_id
       )
-  limit 1000000
+  limit 1000000, os_
     ;
 
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
