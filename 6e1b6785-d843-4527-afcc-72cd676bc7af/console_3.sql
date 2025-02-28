@@ -373,3 +373,81 @@ select count(*)
 FROM dwh.request_for_quote
     where rfq_id between 291591063615740451 and 291591433561841795
 291591063615740451, l_max_rfq_id = 291591433561841795
+    ;
+
+
+select
+        RFQ_LEG_ID as rfq_leg_id -- UNIQUE KEY
+      , RFQ_ID as rfq_id
+      , AUCTION_ID as auction_id
+      , auction_date_id::integer as auction_date_id
+      , rfq_LIQUIDITY_PROVIDER_ID as liquidity_provider_id
+      , rfq_ofp_order_id as ofp_order_id
+      , CLIENT_ORDER_ID as ofp_client_order_id
+--       , to_timestamp(v.create_time, 'YYYYMMDD HH24:MI:SS.MS')::timestamp without time zone as ofp_create_time
+         , v.create_time as ofp_create_time
+      , ORDER_TYPE_id as ofp_order_type
+      , SIDE as ofp_side
+      , ORDER_QTY as ofp_order_qty
+      , PRICE as ofp_order_price
+--       , CO_CLIENT_LEG_REF_ID as ofp_leg_ref_id
+      , null as ofp_leg_ref_id
+      , ACCOUNT_ID as ofp_account_id
+      , SUB_SYSTEM_ID as ofp_sub_system_id
+      , dss.SUB_STRATEGY as ofp_sub_strategy
+--       , INTERNAL_COMPONENT_TYPE as ofp_internal_component_type
+         , null as ofp_internal_component_type
+      , client_id_text as ofp_client_id
+      , requested_qty as rfq_qty
+      , requested_multi_leg_side as rfq_multi_leg_side
+      , MULTILEG_REPORTING_TYPE as rfq_multileg_reporting_type
+--       , to_timestamp(v.rfq_transact_time, 'YYYYMMDD HH24:MI:SS.MS')::timestamp without time zone as rfq_transact_time
+       , v.rfq_transact_time as rfq_transact_time
+      , quote_type as rfq_quote_type
+      , min_response_qty as rfq_min_response_qty
+      , ratio_qty as rfq_ratio_qty
+      , FIX_MESSAGE_ID as ofp_fix_message_id
+      , rfq_fix_message_id as rfq_fix_message_id
+      , INSTRUMENT_ID as ofp_instrument_id
+      , requested_instrument_id as rfq_instrument_id
+      , order_transaction_id as ofp_transaction_id
+      , rfq_transaction_id as rfq_transaction_id
+      , FIX_COMP_ID as ofp_fix_comp_id
+      , rfq_fix_comp_id as rfq_fix_comp_id
+      , FIX_CONNECTION_ID as ofp_fix_connection_id
+      , rfq_fix_connection_id as rfq_fix_connection_id
+      , is_ats_ofp_parent::boolean as is_ats_ofp_parent
+      , is_consolidator_ofp_parent::boolean as is_consolidator_ofp_parent
+      , md.bid_price as rfq_nbbo_bid_price
+      , md.bid_quantity as rfq_nbbo_bid_quantity
+      , md.ask_price as rfq_nbbo_ask_price
+      , md.ask_quantity as rfq_nbbo_ask_quantity
+      , md.is_maket_data_applied
+      , :l_load_id as load_batch_id
+    from staging.ats_rfq_daily_v v
+      left join lateral
+        (
+          select md.bid_price, md.bid_quantity, md.ask_price, md.ask_quantity
+            , case when md.transaction_id > 0 then true end as is_maket_data_applied
+          from dwh.l1_snapshot md
+          where md.transaction_id = v.rfq_transaction_id
+            and md.instrument_id = case when md.instrument_id > 0 and v.MULTILEG_REPORTING_TYPE = '1' then v.instrument_id else md.instrument_id end --v.instrument_id
+            and md.exchange_id = 'NBBO'
+            and md.start_date_id between :l_etl_min_date_id and :l_cur_date_id
+            --and md.start_date_id = v.auction_date_id::integer
+          limit 1
+        ) md on true
+    left join data_marts.d_sub_strategy dss on dss.sub_strategy_id = v.sub_strategy_id
+     where true
+       and v.RFQ_ID >= :l_local_rfq_id
+            and v.RFQ_ID <= :l_max_rfq_id
+       and v.auction_date_id between :l_etl_min_date_id and :l_cur_date_id -- >= l_etl_min_date_id
+       and not exists
+      (
+        select r.rfq_leg_id
+        from data_marts.f_rfq_details r
+        where r.auction_date_id = v.auction_date_id::integer -- unq idx used
+          and r.auction_date_id >= :l_etl_min_date_id
+          and r.rfq_leg_id = v.rfq_leg_id
+      )
+  limit 1000000

@@ -1,6 +1,86 @@
+CREATE TABLE IF NOT EXISTS staging.ats_cons_details
+(
+    dataset_id                    int8                        NULL, -- from subscription
+    auction_id                    int8                        NULL, -- NK #1. Auction ID.
+    auction_date_id               int4                        NULL,
+    liquidity_provider_id         varchar(9)                  NULL, -- Defined via FIX_CONNECTION and FIX_COMP_ID. Used for LPO orders.
+    ofp_orig_order_id             int8                        NULL, -- order_id of auctions initiating OFP parent order. For multileg, mlrt of such ord = ''3'' and side = ''B''
+
+    -- markers of orders groups
+    is_ats                        bool                        NULL,
+    is_cons                       bool                        NULL,
+    --
+    is_ofp_parent                 bool                        NULL, -- OFP originating parent orders.
+    is_ofp_street                 bool                        NULL, -- OFP created crosses
+    is_lpo_parent                 bool                        NULL, -- LPO responces
+    is_lpo_street                 bool                        NULL, -- LPO created crosses
+
+    -- order info
+    order_id                      int8                        NOT NULL,
+    client_order_id               varchar(256)                NULL,
+    parent_order_id               int8                        NULL,
+    order_create_time             timestamp without time zone NULL,
+    create_date_id                integer                     NOT NULL,
+    order_price                   numeric(12, 4)              NULL,
+    order_qty                     int8                        NULL,
+    order_type_id                 varchar(1)                  NULL,
+    account_id                    int8                        NULL,
+    instrument_id                 int8                        NULL,
+    transaction_id                int8                        NULL,
+    side                          varchar(1)                  NULL,
+    multileg_reporting_type       varchar(1)                  NULL, -- including mlrt=3 in temp.
+    cross_order_id                int8                        NULL,
+    client_id                     varchar(255)                NULL,
+    exchange_id                   varchar(6)                  NULL,
+    fix_connection_id             int8                        NULL,
+    fix_comp_id                   varchar(30)                 NULL,
+    internal_component_type       varchar(1)                  NULL,
+    sub_system_id                 varchar(20)                 NULL,
+    order_liquidity_provider_id   varchar(9)                  NULL,
+    exch_order_id                 varchar(128)                NULL,
+    exec_instruction              varchar(128)                NULL,
+    strategy_decision_reason_code int2                        NULL,
+    capacity_group_id             int8                        NULL,
+
+    -- prepare some attributes for resp quality calculation
+    resp_ofp_parent_order_side    varchar(1)                  NULL,
+    resp_ofp_parent_order_price   numeric(12, 4)              NULL,
+    is_marketable                 bpchar(1)                   NULL,
+    resp_is_quality_response      bool                        NULL, -- where resp price < nbbo ask price for a buy; resp price > nbbo bid price for a sell
+    resp_is_good_response         bool                        NULL, -- case when order price < resp price < nbbo ask price for a buy; order price > resp price > nbbo bid price for a sell
+    resp_is_neutral_response      bool                        NULL, -- case when resp price = nbbo ask price for a buy; resp price = nbbo bid price for a sell
+    resp_is_bad_response          bool                        NULL, -- case when resp price > nbbo ask price for a buy; resp price < nbbo bid price for a sell
+    resp_is_great_response        bool                        NULL, -- case when resp price <= order price for a buy; resp price >= order price for a sell
+    resp_price_improve_pct        numeric(12, 4)              NULL, -- ( 1 - (rsp.order_price - ((rsp.nbbo_ask_price + rsp.nbbo_bid_price)/2))::numeric / ((rsp.nbbo_ask_price - rsp.nbbo_bid_price)::numeric/2))*100 for a buy
+    resp_size_impr_vs_nbbo        bool                        NULL, -- case when rsp.order_qty > rsp.nbbo_ask_quantity then true else false end for a buy
+    resp_size_impr_vs_nbbo_pct    numeric(12, 4)              NULL, -- (rsp.order_qty::numeric/nullif(rsp.nbbo_ask_quantity,0)::numeric)*100 for a buy
+    resp_match_qty                int4                        NULL, -- execution.match_qty when exec_type = M
+    resp_avg_match_px             numeric(12, 4)              NULL, -- execution.match_px when exec_type = M
+
+    -- Market Data
+    nbbo_bid_price                numeric(12, 4)              NULL,
+    nbbo_bid_quantity             int4                        NULL,
+    nbbo_ask_price                numeric(12, 4)              NULL,
+    nbbo_ask_quantity             int4                        NULL,
+
+    -- Order Status
+    exec_text                     varchar(512)                NULL, -- 58 tag of the last execution of order.
+    filled_price                  numeric(12, 4)              NULL, -- avg_px
+    filled_qty                    int4                        NULL, -- cum_qty, VOLUME, -- also need to recalculate if needed
+    order_status                  varchar(1)                  NULL, -- last status
+    principal_amount              numeric(16, 4)              NULL,
+    first_fill_date_time          timestamp without time zone NULL,
+
+    etl_max_ord_exec_id           int8                        NULL, -- to filter out up-to-date orders
+    etl_max_ord_trade_tecord_id   int8                        NULL, -- to filter out up-to-date orders
+    etl_max_md_transaction_id     int8                        NULL, -- to filter out up-to-date orders
+    CONSTRAINT "tmp_PK_tmp_ats_cons" PRIMARY KEY (order_id, auction_id, auction_date_id)
+);
+
+
 -- DROP FUNCTION data_marts.load_ats_cons_inc(_int8, int4);
 
-CREATE OR REPLACE FUNCTION data_marts.load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer)
+CREATE OR REPLACE FUNCTION data_marts.so_load_ats_cons_inc(in_order_ids bigint[] DEFAULT NULL::bigint[], in_recalc_date_id integer DEFAULT NULL::integer)
  RETURNS integer
  LANGUAGE plpgsql
 AS $function$
@@ -50,90 +130,12 @@ BEGIN
 
    l_is_current_recalc := case when l_cur_date_id = in_recalc_date_id then true else false end;
 
+  raise notice 'l_cur_date_id - %, l_etl_min_date_id - %, l_gtc_min_date_id - %, l_is_current_recalc - %', l_cur_date_id, l_etl_min_date_id, l_gtc_min_date_id, l_is_current_recalc;
   -- Temporary table definition
 --  execute 'DROP TABLE IF EXISTS tmp_ats_cons_details;';
 
-     execute 'CREATE TEMP TABLE IF NOT EXISTS tmp_ats_cons_details (
-      dataset_id int8 NULL, -- from subscription
-      auction_id int8 NULL, -- NK #1. Auction ID.
-      auction_date_id int4 NULL,
-      liquidity_provider_id varchar(9) NULL, -- Defined via FIX_CONNECTION and FIX_COMP_ID. Used for LPO orders.
-      ofp_orig_order_id int8 NULL, -- order_id of auctions initiating OFP parent order. For multileg, mlrt of such ord = ''3'' and side = ''B''
 
-      -- markers of orders groups
-      is_ats bool NULL,
-      is_cons bool NULL,
-      --
-      is_ofp_parent bool NULL, -- OFP originating parent orders.
-      is_ofp_street bool NULL, -- OFP created crosses
-      is_lpo_parent bool NULL, -- LPO responces
-      is_lpo_street bool NULL, -- LPO created crosses
-
-      -- order info
-      order_id int8 NOT NULL,
-      client_order_id varchar(256) NULL,
-      parent_order_id int8 NULL,
-      order_create_time timestamp without time zone NULL,
-      create_date_id integer NOT NULL,
-      order_price numeric(12,4) NULL,
-      order_qty int8 NULL,
-      order_type_id varchar(1) NULL,
-      account_id int8 NULL,
-      instrument_id int8 NULL,
-      transaction_id int8 NULL,
-      side varchar(1) NULL,
-      multileg_reporting_type varchar(1) NULL, -- including mlrt=3 in temp.
-      cross_order_id int8 NULL,
-      client_id varchar(255) NULL,
-      exchange_id varchar(6) NULL,
-      fix_connection_id int8 NULL,
-      fix_comp_id varchar(30) NULL,
-      internal_component_type varchar(1) NULL,
-      sub_system_id varchar(20) NULL,
-      order_liquidity_provider_id varchar(9) NULL,
-      exch_order_id varchar(128) NULL,
-      exec_instruction varchar(128) NULL,
-      strategy_decision_reason_code int2 NULL,
-	  capacity_group_id int8 NULL,
-
-      -- prepare some attributes for resp quality calculation
-      resp_ofp_parent_order_side varchar(1) NULL,
-      resp_ofp_parent_order_price numeric(12,4) NULL,
-      is_marketable bpchar(1) NULL,
-      resp_is_quality_response bool NULL, -- where resp price < nbbo ask price for a buy; resp price > nbbo bid price for a sell
-      resp_is_good_response bool NULL, -- case when order price < resp price < nbbo ask price for a buy; order price > resp price > nbbo bid price for a sell
-      resp_is_neutral_response bool NULL, -- case when resp price = nbbo ask price for a buy; resp price = nbbo bid price for a sell
-      resp_is_bad_response bool NULL, -- case when resp price > nbbo ask price for a buy; resp price < nbbo bid price for a sell
-      resp_is_great_response bool NULL, -- case when resp price <= order price for a buy; resp price >= order price for a sell
-      resp_price_improve_pct numeric(12,4) NULL, -- ( 1 - (rsp.order_price - ((rsp.nbbo_ask_price + rsp.nbbo_bid_price)/2))::numeric / ((rsp.nbbo_ask_price - rsp.nbbo_bid_price)::numeric/2))*100 for a buy
-      resp_size_impr_vs_nbbo bool NULL, -- case when rsp.order_qty > rsp.nbbo_ask_quantity then true else false end for a buy
-      resp_size_impr_vs_nbbo_pct numeric(12,4) NULL, -- (rsp.order_qty::numeric/nullif(rsp.nbbo_ask_quantity,0)::numeric)*100 for a buy
-      resp_match_qty int4 NULL, -- execution.match_qty when exec_type = M
-      resp_avg_match_px numeric(12,4) NULL, -- execution.match_px when exec_type = M
-
-      -- Market Data
-      nbbo_bid_price numeric(12,4) NULL,
-      nbbo_bid_quantity int4 NULL,
-      nbbo_ask_price numeric(12,4) NULL,
-      nbbo_ask_quantity int4 NULL,
-
-      -- Order Status
-      exec_text varchar(512) NULL, -- 58 tag of the last execution of order.
-      filled_price numeric(12,4) NULL, -- avg_px
-      filled_qty int4 NULL,  -- cum_qty, VOLUME, -- also need to recalculate if needed
-      order_status varchar(1) NULL, -- last status
-      principal_amount numeric(16,4) NULL,
-      first_fill_date_time timestamp without time zone NULL,
-
-      etl_max_ord_exec_id int8 NULL, -- to filter out up-to-date orders
-      etl_max_ord_trade_tecord_id int8 NULL, -- to filter out up-to-date orders
-      etl_max_md_transaction_id int8 NULL,  -- to filter out up-to-date orders
-      CONSTRAINT "tmp_PK_tmp_ats_cons" PRIMARY KEY (order_id, auction_id, auction_date_id)
-    )';
-
-  execute 'truncate table tmp_ats_cons_details';
-
-
+  truncate table staging.ats_cons_details;
 
 
 ---------------------------------------------------------------------------------------------------------
@@ -146,7 +148,7 @@ BEGIN
     -- 1-st execution on the next day should find all gaps if they'll be found...
      l_local_rfq_id  := ( select coalesce(max(q.rfq_id), -1) as local_rfq_id
                           from data_marts.f_rfq_details q
-                          where q.auction_date_id = l_cur_date_id ) - 100000; -- why this 10000 is here if we do not have on conflict update later in insert?
+                          where q.auction_date_id = l_cur_date_id ) - 1000; -- why this 10000 is here if we do not have on conflict update later in insert?
      l_max_rfq_id := (select max(r.rfq_id) FROM dwh.request_for_quote r
                                            where r.auction_date_id = l_cur_date_id);
 
@@ -294,7 +296,9 @@ BEGIN
    -- lookup into the orders array and at the end of procedure - invoke manual run for these orders
    --l_orig_order_ids := array(
    execute 'DROP TABLE IF EXISTS tmp_rfq_missed_md;';
-   create temp table tmp_rfq_missed_md with (parallel_workers = 4) ON COMMIT drop as
+   create temp table tmp_rfq_missed_md with (parallel_workers = 4)
+--        ON COMMIT drop
+       as
     select distinct q.ofp_order_id, q.auction_date_id -- parent_originator order
     from data_marts.f_rfq_details q
       join lateral
@@ -332,7 +336,9 @@ BEGIN
 
   -- prepare Market data for RFQ into TMP
    execute 'DROP TABLE IF EXISTS tmp_rfq_missed_md_v2;';
-   create temp table tmp_rfq_missed_md_v2 with (parallel_workers = 4) ON COMMIT drop as
+   create temp table tmp_rfq_missed_md_v2 with (parallel_workers = 4)
+--        ON COMMIT drop
+       as
   select s.auction_date_id, s.rfq_leg_id, s.rfq_id
     , s.bid_price, s.bid_quantity, s.ask_price, s.ask_quantity
     , s.is_maket_data_applied
@@ -442,7 +448,7 @@ BEGIN
 --    into l_step_id;
 
   -- load auctions, not orders. We need to complete CONS auctions with OFP parent orders. And need to set the ofp_orig_order_id value
-    INSERT INTO tmp_ats_cons_details
+    INSERT INTO staging.ats_cons_details
       ( dataset_id
       , auction_id
       , auction_date_id
@@ -633,7 +639,7 @@ IF cardinality(l_load_batch_arr) > 0
 then
  -- Step 2.2.  ATS + CONS auctions load from source
   -- load auctions, not orders. We need to complete CONS auctions with OFP parent orders. And need to set the ofp_orig_order_id value
-    INSERT INTO tmp_ats_cons_details
+    INSERT INTO staging.ats_cons_details
       ( dataset_id
       , auction_id
       , auction_date_id
@@ -736,7 +742,7 @@ end if; --<< empty  l_load_batch_arr
  end if; --<< full date load or increment
 
 
- if (select count(1) from tmp_ats_cons_details limit 1) > 0
+ if (select count(1) from staging.ats_cons_details limit 1) > 0
    then
 
  -- Step 2.3.  CONS lookup OFP parent orders
@@ -746,13 +752,13 @@ end if; --<< empty  l_load_batch_arr
     with cons_par as
       (
         select t.parent_order_id, t.auction_id, t.auction_date_id
-        from tmp_ats_cons_details t
+        from staging.ats_cons_details t
         where t.is_cons = true
           and t.is_ofp_street = true
         group by t.parent_order_id, t.auction_id, t.auction_date_id
         order by t.parent_order_id, t.auction_id
       )
-    INSERT INTO tmp_ats_cons_details
+    INSERT INTO staging.ats_cons_details
       ( dataset_id
       , auction_id
       , auction_date_id
@@ -843,12 +849,12 @@ end if; --<< empty  l_load_batch_arr
  -- Step 2.4.  CONS set the ofp_orig_order_id attribte.
    -- it is needed for CONS sources. ATS already has ofp_orig_order_id initiated via RFQ on the ORA source view
      -- for multilegs it = order_id of OFP multileg parent order (mlrt=3)
-    update tmp_ats_cons_details t
+    update staging.ats_cons_details t
       set ofp_orig_order_id = src.ofp_orig_order_id
     from
       (
         select s.auction_id, min(s.order_id) as ofp_orig_order_id
-        from tmp_ats_cons_details s
+        from staging.ats_cons_details s
         where s.is_ofp_parent = true
           and s.is_cons = true
           and s.multileg_reporting_type in ('1','3')
@@ -866,14 +872,14 @@ end if; --<< empty  l_load_batch_arr
 
  -- Step 2.5. Set Price and Side of OFP parent order for LPO responses
 
-    update tmp_ats_cons_details trg
+    update staging.ats_cons_details trg
       set resp_ofp_parent_order_side = src.side
         , resp_ofp_parent_order_price = src.order_price
     from
       (
         select ofp.ofp_orig_order_id, ofp.auction_id, ofp.auction_date_id, ofp.instrument_id
           , ofp.order_price, ofp.side
-        from tmp_ats_cons_details ofp
+        from staging.ats_cons_details ofp
         where is_ofp_parent = true
       ) src
     where trg.ofp_orig_order_id = src.ofp_orig_order_id
@@ -893,7 +899,7 @@ end if; --<< empty  l_load_batch_arr
    --
  -- Step 3.1. Lookup descrepancy on filled price, filled qty - from trades or f_yield_capture
     -- insert into the same temp table
-    insert into tmp_ats_cons_details
+    insert into staging.ats_cons_details
       (
         order_id
       , auction_id
@@ -966,7 +972,7 @@ end if; --<< empty  l_load_batch_arr
 
 
  -- Step 3.2. market data descrepancy - from l1_snapshot or maybe f_yield_capture
-    insert into tmp_ats_cons_details
+    insert into staging.ats_cons_details
       (
         order_id
       , auction_id
@@ -1036,7 +1042,7 @@ end if; --<< empty  l_load_batch_arr
     into l_step_id;
 
  -- Step 3.3. order status descrepancy - from execution
-    insert into tmp_ats_cons_details
+    insert into staging.ats_cons_details
       (
         order_id
       , auction_id
@@ -1112,11 +1118,11 @@ end if; --<< empty  l_load_batch_arr
  -- Step 4. Update calculated status attributes in temp tbl
 
   -- define min orders create_date_id
-  l_min_order_create_date_id := (select min(create_date_id) from tmp_ats_cons_details );
+  l_min_order_create_date_id := (select min(create_date_id) from staging.ats_cons_details );
 
  -- Step 4.1. update orders with new status and quality information
   -- using temp table as a source of orders
-    update tmp_ats_cons_details trg
+    update staging.ats_cons_details trg
       set nbbo_bid_price       = md.bid_price
         , nbbo_bid_quantity    = md.bid_quantity
         , nbbo_ask_price       = md.ask_price
@@ -1149,7 +1155,7 @@ end if; --<< empty  l_load_batch_arr
           , ex.exec_id
           , coalesce(tr_par.max_trade_record_id, tr_str.max_trade_record_id)
           , md.transaction_id  */
-    from tmp_ats_cons_details as src
+    from staging.ats_cons_details as src
       -- market data
       left join lateral
         (
@@ -1364,7 +1370,7 @@ end if; --<< empty  l_load_batch_arr
             , mth.resp_match_qty as resp_match_qty
             -- match_px. Based on executions. exec_type = 'M'
             , mth.resp_avg_match_px as resp_avg_match_px
-        from tmp_ats_cons_details as o
+        from staging.ats_cons_details as o
           left join lateral
             (
               select sum(ex.match_qty)::integer as resp_match_qty, (sum(ex.match_qty*ex.match_px)/nullif(sum(ex.match_qty), 0))::numeric as resp_avg_match_px
@@ -1377,7 +1383,7 @@ end if; --<< empty  l_load_batch_arr
             ) mth ON true
         where o.is_lpo_parent = true
       )
-    update tmp_ats_cons_details trg
+    update staging.ats_cons_details trg
       set resp_is_quality_response   = src.resp_is_quality_response
         , resp_is_good_response      = src.resp_is_good_response
         , resp_is_neutral_response   = src.resp_is_neutral_response
@@ -1473,7 +1479,7 @@ end if; --<< empty  l_load_batch_arr
       , t.exec_instruction
       , t.strategy_decision_reason_code
       , t.capacity_group_id
-    from tmp_ats_cons_details t
+    from staging.ats_cons_details t
       left join dwh.d_instrument i
         ON t.instrument_id = i.instrument_id
       left join dwh.d_option_contract oc
@@ -1686,3 +1692,43 @@ exception when others then
 END;
 $function$
 ;
+
+
+SELECT * FROM data_marts.so_load_ats_cons_inc();
+
+SELECT *
+FROM dwh.request_for_quote AS rfq
+WHERE auction_date_id = 20250228;
+
+select *
+from data_marts.f_rfq_details q
+WHERE auction_date_id = 20250228;
+select * from staging.ats_cons_details;
+
+select * from tmp_rfq_missed_md;
+select * from tmp_rfq_missed_md_v2;
+
+
+select q.liquidity_provider_id,
+		q.auction_id,
+		q.rfq_transact_time,
+		q.rfq_quote_type,
+		q.rfq_min_response_qty*coalesce(q.rfq_ratio_qty,1) as MIN_RESPONSE_QTY,
+		--q.ofp_order_qty*coalesce(q.rfq_ratio_qty,1) as ORDER_QTY,
+		q.rfq_qty::bigint as ORDER_QTY, -- https://dashfinancial.atlassian.net/browse/DS-5177
+		q.rfq_fix_message_id, /* OFP/RFQ ???*/
+		q.rfq_multileg_reporting_type,
+		--q.ofp_side,
+		case when q.ofp_side = 'B' then q.rfq_multi_leg_side else q.ofp_side end as ofp_side, -- changed to be able to display legs sides
+		q.rfq_instrument_id,
+		i.display_instrument_id2 display_instrument_id,
+		i.instrument_type_id,
+		q.rfq_transaction_id,
+		q.ofp_account_id,
+		q.rfq_leg_id
+from data_marts.f_rfq_details q
+left join dwh.d_instrument i on (q.rfq_instrument_id = i.instrument_id)
+ where true
+-- and      q.auction_id = :in_auction_id
+and q.auction_date_id = :l_auction_date_id
+and case when l_ofp_orig_order_id is null then true else q.ofp_order_id = l_ofp_orig_order_id end;
