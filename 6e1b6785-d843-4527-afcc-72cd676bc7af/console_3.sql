@@ -451,3 +451,8 @@ select
           and r.rfq_leg_id = v.rfq_leg_id
       )
   limit 1000000
+
+
+select *
+from data_marts.f_rfq_details q
+WHERE auction_date_id = 20250228;

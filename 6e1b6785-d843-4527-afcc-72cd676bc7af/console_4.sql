@@ -1703,6 +1703,7 @@ WHERE auction_date_id = 20250228;
 select *
 from data_marts.f_rfq_details q
 WHERE auction_date_id = 20250228;
+
 select * from staging.ats_cons_details;
 
 select * from tmp_rfq_missed_md;
@@ -1710,25 +1711,39 @@ select * from tmp_rfq_missed_md_v2;
 
 
 select q.liquidity_provider_id,
-		q.auction_id,
-		q.rfq_transact_time,
-		q.rfq_quote_type,
-		q.rfq_min_response_qty*coalesce(q.rfq_ratio_qty,1) as MIN_RESPONSE_QTY,
-		--q.ofp_order_qty*coalesce(q.rfq_ratio_qty,1) as ORDER_QTY,
-		q.rfq_qty::bigint as ORDER_QTY, -- https://dashfinancial.atlassian.net/browse/DS-5177
-		q.rfq_fix_message_id, /* OFP/RFQ ???*/
-		q.rfq_multileg_reporting_type,
-		--q.ofp_side,
-		case when q.ofp_side = 'B' then q.rfq_multi_leg_side else q.ofp_side end as ofp_side, -- changed to be able to display legs sides
-		q.rfq_instrument_id,
-		i.display_instrument_id2 display_instrument_id,
-		i.instrument_type_id,
-		q.rfq_transaction_id,
-		q.ofp_account_id,
-		q.rfq_leg_id
+       q.auction_id,
+       q.rfq_transact_time,
+       q.rfq_quote_type,
+       q.rfq_min_response_qty * coalesce(q.rfq_ratio_qty, 1)                    as MIN_RESPONSE_QTY,
+       --q.ofp_order_qty*coalesce(q.rfq_ratio_qty,1) as ORDER_QTY,
+       q.rfq_qty::bigint                                                        as ORDER_QTY, -- https://dashfinancial.atlassian.net/browse/DS-5177
+       q.rfq_fix_message_id, /* OFP/RFQ ???*/
+       q.rfq_multileg_reporting_type,
+       --q.ofp_side,
+       case when q.ofp_side = 'B' then q.rfq_multi_leg_side else q.ofp_side end as ofp_side,  -- changed to be able to display legs sides
+       q.rfq_instrument_id,
+       i.display_instrument_id2                                                 as display_instrument_id,
+       i.instrument_type_id,
+       q.rfq_transaction_id,
+       q.ofp_account_id,
+       q.rfq_leg_id
+, q.auction_date_id
+,q.ofp_order_id
 from data_marts.f_rfq_details q
-left join dwh.d_instrument i on (q.rfq_instrument_id = i.instrument_id)
- where true
--- and      q.auction_id = :in_auction_id
-and q.auction_date_id = :l_auction_date_id
-and case when l_ofp_orig_order_id is null then true else q.ofp_order_id = l_ofp_orig_order_id end;
+         left join dwh.d_instrument i on (q.rfq_instrument_id = i.instrument_id)
+where true
+and      q.auction_id = :in_auction_id
+  and q.auction_date_id = :l_auction_date_id
+  and case when l_ofp_orig_order_id is null then true else q.ofp_order_id = l_ofp_orig_order_id end;
+
+
+select * from dash360.ats_quotes_requests(in_auction_id := 290007787166, in_order_id := 16868013621)
+
+select distinct ofp_orig_order_id, auction_date_id, ats.auction_id, ats.order_id
+--     into l_ofp_orig_order_id, l_auction_date_id
+    from data_marts.f_ats_cons_details ats
+     where true
+    and ats.order_id = :in_order_id
+    and ats.auction_id = :in_auction_id
+    and auction_date_id >= l_order_date_id;
+         Executing procedure:("dash360.ats_quotes_requests"). Parameters: "@in_auction_id=7790001973844; @in_order_id=292739327434480262; "
