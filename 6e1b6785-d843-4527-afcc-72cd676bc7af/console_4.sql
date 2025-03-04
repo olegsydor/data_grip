@@ -1666,7 +1666,7 @@ end if; --<< empty  l_load_batch_arr
     where load_batch_id = ANY(l_load_batch_arr) --subs_cursor.load_batch_id
       and not is_processed
       and subscription_name in ( 'ats_details' )
-      and source_table_name ='client_order2auction' ;
+      and source_table_name ='dmp.client_order2auction' ;
   GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
 
   select public.load_log(l_load_id, l_step_id, 'load_batches to close subscriptions : '||coalesce(left(array_to_string(l_load_batch_arr, ','),200)::varchar,' '::varchar) , l_row_cnt , 'U')
