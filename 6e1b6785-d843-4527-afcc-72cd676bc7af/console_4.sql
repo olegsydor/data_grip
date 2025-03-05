@@ -1739,7 +1739,7 @@ and      q.auction_id = :in_auction_id
 
 select * from dash360.ats_quotes_requests(in_auction_id := 290007787166, in_order_id := 16868013621)
 
- EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+
 select distinct ofp_orig_order_id, auction_date_id, ats.auction_id, ats.order_id
 --     into l_ofp_orig_order_id, l_auction_date_id
     from data_marts.f_ats_cons_details ats
