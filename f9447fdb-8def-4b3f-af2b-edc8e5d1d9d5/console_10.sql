@@ -1148,7 +1148,7 @@ where date_id = 20250214;
 
 select * from genesis2.customer_or_firm;
 
-
+ EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
         select min(tr.exec_broker)  as exec_broker,                                     -- "Exec Broker"
                'allocation',                                                            -- "Type"
                min(tf.trading_firm_name),                                               -- "Trading Firm Name"
