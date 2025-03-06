@@ -145,4 +145,6 @@ begin
 end;
 $function$
 ;
-select * from dash360.report_isi_bill_changes_monthly_mod(20241201, 20241231, '{socgen01,LPTF286,socbridge}')
+create temp table t02 as
+select *
+from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}')
