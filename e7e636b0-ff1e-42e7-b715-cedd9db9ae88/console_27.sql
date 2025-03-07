@@ -1,4 +1,5 @@
-CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+alter function dash360.allocations_snapshot rename to allocations_snapshot_bkp_20250307;
+CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                       in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                       in_reported_status character DEFAULT NULL::character(1))
     RETURNS TABLE
@@ -43,8 +44,9 @@ $function$
     -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 is_prev_reported will use is_billed
     -- OS 20250212 https://dashfinancial.atlassian.net/browse/DS-9550 Add "GUP" (exec_broker) column to Allocations procedure
     -- OS 20250305 hotfix for empty account_id list returns nothing
+    -- OS 20250307 hotfix performance improvement
 begin
-    raise notice '0 - %', clock_timestamp();
+--     raise notice '0 - %', clock_timestamp();
     drop table if exists t_trade_record;
     create temp table t_trade_record
     as
@@ -56,17 +58,17 @@ begin
     from dash_reporting.bofa_allocation_report br
              join genesis2.alloc_instr2trade_record atr
                   on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
-    where br.date_id = :in_date_id
+    where br.date_id = in_date_id
     union all
     select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
     from dash_reporting.bofa_trade_record btr
-    where btr.date_id = :in_date_id;
-    raise notice '1 - %', clock_timestamp();
+    where btr.date_id = in_date_id;
+--     raise notice '1 - %', clock_timestamp();
 
     analyze t_trade_record;
     create index on t_trade_record (trade_record_id);
     create index on t_trade_record (alloc_instr_id);
-    raise notice '2 - %', clock_timestamp();
+--     raise notice '2 - %', clock_timestamp();
 
     return query
         select tr.date_id::int4,
@@ -113,6 +115,7 @@ begin
 --                           and tri.exch_exec_id = tr.exch_exec_id
                                    and tri.exec_id = tr.exec_id
                                    and tri.is_billed = 'R'
+								   and tri.date_id = tr.date_id
                                  order by 1
                                  limit 1),
                                 rep.db_create_time) end                                                 as reported_time,
@@ -164,7 +167,7 @@ begin
                   when in_reported_status = 'R' then rep.to_report = 'R'
                   when in_reported_status = 'U' then rep.to_report in ('U', 'C')
                   when in_reported_status is null then true end;
-    raise notice '3 - %', clock_timestamp();
+--     raise notice '3 - %', clock_timestamp();
 
     return query
         select ai.date_id,
@@ -251,6 +254,7 @@ begin
                                       and (l1.rn = 1 or l1.rn is null)
                      and alt.date_id = in_date_id
                      and tr.date_id = in_date_id
+			limit 1
             ) ccr on true
 
         where ai.date_id = in_date_id
@@ -261,11 +265,8 @@ begin
                   when in_reported_status = 'R' then rep.to_report = 'R'
                   when in_reported_status = 'U' then rep.to_report in ('U', 'C', 'W') -- C the same as U
                   when in_reported_status is null then true end;
-    raise notice '4 - %', clock_timestamp();
+--     raise notice '4 - %', clock_timestamp();
 
 end ;
 $function$
 ;
-
-
-
