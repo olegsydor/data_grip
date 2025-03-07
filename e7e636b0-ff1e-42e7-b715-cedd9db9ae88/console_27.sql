@@ -56,11 +56,11 @@ begin
     from dash_reporting.bofa_allocation_report br
              join genesis2.alloc_instr2trade_record atr
                   on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
-    where br.date_id = in_date_id
+    where br.date_id = :in_date_id
     union all
     select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
     from dash_reporting.bofa_trade_record btr
-    where btr.date_id = in_date_id;
+    where btr.date_id = :in_date_id;
     raise notice '1 - %', clock_timestamp();
 
     analyze t_trade_record;
@@ -235,7 +235,7 @@ begin
                                            string_agg(distinct tr.exec_broker, ', ')                as exec_broker
                                     from genesis2.alloc_instr2trade_record alt
                                              inner join genesis2.trade_record tr
-                                                        on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+                                                        on alt.trade_record_id = tr.trade_record_id --and alt.date_id = tr.date_id
                                              left join lateral (select rate,
                                                                        row_number()
                                                                        over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
@@ -249,6 +249,8 @@ begin
                                     where alt.alloc_instr_id = ai.alloc_instr_id
                                       and tr.is_busted = 'N'
                                       and (l1.rn = 1 or l1.rn is null)
+                     and alt.date_id = in_date_id
+                     and tr.date_id = in_date_id
             ) ccr on true
 
         where ai.date_id = in_date_id
