@@ -29,9 +29,10 @@ select * from tmp_606_isi_bill_changes
 
 -- DROP FUNCTION dash360.report_isi_bill_changes_monthly(int4, int4, _varchar);
 
-create or replace function dash360.report_isi_bill_changes_monthly_mod(p_start_date_id integer default null::integer,
-                                                                    p_end_date_id integer default null::integer,
-                                                                    p_trading_firm_ids character varying[] default '{}'::character varying[])
+create or replace function dash360.report_isi_bill_changes_monthly(p_start_date_id integer default null::integer,
+                                                                   p_end_date_id integer default null::integer,
+                                                                   p_trading_firm_ids character varying[] default '{}'::character varying[],
+                                                                   p_add_exchange_order_id char default 'N')
     returns table
             (
                 export_row text
@@ -59,7 +60,7 @@ begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly (modified) STARTED===', 0,
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly STARTED===', 0,
                            'O')
     into l_step_id;
 
@@ -99,10 +100,10 @@ begin
     create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
                                                ON COMMIT drop as
     select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
-           tr.client_order_id                          as "OrderID",
-           tr.secondary_order_id                       as "ExchOrderID",
-           tr.secondary_exch_exec_id                   as "ReportID",
-           tr.exch_exec_id                             as "Tag17"
+           coalesce(tr.client_order_id, '')            as "OrderID",
+           coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+           coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
+           coalesce(tr.exch_exec_id, '')               as "Tag17"
     from dwh.flat_trade_record tr
              left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and
                                                           jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
@@ -123,20 +124,29 @@ begin
 
     analyze tmp_606_isi_bill_changes;
 
-    RETURN QUERY
-        select 'Date,OrderID,ExchOrderID,ReportID,Tag17 ';
 
-    return query
-        select array_to_string(ARRAY [
-                                   s."Date",
-                                   s."OrderID",
-                                   s."ExchOrderID",
-                                   s."ReportID",
-                                   s."Tag17"
-                                   ], ',', '')
-        from (select *
-              from tmp_606_isi_bill_changes
-              order by 1, 3, 4) s;
+    if p_add_exchange_order_id = 'Y' then
+        RETURN QUERY
+            select 'Date,OrderID,ReportID,Tag17,ExchOrderID';
+        return query
+            select s."Date" || ',' ||
+                   s."OrderID" || ',' ||
+                   s."ReportID" || ',' ||
+                   s."Tag17" || ',' ||
+                   s."ExchOrderID"
+            from tmp_606_isi_bill_changes s
+            order by s."Date", s."ExchOrderID", s."ReportID";
+    else
+        RETURN QUERY
+            select 'Date,OrderID,ReportID,Tag17';
+        return query
+            select s."Date" || ',' ||
+                   s."OrderID" || ',' ||
+                   s."ReportID" || ',' ||
+                   s."Tag17"
+            from tmp_606_isi_bill_changes s
+            order by s."Date", s."ReportID";
+    end if;
 
     select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly (modified) COMPLETE===',
                            coalesce(l_row_cnt, 0), 'O')
@@ -147,4 +157,27 @@ $function$
 ;
 create temp table t02 as
 select *
-from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}')
+from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}', p_add_exchange_order_id := 'N');
+
+create temp table t01 as
+select *
+from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}', p_add_exchange_order_id := 'Y');
+
+
+alter function dash360.report_isi_bill_changes_monthly set schema trash;
+alter function dash360.report_isi_bill_changes_monthly_mod rename to report_isi_bill_changes_monthly;
+
+
+create temp table t02 as
+select *
+from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}',
+                                             p_add_exchange_order_id := 'N');
+
+create temp table t01 as
+select *
+from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}',
+                                             p_add_exchange_order_id := 'Y');
+
+
+
+select * from t01
