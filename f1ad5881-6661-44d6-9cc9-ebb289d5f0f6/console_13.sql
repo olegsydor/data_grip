@@ -1,8 +1,34 @@
+select * from dash_reporting.reporting_getallocations(in_date_begin := 20250307, in_date_end := 20250307, in_account_ids := '{263007,12931}')
+
 -- DROP FUNCTION dash_reporting.reporting_getallocations(text, _int8, int4, int4);
 
-CREATE OR REPLACE FUNCTION dash_reporting.reporting_getallocations(in_trading_firm_id text DEFAULT NULL::text, in_account_ids bigint[] DEFAULT '{}'::integer[], in_date_begin integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, in_date_end integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
- RETURNS TABLE("Date" date, "TradingFirm" character varying, "AccountName" character varying, "OSI Symbol" character varying, "Symbol" character varying, "Expiration" text, "OpenClose" character, "InstrumentType" character, "Side" text, "Total Quantity" bigint, "Average Price" numeric, "Allocated Quantity" bigint, "Commission" numeric, "Maker/Taker" numeric, "Transaction" numeric, "Trade Processing" numeric, "Royalty" numeric, cmta character varying)
- LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION dash_reporting.reporting_getallocations(in_trading_firm_id text DEFAULT NULL::text,
+                                                                   in_account_ids bigint[] DEFAULT '{}'::integer[],
+                                                                   in_date_begin integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                   in_date_end integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
+    RETURNS TABLE
+            (
+                "Date"               date,
+                "TradingFirm"        character varying,
+                "AccountName"        character varying,
+                "OSI Symbol"         character varying,
+                "Symbol"             character varying,
+                "Expiration"         text,
+                "OpenClose"          character,
+                "InstrumentType"     character,
+                "Side"               text,
+                "Total Quantity"     bigint,
+                "Average Price"      numeric,
+                "Allocated Quantity" bigint,
+                "Commission"         numeric,
+                "Maker/Taker"        numeric,
+                "Transaction"        numeric,
+                "Trade Processing"   numeric,
+                "Royalty"            numeric,
+                cmta                 character varying,
+                "OCC AID"            character varying
+            )
+    LANGUAGE plpgsql
 AS $function$
 -- 2022-02-07 SO remove order_id from group by https://dashfinancial.atlassian.net/browse/DS-4811
 declare
@@ -35,11 +61,11 @@ begin
                                           and atr.date_id = tr.date_id
                                           and atr.is_active
                                         limit 1) at on true
-            where tr.date_id between :in_date_begin and :in_date_end
+            where tr.date_id between in_date_begin and in_date_end
               and is_busted = 'N'
               and tr.order_id > 0
---               and case when in_trading_firm_id is null then true else acc.trading_firm_id = in_trading_firm_id end
-              and case when :in_account_ids = '{}' then true else acc.account_id = any (:in_account_ids) end
+               and case when in_trading_firm_id is null then true else acc.trading_firm_id = in_trading_firm_id end
+              and case when in_account_ids = '{}' then true else acc.account_id = any (in_account_ids) end
 --              and tr.trade_record_reason = 'L'
             group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
                      tr.account_nickname, tr.street_account_name, at.alloc_qty
@@ -69,15 +95,14 @@ begin
                      6)                                                                                             as "Trade Processing",
                round(ftr.tcce_royalty_fee_amount / ftr.sum_last_qty * coalesce(ftr.alloc_qty, ftr.sum_last_qty),
                      6)                                                                                             as "Royalty",
-               ftr.cmta
+               ftr.cmta,
+               ftr.street_account_name                                                                              as "OCC AID"
 
         from ftr
                  join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
                  join dwh.d_account ac on ac.account_id = ftr.account_id
                  join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
                  left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
-
-
 
 end ;
 $function$
