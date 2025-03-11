@@ -70,6 +70,7 @@ begin
     raise info '%: %',clock_timestamp(), 'Started';
 
     return query
+        create table trash.so_parent_order_marketable as
         select tf.trading_firm_name,
                acc.account_name,
                co.process_time                                                               as routed_time,
@@ -205,3 +206,8 @@ select * from dwh.l1_snapshot;
 
 select * from dwh.d_account
     where account_name in ('MIRARET', 'SAXORET', 'FUTCRET', 'MRSC', 'VLOX')
+
+
+select * from trash.so_parent_order_marketable
+where account_name = 'MIRARET'
+limit 20

@@ -104,34 +104,39 @@ begin
     select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            coalesce(tr.client_order_id, '')            as "OrderID",
            coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
-           case
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NSX', 'NSX') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NYSE', 'NYSE') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XPSX', 'PSX') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'AMEXP', 'AMEROP') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'ARCAP', 'ARCAOP') then t_9483
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'EPRL', 'PEARLEQ') then t_1003
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'EMLD', 'EMLD') then t_1003
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MIAX', 'MIAMI') then t_1003
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then t_1003
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then t_880
-               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then t_880
-               end                                     as aux_tag,
+  case
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NSX', 'NSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NYSE', 'NYSE') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XPSX', 'PSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'AMEXP', 'AMEROP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'ARCAP', 'ARCAOP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'EPRL', 'PEARLEQ') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'EMLD', 'EMLD') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MIAX', 'MIAMI') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
+           end as aux_tag_street,
            coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
            coalesce(tr.exch_exec_id, '')               as "Tag17"
     from dwh.flat_trade_record tr
-             left join lateral (select jo.fix_message ->> '143'  as t_143,
-                                       jo.fix_message ->> '9483' as t_9483,
-                                       jo.fix_message ->> '1003' as t_1003,
-                                       jo.fix_message ->> '880'  as t_880
+             left join lateral (select jo.fix_message ->> '143'  as t_143
                                 from fix_capture.fix_message_json jo
                                 where tr.order_fix_message_id = jo.fix_message_id
                                   and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
                                 limit 1) jo on true
-             left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id
+     left join lateral (select jo.fix_message ->> '143'  as t_143,
+                                   jo.fix_message ->> '9483' as t_9483,
+                                   jo.fix_message ->> '1003' as t_1003,
+                                   jo.fix_message ->> '880'  as t_880
+                            from fix_capture.fix_message_json jo
+                            where tr.street_trade_fix_message_id = jo.fix_message_id
+                              and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                            limit 1) jos on true
+             left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
     where true
       and tr.date_id between l_start_date_id and p_end_date_id
       and tr.account_id = any (l_account_ids)
@@ -149,14 +154,13 @@ begin
 
     analyze tmp_606_isi_bill_changes;
 
-
     if p_add_exchange_order_id = 'Y' then
         RETURN QUERY
             select 'Date,OrderID,ReportID,Tag17,ExchOrderID';
         return query
             select s."Date" || ',' ||
                    s."OrderID" || ',' ||
-                   coalesce(aux_tag, s."ReportID") || ',' ||
+                   coalesce(aux_tag_street, s."ReportID") || ',' ||
                    s."Tag17" || ',' ||
                    s."ExchOrderID"
             from tmp_606_isi_bill_changes s
@@ -167,7 +171,7 @@ begin
         return query
             select s."Date" || ',' ||
                    s."OrderID" || ',' ||
-                   s."ReportID" || ',' ||
+                   coalesce(aux_tag_street, s."ReportID") || ',' ||
                    s."Tag17"
             from tmp_606_isi_bill_changes s
             order by s."Date", s."ReportID";
@@ -186,8 +190,10 @@ from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF
 
 create temp table t01 as
 select *
-from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF286,socbridge}', p_add_exchange_order_id := 'Y');
+from dash360.report_isi_bill_changes_monthly(20241202, 20241202, '{socgen01,LPTF286,socbridge}', p_add_exchange_order_id := 'Y');
 
+
+select * from t01
 
 alter function dash360.report_isi_bill_changes_monthly set schema trash;
 alter function dash360.report_isi_bill_changes_monthly_mod rename to report_isi_bill_changes_monthly;
@@ -259,21 +265,44 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then 't_880'
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then 't_880'
            end as aux_tag,
+           case
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NSX', 'NSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NYSE', 'NYSE') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XPSX', 'PSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'AMEXP', 'AMEROP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'ARCAP', 'ARCAOP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'EPRL', 'PEARLEQ') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'EMLD', 'EMLD') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MIAX', 'MIAMI') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
+           end as aux_tag_street,
+
        coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
        coalesce(tr.exch_exec_id, '')               as "Tag17",
-       coalesce(t_17, '')               as "Tag17_orig",
        tr.order_fix_message_id,
        tr.street_order_fix_message_id
 from dwh.flat_trade_record tr
          left join lateral (select jo.fix_message ->> '143'  as t_143,
                                    jo.fix_message ->> '9483' as t_9483,
                                    jo.fix_message ->> '1003' as t_1003,
-                                   jo.fix_message ->> '880'  as t_880,
-                                   jo.fix_message ->> '17'  as t_17
+                                   jo.fix_message ->> '880'  as t_880
                             from fix_capture.fix_message_json jo
                             where tr.order_fix_message_id = jo.fix_message_id
                               and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
                             limit 1) jo on true
+     left join lateral (select jo.fix_message ->> '143'  as t_143,
+                                   jo.fix_message ->> '9483' as t_9483,
+                                   jo.fix_message ->> '1003' as t_1003,
+                                   jo.fix_message ->> '880'  as t_880
+                            from fix_capture.fix_message_json jo
+                            where tr.street_trade_fix_message_id = jo.fix_message_id
+                              and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                            limit 1) jos on true
          left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id
 where true
   and tr.date_id between :l_start_date_id and :p_end_date_id
@@ -289,5 +318,5 @@ where true
        'MXOP');
 
 select * from tmp_606_isi_bill_changes
-where "Tag17_orig" <> ''
+where aux_tag_street is not null;
 
