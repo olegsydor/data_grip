@@ -181,3 +181,32 @@ from dash360.report_isi_bill_changes_monthly(20241201, 20241231, '{socgen01,LPTF
 
 
 select * from t01
+
+
+ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
+           coalesce(tr.client_order_id, '')            as "OrderID",
+           coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+           coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
+           coalesce(tr.exch_exec_id, '')               as "Tag17",
+
+           instrument_type_id,
+           exchange_id,
+           jo.fix_message ->> '9483',
+           jo.fix_message ->> '1003',
+           jo.fix_message ->> '880'
+ ,tr.*
+,
+    from dwh.flat_trade_record tr
+             left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and
+                                                          jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+    left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id
+    where true
+      and tr.date_id between :l_start_date_id and :p_end_date_id
+      and tr.account_id = any (:l_account_ids)
+      and tr.is_busted = 'N'
+--   and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE')
+      and case
+              when tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE'
+                  then false
+              else true end
+ and tr.exchange_id in ('NYSE', 'XPSX');
