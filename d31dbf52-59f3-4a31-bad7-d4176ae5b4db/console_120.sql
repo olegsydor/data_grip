@@ -189,13 +189,13 @@ select * from t01
            coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
            coalesce(tr.exch_exec_id, '')               as "Tag17",
 
-           instrument_type_id,
-           exchange_id,
+           tr.instrument_type_id,
+           tr.exchange_id,
            jo.fix_message ->> '9483',
            jo.fix_message ->> '1003',
            jo.fix_message ->> '880'
- ,tr.*
-,
+--  ,tr.*
+,dex.cat_exchange_id
     from dwh.flat_trade_record tr
              left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and
                                                           jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
@@ -209,4 +209,4 @@ select * from t01
               when tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE'
                   then false
               else true end
- and tr.exchange_id in ('NYSE', 'XPSX');
+ and tr.exchange_id in ('XASE','ARCAE','XCHI','NSX','NYSE','XPSX','AMEXP','ARCAP','EPRL','EMLD','MIAX','MPRL','MEMX','MXOP');
