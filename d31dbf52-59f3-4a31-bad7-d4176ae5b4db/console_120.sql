@@ -5,6 +5,7 @@ as
 select to_char(tr.trade_record_time, 'YYYY-MM-DD') as report_date,
        tr.client_order_id                          as "OrderID",
        tr.secondary_order_id                       as "ExchOrderID",
+       case when
        tr.secondary_exch_exec_id                   as "ReportID",
        tr.exch_exec_id                             as "Tag17"
 
@@ -102,6 +103,7 @@ begin
     select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            coalesce(tr.client_order_id, '')            as "OrderID",
            coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+           case when
            coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
            coalesce(tr.exch_exec_id, '')               as "Tag17"
     from dwh.flat_trade_record tr
@@ -210,3 +212,25 @@ select * from t01
                   then false
               else true end
  and tr.exchange_id in ('XASE','ARCAE','XCHI','NSX','NYSE','XPSX','AMEXP','ARCAP','EPRL','EMLD','MIAX','MPRL','MEMX','MXOP');
+
+
+create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
+                                               ON COMMIT drop as
+    select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
+           coalesce(tr.client_order_id, '')            as "OrderID",
+           coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+           case when
+           coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
+           coalesce(tr.exch_exec_id, '')               as "Tag17"
+    from dwh.flat_trade_record tr
+             left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and
+                                                          jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+    where true
+      and tr.date_id between l_start_date_id and p_end_date_id
+      and tr.account_id = any (l_account_ids)
+      and tr.is_busted = 'N'
+--   and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE')
+      and case
+              when tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE'
+                  then false
+              else true end;

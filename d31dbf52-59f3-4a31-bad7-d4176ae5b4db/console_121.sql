@@ -164,10 +164,15 @@ begin
           from dwh.execution ex
           where ex.exec_date_id between :start_date_id and :end_date_id
             and ex.order_id = co.order_id
-          order by ex.exec_time asc, ex.exec_id asc -- first execution definition
+          order by ex.exec_time, ex.exec_id -- first execution definition
           limit 1
         ) fex on true
-    left join lateral (select * from dwh.l1_snapshot ls where ls.transaction_id = co.transaction_id and ls.exchange_id = 'NBBO' and ls.start_date_id = co.create_date_id limit 1) ls on true
+             left join lateral (select *
+                                from dwh.l1_snapshot ls
+                                where ls.transaction_id = co.transaction_id
+                                  and ls.exchange_id = 'NBBO'
+                                  and ls.start_date_id = co.create_date_id
+                                limit 1) ls on true
     where co.create_date_id between :start_date_id and :end_date_id
       and co.parent_order_id is null
       and co.multileg_reporting_type in ('1', '2')
@@ -178,9 +183,9 @@ begin
         when :account_ids <> '{}' then co.account_id = any(:account_ids)
         else true end and
     case when :p_client_id is not null then upper(co.client_id_text) = upper(:p_client_id) else true end
-      and case
-                   when co.side = '1' and trd.avg_px > ls.ask_price then true
-                   when co.side = '2' and trd.avg_px < ls.bid_price then true
+      and case --limit
+                   when co.side = '1' and co.price > ls.ask_price then true
+                   when co.side = '2' and co.price < ls.bid_price then true
                    else false
                    end
     order by 1,3,2;
