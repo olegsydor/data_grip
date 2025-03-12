@@ -430,6 +430,7 @@ end;
 $function$;
 
 drop function if exists dash360.report_isi_bill_changes_monthly_mod;
+Exchanges_ExecID_to_Tag17_cross_reference
 CREATE OR REPLACE FUNCTION dash360.report_isi_bill_changes_monthly_mod(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer, p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], p_add_exchange_order_id character DEFAULT 'N'::bpchar)
  RETURNS TABLE(export_row text)
  LANGUAGE plpgsql
@@ -577,10 +578,19 @@ begin
 end;
 $function$;
 
+alter function dash360.report_isi_bill_changes_monthly_mod rename to exchanges_execid_to_tag17_cross_reference;
+
 
 create temp table t02 as
 select *
 from dash360.report_isi_bill_changes_monthly_mod(20241201, 20241231, '{socgen01,LPTF286,socbridge}', p_add_exchange_order_id := 'Y');
+
+create temp table t01 as
+select *
+from dash360.exchanges_execid_to_tag17_cross_reference(20241201, 20241202, '{socgen01,LPTF286,socbridge}',
+                                                       p_add_exchange_order_id := 'Y');
+
+;
 
 Exchanges_ExecID to Tag17 cross reference
 select * from t02
