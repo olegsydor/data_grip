@@ -265,7 +265,7 @@ select trading_firm_name                                   as "Trading Firm",
        to_char(internal_order_id, 'FM999,999,999,999,999') as "SOR Ord ID",
        stop_price                                          as "Stop Px"
 from trash.so_parent_order_marketable
-where account_name = 'MIRARET'
+-- where account_name = 'MIRARET'
 order by trading_firm_name, routed_time, account_name;
 
 create index so_parent_order_marketable_etl_ids on trash.so_parent_order_marketable (trading_firm_name, routed_time, account_name)
