@@ -208,6 +208,57 @@ select * from dwh.d_account
     where account_name in ('MIRARET', 'SAXORET', 'FUTCRET', 'MRSC', 'VLOX')
 
 
-select * from trash.so_parent_order_marketable
-where account_name = 'MIRARET'
-limit 20
+select trading_firm_name                     as "Trading Firm",
+       account_name                          as "Account",
+       order_status                          as "Order Status",
+       to_char(event_time, 'DD/MM/YY')       as "Event Date",
+       to_char(routed_time, 'HH24:MI:SS.MS') as "Routed Time",
+       to_char(event_time, 'HH24:MI:SS.MS')  as "Event Time",
+
+       client_order_id                       as "Cl Ord ID",
+       free_text                             as "Free Text",
+       orig_client_order_id                  as "Free Text",
+       ex_destination                        as "Ex Dest",
+       case when instrument_type_id = 'E' then 'Equity'
+           when instrument_type_id = 'O' then 'Option' end as "Security Type",
+       symbol                                as "Underlying Symbol",
+       customer_or_firm_name                 as "Capacity",
+       display_instrument_id                 as "Symbol",
+       last_trade_date                       as "Expiration Date",
+       side                                  as "Side",
+       order_qty                             as "Ord Qty",
+       exec_qty                              as "Ex Qty",
+       avg_px                                as "Avg Px",
+       price                                 as "Price",
+       leaves_qty                            as "Lvs Qty",
+       exchange_id                           as "Exchange ID",
+       sub_strategy                          as "Sub Strategy",
+       time_in_force                         as "TIF",
+       order_type                            as "Ord Type",
+       clearing_firm_id                      as "Sending Firm",
+       max_floor                             as "Max Floor",
+       open_close                            as "O/C",
+       client_id                             as "Client ID",
+       root_symbol                           as "Root Symbol",
+       is_cross                              as "Is Cross",
+       is_mleg                               as "Is MLeg",
+       max_show_qty                          as "Max Show Qty",
+       market_participant_id                 as "MPID",
+       to_char(create_time, 'DD/MM/YYYY')    as "Creation Date",
+       to_char(create_time, 'HH24:MI:SS.MS') as "Creation Time",
+       event_type                            as "Event Type",
+       opt_exec_broker                       as "Exec Broker",
+       exec_instruction                      as "Exec Inst",
+--        expire_time as "",
+       fee_sensitivity                       as "Fee Sensitivity",
+       handl_inst                            as "Handle Inst",
+       leg_id                                as "Leg ID",
+       locate_broker                         as "Locate Broker",
+       occ_optional_data                     as "OCC Opt Data",
+       order_capacity                        as "Ord Capacity",
+       osi_symbol                            as "OSI Symbol",
+       internal_order_id                     as "SOR Ord ID",
+       stop_price                            as "Stop Px"
+from trash.so_parent_order_marketable
+where account_name = 'VLOX'
+  and client_order_id between 'client1-285817' and 'client1-285826'
