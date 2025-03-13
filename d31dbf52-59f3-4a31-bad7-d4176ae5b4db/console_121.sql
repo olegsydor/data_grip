@@ -266,6 +266,7 @@ select trading_firm_name                                   as "Trading Firm",
        stop_price                                          as "Stop Px"
 from trash.so_parent_order_marketable
 -- where account_name = 'MIRARET'
-order by trading_firm_name, routed_time, account_name;
+order by trading_firm_name, routed_time, account_name
+limit 200000 offset 600000;
 
 create index so_parent_order_marketable_etl_ids on trash.so_parent_order_marketable (trading_firm_name, routed_time, account_name)
