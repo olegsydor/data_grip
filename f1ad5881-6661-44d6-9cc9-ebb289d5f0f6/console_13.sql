@@ -2,39 +2,20 @@ select * from dash_reporting.reporting_getallocations(in_date_begin := 20250307,
 
 -- DROP FUNCTION dash_reporting.reporting_getallocations(text, _int8, int4, int4);
 
-CREATE OR REPLACE FUNCTION dash_reporting.reporting_getallocations(in_trading_firm_id text DEFAULT NULL::text,
-                                                                   in_account_ids bigint[] DEFAULT '{}'::integer[],
-                                                                   in_date_begin integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
-                                                                   in_date_end integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
-    RETURNS TABLE
-            (
-                "Date"               date,
-                "TradingFirm"        character varying,
-                "AccountName"        character varying,
-                "OSI Symbol"         character varying,
-                "Symbol"             character varying,
-                "Expiration"         text,
-                "OpenClose"          character,
-                "InstrumentType"     character,
-                "Side"               text,
-                "Total Quantity"     bigint,
-                "Average Price"      numeric,
-                "Allocated Quantity" bigint,
-                "Commission"         numeric,
-                "Maker/Taker"        numeric,
-                "Transaction"        numeric,
-                "Trade Processing"   numeric,
-                "Royalty"            numeric,
-                cmta                 character varying,
-                "OCC AID"            character varying
-            )
-    LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION dash_reporting.reporting_getallocations(in_trading_firm_id text DEFAULT NULL::text, in_account_ids bigint[] DEFAULT '{}'::integer[], in_date_begin integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, in_date_end integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
+ RETURNS TABLE("Date" date, "TradingFirm" character varying, "AccountName" character varying, "OSI Symbol" character varying, "Symbol" character varying, "Expiration" text, "OpenClose" character, "InstrumentType" character, "Side" text, "Total Quantity" bigint, "Average Price" numeric, "Allocated Quantity" bigint, "Commission" numeric, "Maker/Taker" numeric, "Transaction" numeric, "Trade Processing" numeric, "Royalty" numeric, cmta character varying, "OCC AID" character varying)
+ LANGUAGE plpgsql
 AS $function$
 -- 2022-02-07 SO remove order_id from group by https://dashfinancial.atlassian.net/browse/DS-4811
 declare
 
 
 begin
+    create temp table t_aie as
+        select * from staging.allocation_instruction_entry
+            where date_id between :in_date_begin and :in_date_end;
+
+    select * from t_aie;
     return query
         with ftr as (
             select tr.date_id,
@@ -55,12 +36,13 @@ begin
                    tr.street_account_name
             from dwh.flat_trade_record tr
                      join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
-                     left join lateral (select alloc_qty
+                     left join lateral (select alloc_qty, atr.clearing_account_id, alloc_instr_id
                                         from dwh.allocation2trade_record atr
                                         where atr.trade_record_id = tr.trade_record_id
                                           and atr.date_id = tr.date_id
                                           and atr.is_active
                                         limit 1) at on true
+            left join t_aie aie on aie.alloc_instr_id = at.alloc_instr_id and aie.clearing_account_id = at.clearing_account_id
             where tr.date_id between in_date_begin and in_date_end
               and is_busted = 'N'
               and tr.order_id > 0
