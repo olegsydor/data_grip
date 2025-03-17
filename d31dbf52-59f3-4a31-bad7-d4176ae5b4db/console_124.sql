@@ -1159,69 +1159,93 @@ end;$function$
 select string_agg(distinct account_id::text, ',')
 from tmp_risk_peak_conumption;
 
-explain (analyze, buffers, verbose, settings)
+EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select fyc.account_id
      , fyc.order_id
-     , fyc.client_order_id
-     , fyc.routed_time
+     , fyc.client_order_id -- fyc.order_id will be removed to group by cl_ord_id
+     , to_char(fyc.routed_time, 'YYYYMMDD')::integer                     as create_date_id
      , fyc.multileg_reporting_type
-     , fyc.instrument_id
-     , fyc.order_fix_message_id
-     , fyc.status_date_id
      , fyc.instrument_type_id
-     , fyc.cross_order_id
+     , case when fyc.cross_order_id is not null then true else false end as is_cross
      , fyc.order_qty
-     , fyc.side
-     , fyc.nbbo_ask_price
-     , fyc.nbbo_bid_price
---      , case when fyc.parent_order_id is not null then 1 else 0 end as is_prnt
-from data_marts.f_yield_capture fyc
-         left join dwh.d_option_contract oc
-                   on fyc.instrument_id = oc.instrument_id
-         left join dwh.d_option_series os
-                   on oc.option_series_id = os.option_series_id
+     , case
+           when fyc.instrument_type_id = 'E'
+               then abs(fyc.order_qty *
+                        coalesce((case --when fyc.order_type_id <> '1' then fyc.order_price
+                                      when fyc.side in ('1', '3') then fyc.nbbo_ask_price -- fyc.order_type_id = '1' and
+                                      when fyc.side not in ('1', '3')
+                                          then fyc.nbbo_bid_price -- fyc.order_type_id = '1' and
+                            end), 0))
+           when fyc.instrument_type_id = 'O'
+               then fyc.order_qty * os.contract_multiplier *
+                    coalesce((case --when fyc.order_type_id <> '1' then fyc.order_price
+                                  when fyc.side in ('1', '3')
+                                      then abs(fyc.nbbo_ask_price) -- fyc.order_type_id = '1' and
+                                  when fyc.side not in ('1', '3')
+                                      then -abs(fyc.nbbo_bid_price) -- fyc.order_type_id = '1' and -- sell will summarizing as minus
+                        end), 0)
+    end                                                                  as order_notional
+     , case
+           when fyc.instrument_type_id = 'E'
+               then tag_10504_equity_order_notional::numeric
+           when fyc.instrument_type_id = 'O'
+               then tag_10505_option_order_notional::numeric
+    end                                                                  as fix_order_notional
+     , case
+           when fyc.multileg_reporting_type = '2' and fyc.instrument_type_id = 'E'
+               then abs(tr.principal_amount)
+           when fyc.multileg_reporting_type = '2' and fyc.instrument_type_id = 'O' and fyc.side = '1'
+               then abs(tr.principal_amount)
+           when fyc.multileg_reporting_type = '2' and fyc.instrument_type_id = 'O' and fyc.side <> '1'
+               then -abs(tr.principal_amount)
+    end                                                                  as principal_amount
+--, fyc.order_type_id, fyc.side, fyc.order_price
+from --data_marts.f_yield_capture fyc
+     data_marts.f_yield_capture fyc
+         left join dwh.d_option_contract oc on fyc.instrument_id = oc.instrument_id
+         left join dwh.d_option_series os on oc.option_series_id = os.option_series_id
          left join lateral
-    (
-    select j.fix_message ->> '10504' as tag_10504_equity_order_notional
-         , j.fix_message ->> '10505' as tag_10505_option_order_notional
-    --, j.*
-    from fix_capture.fix_message_json j
-    where 1 = 1
-      and j.fix_message_id = fyc.order_fix_message_id
-      and j.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
-      and j.date_id = fyc.status_date_id
-      and fyc.cross_order_id is null
-    limit 1
-    ) fx on true
+                             (
+                             select j.fix_message ->> '10504' as tag_10504_equity_order_notional
+                                  , j.fix_message ->> '10505' as tag_10505_option_order_notional
+                             --, j.*
+                             from fix_capture.fix_message_json j
+                             where true
+                               and j.fix_message_id = fyc.order_fix_message_id
+                               and j.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+                               and j.date_id = fyc.status_date_id
+                               and fyc.cross_order_id is null
+                             limit 1
+                             ) fx on true
          left join lateral
-    (
-    select tr.order_id
-         , sum(abs(tr.principal_amount)) as principal_amount
-    from dwh.flat_trade_record tr
-    where tr.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
-      and tr.order_id = fyc.order_id
-      and tr.is_busted = 'N'
-      -- equity multileg crosses(legs) Single Cross Options - via NBBO. Single Equities cannot be part of Crosses
-      -- and fyc.instrument_type_id in ('E', 'O')
-      and fyc.multileg_reporting_type = '2'                      -- cross multilegs only
-      and fyc.cross_order_id is not null
-    group by tr.order_id
-    limit 1
-    ) tr on true
+                             (
+                             select tr.order_id
+                                  , sum(abs(tr.principal_amount)) as principal_amount
+                             from dwh.flat_trade_record tr
+                             where tr.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+                               and tr.order_id = fyc.order_id
+                               and tr.is_busted = 'N'
+                               -- equity multileg crosses(legs) Single Cross Options - via NBBO. Single Equities cannot be part of Crosses
+                               -- and fyc.instrument_type_id in ('E', 'O')
+                               and fyc.multileg_reporting_type = '2'                      -- cross multilegs only
+                               and fyc.cross_order_id is not null
+                             group by tr.order_id
+                             limit 1
+                             ) tr on true
          left join lateral
-    (
-    select ex.order_status, ex.exec_type
-    from dwh.execution ex
-    where ex.order_id = fyc.order_id
-      and (ex.order_status = '8' or ex.exec_type = '8')
-      --and ex.exec_date_id >= fyc.status_date_id
-      and ex.exec_date_id between :l_start_date_id and :l_end_date_id
-    limit 1
-    ) rj on true
+                             (
+                             select ex.order_status, ex.exec_type
+                             from dwh.execution ex
+                             where ex.order_id = fyc.order_id
+                               and (ex.order_status = '8' or ex.exec_type = '8')
+                               and ex.exec_date_id >= fyc.status_date_id
+                               and ex.exec_date_id between :l_start_date_id and :l_end_date_id
+                             limit 1
+                             ) rj on true
 where true
   and case when :l_is_include_rejected_order = 'Y' then true else rj.order_status is null end
-  and fyc.account_id = any (:l_account_id_from_tempt_table)
+  and fyc.account_id = any
+      ('{23680,23682,23683,23684,23704,23705,24012,24520,24521,24522,24523,24524,24525,25035,25036,25037,25038,25039,25040,25249,25250,25251,25252,25890,25891,25892,25893,25894,25895,27010,27011,27012,27013,27014,27015,27016,27017,27632,27633,27634,27635,27636,27637,27638,27639,27640,28569,28570,28571,28572,28573,28574,28575,28576,28577,31009,31010,33137,33138,33139,33140,33141,33142,33143,33145,33146,33147,33148,33149,33190,33191,33192,33193,33194,33195,33196,33197,33198,33199,33200,33201,33202,33203,33204,33205,33206,33207,33208,33209,33210,33211,33212,33213,33214,33215,33216,33217,33218,38477,38480,38481,38496,38497,38498,38524,38525,38526,38527,38528,38529,38920,49542,49543,49544,49545,49546,49547,51722,51782,51783,51787,51788,51789,51790,51792,51794,51842,51843,51844,52362,52363,52364,52365,52366,52367,52368,52369,52370,52371,52372,52373,52374,52375,52376,52377,52378,52379,52380,52381,52382,52383,52384,52385,52386,52387,52388,52389,52390,52391,52392,52393,52394,52395,52396,52397,52398,52399,52400,52401,52402,52403,52404,52405,52406,52407,52408,52409,52410,52411,52412,52413,52414,52415,52416,52417,52418,52419,52420,52421,52422,52423,52424,52425,52426,52427,52428,52429,52430,52431,52432,52433,52434,52435,52436,52437,52438,52439,52440,52441,53832,53833,53834,54511,54514,54515,54680,55722,55723,55724,55725,55973,55974,56092,56093,56355,56356,56358,56359,56360,56393,56394,56395,56396,56517,56592,56759,56813,56856,56857,57333,57772,57913,58254,58471,58689,58749,59570,59689,59772,59790,59908,61149,62468,62584,62585,62609,62652,62755,63287,63471,63671,63698,63699,63708,63709,63729,63730,63731,63872,63903,64655,64683,64717,64721,64722,64723,64864,64928,65107,65108,65109,65110,65111,65112,65113,65114,65123,65127,66434,66435,67602,67603,67745,67755,67798,67891,68028,68149,68221,68265,68267,68290,68291,68331,68371,68462,68483,68919,68921,68987,69038,69040,69074,69079,69162,69177,69211,69212,69220,69238,69240,69243,69283,69288,69421,69435,69772,69773,69774,69792,69793,69794,69897,69954,69955,69956,70010,70011,70012,70069,70139,70140,70141,70142,70246,70253,70266,70280,70385,70388,70390,70415,70490,70593,71159,71160,71161,71162,71163,71164,71165,71166,71167,71168,71169,71174,71204,71205,71206,71207,71208,71209,71210,71211,71212,71213,71214,71215,71216,71217,71218,71219,71220,71221,71222,71223,71224,71306,71307,71330,71331,71332,71358,71359,71360,71382,71716,71943,71944,71945,72100,72157,72320,72331,72346,72416,72425,72426,72427,72486,72487,72488,72784,72966,72995,73023,73077,73078,73079,73120,73123,73124,73125,73568,73696}')
   and fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210930 --
-  and fyc.status_date_id = to_char(fyc.routed_time, 'YYYYMMDD')::int4
+  and to_char(fyc.routed_time, 'YYYYMMDD')::int = fyc.status_date_id
   and fyc.parent_order_id is null
-
