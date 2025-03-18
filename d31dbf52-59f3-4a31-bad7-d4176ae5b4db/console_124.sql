@@ -28,8 +28,8 @@ declare
   l_step_id int;
 
   l_current_date    date;
-  :l_start_date_id   int;
-  :l_end_date_id     int;
+  l_start_date_id   int;
+  l_end_date_id     int;
 
   l_is_include_rejected_order varchar;
   l_is_include_10503_10502_tags varchar;
@@ -128,7 +128,7 @@ begin
       and ac.account_name is not null;
 
 select * from tmp_risk_peak_conumption;
-  create index on tmp_risk_peak_conumption (account_id);
+
 
     insert into tmp_risk_peak_conumption
     select ac.account_name as tag_1
@@ -163,8 +163,8 @@ select * from tmp_risk_peak_conumption;
       and ac.account_name is not null;
 --     order by 1, 3, 2, 8
     ;
-    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-
+    GET DIAGNOSTICS l_row_cnt = ROW_COUNT;!!!! it was union
+  create index on tmp_risk_peak_conumption (account_id);
     execute 'analyze tmp_risk_peak_conumption;';
 
     select public.load_log(l_load_id, l_step_id, 'Accounts and risk limit parameters are loaded', l_row_cnt, 'I')
@@ -1248,4 +1248,238 @@ where true
       ('{23680,23682,23683,23684,23704,23705,24012,24520,24521,24522,24523,24524,24525,25035,25036,25037,25038,25039,25040,25249,25250,25251,25252,25890,25891,25892,25893,25894,25895,27010,27011,27012,27013,27014,27015,27016,27017,27632,27633,27634,27635,27636,27637,27638,27639,27640,28569,28570,28571,28572,28573,28574,28575,28576,28577,31009,31010,33137,33138,33139,33140,33141,33142,33143,33145,33146,33147,33148,33149,33190,33191,33192,33193,33194,33195,33196,33197,33198,33199,33200,33201,33202,33203,33204,33205,33206,33207,33208,33209,33210,33211,33212,33213,33214,33215,33216,33217,33218,38477,38480,38481,38496,38497,38498,38524,38525,38526,38527,38528,38529,38920,49542,49543,49544,49545,49546,49547,51722,51782,51783,51787,51788,51789,51790,51792,51794,51842,51843,51844,52362,52363,52364,52365,52366,52367,52368,52369,52370,52371,52372,52373,52374,52375,52376,52377,52378,52379,52380,52381,52382,52383,52384,52385,52386,52387,52388,52389,52390,52391,52392,52393,52394,52395,52396,52397,52398,52399,52400,52401,52402,52403,52404,52405,52406,52407,52408,52409,52410,52411,52412,52413,52414,52415,52416,52417,52418,52419,52420,52421,52422,52423,52424,52425,52426,52427,52428,52429,52430,52431,52432,52433,52434,52435,52436,52437,52438,52439,52440,52441,53832,53833,53834,54511,54514,54515,54680,55722,55723,55724,55725,55973,55974,56092,56093,56355,56356,56358,56359,56360,56393,56394,56395,56396,56517,56592,56759,56813,56856,56857,57333,57772,57913,58254,58471,58689,58749,59570,59689,59772,59790,59908,61149,62468,62584,62585,62609,62652,62755,63287,63471,63671,63698,63699,63708,63709,63729,63730,63731,63872,63903,64655,64683,64717,64721,64722,64723,64864,64928,65107,65108,65109,65110,65111,65112,65113,65114,65123,65127,66434,66435,67602,67603,67745,67755,67798,67891,68028,68149,68221,68265,68267,68290,68291,68331,68371,68462,68483,68919,68921,68987,69038,69040,69074,69079,69162,69177,69211,69212,69220,69238,69240,69243,69283,69288,69421,69435,69772,69773,69774,69792,69793,69794,69897,69954,69955,69956,70010,70011,70012,70069,70139,70140,70141,70142,70246,70253,70266,70280,70385,70388,70390,70415,70490,70593,71159,71160,71161,71162,71163,71164,71165,71166,71167,71168,71169,71174,71204,71205,71206,71207,71208,71209,71210,71211,71212,71213,71214,71215,71216,71217,71218,71219,71220,71221,71222,71223,71224,71306,71307,71330,71331,71332,71358,71359,71360,71382,71716,71943,71944,71945,72100,72157,72320,72331,72346,72416,72425,72426,72427,72486,72487,72488,72784,72966,72995,73023,73077,73078,73079,73120,73123,73124,73125,73568,73696}')
   and fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210930 --
   and to_char(fyc.routed_time, 'YYYYMMDD')::int = fyc.status_date_id
-  and fyc.parent_order_id is null
+  and fyc.parent_order_id is null;
+
+
+
+create temp table t_01 as
+select s1.account_id
+                              , s1.date_id
+                              , s1.instrument_type_id
+                              , s1.is_cross
+                              , s1.multileg_reporting_type
+                              , s1.principal_amount
+                              , s1.filled_portion_percentage_to_10504_10505_value
+                              , 's1' as calc_source
+                              , null::numeric as order_notional_nbbo
+                              , s1.is_10504_10505_exists
+                            from
+                              (
+                                select tr.account_id
+                                  , tr.date_id
+                                  , tr.instrument_type_id
+                                  , tr.is_cross
+                                  , tr.multileg_reporting_type
+                                  , abs(tr.principal_amount) as principal_amount -- modified for MLEG Option 10505 value percentage
+                                  --, tr.*, fx.*
+                                  --, tr.cum_qty/tr.order_qty * 100 as prc
+                                  , ((case when tr.instrument_type_id = 'E' then fx.tag_10504_equity_order_notional::numeric else fx.tag_10505_option_order_notional::numeric end) / tr.order_qty::numeric) * tr.cum_qty::numeric as filled_portion_percentage_to_10504_10505_value -- по эквити легко: там 10504 будет соответствовать order_qty эквити лега
+                                    -- по опционам сложно: там 10505 будет соответствовать сумме order_qty опционовых легов
+                                    , tr.order_fix_message_id
+                                  , case when coalesce(fx.tag_10504_equity_order_notional, fx.tag_10505_option_order_notional) is not null then true else false end as is_10504_10505_exists
+                                from
+                                  (
+                                    select s.account_id
+                                      , s.date_id
+                                      , s.client_order_id
+                                      , s.order_fix_message_id
+                                      , s.instrument_type_id
+                                      , s.is_cross
+                                      , s.multileg_reporting_type
+                                      , sum(s.order_qty) as order_qty
+                                      , sum(s.cum_qty) as cum_qty
+                                      , sum(s.principal_amount) as principal_amount
+                                    from
+                                      (
+                                        select tr.account_id
+                                          , tr.date_id
+                                          , tr.order_id, tr.client_order_id
+                                          , tr.order_fix_message_id
+                                          , tr.instrument_type_id
+                                          , case when tr.is_cross_order = 'Y' then true else false end as is_cross
+                                          , tr.multileg_reporting_type
+                                          , avg(tr.last_px) as avg_px
+                                          , max(tr.order_qty) as order_qty
+                                          , sum(tr.last_qty) as cum_qty
+                                          , sum(case when tr.multileg_reporting_type = '2' and tr.side not in ('1','3') then -tr.principal_amount else tr.principal_amount end) as principal_amount
+                                        from dwh.flat_trade_record tr
+                                        where tr.date_id between :l_start_date_id and :l_end_date_id -- = 20211207 --   20211201 and 20211231 --
+                                          and tr.account_id = any
+      ('{23680,23682,23683,23684,23704,23705,24012,24520,24521,24522,24523,24524,24525,25035,25036,25037,25038,25039,25040,25249,25250,25251,25252,25890,25891,25892,25893,25894,25895,27010,27011,27012,27013,27014,27015,27016,27017,27632,27633,27634,27635,27636,27637,27638,27639,27640,28569,28570,28571,28572,28573,28574,28575,28576,28577,31009,31010,33137,33138,33139,33140,33141,33142,33143,33145,33146,33147,33148,33149,33190,33191,33192,33193,33194,33195,33196,33197,33198,33199,33200,33201,33202,33203,33204,33205,33206,33207,33208,33209,33210,33211,33212,33213,33214,33215,33216,33217,33218,38477,38480,38481,38496,38497,38498,38524,38525,38526,38527,38528,38529,38920,49542,49543,49544,49545,49546,49547,51722,51782,51783,51787,51788,51789,51790,51792,51794,51842,51843,51844,52362,52363,52364,52365,52366,52367,52368,52369,52370,52371,52372,52373,52374,52375,52376,52377,52378,52379,52380,52381,52382,52383,52384,52385,52386,52387,52388,52389,52390,52391,52392,52393,52394,52395,52396,52397,52398,52399,52400,52401,52402,52403,52404,52405,52406,52407,52408,52409,52410,52411,52412,52413,52414,52415,52416,52417,52418,52419,52420,52421,52422,52423,52424,52425,52426,52427,52428,52429,52430,52431,52432,52433,52434,52435,52436,52437,52438,52439,52440,52441,53832,53833,53834,54511,54514,54515,54680,55722,55723,55724,55725,55973,55974,56092,56093,56355,56356,56358,56359,56360,56393,56394,56395,56396,56517,56592,56759,56813,56856,56857,57333,57772,57913,58254,58471,58689,58749,59570,59689,59772,59790,59908,61149,62468,62584,62585,62609,62652,62755,63287,63471,63671,63698,63699,63708,63709,63729,63730,63731,63872,63903,64655,64683,64717,64721,64722,64723,64864,64928,65107,65108,65109,65110,65111,65112,65113,65114,65123,65127,66434,66435,67602,67603,67745,67755,67798,67891,68028,68149,68221,68265,68267,68290,68291,68331,68371,68462,68483,68919,68921,68987,69038,69040,69074,69079,69162,69177,69211,69212,69220,69238,69240,69243,69283,69288,69421,69435,69772,69773,69774,69792,69793,69794,69897,69954,69955,69956,70010,70011,70012,70069,70139,70140,70141,70142,70246,70253,70266,70280,70385,70388,70390,70415,70490,70593,71159,71160,71161,71162,71163,71164,71165,71166,71167,71168,71169,71174,71204,71205,71206,71207,71208,71209,71210,71211,71212,71213,71214,71215,71216,71217,71218,71219,71220,71221,71222,71223,71224,71306,71307,71330,71331,71332,71358,71359,71360,71382,71716,71943,71944,71945,72100,72157,72320,72331,72346,72416,72425,72426,72427,72486,72487,72488,72784,72966,72995,73023,73077,73078,73079,73120,73123,73124,73125,73568,73696}')
+                                          --and tr.account_id in (select distinct account_id from trash.sdn_tmp_risk_peak_conumption) -- in (24649, 25239, 29222, 24650,30214) --
+                                          and tr.is_busted = 'N'
+                                          and coalesce(tr.trade_record_reason, '-1') <> 'A' -- ???? Away trades
+                                          --and tr.is_cross_order = 'Y' -- principal_amount logic is only for crosses
+                                        group by tr.account_id
+                                          , tr.date_id
+                                          , tr.order_id, tr.client_order_id
+                                          , tr.order_fix_message_id
+                                          , tr.instrument_type_id
+                                          , case when tr.is_cross_order = 'Y' then true else false end
+                                          , tr.multileg_reporting_type
+                                        --order by tr.order_fix_message_id
+                                      ) s
+                                    group by s.account_id
+                                      , s.date_id
+                                      , s.client_order_id
+                                      , s.order_fix_message_id
+                                      , s.instrument_type_id
+                                      , s.is_cross
+                                      , s.multileg_reporting_type
+                                    --order by s.order_fix_message_id
+                                  ) tr
+                                  left join lateral
+                                    (
+                                      select j.fix_message_id
+                                        , j.fix_message ->> '10504' as tag_10504_equity_order_notional
+                                        , j.fix_message ->> '10505' as tag_10505_option_order_notional
+                                        --, j.*
+                                      from fix_capture.fix_message_json j
+                                      where 1=1
+                                        and j.fix_message_id = tr.order_fix_message_id
+                                        and j.date_id between :l_start_date_id and :l_end_date_id -- 20211201 and 20211231 --
+                                        --and j.date_id = tr.date_id
+                                        and tr.is_cross = false
+                                      limit 1
+                                    ) fx on true
+                                --order by tr.order_fix_message_id
+                              ) s1;
+insert into t_01
+                            select s2.account_id
+                              , s2.date_id
+                              , s2.instrument_type_id
+                              , s2.is_cross
+                              , s2.multileg_reporting_type
+                              , s2.principal_amount
+                              , s2.filled_portion_percentage_to_10504_10505_value
+                              , 's2' as calc_source
+                              , s2.equity_order_notional+s2.option_order_notional as order_notional_nbbo -- will be dependent on instrument_type. Just in case there are no 10504/10505 tags in orders
+                              , s2.is_10504_10505_exists
+                            from
+                              (
+                                select conew.account_id
+                                  , conew.date_id
+                                  , conew.instrument_type_id
+                                  , conew.is_cross
+                                  , conew.multileg_reporting_type
+                                  , null::numeric as principal_amount
+                                  --, tr.*, fx.*
+                                  --, tr.cum_qty/tr.order_qty * 100 as prc
+                                  , ((case when conew.instrument_type_id = 'E' then fx.tag_10504_equity_order_notional::numeric else fx.tag_10505_option_order_notional::numeric end) / conew.order_qty::numeric) * conew.cum_qty::numeric as filled_portion_percentage_to_10504_10505_value -- по эквити легко: там 10504 будет соответствовать order_qty эквити лега
+                                    -- по опционам сложно: там 10505 будет соответствовать сумме order_qty опционовых легов
+                                    , conew.order_fix_message_id
+                                  , case when coalesce(fx.tag_10504_equity_order_notional, fx.tag_10505_option_order_notional) is not null then true else false end as is_10504_10505_exists
+                                  , abs(conew.equity_order_notional) as equity_order_notional
+                                  , abs(conew.option_order_notional) as option_order_notional
+                                from
+                                  (
+                                    select s.account_id
+                                      , s.date_id
+                                      , s.client_order_id
+                                      , s.order_fix_message_id
+                                      , s.instrument_type_id
+                                      , s.is_cross
+                                      , s.multileg_reporting_type
+                                      , sum(s.order_qty) as order_qty
+                                      , sum(s.cum_qty) as cum_qty
+                                      --, sum(s.principal_amount) as principal_amount
+                                      --NBBO Buy-Sell Order Notional
+                                      , sum(s.equity_order_notional) as equity_order_notional -- NBBO
+                                      , sum(s.option_order_notional) as option_order_notional -- NBBO - differs from what we have from 10504/10505
+                                    from
+                                      (
+                                       create temp table t_001 as
+                                       select co.account_id
+                                          , co.create_date_id as date_id
+                                          , co.order_id , co.client_order_id
+                                          , co.fix_message_id as order_fix_message_id
+                                          , di.instrument_type_id
+                                          , case when co.cross_order_id is not null then true else false end as is_cross
+                                          , co.multileg_reporting_type
+                                          , co.order_qty
+                                          , co.order_qty as cum_qty
+                                          , fyc.nbbo_ask_price
+                                          , fyc.nbbo_bid_price
+                                          , co.side
+                                          , case when di.instrument_type_id = 'E'
+                                                  then abs(co.order_qty *
+                                                        coalesce((case --when fyc.order_type_id <> '1' then fyc.order_price
+                                                                     when co.side in ('1','3') then fyc.nbbo_ask_price  -- fyc.order_type_id = '1' and
+                                                                     when co.side not in ('1','3') then fyc.nbbo_bid_price -- fyc.order_type_id = '1' and
+                                                                   end),0))
+                                            end as equity_order_notional
+                                          , case when di.instrument_type_id = 'O'
+                                                  then (co.order_qty * os.contract_multiplier *
+                                                        coalesce((case --when fyc.order_type_id <> '1' then fyc.order_price
+                                                                     when co.side in ('1','3') then abs(fyc.nbbo_ask_price)  -- fyc.order_type_id = '1' and
+                                                                     when co.side not in ('1','3') then -abs(fyc.nbbo_bid_price) -- fyc.order_type_id = '1' and
+                                                                   end),0))
+                                            end as option_order_notional
+                                          --, ex.*
+                                          --, co.trans_type
+                                        from dwh.client_order co
+                                          join lateral
+                                            (
+                                              select ex.order_id
+                                                , ex.order_status , ex.exec_type
+                                                --, first_value(ex.order_status) over (partition by ex.order_id order by ex.exec_id desc) as max_status
+                                                --, ex.*
+                                              from dwh.execution ex
+                                              where ex.order_id = co.order_id
+                                                and ex.exec_date_id between :l_start_date_id and :l_end_date_id -- 20211201 and 20211231
+                                                --and ex.exec_type = 'F'
+                                              order by ex.exec_id desc
+                                              limit 1
+                                            ) ex on ex.order_status = '0' -- ex.max_status = '0' --true --
+                                          left join dwh.d_instrument di
+                                            on co.instrument_id = di.instrument_id
+                                          left join dwh.d_option_contract oc
+                                            on di.instrument_id = oc.instrument_id
+                                          left join dwh.d_option_series os
+                                            on oc.option_series_id = os.option_series_id
+                                          left join lateral
+                                            (
+                                              select fyc.order_id
+                                                , fyc.nbbo_ask_price
+                                                , fyc.nbbo_bid_price
+                                              from data_marts.f_yield_capture fyc
+                                              where fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20211201 and 20211231 --
+                                                and fyc.status_date_id = co.create_date_id
+                                                and fyc.order_id = co.order_id
+                                              limit 1
+                                            ) fyc on true
+                                        where co.create_date_id between :l_start_date_id and :l_end_date_id -- 20211201 and 20211231 -- = 20211207 --
+                                          and co.account_id = any
+      ('{23680,23682,23683,23684,23704,23705,24012,24520,24521,24522,24523,24524,24525,25035,25036,25037,25038,25039,25040,25249,25250,25251,25252,25890,25891,25892,25893,25894,25895,27010,27011,27012,27013,27014,27015,27016,27017,27632,27633,27634,27635,27636,27637,27638,27639,27640,28569,28570,28571,28572,28573,28574,28575,28576,28577,31009,31010,33137,33138,33139,33140,33141,33142,33143,33145,33146,33147,33148,33149,33190,33191,33192,33193,33194,33195,33196,33197,33198,33199,33200,33201,33202,33203,33204,33205,33206,33207,33208,33209,33210,33211,33212,33213,33214,33215,33216,33217,33218,38477,38480,38481,38496,38497,38498,38524,38525,38526,38527,38528,38529,38920,49542,49543,49544,49545,49546,49547,51722,51782,51783,51787,51788,51789,51790,51792,51794,51842,51843,51844,52362,52363,52364,52365,52366,52367,52368,52369,52370,52371,52372,52373,52374,52375,52376,52377,52378,52379,52380,52381,52382,52383,52384,52385,52386,52387,52388,52389,52390,52391,52392,52393,52394,52395,52396,52397,52398,52399,52400,52401,52402,52403,52404,52405,52406,52407,52408,52409,52410,52411,52412,52413,52414,52415,52416,52417,52418,52419,52420,52421,52422,52423,52424,52425,52426,52427,52428,52429,52430,52431,52432,52433,52434,52435,52436,52437,52438,52439,52440,52441,53832,53833,53834,54511,54514,54515,54680,55722,55723,55724,55725,55973,55974,56092,56093,56355,56356,56358,56359,56360,56393,56394,56395,56396,56517,56592,56759,56813,56856,56857,57333,57772,57913,58254,58471,58689,58749,59570,59689,59772,59790,59908,61149,62468,62584,62585,62609,62652,62755,63287,63471,63671,63698,63699,63708,63709,63729,63730,63731,63872,63903,64655,64683,64717,64721,64722,64723,64864,64928,65107,65108,65109,65110,65111,65112,65113,65114,65123,65127,66434,66435,67602,67603,67745,67755,67798,67891,68028,68149,68221,68265,68267,68290,68291,68331,68371,68462,68483,68919,68921,68987,69038,69040,69074,69079,69162,69177,69211,69212,69220,69238,69240,69243,69283,69288,69421,69435,69772,69773,69774,69792,69793,69794,69897,69954,69955,69956,70010,70011,70012,70069,70139,70140,70141,70142,70246,70253,70266,70280,70385,70388,70390,70415,70490,70593,71159,71160,71161,71162,71163,71164,71165,71166,71167,71168,71169,71174,71204,71205,71206,71207,71208,71209,71210,71211,71212,71213,71214,71215,71216,71217,71218,71219,71220,71221,71222,71223,71224,71306,71307,71330,71331,71332,71358,71359,71360,71382,71716,71943,71944,71945,72100,72157,72320,72331,72346,72416,72425,72426,72427,72486,72487,72488,72784,72966,72995,73023,73077,73078,73079,73120,73123,73124,73125,73568,73696}')
+                                          --and co.account_id in (select distinct account_id from trash.sdn_tmp_risk_peak_conumption) -- in (24649, 25239, 29222, 24650,30214) --
+                                          and co.multileg_reporting_type in ('1','2')
+                                          and co.trans_type not in ('F', 'G')
+                                          and co.parent_order_id is null -- only parent orders
+                                          and co.cross_order_id is null -- only non-crosses
+                                        --order by co.fix_message_id, co.order_id --, ex.exec_id
+                                      ) s
+                                    group by s.account_id
+                                      , s.date_id
+                                      , s.client_order_id
+                                      , s.order_fix_message_id
+                                      , s.instrument_type_id
+                                      , s.is_cross
+                                      , s.multileg_reporting_type
+                                    --order by s.order_fix_message_id
+                                  ) conew
+                                  left join lateral
+                                    (
+                                      select j.fix_message_id
+                                        , j.fix_message ->> '10504' as tag_10504_equity_order_notional
+                                        , j.fix_message ->> '10505' as tag_10505_option_order_notional
+                                        --, j.*
+                                      from fix_capture.fix_message_json j
+                                      where 1=1
+                                        and j.fix_message_id = conew.order_fix_message_id
+                                        and j.date_id between :l_start_date_id and :l_end_date_id -- 20211201 and 20211231 --
+                                        --and j.date_id = tr.date_id
+                                        --and co.cross_order_id is null --??
+                                      limit 1
+                                    ) fx on true
+                                --order by tr.order_fix_message_id
+                              ) s2
