@@ -175,8 +175,10 @@ begin
     --execute 'DROP TABLE IF EXISTS trash.sdn_tmp_risk_peak_max_order_notshar_contr;';
     --create table trash.sdn_tmp_risk_peak_max_order_notshar_contr with (parallel_workers = 8) as
     execute 'DROP TABLE IF EXISTS tmp_risk_peak_max_order_notshar_contr;';
-    create temp table tmp_risk_peak_max_order_notshar_contr with (parallel_workers = 8)
-                                                            ON COMMIT drop as
+    EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+    create temp table tmp_risk_peak_max_order_notshar_contr --with (parallel_workers = 8)
+--                                                             ON COMMIT drop
+        as
     select src.account_id
          , src.osr_param_code
          , src.peak_num        as peak_id
@@ -382,7 +384,8 @@ begin
                                        , src.create_date_id
                                        , src.multileg_reporting_type
                                        , src.instrument_type_id
-                                       , src.is_cross) s) src) s
+                                       , src.is_cross
+                                ) s) src) s
           where (crmxoc is not null and rn_crmxoc <= 5)
              or (crmxco is not null and rn_crmxco <= 5)
              or (crmnve is not null and rn_crmnve <= 5)
@@ -396,11 +399,14 @@ begin
              or (omaxnv is not null and rn_omaxnv <= 5)
              or (omaxnv_ml is not null and rn_omaxnv_ml <= 5)
              or (omaxoc is not null and rn_omaxoc <= 5)
-             or (omaxoc_ml is not null and rn_omaxoc_ml <= 5)) src
+             or (omaxoc_ml is not null and rn_omaxoc_ml <= 5)
+
+          ) src
     group by src.account_id
            , src.osr_param_code
            , src.peak_num
-    order by 1, 2, 3;
+--     order by 1, 2, 3
+    ;
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
 
     select public.load_log(l_load_id, l_step_id,
@@ -1106,6 +1112,7 @@ $function$
 
 --------------------------
 create temp table tmp_to_do1 as
+-- EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select fyc.account_id
      , fyc.order_id
      , fyc.client_order_id -- fyc.order_id will be removed to group by cl_ord_id
@@ -1153,58 +1160,55 @@ select fyc.account_id
 --, fyc.order_type_id, fyc.side, fyc.order_price
 --data_marts.f_yield_capture fyc
          from data_marts.f_yield_capture fyc
-         left join dwh.d_option_contract oc
-                   on fyc.instrument_id = oc.instrument_id
-         left join dwh.d_option_series os
-                   on oc.option_series_id = os.option_series_id
+         left join dwh.d_option_contract oc on fyc.instrument_id = oc.instrument_id
+         left join dwh.d_option_series os on oc.option_series_id = os.option_series_id
          left join lateral
-         (
-         select j.fix_message ->> '10504' as tag_10504_equity_order_notional
-              , j.fix_message ->> '10505' as tag_10505_option_order_notional
-         --, j.*
-         from fix_capture.fix_message_json j
-         where true
-           and j.fix_message_id = fyc.order_fix_message_id
-           and j.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
-           and j.date_id = fyc.status_date_id
-           and fyc.cross_order_id is null
+                         (
+                         select j.fix_message ->> '10504' as tag_10504_equity_order_notional
+                              , j.fix_message ->> '10505' as tag_10505_option_order_notional
+                         --, j.*
+                         from fix_capture.fix_message_json j
+                         where true
+                           and j.fix_message_id = fyc.order_fix_message_id
+                           and j.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+                           and j.date_id = fyc.status_date_id
+                           and fyc.cross_order_id is null
 
-         limit 1
-         ) fx on true
+                         limit 1
+                         ) fx on true
          left join lateral
-         (
-         select tr.order_id
-              , sum(abs(tr.principal_amount)) as principal_amount
-         from dwh.flat_trade_record tr
-         where tr.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
-           and tr.order_id = fyc.order_id
-           and tr.is_busted = 'N'
-           -- equity multileg crosses(legs) Single Cross Options - via NBBO. Single Equities cannot be part of Crosses
-           -- and fyc.instrument_type_id in ('E', 'O')
-           and fyc.multileg_reporting_type = '2'                    -- cross multilegs only
-           and fyc.cross_order_id is not null
-         group by tr.order_id
-         limit 1
-         ) tr on true
+                         (
+                         select tr.order_id
+                              , sum(abs(tr.principal_amount)) as principal_amount
+                         from dwh.flat_trade_record tr
+                         where tr.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+                           and tr.order_id = fyc.order_id
+                           and tr.is_busted = 'N'
+                           -- equity multileg crosses(legs) Single Cross Options - via NBBO. Single Equities cannot be part of Crosses
+                           -- and fyc.instrument_type_id in ('E', 'O')
+                           and fyc.multileg_reporting_type = '2'                    -- cross multilegs only
+                           and fyc.cross_order_id is not null
+                         group by tr.order_id
+                         limit 1
+                         ) tr on true
          left join lateral
-         (
-         select ex.order_status, ex.exec_type
-         from dwh.execution ex
-         where ex.order_id = fyc.order_id
-           and (ex.order_status = '8' or ex.exec_type = '8')
-           --and ex.exec_date_id >= fyc.status_date_id
-           and ex.exec_date_id between :l_start_date_id and :l_end_date_id
-         limit 1
-         ) rj on true
+                         (
+                         select ex.order_status, ex.exec_type
+                         from dwh.execution ex
+                         where ex.order_id = fyc.order_id
+                           and (ex.order_status = '8' or ex.exec_type = '8')
+                           --and ex.exec_date_id >= fyc.status_date_id
+                           and ex.exec_date_id between :l_start_date_id and :l_end_date_id
+                         limit 1
+                         ) rj on true
 where true
   --and rj.order_status is null -- exclude rejects
   and case
-          when :l_is_include_rejected_order = 'Y' then true
-          else rj.order_status is null end
-
+          when :l_is_include_rejected_order = 'Y' then true else rj.order_status is null end
            and fyc.account_id = any(:l_account_ids)
            and fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210930 --
            and to_char(fyc.routed_time, 'YYYYMMDD')::varchar = fyc.status_date_id::varchar
                   and fyc.parent_order_id is null
 
 
+select * from tmp_to_do1
