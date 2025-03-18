@@ -715,6 +715,8 @@ select * from tmp_risk_peak_conumption;
                                   end
                             end as CRTNOP_ML --OptionTotalNotionalCross -- ML_OPT (Multileg - options, crosses)
                         from
+                            t_01
+                            /*
                           (
                             select s1.account_id
                               , s1.date_id
@@ -944,6 +946,7 @@ select * from tmp_risk_peak_conumption;
                                 --order by tr.order_fix_message_id
                               ) s2
                           ) s
+                        */
                         --order by 1,2
                       ) src
                     group by src.account_id
@@ -1386,8 +1389,8 @@ insert into t_01
                                       --NBBO Buy-Sell Order Notional
                                       , sum(s.equity_order_notional) as equity_order_notional -- NBBO
                                       , sum(s.option_order_notional) as option_order_notional -- NBBO - differs from what we have from 10504/10505
-                                    from
-                                      (
+                                    from t_001 s
+                                      /*(
                                        create temp table t_001 as
                                        select co.account_id
                                           , co.create_date_id as date_id
@@ -1458,6 +1461,8 @@ insert into t_01
                                           and co.cross_order_id is null -- only non-crosses
                                         --order by co.fix_message_id, co.order_id --, ex.exec_id
                                       ) s
+                                        */
+
                                     group by s.account_id
                                       , s.date_id
                                       , s.client_order_id
