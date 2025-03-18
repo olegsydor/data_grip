@@ -1,11 +1,11 @@
 -- DROP FUNCTION dash360.report_risk_baml_peak_consumption_file(int4, int4, _int8, _varchar, varchar, varchar);
 
 CREATE OR REPLACE FUNCTION trash.so_report_risk_baml_peak_consumption_file(in_start_date_id integer DEFAULT NULL::integer,
-                                                                          in_end_date_id integer DEFAULT NULL::integer,
-                                                                          in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                          in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                          in_is_include_rejected_order character varying DEFAULT 'N'::character varying,
-                                                                          in_is_include_10503_10502_tags character varying DEFAULT 'N'::character varying)
+                                                                           in_end_date_id integer DEFAULT NULL::integer,
+                                                                           in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                           in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                           in_is_include_rejected_order character varying DEFAULT 'N'::character varying,
+                                                                           in_is_include_10503_10502_tags character varying DEFAULT 'N'::character varying)
     RETURNS TABLE
             (
                 roe text
@@ -26,8 +26,7 @@ declare
     text_var1                     varchar;
     text_var2                     varchar;
     text_var3                     varchar;
-    
-    l_account_ids int8[];
+    l_account_ids                 int8[];
 
 begin
 
@@ -79,7 +78,7 @@ begin
     execute 'DROP TABLE IF EXISTS tmp_risk_peak_conumption;';
     create temp table tmp_risk_peak_conumption --with (parallel_workers = 8)
 --                                                ON COMMIT drop
-                                                   as
+    as
     select ac.account_name::character varying                   as tag_1
          , rlv.security_type::character varying                 as security_type
          --, rlv.osr_param_name as rl_parameter
@@ -117,28 +116,28 @@ begin
       and ac.account_name is not null;
 
     insert into tmp_risk_peak_conumption
-    select ac.account_name                                                                                           as tag_1
+    select ac.account_name                 as tag_1
          --, 'Multileg' as security_type
          , case
                when rlv.osr_param_code in ('CRMNVE') then 'Multileg(Eq)'
                when rlv.osr_param_code in ('CRMXNV') then 'Multileg(Opt)'
                else 'Multileg'
-        end                                                                                                          as security_type
+        end                                as security_type
          --, rlv.osr_param_name as rl_parameter
          , case
                when rlv.risk_mgmt_config_scope = 'H' then rlv.osr_param_name || '(EOS)'
-               else rlv.osr_param_name end                                                                           as rl_parameter
-         , rlv.osr_param_value                                                                                       as current_limit
-         , null::varchar                                                                                             as peak_value
-         , null::varchar                                                                                             as peak_date
-         , null::varchar                                                                                             as cl_ord_id
+               else rlv.osr_param_name end as rl_parameter
+         , rlv.osr_param_value             as current_limit
+         , null::varchar                   as peak_value
+         , null::varchar                   as peak_date
+         , null::varchar                   as cl_ord_id
          --
-         , gs.val::int4                                                                                              as peak_id
+         , gs.val::int4                    as peak_id
          , tf.trading_firm_name
          , tf.trading_firm_id
          , ac.account_id
          , ac.account_name
-         , rlv.osr_param_code || '_ML'                                                                               as osr_param_code
+         , rlv.osr_param_code || '_ML'     as osr_param_code
     --, rlv.*
     from staging.risk_limits_osr_param_v rlv
              left join dwh.d_account ac
@@ -162,8 +161,8 @@ begin
 
     create index on tmp_risk_peak_conumption (account_id);
     analyze tmp_risk_peak_conumption;
-    
-    select array_agg(distinct account_id) 
+
+    select array_agg(distinct account_id)
     into l_account_ids
     from tmp_risk_peak_conumption;
 
@@ -174,8 +173,131 @@ begin
     -- step 2: load max_order_notional and max_order_shares/contracts parameters
     --execute 'DROP TABLE IF EXISTS trash.sdn_tmp_risk_peak_max_order_notshar_contr;';
     --create table trash.sdn_tmp_risk_peak_max_order_notshar_contr with (parallel_workers = 8) as
-    execute 'DROP TABLE IF EXISTS tmp_risk_peak_max_order_notshar_contr;';
-    EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+
+    DROP TABLE IF EXISTS tmp_to_do1;
+
+    create temp table tmp_to_do1 as
+-- EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+    select fyc.account_id
+         , fyc.order_id
+         , fyc.client_order_id -- fyc.order_id will be removed to group by cl_ord_id
+         , to_char(fyc.routed_time, 'YYYYMMDD')::integer                     as create_date_id
+         , fyc.multileg_reporting_type
+         , fyc.instrument_type_id
+         , case when fyc.cross_order_id is not null then true else false end as is_cross
+         , fyc.order_qty
+         , case
+               when fyc.instrument_type_id = 'E'
+                   then abs(fyc.order_qty *
+                            coalesce(
+                                    (case --when fyc.order_type_id <> '1' then fyc.order_price
+                                         when fyc.side in ('1', '3')
+                                             then fyc.nbbo_ask_price -- fyc.order_type_id = '1' and
+                                         when fyc.side not in ('1', '3')
+                                             then fyc.nbbo_bid_price -- fyc.order_type_id = '1' and
+                                        end), 0))
+               when fyc.instrument_type_id = 'O'
+                   then fyc.order_qty * os.contract_multiplier *
+                        coalesce(
+                                (case --when fyc.order_type_id <> '1' then fyc.order_price
+                                     when fyc.side in ('1', '3')
+                                         then abs(fyc.nbbo_ask_price) -- fyc.order_type_id = '1' and
+                                     when fyc.side not in ('1', '3')
+                                         then -abs(fyc.nbbo_bid_price) -- fyc.order_type_id = '1' and -- sell will summarizing as minus
+                                    end), 0)
+        end                                                                  as order_notional
+         , case
+               when fyc.instrument_type_id = 'E'
+                   then tag_10504_equity_order_notional::numeric
+               when fyc.instrument_type_id = 'O'
+                   then tag_10505_option_order_notional::numeric
+        end                                                                  as fix_order_notional
+         , case
+               when fyc.multileg_reporting_type = '2' and fyc.instrument_type_id = 'E'
+                   then abs(tr.principal_amount)
+               when fyc.multileg_reporting_type = '2' and
+                    fyc.instrument_type_id = 'O' and fyc.side = '1'
+                   then abs(tr.principal_amount)
+               when fyc.multileg_reporting_type = '2' and
+                    fyc.instrument_type_id = 'O' and fyc.side <> '1'
+                   then -abs(tr.principal_amount)
+        end                                                                  as principal_amount
+    --, fyc.order_type_id, fyc.side, fyc.order_price
+--data_marts.f_yield_capture fyc
+    from data_marts.f_yield_capture fyc
+             left join dwh.d_option_contract oc on fyc.instrument_id = oc.instrument_id
+             left join dwh.d_option_series os on oc.option_series_id = os.option_series_id
+             left join lateral
+        (
+        select j.fix_message ->> '10504' as tag_10504_equity_order_notional
+             , j.fix_message ->> '10505' as tag_10505_option_order_notional
+        --, j.*
+        from fix_capture.fix_message_json j
+        where true
+          and j.fix_message_id = fyc.order_fix_message_id
+          and j.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+          and j.date_id = fyc.status_date_id
+          and fyc.cross_order_id is null
+
+        limit 1
+        ) fx on true
+             left join lateral
+        (
+        select tr.order_id
+             , sum(abs(tr.principal_amount)) as principal_amount
+        from dwh.flat_trade_record tr
+        where tr.date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210731 --
+          and tr.order_id = fyc.order_id
+          and tr.is_busted = 'N'
+          -- equity multileg crosses(legs) Single Cross Options - via NBBO. Single Equities cannot be part of Crosses
+          -- and fyc.instrument_type_id in ('E', 'O')
+          and fyc.multileg_reporting_type = '2'                      -- cross multilegs only
+          and fyc.cross_order_id is not null
+        group by tr.order_id
+        limit 1
+        ) tr on true
+             left join lateral
+        (
+        select ex.order_status, ex.exec_type
+        from dwh.execution ex
+        where ex.order_id = fyc.order_id
+          and (ex.order_status = '8' or ex.exec_type = '8')
+          --and ex.exec_date_id >= fyc.status_date_id
+          and ex.exec_date_id between :l_start_date_id and :l_end_date_id
+        limit 1
+        ) rj on true
+    where true
+      --and rj.order_status is null -- exclude rejects
+      and case
+              when :l_is_include_rejected_order = 'Y' then true
+              else rj.order_status is null end
+      and fyc.account_id = any (:l_account_ids)
+      and fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210930 --
+      and to_char(fyc.routed_time, 'YYYYMMDD')::varchar = fyc.status_date_id::varchar
+      and fyc.parent_order_id is null;
+
+    drop table if exists t_to_do_wrp;
+    create temp table t_to_do_wrp as
+    select src.account_id
+         , src.client_order_id
+         , src.create_date_id
+         , src.multileg_reporting_type
+         , src.instrument_type_id
+         , src.is_cross
+         , max(src.order_qty)             as order_qty
+         , abs(sum(src.order_notional))   as order_notional            -- left for single cross options (using NBBO)
+         , max(src.fix_order_notional)    as fix_order_notional        -- for all non-crosses
+         , abs(sum(src.principal_amount)) as cross_legs_order_notional -- for cross equity and option legs
+    from tmp_to_do1 src
+    group by src.account_id, src.client_order_id
+           , src.create_date_id
+           , src.multileg_reporting_type
+           , src.instrument_type_id
+           , src.is_cross;
+
+    create index on t_to_do_wrp (account_id, create_date_id, client_order_id);
+
+    DROP TABLE IF EXISTS tmp_risk_peak_max_order_notshar_contr;
     create temp table tmp_risk_peak_max_order_notshar_contr --with (parallel_workers = 8)
 --                                                             ON COMMIT drop
         as
@@ -369,23 +491,7 @@ begin
                                                    s.multileg_reporting_type = '2' --
                                                   then s.order_qty
                             end as OMAXOC_ML               --OptionsMaxOrderContracts -- MLEG
-                          from (select src.account_id
-                                     , src.client_order_id
-                                     , src.create_date_id
-                                     , src.multileg_reporting_type
-                                     , src.instrument_type_id
-                                     , src.is_cross
-                                     , max(src.order_qty)             as order_qty
-                                     , abs(sum(src.order_notional))   as order_notional            -- left for single cross options (using NBBO)
-                                     , max(src.fix_order_notional)    as fix_order_notional        -- for all non-crosses
-                                     , abs(sum(src.principal_amount)) as cross_legs_order_notional -- for cross equity and option legs
-                                from tmp_to_do1 src
-                                group by src.account_id, src.client_order_id
-                                       , src.create_date_id
-                                       , src.multileg_reporting_type
-                                       , src.instrument_type_id
-                                       , src.is_cross
-                                ) s) src) s
+                          from t_to_do_wrp s) src) s
           where (crmxoc is not null and rn_crmxoc <= 5)
              or (crmxco is not null and rn_crmxco <= 5)
              or (crmnve is not null and rn_crmnve <= 5)
@@ -1208,7 +1314,7 @@ where true
            and fyc.account_id = any(:l_account_ids)
            and fyc.status_date_id between :l_start_date_id and :l_end_date_id -- 20210701 and 20210930 --
            and to_char(fyc.routed_time, 'YYYYMMDD')::varchar = fyc.status_date_id::varchar
-                  and fyc.parent_order_id is null
+                  and fyc.parent_order_id is null;
 
 
 select * from tmp_to_do1
