@@ -1,34 +1,34 @@
 -- DROP FUNCTION dash360.report_fintech_mwace_execution(int4, int4, bpchar, _int4, _varchar);
 
-create function dash360.report_fintech_mwace_execution(in_start_date_id integer default get_dateid(current_date),
+create or replace function dash360.report_fintech_mwace_execution(in_start_date_id integer default get_dateid(current_date),
                                                        in_end_date_id integer default get_dateid(current_date),
                                                        in_instrument_type character default null::bpchar,
                                                        in_account_ids integer[] default '{}'::integer[],
                                                        in_trading_firm_ids character varying[] default '{}'::character varying[])
     RETURNS TABLE
             (
-                "Trading Firm"          character varying,
-                "Account"               character varying,
-                "Cl Ord ID"             character varying,
-                "Date"                  text,
-                "Time"                  text,
-                "Sec Type"              text,
-                "Ex Dest"               character varying,
-                "Sub Strategy"          character varying,
-                "Side"                  text,
-                "O/C"                   text,
-                "Symbol"                character varying,
-                "Root Symbol"           character varying,
-                "Expiration"            text,
-                "Put/Call"              text,
-                "Last Qty"              integer,
-                "Last Px"               numeric,
-                "Strike"                numeric,
-                "Exchange Name"         character varying,
-                "Cust/Firm"             character varying,
-                "Exec Broker"           character varying,
-                "CMTA"                  character varying,
-                "Client ID"             character varying
+                "Trading Firm"  character varying,
+                "Account"       character varying,
+                "Cl Ord ID"     character varying,
+                "Date"          text,
+                "Time"          text,
+                "Sec Type"      text,
+                "Ex Dest"       character varying,
+                "Sub Strategy"  character varying,
+                "Side"          text,
+                "O/C"           text,
+                "Symbol"        character varying,
+                "Root Symbol"   character varying,
+                "Expiration"    text,
+                "Put/Call"      text,
+                "Last Qty"      integer,
+                "Last Px"       numeric,
+                "Strike"        numeric,
+                "Exchange Name" character varying,
+                "Cust/Firm"     character varying,
+                "Exec Broker"   character varying,
+                "CMTA"          character varying,
+                "Client ID"     character varying
             )
     LANGUAGE plpgsql
 AS
@@ -38,7 +38,16 @@ $function$
     -- 2024-09-07 OS https://dashfinancial.atlassian.net/browse/DS-7719 text_ -> exec_text
     -- 20241121 AK https://dashfinancial.atlassian.net/browse/DS-9086 added Client Commission to return query and renamed function from report_fintech_adh_execution_xls_liq_type to report_fintech_adh_execution_xls
 declare
+    l_load_id int8;
+    l_step_id int;
+    l_row_cnt integer;
 begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_fintech_mwace_execution STARTED===', 0, 'O')
+    into l_step_id;
+
     return query
         select -- just for debagging
                replace(tf.trading_firm_name, ',', '')::varchar as "Trading Firm",
@@ -70,10 +79,14 @@ begin
                    when tr.open_close = 'C' then 'Close'
                    else '' end                                 as "O/C",
                case
-                    when "Sec Type" = 'Option' then concat("Root Symbol", ' US ',
-                                                           to_char("Expiration"::date, 'MM/DD/YY'), ' ',
-                                                           substring("Put/Call", 1, 1), "Strike"::float::varchar)
-                    else hsd.display_instrument_id end                         as "Symbol",
+                   when tr.instrument_type_id = 'O' then
+                       concat(coalesce(hsd.underlying_symbol, hsd.symbol),
+                              ' US ',
+                              to_char(hsd.maturity_date, 'MM/DD/YY'),
+                              ' ',
+                              case when hsd.put_call = '0' then 'P' when hsd.put_call = '1' then 'C' else '' end,
+                              hsd.strike_px::float::varchar)
+                   else hsd.display_instrument_id end          as "Symbol",
                coalesce(hsd.underlying_symbol, hsd.symbol)     as "Root Symbol",
                to_char(hsd.maturity_date, 'MM/DD/YYYY')        as "Expiration",
                case
@@ -114,7 +127,14 @@ begin
                   when coalesce(in_trading_firm_ids, '{}') <> '{}' then da.trading_firm_id = any (in_trading_firm_ids)
                   else true end
         order by tr.date_id, tr.trade_record_id;
-
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_fintech_mwace_execution COMPLETED ===', l_row_cnt, 'O')
+    into l_step_id;
 end;
 $function$
 ;
+
+select *
+from dash360.report_fintech_mwace_execution(in_instrument_type => null, in_account_ids => '{68699,68700,72072,68701}');
+
+ASHR US  C28
