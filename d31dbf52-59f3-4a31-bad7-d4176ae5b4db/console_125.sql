@@ -462,4 +462,7 @@ $function$
 ;
 
 
-select * from trash.eod_jonestrad_best_ex_ht3(20250318, 20250318);
+select * from fintech_reports.eod_jonestrad_best_ex_ht3(20250318, 20250318);
+
+drop FUNCTION fintech_reports.eod_jonestrad_best_ex_ht3;
+alter FUNCTION trash.eod_jonestrad_best_ex_ht3 set schema fintech_reports
