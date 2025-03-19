@@ -49,7 +49,10 @@ begin
     into l_step_id;
 
     return query
-        select -- just for debagging
+    select 'Trading Firm,Account,Cl Ord ID,Date,Time,Sec Type,Ex Dest,Sub Strategy,Side,O/C,Symbol,Root Symbol,Expiration,Put/Call,Last Qty,Last Px,Strike,Exchange Name,Cust/Firm,Exec Broker,CMTA,Client ID';
+
+    return query
+        select 
                replace(tf.trading_firm_name, ',', '')::varchar as "Trading Firm",
                da.account_name                                 as "Account",
                tr.client_order_id                              as "Cl Ord ID",
@@ -137,4 +140,3 @@ $function$
 select *
 from dash360.report_fintech_mwace_execution(in_instrument_type => null, in_account_ids => '{68699,68700,72072,68701}');
 
-ASHR US  C28
