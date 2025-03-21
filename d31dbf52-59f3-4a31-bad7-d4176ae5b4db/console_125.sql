@@ -464,5 +464,33 @@ $function$
 
 select * from fintech_reports.eod_jonestrad_best_ex_ht3(20250318, 20250318);
 
+SELECT entity_id,
+       created_by,
+       creation_time,
+       is_deleted,
+       deleted_by,
+       deleted_time,
+       index_nyse,
+       index_nasdaq,
+       index_cboe,
+       index_ftse,
+       cob_amxo,
+       cob_xcbo,
+       cob_edgo,
+       cob_xisx,
+       cob_xmio,
+       cob_arco,
+       cob_c2ox,
+       cob_xpho,
+       bi_amxo,
+       bi_xcbo,
+       bi_arco,
+       bi_xbox,
+       bi_xpho,
+       equity_nyse,
+       equity_nasdaq,
+       option_opra
+FROM blaze7_configuration.entity_market_data_entitlement;
+
 drop FUNCTION fintech_reports.eod_jonestrad_best_ex_ht3;
 alter FUNCTION trash.eod_jonestrad_best_ex_ht3 set schema fintech_reports

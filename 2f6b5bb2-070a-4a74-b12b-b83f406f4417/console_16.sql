@@ -33,3 +33,5 @@ SELECT ts.* FROM training.t_sample AS ts;
 create index t_sample_btree_idx on training.t_sample (sensor_id);
 create index t_sample_hash_idx on training.t_sample using hash (sensor_id);
 
+
+
