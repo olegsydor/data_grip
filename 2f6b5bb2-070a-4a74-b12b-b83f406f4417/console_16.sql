@@ -26,3 +26,9 @@ create trigger trg_cantor_before_delete
      on training.cantor
     for each row
     execute function training.trg_delete();
+
+
+
+SELECT ts.* FROM training.t_sample AS ts;
+create index t_sample_btree_idx on training.t_sample (sensor_id);
+create index t_sample_hash_idx on training.t_sample using hash (sensor_id);
