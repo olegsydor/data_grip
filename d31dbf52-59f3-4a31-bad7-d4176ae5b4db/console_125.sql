@@ -493,4 +493,7 @@ SELECT entity_id,
 FROM blaze7_configuration.entity_market_data_entitlement;
 
 drop FUNCTION fintech_reports.eod_jonestrad_best_ex_ht3;
-alter FUNCTION trash.eod_jonestrad_best_ex_ht3 set schema fintech_reports
+alter FUNCTION trash.eod_jonestrad_best_ex_ht3 set schema fintech_reports;
+
+
+
