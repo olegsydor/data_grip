@@ -29,6 +29,8 @@ select id,
 from blaze7_configuration.user_market_data_entitlement;
 
 
+
+
 SELECT id,
        entity_id,
        created_by,
@@ -58,3 +60,15 @@ SELECT id,
        option_opra
 
 FROM blaze7_configuration.entity_market_data_entitlement;
+
+
+select entity_id,
+       created_by,
+       creation_time,
+       is_deleted,
+       deleted_by,
+       deleted_time,
+       fdid,
+       account_holder_type,
+       id
+from blaze7_settings.entity_cat_representative_defaults;
