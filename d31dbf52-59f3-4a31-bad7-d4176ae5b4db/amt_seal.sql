@@ -50,20 +50,21 @@ begin
 
     return query
         select array_to_string(ARRAY [
-                                   tr.trade_record_id, -- UniqueIdentifier
+                                   tr.trade_record_id::text, -- UniqueIdentifier
                                    'A', -- Action
                                    exc.mic_code, -- Exchange
                                    'O', -- InstrumentType
                                    null, -- ExchangeMember
                                    null, -- ClearingDate
                                    to_char(tr.trade_record_time, 'yyyyMMdd'), -- TradeDate
-                                   to_char(tr.trade_record_time, 'HH24:MI:SS'), -- TradeTime
+                                   to_char(tr.trade_record_time, 'HH24MISS'), -- TradeTime
                                    hsd.underlying_symbol, -- ProductCode
                                    to_char(hsd.maturity_date, 'yyyyMMdd'), -- Expiry
-                                   hsd.strike_px, -- StrikePrice
+                                   staging.trailing_dot(hsd.strike_px), -- StrikePrice
+            -- to_char(hsd.strike_px, 'FM999990.0099'), -- StrikePrice
                                    case hsd.put_call when 'C' then 'Call' when 'P' then 'Put' end, -- OptionType
                                    case when tr.SIDE in ('2', '5') then 'Sell' else 'Buy' end, -- BuySell
-                                   tr.last_px, -- Price
+                                   staging.trailing_dot(tr.last_px), -- Price
                                    null, -- AbbreviatedPrice
                                    tr.secondary_order_id, -- ExchangeOrderNumber
                                    tr.secondary_exch_exec_id, -- ExchangeTradeNumber
@@ -75,7 +76,7 @@ begin
                                    exc.mic_code, -- Venue
                                    null, -- TimeCode,
                                    null, -- ComboType
-                                   last_qty, -- Volume
+                                   last_qty::text, -- Volume
                                    case
                                        when tr.open_close = 'C' then 'Close'
                                        when tr.open_close = 'O' then 'Open' end, -- OpenClose
@@ -118,24 +119,39 @@ begin
                                    null, -- ExecIdType,
                                    null-- OrderType
                                    ], ',', '')
-        select tr.account_id from dwh.flat_trade_record tr72476
-72831
-
+        from dwh.flat_trade_record tr
                  join dwh.d_account da on (da.account_id = tr.account_id)
                  join dwh.historic_security_definition_all hsd on (hsd.instrument_id = tr.instrument_id)
                  left join dwh.d_exchange exc on (exc.exchange_id = tr.exchange_id and exc.is_active)
-        where tr.date_id between :in_start_date_id and :in_end_date_id
+        where tr.date_id between in_start_date_id and in_end_date_id
           and tr.is_busted <> 'Y'
 --           and da.account_name not in (select * from fintech_dwh.users_fbw_tb)
---           and tr.account_id = any (l_account_ids)
+          and tr.account_id = any (l_account_ids)
           and tr.multileg_reporting_type in ('1', '2')
           and tr.instrument_type_id = 'O'
         order by tr.date_id, tr.trade_record_id;
 
     get diagnostics l_row_cnt = row_count;
+    return query
+        select 'EOD_OF_FILE';
+
     select public.load_log(l_load_id, l_step_id, 'dash360.report_fintech_eod_seals_trade_import COMPLETED ===',
                            l_row_cnt, 'O')
     into l_step_id;
 end ;
 $function$
 ;
+
+select *
+from dash360.report_fintech_eod_seals_trade_import(in_start_date_id := 20250324, in_end_date_id := 20250324,
+                                                   in_account_ids := '{72476,72831,70621}');
+
+select *
+from dash360.report_fintech_eod_seals_trade_import(in_start_date_id := 20250324, in_end_date_id := 20250324,
+                                                   in_trading_firm_ids := '{samsungs,samsungr}');
+
+
+select trading_firm_id from dwh.d_account
+where account_id = any('{72476,72831,70621}')
+
+select staging.trailing_dot(1.000001)
