@@ -142,7 +142,6 @@ CREATE OR REPLACE FUNCTION hotel_add
 	LANGUAGE 'plpgsql';
 --Delete hotel-----------------------------------------------
 
-select * from hotel_del(1)
 CREATE OR REPLACE FUNCTION hotel_del(p_hotel_id int)
 	RETURNS VARCHAR
 	AS
@@ -1001,3 +1000,75 @@ SQL state: P0001
 */
 SELECT * FROM hotel_upsert('{"hotel_id": null, "hotel_name": "Hilton", "hotel_location_id": 1, "score": 5}');
 /*****************************************************************/
+
+
+create or replace function hotel_upsert_ol(
+    p_hotel_name varchar,
+    p_hotel_location_id int,
+    p_hotel_score int,
+    p_hotel_id integer default null -- default should be after strict args
+)
+    returns setof t_hotels
+as
+$code$
+declare
+
+begin
+
+    return query
+        insert into t_hotels (hotel_id, hotel_name, hotel_location_id, hotel_score)
+            values (coalesce(p_hotel_id, nextval('t_hotels_hotel_id_seq')),
+                    p_hotel_name,
+                    p_hotel_location_id,
+                    p_hotel_score)
+            on conflict (hotel_id)
+                do update set
+                    hotel_name = excluded.hotel_name ,
+                    hotel_location_id = excluded.hotel_location_id ,
+                    hotel_score = excluded.hotel_score
+            returning t_hotels.*;
+
+end;
+$code$
+    language 'plpgsql';
+
+
+SELECT * FROM hotel_upsert_ol( 'Edited Upsert hotel', 1, 8);
+
+select last_value, * from pg_sequences
+where sequencename = 't_hotels_hotel_id_seq';
+
+
+
+CREATE OR REPLACE FUNCTION hotel_upsert_ol_jsn(
+    in_jsn text
+)
+    RETURNS SETOF t_hotels
+AS
+$code$
+DECLARE
+    f_jsn jsonb;
+BEGIN
+    f_jsn := in_jsn::jsonb;
+
+    RETURN QUERY
+        INSERT INTO t_hotels (hotel_id, hotel_name, hotel_location_id, hotel_score)
+            select coalesce(hotel_id, nextval('t_hotels_hotel_id_seq')),
+                   hotel_name,
+                   hotel_location_id,
+                   hotel_score
+            from
+                jsonb_populate_record(null::t_hotels, f_jsn)
+            ON CONFLICT (hotel_id)
+                DO UPDATE SET
+                    hotel_name = EXCLUDED.hotel_name ,
+                    hotel_location_id = EXCLUDED.hotel_location_id ,
+                    hotel_score = EXCLUDED.hotel_score
+            RETURNING t_hotels.*;
+
+END;
+$code$
+    LANGUAGE 'plpgsql';
+
+select * from hotel_upsert_ol_jsn('{"hotel_id":3,"hotel_name":"Edited 3 times Upsert hotel","hotel_location_id":1,"hotel_score":8}');
+select * from hotel_upsert_ol_jsn('{"hotel_name":"New hotel","hotel_location_id":1,"hotel_score":8}')
