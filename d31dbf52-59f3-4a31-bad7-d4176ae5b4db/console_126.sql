@@ -35,7 +35,7 @@ begin
     from dwh.d_account
     where true
       and trading_firm_id = 'OFP0055';
-    l_account_ids := '{26573}';
+
     return query
         select 'ORDER_DATE,ROUTED_ORDER_REF,TYPE,BUY_SELL,CALL_PUT,OPEN_CLOSE,CONTRACTS,LEAVES_QTY,SYMBOL,EXPIRY,STRIKE,PRICE_TYPE,LIMIT_PRICE,STOP_PRICE,EXPIRY_TYPE,BROKER_ORDER_ID,SENDER_SUB_ID,EXPIREDATE';
 
@@ -95,7 +95,7 @@ begin
 -- the code below has been added to provide the same performance in the case we use the report for CURRENT date
             or (case
                     when l_is_current_date then false
-                    else gtc.close_date_id is not null and close_date_id > in_end_date_id end))
+                    else gtc.close_date_id is not null and close_date_id >= in_end_date_id end))
           -- end of
           and co.multileg_reporting_type <> '3';
 
@@ -110,6 +110,23 @@ END;
 $function$
 ;
 
-select * from dash360.report_gtc_ofp0055_open_order(20250325, 20250325);
+select * from dash360.report_gtc_ofp0055_open_order(20231226, 20231226);
+
+select * from dash360.report_gtc_ofp0055_open_order(20250326, 20250326);
 create temp table t_os as
 select * from dash360.report_gtc_ofp0055_open_order(20250326, 20250326);
+
+
+select * from t_os
+
+ select array_agg(account_id)
+
+    from dwh.d_account
+    where true
+      and trading_firm_id = 'OFP0055';
+
+
+select * from dwh.gtc_order_status
+where account_id = any('{69350,69405,68911}')
+
+
