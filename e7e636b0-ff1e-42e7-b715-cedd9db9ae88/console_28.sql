@@ -454,3 +454,7 @@ $function$
 COMMENT ON FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4) IS 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
+
+
+
+select * from staging.fix_ptm_missed_r()
