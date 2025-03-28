@@ -44,6 +44,8 @@
                coalesce(parent_waves.last_wave_nbbo_ask_qty::int8,
                         head_md.ask_qty)                                                                   as last_wave_nbbo_ask_qty,
                1                                                                                           as rn
+        , po.order_id,
+          parent_waves.first_wave_nbbo_bid_px, head_md.bid_price
         from data_marts.f_yield_capture po
                  inner join dwh.d_time_in_force tif on tif.is_active and tif.tif_id = po.time_in_force_id
                  inner join dwh.d_order_type ot on ot.order_type_id = po.order_type_id
@@ -89,4 +91,26 @@
           and po.multileg_reporting_type in ('1', '2')
           and po.instrument_type_id = :in_instrument_type_id
           and po.time_in_force_id in ('0', '2', '3', '4')
-          and po.account_id = any (:l_account_ids);
+          and po.account_id = any (:l_account_ids)
+        and po.order_id in (18561901909,18561901910)
+        ;
+
+
+select *
+from dash360.report_compliance_order_blotter_reg(
+	in_start_date_id := 20250102,
+	in_end_date_id := 20250102,
+	in_instrument_type => 'O',
+	in_account_ids := '{71361}'
+);
+
+
+
+select *
+from dash360.dash360_report_parent_order_metrics(account_ids := '{71361}', instrument_type_id := 'O',
+                                                 start_status_date_id := 20250102,
+                                                 end_status_date_id := 20250102);
+
+
+select * from order_ids_cte
+where order_id in (18561901909,18561901910)
