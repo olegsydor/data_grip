@@ -426,7 +426,7 @@ insert into orders_to_process
 		                limit 1000000) str on true ;
 
  GET DIAGNOSTICS row_cnt = ROW_COUNT;
-
+select MULTILEG_REPORTING_TYPE, * from pre_str;
 
   select public.load_log(l_load_id, l_step_id, 'Insert into pre_str ', row_cnt, 'I')
    into l_step_id;
@@ -813,7 +813,7 @@ select * from str_enriched
       case when par.sub_system_unq_id = '93' then ODCS.customer_or_firm_id -- HFT parent orders
       	   else par.customer_or_firm_id end as customer_or_firm_id,
 
-  	      par.transaction_id, 'NBBO'::varchar, par.multileg_reporting_type, par.instrument_id,   par.create_date_id
+  	     select par.transaction_id, 'NBBO'::varchar, par.multileg_reporting_type, par.instrument_id,   par.create_date_id
 
             from par
 --                inner join dwh.d_instrument i on (par.instrument_id = i.instrument_id)
@@ -825,26 +825,28 @@ select * from str_enriched
                           AND E.ORDER_STATUS <> '3') ex on (ex.rn=1)
 
                 --inner join dwh.d_exchange exch on (par.exchange_unq_id = exch.exchange_unq_id)
-                left join lateral (select
-                                      sum(last_qty) as DAY_CUM_QTY,
-                                      --str.order_id,
-                                      ft.date_id as TRADE_DATE_ID,
-                                      SUM (ft.LAST_QTY * ft.LAST_PX) / NULLIF(SUM (ft.LAST_QTY),0)  DAY_AVG_PX,
-                                      max(ft.trade_record_time) as exec_time,
-                                      min(ft.leaves_qty) as leaves_qty,
-                                      min(ft.opt_customer_firm) as customer_or_firm_id
-                               from  flat_trade_record ft
-                                where ft.date_id= any(:l_date_ids)
-                                and par.order_id = ft.order_id and ft.is_busted='N'
-                                and ft.date_id = ex.exec_date_id
-                                group by ft.date_id
-                                limit 10000)  ODCS   ON (1=1 )
-                left join lateral (select  bid_qty
-                                         , bid_price
-                                         , ask_qty
-                                         , ask_price
-     							 from dwh.get_routing_market_data(par.transaction_id, 'NBBO'::varchar, par.multileg_reporting_type, par.instrument_id,   par.create_date_id)
-                           ) nbbo on (1=1)
+                left join lateral (select sum(last_qty)             as                                DAY_CUM_QTY,
+                                          --str.order_id,
+                                          ft.date_id                as                                TRADE_DATE_ID,
+                                          SUM(ft.LAST_QTY * ft.LAST_PX) / NULLIF(SUM(ft.LAST_QTY), 0) DAY_AVG_PX,
+                                          max(ft.trade_record_time) as                                exec_time,
+                                          min(ft.leaves_qty)        as                                leaves_qty,
+                                          min(ft.opt_customer_firm) as                                customer_or_firm_id
+                                   from flat_trade_record ft
+                                   where ft.date_id = any (:l_date_ids)
+                                     and par.order_id = ft.order_id
+                                     and ft.is_busted = 'N'
+                                     and ft.date_id = ex.exec_date_id
+                                   group by ft.date_id
+                                   limit 10000) ODCS ON (1 = 1)
+                left join lateral (select bid_qty
+                                        , bid_price
+                                        , ask_qty
+                                        , ask_price
+                                   from dwh.get_routing_market_data(par.transaction_id, 'NBBO'::varchar,
+                                                                    par.multileg_reporting_type, par.instrument_id,
+                                                                    par.create_date_id)
+                ) nbbo on (1 = 1)
 
                   left join lateral (select  count(distinct md.exchange_id) as num_exchange
                                  from  l1_snapshot md
