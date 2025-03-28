@@ -187,7 +187,7 @@ from genesis2.clearing_instruction_entry cin
          inner join genesis2.clearing_instruction ci                    on ci.clearing_instr_id = cin.clearing_instr_id
              left join lateral (select * from dash360.clearing_instruction_modifications(cin.clearing_instr_id)) orig on true
 --              left join lateral(select * from trash.clearing_instruction_modifications(cin.clearing_instr_id)) nw on true
-where cin.date_id > 20250101
+where cin.date_id > 20250101;
 -- and cin.clearing_instr_id = 8293
 
 create temp table t_new as
@@ -196,11 +196,12 @@ from genesis2.clearing_instruction_entry cin
          inner join genesis2.clearing_instruction ci                    on ci.clearing_instr_id = cin.clearing_instr_id
 --              left join lateral (select * from dash360.clearing_instruction_modifications(:clearing_instr_id)) orig on true
              left join lateral(select * from trash.clearing_instruction_modifications(cin.clearing_instr_id)) nw on true
-where cin.date_id > 20250101
+where cin.date_id > 20250101;
 -- and cin.clearing_instr_id = 8293
 
-
-
+select * from t_new
+except
+select * from t_orig
 
 
 --{8293,8293,8294,8294,8294,8294,8295,8295,8296,8296,8297,8297,8298,8298,8299,8299,8300,8300,8301,8301}
