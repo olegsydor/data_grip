@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.clearing_instruction_modifications(int4);
 
-CREATE OR REPLACE FUNCTION dash360.clearing_instruction_modifications(in_clearing_instr_id integer)
+CREATE or replace FUNCTION trash.clearing_instruction_modifications(in_clearing_instr_id integer)
     RETURNS TABLE
             (
                 trade_record_id                 bigint,
@@ -69,7 +69,8 @@ $function$
     -- 20240130 AK : https://dashfinancial.atlassian.net/browse/DS-7912 added cboe_reason_code to return query
 -- PD 20240530: https://dashfinancial.atlassian.net/browse/DS-8362 box_additional_client_memo and orig_box_additional_client_memo added to the output
 -- OS 20241202 https://dashfinancial.atlassian.net/browse/DS-9047 added blaze_account_alias to output
--- OS 20250128 hotfix replaced 78 row with 79
+-- OS 20250128 hotfix replaced 78 row with 79: join to trade_record using lateral instead of join
+-- OS 20250328 https://dashfinancial.atlassian.net/browse/DS-9719 added condition date_id = date_id in a few joins
 begin
     return query
         select cin.trade_record_id::bigint,
@@ -135,28 +136,31 @@ begin
                tr.blaze_account_alias
         from genesis2.clearing_instruction_entry cin
                  inner join genesis2.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
-                                                                    and cin.date_id = ci.date_id -- checked on PROD
+                                                                    and cin.date_id = ci.date_id -- DS-9719 checked on PROD
                  inner join genesis2.account acc on acc.account_id = cin.account_id
-            and acc.is_deleted <> 'Y' -- please check
                  inner join genesis2.trading_firm as tf
                             on tf.trading_firm_id = acc.trading_firm_id and tf.is_deleted = 'N'
 --                 left join trade_record orig_tr on orig_tr.trade_record_id = tr.trade_record_id
                  left join lateral (select *
                                     from genesis2.trade_record orig_tr
                                     where orig_tr.trade_record_id = cin.trade_record_id
-                                      and cin.date_id = orig_tr.date_id
+                                      and cin.date_id = orig_tr.date_id -- DS-9719
                                     limit 1) tr on true
                  left join genesis2.clearing_instruction_entry cie on cie.new_trade_record_id = tr.trade_record_id and
                                                                       cie.opt_customer_firm = tr.opt_customer_firm
+            and cie.date_id = cin.date_id -- DS-9719 checked on prod
                  left join genesis2.account orig_acc on tr.account_id = orig_acc.account_id
                  left join genesis2.exchange exch on exch.exchange_id = tr.exchange_id
                  left join genesis2.exchange real_exch on real_exch.exchange_id = exch.real_exchange_id
                  left join genesis2.instrument i on i.instrument_id = tr.instrument_id
-                 left join (select AT.TRADE_RECORD_ID, A.alloc_instr_id
+                 left join (select AT.TRADE_RECORD_ID, A.alloc_instr_id, at.date_id
                             from genesis2.ALLOC_INSTR2TRADE_RECORD AT
                                      inner join genesis2.ALLOCATION_INSTRUCTION A
-                                                on A.ALLOC_INSTR_ID = AT.ALLOC_INSTR_ID AND A.IS_DELETED = 'N') alc
-                           on (alc.trade_record_id = coalesce(cin.new_trade_record_id, cin.trade_record_id))
+                                                on A.ALLOC_INSTR_ID = AT.ALLOC_INSTR_ID AND A.IS_DELETED = 'N'
+                            and a.date_id = at.date_id -- DS-9719 checked on PROD
+                            ) alc
+                           on (alc.trade_record_id = coalesce(cin.new_trade_record_id, cin.trade_record_id)
+                               and alc.date_id = cin.date_id)
                  left join lateral (select L1.rate
                                     from (SELECT row_number()
                                                  over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
@@ -172,8 +176,86 @@ begin
 end;
 $function$
 ;
+se
+select dash360.clearing_instruction_modifications(:in_alloc_instr_id)
+except
+select trash.clearing_instruction_modifications(:in_alloc_instr_id);
+
+create temp table t_orig as
+select distinct on (cin.clearing_instr_id) orig.*--, nw.*
+from genesis2.clearing_instruction_entry cin
+         inner join genesis2.clearing_instruction ci                    on ci.clearing_instr_id = cin.clearing_instr_id
+             left join lateral (select * from dash360.clearing_instruction_modifications(cin.clearing_instr_id)) orig on true
+--              left join lateral(select * from trash.clearing_instruction_modifications(cin.clearing_instr_id)) nw on true
+where cin.date_id > 20250101
+-- and cin.clearing_instr_id = 8293
+
+create temp table t_new as
+select distinct on (cin.clearing_instr_id) nw.*
+from genesis2.clearing_instruction_entry cin
+         inner join genesis2.clearing_instruction ci                    on ci.clearing_instr_id = cin.clearing_instr_id
+--              left join lateral (select * from dash360.clearing_instruction_modifications(:clearing_instr_id)) orig on true
+             left join lateral(select * from trash.clearing_instruction_modifications(cin.clearing_instr_id)) nw on true
+where cin.date_id > 20250101
+-- and cin.clearing_instr_id = 8293
+
+
+
+
+
+--{8293,8293,8294,8294,8294,8294,8295,8295,8296,8296,8297,8297,8298,8298,8299,8299,8300,8300,8301,8301}
+select cin.date_id, ci.date_id, *
+from genesis2.clearing_instruction_entry cin
+         inner join genesis2.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
+--    and cin.date_id = ci.date_id -- DS-9719 checked on PROD
+/*         inner join genesis2.account acc on acc.account_id = cin.account_id
+         inner join genesis2.trading_firm as tf
+                    on tf.trading_firm_id = acc.trading_firm_id and tf.is_deleted = 'N'
+--                 left join trade_record orig_tr on orig_tr.trade_record_id = tr.trade_record_id
+         left join lateral (select *
+                            from genesis2.trade_record orig_tr
+                            where orig_tr.trade_record_id = cin.trade_record_id
+                              and cin.date_id = orig_tr.date_id -- DS-9719
+                            limit 1) tr on true
+         left join genesis2.clearing_instruction_entry cie on cie.new_trade_record_id = tr.trade_record_id and
+                                                              cie.opt_customer_firm = tr.opt_customer_firm
+    and cie.date_id = cin.date_id -- DS-9719 checked on prod
+         left join genesis2.account orig_acc on tr.account_id = orig_acc.account_id
+         left join genesis2.exchange exch on exch.exchange_id = tr.exchange_id
+         left join genesis2.exchange real_exch on real_exch.exchange_id = exch.real_exchange_id
+         left join genesis2.instrument i on i.instrument_id = tr.instrument_id
+         left join (select AT.TRADE_RECORD_ID, A.alloc_instr_id, at.date_id
+                    from genesis2.ALLOC_INSTR2TRADE_RECORD AT
+                             inner join genesis2.ALLOCATION_INSTRUCTION A
+                                        on A.ALLOC_INSTR_ID = AT.ALLOC_INSTR_ID AND A.IS_DELETED = 'N'
+                                            and a.date_id = at.date_id -- DS-9719 checked on PROD
+) alc
+                   on (alc.trade_record_id = coalesce(cin.new_trade_record_id, cin.trade_record_id)
+                       and alc.date_id = cin.date_id)
+         left join lateral (select L1.rate
+                            from (SELECT row_number()
+                                         over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                         tl.rate
+                                  FROM genesis2.trade_level_book_record tl
+                                           inner join genesis2.book_record_creator cr
+                                                      on tl.book_record_creator_id = cr.book_record_creator_id
+                                  WHERE book_record_type_id = 'CCRU'
+                                    and tl.trade_record_id = tr.trade_record_id) L1
+                            where rn = 1) CCRU on true
+*/
+           where ci.clearing_instr_id = :in_clearing_instr_id;
+
+
+
 
 
 select * from genesis2.clearing_instruction_entry cin
                  inner join genesis2.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
 where cin.date_id <> ci.date_id
+
+select array_agg(clearing_instr_id) from (select distinct cin.clearing_instr_id
+                                          from genesis2.clearing_instruction_entry cin
+                                                   inner join genesis2.clearing_instruction ci
+                                                              on ci.clearing_instr_id = cin.clearing_instr_id
+                                                                  and cin.date_id > 20250101
+                                          limit 20) x
