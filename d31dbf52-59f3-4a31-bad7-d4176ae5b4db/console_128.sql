@@ -116,4 +116,3 @@ select * from order_ids_cte
 where order_id in (18561901909,18561901910);
 
 
-        
