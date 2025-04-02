@@ -1,8 +1,10 @@
-select * from dash360.report_billing_belved01_ecr(in_start_date_id := 20250303, in_end_date_id :=20250303)
-create function dash360.report_billing_belved01_ecr(in_start_date_id int4, in_end_date_id int4)
+select *
+from dash360.report_billing_belved01_ecr(in_start_date_id := 20250303, in_end_date_id := 20250303);
+create or replace
+    function dash360.report_billing_belved01_ecr(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
-                roe text
+                ret_row text
             )
     language plpgsql
 as
@@ -21,7 +23,7 @@ begin
     into l_step_id;
 
     drop table if exists t_base;
-    create temp table t_base as
+    create temp table t_base on commit drop as
     select
 -- tcb.date,
 tr.date_id,
@@ -73,12 +75,15 @@ round((coalesce(tcb."CATTF$", 0.0))::numeric, 8)                       as "FINRA
              left join billing.dash_exchange_names ex on (ex.exchange_id = tr.exchange_id and ex.is_active = '1')
     where true
       and tcb.date between in_start_date_id::text::date and in_end_date_id::text::date --convert(date, getdate()-day(getdate()-1)) and convert(date, getdate()-2)
+      and tr.date_id between in_start_date_id and in_end_date_id
       and lower(tcb.billingentity) = 'belved01'
       and lower(tcb.company) in ('belvcaid', 'belved01', 'belved02')
       and tcb."FILLED QTY" > 0;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_belved01_ecr data is prepared', l_row_cnt, 'O')
     into l_step_id;
+    create index on t_base (date_id, trade_record_id);
+
     return query
         select 'Date,Exec Time,Account,Client ID,Cl Ord ID,Exec ID,Security Type,Sub Strategy,Exchange,OSI Symbol,Symbol,Exp Date,Side,Exec Qty,Exec Px,Principal Amount,Execution Cost,Execution Cost/Unit,DashCommission,Maker/Taker Fee,Transaction Fee,Trade Processing Fee,Royalty Fee,FINRA CAT Fees';
     return query
@@ -115,5 +120,108 @@ round((coalesce(tcb."CATTF$", 0.0))::numeric, 8)                       as "FINRA
     into l_step_id;
 end ;
 $fn$;
+----------------------
+select * from dash360.report_billing_wedbullofp_execution(in_start_date_id := 20250303)
+create or replace
+    function dash360.report_billing_wedbullofp_execution(in_start_date_id int4)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$fn$
+declare
+    l_load_id int8;
+    l_step_id int;
+    l_row_cnt integer;
 
-select * into trash.os_to_delete from t_base
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution STARTED===', 0, 'O')
+    into l_step_id;
+
+    drop table if exists t_base;
+    create temp table t_base on commit drop as
+    select tcb."date",
+           tcb.cl_ord_id                                            as order_id,
+           tcb.report_id                                            as execution_id,
+           tcb.osiseries                                            as symbol,
+           tcb."B/S"                                                as side,
+           tcb."FILLED QTY"                                         as contracts,
+           tr.price_limit                                           as limit_price,
+           case
+               when tr.order_type = '1' then 'Market'
+               when tr.order_type = '2' then 'Limit'
+               when tr.order_type = '3' then 'Stop'
+               when tr.order_type = '4' then 'Stop limit'
+               when tr.order_type = '5' then 'Market on close'
+               when tr.order_type = '7' then 'Limit or better'
+               end                                                  as order_type,
+           case when tcb.is_marketable = '1' then 'Y' else 'N' end  as is_marketable,
+           tcb.premium                                              as avg_filled_price,
+           case when tcb."LEG NUMBER" = '1/1' then 'N' else 'Y' end as is_complex,
+           case
+               when tcb.symbol = 'SPY' then 'SPY'
+               when tcb.symbol in
+                    ('VIX', 'VIXW', 'SPX', 'SPXW', 'SPXPM', 'OEX', 'XEO', 'RUT', 'RUTW', 'DJX', 'XSP', 'MRUT')
+                   then 'Index'
+               when tcb."LEG NUMBER" <> '1/1' then 'Complex'
+               when tcb.penny = '1' then 'Penny'
+               when tcb.penny = '0' then 'Non-Penny'
+               end                                                  as pfof_type,
+           tcb."FILLED QTY"                                         as executed_contracts,
+           case
+               when tcb."C/P" = 'S' then tcb."FILLED QTY" * tcb.premium
+               when tcb."C/P" in ('C', 'P') then tcb."FILLED QTY" * tcb.premium * 100
+               end                                                  as notional_value,
+           tcb."PFOFTF"                                             as pfof_rate,
+           tcb."PFOFTF$"                                            as estimated_payment
+    from billing_data.tcustomer_billing_detail_all tcb
+             left join billing_data.fdw_dash_trade_record tr
+                       on (true and tr.trading_firm_id in ('OFP0032', 'OFP0132') and tr.trade_record_id = tcb.report_id)
+    where true
+      and tcb."date" = in_start_date_id::text::date
+      and tcb.billingentity = 'WEDBULLOFP'
+      and tcb.company in ('OFP0032', 'OFP0132')
+      and tcb."C/P" in ('C', 'P')
+      and tcb."FILLED QTY" > 0
+      and tr.date_id = in_start_date_id;
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution data is prepared',
+                           l_row_cnt, 'O')
+    into l_step_id;
+    create index on t_base ("date", execution_id);
+
+    return query
+        select 'order_id,execution_id,symbol,side,contracts,limit_price,order_type,is_marketable,avg_filled_price,is_complex,pfof_type,executed_contracts,notional_value,pfof_rate,estimated_payment';
+    return query
+        select array_to_string(ARRAY [
+                                   order_id,
+                                   execution_id::text,
+                                   symbol,
+                                   side,
+                                   contracts::text,
+                                   to_char(limit_price, 'FM999990.099999'),
+                                   order_type,
+                                   is_marketable,
+                                   to_char(avg_filled_price, 'FM999990.099999'),
+                                   is_complex,
+                                   pfof_type,
+                                   executed_contracts::text,
+                                   to_char(notional_value, 'FM999990.09999999'),
+                                   to_char(pfof_rate, 'FM999990.09999999'),
+                                   to_char(estimated_payment, 'FM999990.09999999')
+                                   ], ',', '')
+        from t_base tr
+        order by tr."date", tr.execution_id;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution COMPLETED===', l_row_cnt,
+                           'C')
+    into l_step_id;
+end ;
+$fn$;
