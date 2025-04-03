@@ -120,10 +120,10 @@ round((coalesce(tcb."CATTF$", 0.0))::numeric, 8)                       as "FINRA
     into l_step_id;
 end ;
 $fn$;
-----------------------
-select * from dash360.report_billing_wedbullofp_execution(in_start_date_id := 20250303)
+---------------------------------------------------------------------------------------------------
+select * from dash360.report_billing_wedbullofp_execution(in_start_date_id := 20250303, in_end_date_id := 20250304)
 create or replace
-    function dash360.report_billing_wedbullofp_execution(in_start_date_id int4)
+    function dash360.report_billing_wedbullofp_execution(in_start_date_id int4, in_end_date_id int4)
     returns table
             (
                 ret_row text
@@ -141,7 +141,9 @@ begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution STARTED===', 0, 'O')
+    select public.load_log(l_load_id, l_step_id,
+                           'dash360.report_billing_wedbullofp_execution for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED===', 0, 'O')
     into l_step_id;
 
     drop table if exists t_base;
@@ -184,16 +186,17 @@ begin
              left join billing_data.fdw_dash_trade_record tr
                        on (true and tr.trading_firm_id in ('OFP0032', 'OFP0132') and tr.trade_record_id = tcb.report_id)
     where true
-      and tcb."date" = in_start_date_id::text::date
+      and tcb."date" between in_start_date_id::text::date and in_end_date_id::text::date
       and tcb.billingentity = 'WEDBULLOFP'
       and tcb.company in ('OFP0032', 'OFP0132')
       and tcb."C/P" in ('C', 'P')
       and tcb."FILLED QTY" > 0
-      and tr.date_id = in_start_date_id;
+      and tr.date_id between in_start_date_id and in_end_date_id;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution data is prepared',
-                           l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id,
+                           'dash360.report_billing_wedbullofp_execution for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' data is prepared', l_row_cnt, 'O')
     into l_step_id;
     create index on t_base ("date", execution_id);
 
@@ -220,7 +223,9 @@ begin
         from t_base tr
         order by tr."date", tr.execution_id;
 
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_wedbullofp_execution COMPLETED===', l_row_cnt,
+    select public.load_log(l_load_id, l_step_id,
+                           'dash360.report_billing_wedbullofp_execution for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' COMPLETED===', l_row_cnt,
                            'C')
     into l_step_id;
 end ;
