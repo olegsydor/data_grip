@@ -225,3 +225,134 @@ begin
     into l_step_id;
 end ;
 $fn$;
+-------------------------------------------------------
+
+select *
+from dash360.report_billing_xfa_ecr(in_start_date_id := 20250110, in_end_date_id := 20250110);
+create --or replace
+    function dash360.report_billing_xfa_ecr(in_start_date_id int4, in_end_date_id int4)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$fn$
+declare
+    l_load_id int8;
+    l_step_id int;
+    l_row_cnt integer;
+
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_xfa_ecr STARTED===', 0, 'O')
+    into l_step_id;
+
+    drop table if exists t_base;
+    create temp table t_base
+        on commit drop
+    as
+    select date                                                                                 as clear_date,
+           to_char(tcb."date", 'MM/dd/yyyy')                                                    as "Date",
+           tcb.billingentity                                                                    as "Billing Entity",
+           tcb.account                                                                          as "Account",
+           tcb."USER"                                                                           as "Client ID",
+           tcb.cl_ord_id                                                                        as "Cl Ord ID",
+           tcb.report_id                                                                        as "Report ID",
+           tcb."SECURITY TYPE"                                                                  as "Sec Type",
+           case
+               when lower(tcb."connection") like lower(concat(tcb.exchange, ' dash%')) then 'DMA'
+               when lower(tcb."connection") like '%blaze%' then tcb."connection"
+               else coalesce(substring(tcb."connection" from '.+?(?= |\+|-)'), tcb."connection")
+               end                                                                              as "Sub Strategy",
+           tcb."CMTA FIRM"                                                                      as "CMTA",
+           tcb.giveup                                                                           as "Exec Broker",
+           tcb."range"                                                                          as "Cust/Firm",
+           tcb.exchange                                                                         as "Exchange",
+           tcb."SYMBOL TYPE"                                                                    as "Symbol Type",
+           --tcb.osiseries as "OSI Symbol",
+           case
+               when tcb."C/P" = 'S' then tcb.symbol
+               when tcb."C/P" in ('C', 'P') then
+                   concat(
+                           rpad(tcb.symbol, 6, ' '),
+                           to_char(tcb.expiration, 'yyMMdd'),
+                           tcb."C/P",
+                           lpad((tcb.strike * 1000)::int::varchar, 8, '0')
+                   )
+               end                                                                              as "OSI Symbol",
+           tcb.symbol                                                                           as "Symbol",
+           to_char(tcb.expiration, 'MM/dd/yyyy')                                                as "Expiration",
+           initcap(tcb."B/S")                                                                   as "Side",
+           tcb."FILLED QTY"                                                                     as "Last Qty",
+           tcb.premium                                                                          as "Last Px",
+           tcb."FILLED QTY" * tcb.premium * (case when tcb."C/P" = 'S' then 1.0 else 100.0 end) as "Principal Amount",
+           round((coalesce(tcb."LADR$", 0.0) + coalesce(tcb."LAST$", 0.0) + coalesce(tcb."MTF$", 0.0) +
+                  coalesce(tcb."ETF$", 0.0) + coalesce(tcb."TPF$", 0.0))::numeric, 6)           as "Execution Cost",
+           round((coalesce(tcb."LADR$", 0.0) + coalesce(tcb."LAST$", 0.0))::numeric, 6)         as "Commission",
+           round(coalesce(tcb."MTF$", 0.0)::numeric, 6)                                         as "Maker/Taker Fee",
+           round(coalesce(tcb."ETF$", 0.0)::numeric, 6)                                         as "Transaction Fee",
+           round(coalesce(tcb."TPF$", 0.0)::numeric, 6)                                         as "Trade Processing Fee",
+           round(0.0, 6)                                                                        as "Royalty Fee",
+           tcb.subaccount3                                                                      as "Sub Acct 3"
+    from billing.billing_data.tcustomer_billing_detail_all tcb
+    where true
+      and tcb."date" between in_start_date_id::text::date and in_end_date_id::text::date
+      and tcb.billingentity in ('FSS', 'FXF', 'FXI', 'FXN', 'XAX', 'XCF', 'XFALP', 'XFC', 'xfa', 'xfachi')
+      and (
+        tcb."connection" not in ('Stage', 'ManualRoute', 'BrokerPointRouting') or
+        (tcb.account = '5CG00007' and tcb."connection" = 'Stage')
+        )
+      and tcb."FILLED QTY" > 0;
+    --and tcb.lp_dash = 'DASH'
+
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_xfa_ecr data is prepared',
+                           l_row_cnt, 'O')
+    into l_step_id;
+    create index on t_base (clear_date, "Report ID");
+
+    return query
+        select 'Date,Billing Entity,Account,Client ID,Cl Ord ID,Report ID,Sec Type,Sub Strategy,CMTA,Exec Broker,Cust/Firm,Exchange,Symbol Type,OSI Symbol,Symbol,Expiration,Side,Last Qty,Last Px,Principal Amount,Execution Cost,Commission,Maker/Taker Fee,Transaction Fee,Trade Processing Fee,Royalty Fee,Sub Acct 3';
+    return query
+        select array_to_string(ARRAY [
+                                   "Date",
+                                   "Billing Entity",
+                                   "Account",
+                                   "Client ID",
+                                   "Cl Ord ID",
+                                   "Report ID"::text,
+                                   "Sec Type",
+                                   "Sub Strategy",
+                                   "CMTA",
+                                   "Exec Broker",
+                                   "Cust/Firm",
+                                   "Exchange",
+                                   "Symbol Type",
+                                   "OSI Symbol",
+                                   "Symbol",
+                                   "Expiration",
+                                   "Side",
+                                   "Last Qty"::text,
+                                   to_char("Last Px", 'FM999990.009999'),
+                                   to_char("Principal Amount", 'FM999990.09999999'),
+                                   to_char("Execution Cost", 'FM999990.09999999'),
+                                   to_char("Commission", 'FM999990.09999999'),
+                                   to_char("Maker/Taker Fee", 'FM999990.09999999'),
+                                   to_char("Transaction Fee", 'FM999990.09999999'),
+                                   to_char("Trade Processing Fee", 'FM999990.09999999'),
+                                   to_char("Royalty Fee", 'FM999990.09999999'),
+                                   "Sub Acct 3"
+                                   ], ',', '')
+        from t_base tcb
+        order by tcb.clear_date, tcb."Report ID";
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_billing_xfa_ecr COMPLETED===', l_row_cnt,
+                           'C')
+    into l_step_id;
+end ;
+$fn$;
