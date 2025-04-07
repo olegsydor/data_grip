@@ -295,8 +295,8 @@ except
 select * from trash.so_collect_order_exec_tree_from_root_but_street_no_fixmsg2(root_order_id_ := 100000019834196440);
 
 
-drop table t_result_new
-create temp table t_result_new as
+drop table t_result_n2
+create temp table t_result_n4 with (parallel_workers = 4) as
 select ors.*, 'new' as src
 from t_base_order bs
          left join lateral (select *
@@ -304,9 +304,9 @@ from t_base_order bs
                    on true;
 
 
-select * from t_result_new
+select * from t_result_old
 except
-select * from t_result
+select * from t_result_new
 
 
 create temp table t_result_old as
