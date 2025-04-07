@@ -523,3 +523,25 @@ WHERE co.ern = 1 -- needed to leave only last instances of ERs that relate to bo
 END;
 $function$
 ;
+
+
+
+with base as (SELECT distinct if2.counterparty_range as counterparty_range,
+                              ex_exchange_id
+              FROM dash_reporting.imc_final AS if2)
+select counterparty_range,
+       ex_exchange_id,
+       case counterparty_range
+           when '0' then 'Customer'
+           when '1' then 'Proprietary – Firm'
+           when '2' then 'Broker/Dealer – Firm'
+           when '3' then 'Broker/Dealer – Customer'
+           when '4' then 'Market Maker'
+           when '5' then 'Away Market Maker'
+           when '7' then 'Proprietary Customer'
+           when '8' then 'Professional Customer'
+           when 'J' then 'Joint Back Office Account'
+           when 'N' then 'NTPH'
+           else 'no mapping'
+           end as mapping
+from base
