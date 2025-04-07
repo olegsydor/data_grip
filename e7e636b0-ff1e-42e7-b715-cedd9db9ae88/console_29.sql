@@ -1,7 +1,32 @@
 drop function if exists dash360.bofa_allocation_entry_history;
 
-create function dash360.bofa_allocation_entry_history
-drop table if exists t_trade_record;
+create function dash360.bofa_allocation_entry_history(in_date_id integer , in_exec_broker text)
+returns table (ret_row text)
+language plpgsql
+        -- OS 20250305 https://dashfinancial.atlassian.net/browse/DS-8204
+as $fx$
+declare
+    l_load_id                 int;
+    l_step_id                 int;
+    l_alloc_instr_id_reported int4[];
+    l_alloc_instr_id          int4[];
+    l_row_cnt                 int4;
+    l_row_cnt_eod             int4;
+    l_msg_text                text;
+    l_start_row               int4;
+
+    begin
+    l_msg_text := 'bofa_allocation_entry_history ' ||
+                  in_date_id::text ||
+                  ' for ' || case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ':';
+
+        select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data STARTED ====', 0, 'O')
+    into l_step_id;
+
+
+    drop table if exists t_trade_record;
     create temp table t_trade_record
     as
     select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
@@ -18,7 +43,8 @@ drop table if exists t_trade_record;
     from dash_reporting.bofa_trade_record btr
     where btr.date_id = :in_date_id;
 
-
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed ====', 0, 'O')
+    into l_step_id;
 select tr.exec_broker            as "Exec Broker", --list of all exec_broker from trades releated to AI. e.g. 333, 733, 792.
        'allocation'              as "Type",        --show `allocation` if we generate line from allocation, `trade` if from trade record
        ac.account_name           as "Account Name", -- taken from account_id
@@ -63,40 +89,51 @@ from genesis2.allocation_instruction ai
          join genesis2.instrument di on di.instrument_id = ai.instrument_id
          left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
          left join genesis2.user_identifier uic on uic.user_id = ai.created_by_user_id and uic.is_deleted <> 'Y'
-where ai.date_id = :in_date_id;
 
+where ai.date_id = :in_date_id
+    and case when ac.opt_report_to_mpid::text = 'MLCB' then true
+    when ;
 
-select
-            CASE
-            WHEN da.opt_report_to_mpid::text = 'MLCB'::text THEN 'Y'::text
-            WHEN da.eq_report_to_mpid::text = 'MLCB'::text AND (COALESCE(ca.eq_clearing_account_number, 'null alternative'::text) <> ALL (ARRAY['3Q800806'::text, '3Q800797'::text, '3Q800809'::text])) THEN 'Y'::text
-            ELSE 'N'::text
-        END AS is_pta_configured,
-    *
-FROM genesis2.account da
-     LEFT JOIN ( SELECT max(
-                CASE ca.market_type
-                    WHEN 'E'::bpchar THEN ca.clearing_account_number
-                    ELSE NULL::character varying
-                END::text) AS eq_clearing_account_number,
-            max(
-                CASE ca.market_type
-                    WHEN 'E'::bpchar THEN ca.clearing_account_type
-                    ELSE NULL::bpchar
-                END) AS eq_clearing_account_type,
-            ca.is_visible_for_manual_allocation,
-            max(
-                CASE ca.market_type
-                    WHEN 'O'::bpchar THEN ca.clearing_account_number
-                    ELSE NULL::character varying
-                END::text) AS opt_clearing_account_number,
-            max(
-                CASE ca.market_type
-                    WHEN 'O'::bpchar THEN ca.clearing_account_type
-                    ELSE NULL::bpchar
-                END) AS opt_clearing_account_type,
-            ca.account_id
-           FROM genesis2.clearing_account ca
-          WHERE ca.is_default = 'Y'::bpchar AND ca.is_deleted <> 'Y'
-          GROUP BY ca.account_id, ca.is_visible_for_manual_allocation) ca ON ca.account_id = da.account_id
-  WHERE da.is_deleted <> 'Y';
+    select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed ====', 0, 'O')
+    into l_step_id;
+
+with base as (select CASE
+                         WHEN da.opt_report_to_mpid::text = 'MLCB'::text THEN 'Y'::text
+                         WHEN da.eq_report_to_mpid::text = 'MLCB'::text AND
+                              (COALESCE(ca.eq_clearing_account_number, 'null alternative'::text) <> ALL
+                               (ARRAY ['3Q800806'::text, '3Q800797'::text, '3Q800809'::text])) THEN 'Y'::text
+                         ELSE 'N'::text
+                         END AS is_pta_configured,
+                     *
+              FROM genesis2.account da
+                       LEFT JOIN (SELECT max(
+                                                 CASE ca.market_type
+                                                     WHEN 'E'::bpchar THEN ca.clearing_account_number
+                                                     ELSE NULL::character varying
+                                                     END::text) AS eq_clearing_account_number,
+                                         max(
+                                                 CASE ca.market_type
+                                                     WHEN 'E'::bpchar THEN ca.clearing_account_type
+                                                     ELSE NULL::bpchar
+                                                     END)       AS eq_clearing_account_type,
+                                         ca.is_visible_for_manual_allocation,
+                                         max(
+                                                 CASE ca.market_type
+                                                     WHEN 'O'::bpchar THEN ca.clearing_account_number
+                                                     ELSE NULL::character varying
+                                                     END::text) AS opt_clearing_account_number,
+                                         max(
+                                                 CASE ca.market_type
+                                                     WHEN 'O'::bpchar THEN ca.clearing_account_type
+                                                     ELSE NULL::bpchar
+                                                     END)       AS opt_clearing_account_type,
+                                         ca.account_id
+                                  FROM genesis2.clearing_account ca
+                                  WHERE ca.is_default = 'Y'::bpchar
+                                    AND ca.is_deleted <> 'Y'
+                                  GROUP BY ca.account_id, ca.is_visible_for_manual_allocation) ca
+                                 ON ca.account_id = da.account_id
+              WHERE da.is_deleted <> 'Y')
+    select * from base where is_pta_configured = 'Y'
+    end;
+$fx$
