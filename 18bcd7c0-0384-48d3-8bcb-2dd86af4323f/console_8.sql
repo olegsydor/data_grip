@@ -1,3 +1,6 @@
+select * from partitions.hft_fix_message_event_20250407
+    where load_batch_id = -1;
+
 INSERT INTO partitions.hft_fix_message_event_20250407 (date_id, fix_date, msg_type, sub_system_id, sender_comp_id,
                                                        target_comp_id, account_name, cl_ord_id, parent_cl_ord_id,
                                                        secondary_ord_id, exch_exec_id, sec_exch_exec_id, exch_ord_id,

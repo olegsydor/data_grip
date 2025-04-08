@@ -1,5 +1,5 @@
 create
---     or replace
+    or replace
     function dash360.bofa_allocation_entry_history(in_date_id integer, in_exec_broker text, in_account_ids int4[] default '{}'::int4[])
     returns table
             (
@@ -44,6 +44,9 @@ begin
 
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' preparing data completed ====', 0, 'O')
     into l_step_id;
+
+    return query
+        select 'Exec Broker,Type,Account Name,Alloc Instr ID,Symbol,Side,O/C,Exec Qty,Avg Px,CMTA,OCC AID,Reported Status,Reported Time,Alloc is deleted,Created Time,Created by User,Deleted by User,Deleted time';
 
     return query
         select
