@@ -1,6 +1,6 @@
-drop function if exists dash360.bofa_allocation_entry_history;
-
-create or replace function dash360.bofa_allocation_entry_history(in_date_id integer, in_exec_broker text, in_account_ids int4[] default '{}'::int4[])
+create
+--     or replace
+    function dash360.bofa_allocation_entry_history(in_date_id integer, in_exec_broker text, in_account_ids int4[] default '{}'::int4[])
     returns table
             (
                 ret_row text
@@ -123,7 +123,3 @@ end;
 $fx$;
 
 select * from dash360.bofa_allocation_entry_history(in_date_id := 20250404, in_exec_broker := '733', in_account_ids := '{64885}')
-
-
-select * from genesis2.account
-where account_name = 'BNPLON'
