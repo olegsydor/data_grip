@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.report_alloc_instr_trade_record(int4, text);
-CREATE OR REPLACE FUNCTION dash360.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
-    RETURNS TABLE
+create or replace function dash360.report_alloc_instr_trade_record(in_date_id integer, in_exec_broker text)
+    returns table
             (
                 "Exec Broker"           text,
                 "Type"                  text,
