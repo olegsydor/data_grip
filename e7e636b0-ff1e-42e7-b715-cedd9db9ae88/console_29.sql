@@ -116,7 +116,7 @@ begin
                                     where rep.alloc_instr_id = ai.alloc_instr_id
                                     limit 1) rep on true
                  left join genesis2.clearing_account ca
-                           on ca.account_id = aie.clearing_account_id and ca.clearing_account_type = '1' and
+                           on ca.clearing_account_id = aie.clearing_account_id and ca.clearing_account_type = '1' and
                               ca.market_type = 'O'
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = ai.instrument_id

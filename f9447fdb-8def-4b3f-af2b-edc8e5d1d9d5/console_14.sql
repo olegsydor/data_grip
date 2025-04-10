@@ -116,7 +116,7 @@ begin
                                     where rep.alloc_instr_id = ai.alloc_instr_id
                                     limit 1) rep on true
                  left join genesis2.clearing_account ca
-                           on ca.account_id = aie.clearing_account_id and ca.clearing_account_type = '1' and
+                           on ca.clearing_account_id = aie.clearing_account_id and ca.clearing_account_type = '1' and
                               ca.market_type = 'O'
                  join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
                  join genesis2.instrument di on di.instrument_id = ai.instrument_id
@@ -152,8 +152,8 @@ $function$
 ;
 
 select *
-from dash360.bofa_allocation_entry_history(in_start_date_id := 20250404, in_end_date_id := 20250408,
-                                           in_exec_broker := '{733,019}', in_account_ids := '{}');
+from dash360.bofa_allocation_entry_history(in_start_date_id := 20250410, in_end_date_id := 20250410,
+                                           in_exec_broker := '{792,019}', in_account_ids := '{}');
 
 
 select 'bofa_allocation_entry_history ' || :in_start_date_id::text || '-' || :in_end_date_id::text ||
