@@ -153,3 +153,6 @@ begin
 end;
 $function$
 ;
+
+select * from genesis2.clearing_account
+where is_visible_for_manual_allocation is not null
