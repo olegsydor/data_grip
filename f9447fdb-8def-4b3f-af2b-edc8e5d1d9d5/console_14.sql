@@ -96,10 +96,10 @@ begin
            di.display_instrument_id2                                         as "Symbol",          -- display_instrument_v2
            case ai.side when '1' then 'Buy' when '2' then 'Sell' end         as "Side",
            case ai.open_close when 'O' then 'Open' when 'C' then 'Close' end as "O/C",
-           aie.alloc_qty                                                     as "Exec Qty",
+           bar.alloc_qty                                                     as "Exec Qty",
            ai.avg_px                                                         as "Avg Px",
-           ca.cmta                                                           as "CMTA",
-           aie.occ_actionable_id                                             as "OCC AID",
+           bar.ca_cmta                                                           as "CMTA",
+           bar.occ_actionable_id                                             as "OCC AID",
            null                                                              as "Capacity",
            case
                when rep.to_report = 'R' then 'Reported'
@@ -115,23 +115,20 @@ begin
     from genesis2.allocation_instruction ai
              join dash_reporting.bofa_allocation_report bar
                   on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
-             join allocation_instruction_entry aie
-                  on (aie.alloc_instr_id = ai.alloc_instr_id-- and aie.date_id = ai.date_id removed bccecause t
-                      )
              join lateral (select string_agg(distinct tr.exec_broker, '|')                         as exec_broker,
                                   tr.account_id,
                                   min(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as first_trade_exec_time,
                                   max(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as last_trade_exec_time
                            from genesis2.alloc_instr2trade_record aitr
                                     join genesis2.trade_record tr using (trade_record_id, date_id)
-                           where (aitr.alloc_instr_id = aie.alloc_instr_id
-                               and aitr.date_id = aie.date_id
+                           where (aitr.alloc_instr_id = bar.alloc_instr_id
+                               and aitr.date_id = bar.date_id
                                and tr.exec_broker = any (in_exec_broker))
                            group by tr.account_id
                            limit 1) tr on true
              left join lateral (select case
                                            when rep.to_report = 'U' and
-                                                staging.get_fully_reported_trade(rep.alloc_instr_id, aie.date_id) =
+                                                staging.get_fully_reported_trade(rep.alloc_instr_id, bar.date_id) =
                                                 1 -- means that only one value is possible in related trade_records and it can be only R
                                                then 'U'
                                            when rep.to_report = 'U' then 'W'
@@ -140,9 +137,6 @@ begin
                                 from t_trade_record rep
                                 where rep.alloc_instr_id = ai.alloc_instr_id
                                 limit 1) rep on true
-             left join genesis2.clearing_account ca
-                       on ca.clearing_account_id = aie.clearing_account_id and ca.clearing_account_type = '1' and
-                          ca.market_type = 'O'
              join genesis2.account ac on tr.account_id = ac.account_id and ac.is_deleted <> 'Y'
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
              left join genesis2.user_identifier ui on ui.user_id = ai.deleted_by_user_id and ui.is_deleted <> 'Y'
@@ -224,7 +218,7 @@ $function$
 ;
 
 select *
-from dash360.bofa_allocation_entry_history(in_start_date_id := 20250407, in_end_date_id := 20250410,
+from dash360.bofa_allocation_entry_history(in_start_date_id := 20250401, in_end_date_id := 20250409,
                                            in_exec_broker := '{792,019}', in_account_ids := '{}');
 
 
