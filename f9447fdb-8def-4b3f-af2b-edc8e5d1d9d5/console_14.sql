@@ -90,13 +90,17 @@ begin
                ai.create_time::text                                             as "Created Time",
                uic.user_name                                                    as "Created by User", -- Taken from Users dictionary
                ai.delete_time::text                                             as "Deleted time",
-               ui.user_name                                                     as "Deleted by User"  -- Taken from Users dicitionary by deleted_user_id
-
+               ui.user_name                                                     as "Deleted by User",  -- Taken from Users dicitionary by deleted_user_id
+               min(to_char(tr.first_trade_exec_time, 'HH24:MI:SS')),
+               min(to_char(tr.last_trade_exec_time, 'HH24:MI:SS'))
         from genesis2.allocation_instruction ai
+            join dash_reporting.bofa_allocation_report bar on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
                  join allocation_instruction_entry aie
                       on (aie.alloc_instr_id = ai.alloc_instr_id-- and aie.date_id = ai.date_id
                           )
-                 join lateral (select string_agg(distinct tr.exec_broker, '|') as exec_broker, tr.account_id
+                 join lateral (select string_agg(distinct tr.exec_broker, '|') as exec_broker, tr.account_id,
+                                      min(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as first_trade_exec_time,
+                                      max(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as last_trade_exec_time
                                from genesis2.alloc_instr2trade_record aitr
                                         join genesis2.trade_record tr using (trade_record_id, date_id)
                                where (aitr.alloc_instr_id = aie.alloc_instr_id
