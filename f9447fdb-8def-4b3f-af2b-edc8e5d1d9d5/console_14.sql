@@ -238,4 +238,10 @@ create temp table t_clearing_account as
 from genesis2.clearing_account ca
 where ca.is_default = 'Y'
   and ca.is_deleted <> 'Y'
-group by ca.account_id, ca.is_visible_for_manual_allocation
+group by ca.account_id, ca.is_visible_for_manual_allocation;
+
+
+-- DROP FUNCTION dash360.bofa_allocation_entry_history(int4, int4, _text, _int4);
+
+-- DROP FUNCTION dash360.bofa_allocation_entry_history(int4, int4, _text, _int4);
+
