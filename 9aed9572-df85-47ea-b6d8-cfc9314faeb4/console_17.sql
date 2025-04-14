@@ -830,3 +830,9 @@ AS SELECT NULL::text AS id,
           ORDER BY rep.exec_id DESC
          LIMIT 1) rep_last ON true
   WHERE co.record_type = ANY (ARRAY['0'::bpchar, '2'::bpchar]);
+
+
+
+SELECT count(1)
+FROM blaze7.treports_edw as x
+where to_char(x._db_create_time, 'YYYYMMDD')::int = 20250414
