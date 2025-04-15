@@ -30,4 +30,7 @@ $function$
 ;
 
 COMMENT ON FUNCTION staging.zabbix_monitor_ptm_missed_r(int4) IS 'The script returns 1 if trade_records exist with missed status R, and zero otherwise';
-select * from staging.zabbix_monitor_ptm_missed_r()
+select * from staging.zabbix_monitor_ptm_missed_r();
+
+
+select * from dash360.get_user_login_stats_by_range
