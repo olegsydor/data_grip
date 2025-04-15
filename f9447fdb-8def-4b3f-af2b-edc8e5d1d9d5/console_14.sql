@@ -1,37 +1,37 @@
--- DROP FUNCTION dash360.bofa_allocation_entry_history;
+-- DROP FUNCTION dash360.bofa_allocation_entry_history(int4, int4, _text, _int4);
 
-create or replace function dash360.bofa_allocation_entry_history(in_start_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4,
-                                                                 in_end_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4,
-                                                                 in_exec_broker text[] default '{792,733}',
-                                                                 in_account_ids integer[] DEFAULT '{}'::int4[])
-    returns table
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_entry_history(in_start_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                 in_end_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                 in_exec_broker text[] DEFAULT '{792,733}'::text[],
+                                                                 in_account_ids integer[] DEFAULT '{}'::integer[])
+    RETURNS TABLE
             (
-                "Date"                  text,
+                "Reported Date"         text,
                 "Exec Broker"           text,
                 "Type"                  text,
-                "Account Name"          varchar(30),
-                "Alloc Instr ID"        int4,
-                "Trade Record ID"       int8,
-                "Symbol"                varchar(100),
+                "Account Name"          character varying,
+                "Alloc Instr ID"        integer,
+                "Trade Record ID"       bigint,
+                "Symbol"                character varying,
                 "Side"                  text,
                 "O/C"                   text,
-                "Exec Qty"              int4,
-                "Avg Px"                numeric(14, 6),
-                "CMTA"                  varchar(3),
-                "OCC AID"               varchar(10),
+                "Exec Qty"              integer,
+                "Avg Px"                numeric,
+                "CMTA"                  character varying,
+                "OCC AID"               character varying,
                 "Capacity"              text,
                 "Reported Status"       text,
                 "Reported Time"         text,
-                "Is Busted"             bpchar(1),
+                "Is Busted"             character,
                 "Created Time"          text,
-                "Created by User"       varchar(30),
-                "Deleted time"          text,
-                "Deleted by User"       varchar(30),
+                "Created by User"       character varying,
+                "Deleted Time"          text,
+                "Deleted by User"       character varying,
                 "First Trade Exec Time" text,
                 "Last Trade Exec Time"  text
             )
-    language plpgsql
-as
+    LANGUAGE plpgsql
+AS
 $function$
 declare
     l_load_id  int;
@@ -87,8 +87,8 @@ begin
     drop table if exists t_report;
     create temp table t_report as
 --         create table trash.so_to_delete as
-    select to_char(ai.date_id::text::date, 'MM/DD/YYYY')                     as "Date",
-           tr.exec_broker::text                                              as "Exec Broker",     --list of all exec_broker from trades releated to AI. e.g. 333, 733, 792.
+    select to_char(ai.date_id::text::date, 'MM/DD/YYYY')                     as "Reported Date",
+           trm.exec_broker::text                                             as "Exec Broker",     --list of all exec_broker from trades releated to AI. e.g. 333, 733, 792.
            'allocation'                                                      as "Type",            --show `allocation` if we generate line from allocation, `trade` if from trade record
            ac.account_name                                                   as "Account Name",    -- taken from account_id
            ai.alloc_instr_id                                                 as "Alloc Instr ID",
@@ -98,16 +98,20 @@ begin
            case ai.open_close when 'O' then 'Open' when 'C' then 'Close' end as "O/C",
            bar.alloc_qty                                                     as "Exec Qty",
            ai.avg_px                                                         as "Avg Px",
-           bar.ca_cmta                                                           as "CMTA",
+           bar.ca_cmta                                                       as "CMTA",
            bar.occ_actionable_id                                             as "OCC AID",
-           null                                                              as "Capacity",
+--           cf.customer_or_firm_name                                          as "Capacity",
+           trm.opt_customer_firm                                             as "Capacity",
            case
                when rep.to_report = 'R' then 'Reported'
                when rep.to_report in ('U', 'W') then 'Unable to Report' end  as "Reported Status",
            rep.db_create_time::text                                          as "Reported Time",   --better recursion, but otherwise use our logic.
            ai.is_deleted                                                     as "Is Busted",
            ai.create_time::text                                              as "Created Time",
-           uic.user_name                                                     as "Created by User", -- Taken from Users dictionary
+           case
+               when ai.created_by_subsystem_id = 'RPS'
+                   and ai.created_by_user_id is null then 'auto'
+               else uic.user_name end                                        as "Created by User", -- Taken from Users dictionary
            ai.delete_time::text                                              as "Deleted Time",
            ui.user_name                                                      as "Deleted by User", -- Taken from Users dicitionary by deleted_user_id
            to_char(tr.first_trade_exec_time, 'HH24:MI:SS')                   as "First Trade Exec Time",
@@ -115,8 +119,7 @@ begin
     from genesis2.allocation_instruction ai
              join dash_reporting.bofa_allocation_report bar
                   on ai.alloc_instr_id = bar.alloc_instr_id and ai.date_id = bar.date_id
-             join lateral (select string_agg(distinct tr.exec_broker, '|')                         as exec_broker,
-                                  tr.account_id,
+             join lateral (select tr.account_id,
                                   min(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as first_trade_exec_time,
                                   max(coalesce(tr.street_trade_record_time, tr.trade_record_time)) as last_trade_exec_time
                            from genesis2.alloc_instr2trade_record aitr
@@ -126,6 +129,16 @@ begin
                                and tr.exec_broker = any (in_exec_broker))
                            group by tr.account_id
                            limit 1) tr on true
+             left join lateral (select string_agg(distinct tr.exec_broker, ',')           as exec_broker,
+                                       string_agg(distinct cf.customer_or_firm_name, ',') as opt_customer_firm
+                                from genesis2.alloc_instr2trade_record aitr
+                                         join genesis2.trade_record tr using (trade_record_id, date_id)
+                                         left join genesis2.customer_or_firm cf
+                                                   on cf.customer_or_firm_id = tr.opt_customer_firm
+                                where (aitr.alloc_instr_id = bar.alloc_instr_id
+                                    and aitr.date_id = bar.date_id)
+                                limit 1) trm on true
+
              left join lateral (select case
                                            when rep.to_report = 'U' and
                                                 staging.get_fully_reported_trade(rep.alloc_instr_id, bar.date_id) =
@@ -207,8 +220,9 @@ begin
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' TR part completed', l_row_cnt, 'O')
     into l_step_id;
     return query
-        select * from t_report
-    order by "Type", "Alloc Instr ID", "Trade Record ID";
+        select *
+        from t_report
+        order by "Type", "Alloc Instr ID", "Trade Record ID";
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' report COMPLETED ====', l_row_cnt, 'O')
@@ -216,32 +230,3 @@ begin
 end ;
 $function$
 ;
-
-select *
-from dash360.bofa_allocation_entry_history(in_start_date_id := 20250401, in_end_date_id := 20250409,
-                                           in_exec_broker := '{792,019}', in_account_ids := '{}');
-
-
-select 'bofa_allocation_entry_history ' || :in_start_date_id::text || '-' || :in_end_date_id::text ||
-                  ' for accounts ' || case when :in_account_ids = '{}' then 'all' else :in_account_ids::text end ||
-                  ' for exec brokers ' || case when :in_exec_broker = '{}' then 'all' else :in_exec_broker end || ':';
-
-
-
-create temp table t_clearing_account as
-  EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
-    select max(
-               case ca.market_type
-                   when 'E' then ca.clearing_account_number
-                   end::text) as eq_clearing_account_number,
-       ca.account_id
-from genesis2.clearing_account ca
-where ca.is_default = 'Y'
-  and ca.is_deleted <> 'Y'
-group by ca.account_id, ca.is_visible_for_manual_allocation;
-
-
--- DROP FUNCTION dash360.bofa_allocation_entry_history(int4, int4, _text, _int4);
-
--- DROP FUNCTION dash360.bofa_allocation_entry_history(int4, int4, _text, _int4);
-
