@@ -119,7 +119,7 @@ $function$
 -- DROP FUNCTION dash360.report_eod_alpaca_equity_retail2(int4, int4);
 select * from dash360.report_eod_alpaca_equity_retail2(20250415, 20250415)
 except
-select * from dash360.report_eod_alpaca_equity_retail(20250415, 20250415);
+select * from dash360.report_eod_alpaca_equity_retail(20250415, 20250415, '{}', '{63706}');
 
 CREATE OR REPLACE FUNCTION dash360.report_eod_alpaca_equity_retail(in_start_date_id integer, in_end_date_id integer, in_trading_firm_ids varchar[] default '{}'::varchar[], in_account_ids int4[] default '{}'::int4[])
  RETURNS TABLE(ret_row text)
@@ -211,7 +211,7 @@ $function$
 
 
 -- DROP FUNCTION dash360.report_eod_alpaca_algo_route(int4, int4);
-select * from dash360.report_eod_alpaca_algo_route(20250415, 20250415, '{}', '{}');
+select * from dash360.report_eod_alpaca_algo_route(20250415, 20250415, '{}', '{63706, 63109, 63384}');
 except
 select * from dash360.report_eod_alpaca_algo_route2(20250415, 20250415);
 
@@ -282,14 +282,13 @@ begin
                                    co.client_order_id, -- as "Client Order ID",
                                    sub_strategy_desc, -- as "Target Strategy Name",
                                    null::text, -- as "Custom Algo",
-                                   left(fmj.fix_message ->> '9002', 6), -- as "Urgency Code",
+                                   left(fmj.t9002, 6), -- as "Urgency Code",
                                    ftr.exch_exec_id, -- as "External Exec ID"
                                    exc.mic_code,
                                    to_char(coalesce(tcce_maker_taker_fee_amount, 0) +
                                    coalesce(tcce_trade_processing_fee_amount, 0) +
                                    coalesce(tcce_transaction_fee_amount, 0), 'FM99999999990.09999999')
                                    ], ',', '')
-        select co.*
         from dwh.client_order co
                  join dwh.flat_trade_record ftr on ftr.order_id = co.order_id and ftr.date_id = co.create_date_id
                  join dwh.d_account ac on ac.account_id = ftr.account_id
@@ -299,12 +298,12 @@ begin
                                                            ftr.trade_liquidity_indicator and
                                                            li.is_active
 
-                 left join fix_capture.fix_message_json fmj
-                           on fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id
+                 left join lateral (select fmj.fix_message ->> '9002' as t9002 from fix_capture.fix_message_json fmj
+                           where fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id limit 1) fmj on true
                  left join dwh.d_exchange exc on exc.exchange_id = ftr.exchange_id and exc.is_active
         where co.ex_destination = 'ALGO'
---           and co.account_id = any (l_account_ids)
-          and co.create_date_id between :in_start_date_id and :in_end_date_id
+          and co.account_id = any (l_account_ids)
+          and co.create_date_id between in_start_date_id and in_end_date_id
         order by ftr.date_id, ftr.trade_record_id;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
