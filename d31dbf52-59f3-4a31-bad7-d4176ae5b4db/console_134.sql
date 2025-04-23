@@ -1,4 +1,6 @@
-CREATE FUNCTION trash.os_report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
+CREATE
+    or replace
+    FUNCTION trash.os_report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
                                                    in_instrument_type character DEFAULT NULL::bpchar,
                                                    in_account_ids integer[] DEFAULT '{}'::integer[],
                                                    in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
@@ -199,7 +201,7 @@ begin
                        on (mleg.order_id = cl.orig_order_id and mleg.create_date_id >= cl.create_date_id)
              join dwh.d_account ac on cl.account_id = ac.account_id and ac.is_active
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-        and case when in_symbol_list = '{}' then true else di.symbol = any(in_symbol_list) end
+--         and case when in_symbol_list = '{}' then true else di.symbol = any(in_symbol_list) end
              left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
              left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
              left join lateral
@@ -250,6 +252,7 @@ begin
               when coalesce(in_parent_order_ids, '{}') = '{}' then true
               else cl.order_id = any (in_parent_order_ids) end
       and cl.create_date_id between l_date_begin_id and l_date_end_id
+      and case when in_symbol_list = '{}' then true else di.symbol = any(in_symbol_list) end
       and case when l_account_ids = '{}' then true else ac.account_id = any (l_account_ids) end;
     --and case when in_trading_firm_ids <> '{}' then ac.trading_firm_id = any(in_trading_firm_ids) else true end;
 
@@ -503,5 +506,9 @@ where symbol ilike '%TUR%'
 
 
 select *
-from trash.os_report_obo_compliance_xls(in_date_begin_id := 20250218, in_date_end_id := 20250218,
+from trash.os_report_obo_compliance_xls(in_date_begin_id := 20250219, in_date_end_id := 20250219,
                                         in_symbol_list := array ['INTC', 'SMCI', 'SOXL', 'TNA', 'NVDA', 'PLTR', 'SPXW', 'QQQ', 'CDNS', 'TURY'])
+
+create table trash.so_reprint_obo as
+select *
+    from t_sor rep
