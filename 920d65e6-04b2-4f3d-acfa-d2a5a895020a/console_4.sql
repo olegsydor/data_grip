@@ -1,3 +1,10 @@
+select db_create_time::timestamp at time zone 'UTC' at time zone 'US/Central'
+from blaze7.client_order
+where client_order.record_type = any (array['0', '2'])
+and db_create_time < clock_timestamp()-- - interval '5 minutes'
+order by 1 desc
+limit 1
+
 create function staging.is_sor_routed(in_report_id text)
 returns text
 language plpgsql
