@@ -583,7 +583,7 @@ begin
                                    rep.no_legs::text, -- as "Number of legs",
                                    rep.multileg_order_id::varchar, -- as "Leg Order ID",
                                    rep.manual_flag, -- as "Manual Flag",
-                                   rep.exec_text, -- as "Free Text",
+                                   replace(rep.exec_text, ',', ''), -- as "Free Text",
 
             -- Order Detail
                                    case
@@ -666,8 +666,11 @@ $$
  select ret_row from trash.so_print_obo_report(in_date_id := 20250218)
 
  select * from trash.so_reprint_obo rep
-     where rep.exec_instruction is not null
+     where rep.exec_text ilike '%,%'
 
 
  select sum(order_qty) from trash.so_reprint_obo rep
- where create_date_id = 20250401
+ where create_date_id = 20250401;
+
+
+select replace('Risk limit Option Max Away Cents was breached: Price=1.7, BidPx=2.24', ',', '')
