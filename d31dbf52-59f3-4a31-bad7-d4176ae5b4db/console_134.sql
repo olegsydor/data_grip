@@ -193,8 +193,10 @@ begin
         -- Execution Details
         ex.last_mkt,
         exc.mic_code,
-        ex.trade_liquidity_indicator
+        ex.trade_liquidity_indicator,
     -- CAT Details
+
+    cl.exec_instruction,
 
     from dwh.client_order as cl
              left join dwh.client_order mleg
@@ -505,10 +507,10 @@ where symbol ilike '%TUR%'
 
 
  insert into trash.so_reprint_obo
-select * from t_sor rep
+select * from t_sor
 
  select *
-from trash.os_report_obo_compliance_xls(in_date_begin_id := 20250219, in_date_end_id := 20250219,
+from trash.os_report_obo_compliance_xls(in_date_begin_id := 20250221, in_date_end_id := 20250221,
                                         in_symbol_list := array ['INTC', 'SMCI', 'SOXL', 'TNA', 'NVDA', 'PLTR', 'SPXW', 'QQQ', 'CDNS', 'TURY'],
 --      in_account_ids := '{71730,71731,71733,71737,71738,71740,71744,71753,71758,71761,71762,71764,71765,71768,71771,71778,71781,71785,71787,71793,71795,71801,71808,71811,71812,71815,71817,71824,71828,71831,71832,71846,71847,71849,71855,71866,71868,71873,72084,72087,72088,72114,72128,72301,72453,72943,73298,73524,71743,71857,71742,71829,71848,71822,73623,73573,73499,71736,71802,73081,72490,71755,71784,71746,71821,72961,73637,73480,72081,71747,73867,71772,72952,71766,72085,71751,73292,71823,71870,73454,73570,73830,73915,71816,71756,72929,71759,71763,71770,71779,71797,71732,71774,71775,71792,71854,71862,73931,71790,71845,71860,71757,71796,71799,71865,71874,71788,71735,71777,71876,71741,71749,71809,71853,71859,71830,71838,72086,71767,71804,71813,71863,72800,72992,73706,73953,71750,71875,71807,72945,73089,73094,72991,73021,73868,73959,73960,71760,71833,71850,72089,73900,72433,71841,71851,71871,72335,73566,71734,71786,71803,71834,71835,71864,71867,71869,71877,72083,72117,72482,73693,71739,71745,71748,71752,71754,71769,71773,71776,71780,71782,71783,71789,71791,71794,71798,71800,71805,71806,71810,71814,71818,71819,71820,71825,71826,71827,71836,71837,71839,71840,71842,71843,71844,71852,71856,71858,71861,71872,72082,72452,72918,72942,72986,73090,73095,73403,73595,73653,73685,73884}'
      in_trading_firm_ids := '{"OFP0058"}');
@@ -518,6 +520,7 @@ create table trash.so_reprint_obo as
 select *
     from t_sor rep;
 
+select * from trash.so_reprint_obo;
 
 select * from dwh.d_trading_firm
 where trading_firm_name ilike '%T3%';
@@ -536,3 +539,135 @@ select string_agg(account_id::text, ',')
         account_name like 'TG%'
     )
     and is_active;
+
+
+
+create or replace function trash.so_print_obo_report(in_date_id int4)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$$
+begin
+    return query
+        select
+            'Parent Order Id,Trading Firm Name,Trading Firm IMID, Trading Firm CRD,Event Type,Event Date,Event Time,Client clOrderID,Street clOrderID,Event Qty,Event Price,Net Price,Multi Leg Indicator,' ||
+            'Number of legs,Leg Order ID,Manual Flag,Free Text,Order Status,Original Client clOrderID,Original Street clOrderID,OSI Symbol,Base symbol,Symbol,Security Type,Underlying Symbol,' ||
+            'P/C/S,Expiration Date,Expiration Time,Side,TIF,Good Till Date,Good Till Time,Order Qty,Filled Qty,Order Type Code,Order Price,Order Creation Date,Order Creation Time,' ||
+            'Open/Close,Trading Session,Is Held,Is Cross,Fee Sensitivity,Stop Price,Max Floor,Capacity,ExDestination,Leg ratio,User,Account Name,Account ID,Account Holder Type,' ||
+            'Account FDID,Account IMID,Account CRD,Sender type,Last Mkt,MIC Code,Liquidity Indicator,ExecutionID,CAT Reporting Firm IMID,Exec Instruction';
+
+    return query
+        select array_to_string(ARRAY [
+                                   rep.parent_order_id::varchar, -- as parent_order_id,
+
+            -- Firm Details
+                                   rep.trading_firm_name, -- as "Trading Firm Name",
+                                   rep.firm_cat_imid, -- as "Trading Firm IMID",
+                                   rep.firm_cat_crd, --  as "Trading Firm CRD",
+            -- Event Details
+                                   case when rep.exec_id is not null then rep.order_status_description end, -- as "Event Type",
+                                   to_char(rep.event_ts, 'MM/DD/YYYY'), -- as "Event Date",
+                                   to_char(rep.event_ts, 'HH24:MI:SS.MS'), -- as "Event Time",
+                                   rep.parent_clorderid, -- as "Client clOrderID",
+                                   rep.street_clorderid, -- as "Street clOrderID",
+                                   rep.event_order_qty::text, -- as "Event Qty",
+                                   to_char(rep.event_price, 'FM999990.0099'), -- as "Event Price",
+                                   to_char(rep.net_price, 'FM999990.0099'), -- as "Net Price",
+                                   case
+                                       when rep.multileg_reporting_type <> '1' then 'Y'
+                                       else 'N'
+                                       end, -- as "Multi Leg Indicator",
+                                   rep.no_legs::text, -- as "Number of legs",
+                                   rep.multileg_order_id::varchar, -- as "Leg Order ID",
+                                   rep.manual_flag, -- as "Manual Flag",
+                                   rep.exec_text, -- as "Free Text",
+
+            -- Order Detail
+                                   case
+                                       when rep.exec_id is null
+                                           then rep.order_status_description end, -- as "Order Status",
+                                   case
+                                       when rep.event_type = 'New Order'
+                                           then orig_client_order_id end, -- as "Original Client clOrderID",
+                                   case
+                                       when rep.event_type = 'Order Route'
+                                           then orig_client_order_id end, -- as "Original Street clOrderID",
+                                   rep.opra_symbol, -- as "OSI Symbol",
+                                   rep.root_symbol, -- as "Base symbol",
+                                   rep.symbol, -- as "Symbol",
+                                   case rep.instrument_type_id
+                                       when 'O' then 'Option'
+                                       when 'E' then 'Equity'
+                                       else rep.instrument_type_id end, -- as "Security Type",
+                                   rep.underlying_symbol, -- as "Underlying Symbol",
+                                   rep.pcv, -- as "P/C/S",
+                                   to_char(rep.expiration_ts, 'MM/DD/YYYY'), -- as "Expiration Date",
+                                   to_char(rep.expiration_ts, 'HH24:MI:SS.MS'), -- as "Expiration Time",
+                                   case
+                                       when rep.side = '1' then 'Buy'
+                                       when rep.side = '2' then 'Sell'
+                                       when rep.side in ('5', '6') then 'Sell Short'
+                                       end, -- as "Side",
+                                   rep.tif, -- as "TIF",
+                                   to_char(rep.good_till_ts, 'MM/DD/YYYY'), -- as "Good Till Date",
+                                   to_char(rep.good_till_ts, 'HH24:MI:SS.MS'), -- as "Good Till Time",
+                                   rep.order_qty::text, -- as "Order Qty",
+                                   rep.cum_qty::text, -- as "Filled Qty",
+                                   rep.order_type_name, -- as "Order Type Code",
+                                   to_char(rep.price, 'FM999990.0099'), -- as "Order Price",
+                                   to_char(rep.order_creation_ts, 'DD.MM.YYYY'), -- as "Order Creation Date",
+                                   to_char(rep.order_creation_ts, 'HH24:MI:SS.MS'), -- as "Order Creation Time",
+                                   rep.open_close, -- as "Open/Close",
+                                   compliance.get_eq_sor_trading_session(in_order_id := rep.order_id,
+                                                                         in_date_id := rep.create_date_id), -- as "Trading Session",
+                                   case
+                                       when rep.exec_instruction like '1%' then 'NH'
+                                       when rep.exec_instruction like '5%' then 'H'
+                                       else 'NH'
+                                       end, -- as "Is Held",
+                                   case when rep.cross_order_id is not null then 'Y' else 'N' end, -- as "Is Cross",
+                                   rep.fee_sensitivity::text, -- as "Fee Sensitivity",
+                                   to_char(rep.stop_price, 'FM999990.0099'), -- as "Stop Price",
+                                   rep.max_floor::text, -- as "Max Floor",
+                                   rep.customer_or_firm_name, -- as "Capacity",
+                                   rep.ex_destination, -- as "ExDestination",
+                                   rep.ratio_qty::text, -- as "Leg ratio",
+                                   rep.user_, -- as "User",
+
+            -- Account Details
+                                   rep.account_name, -- as "Account Name",
+                                   rep.account_id::text, -- as "Account ID",
+                                   rep.account_holder_type, -- as "Account Holder Type",
+                                   rep.cat_fdid, -- as "Account FDID",
+                                   null::text, -- as "Account IMID",
+                                   rep.crd_number, -- as "Account CRD",
+                                   rep.sender_sub_id, -- as "Sender type",
+
+            -- Execution Details
+                                   rep.last_mkt, -- as "Last Mkt",
+                                   rep.mic_code, -- as "MIC Code",
+                                   rep.trade_liquidity_indicator, -- as "Liquidity Indicator",
+                                   rep.exec_id, -- as "ExecutionID",
+
+            -- CAT Details
+                                   rep.cat_imid, -- as "CAT Reporting Firm IMID"
+                                   rep.exec_instruction -- as "Exec Instruction"
+                                   ], ',', '')
+        from trash.so_reprint_obo rep
+        where rep.create_date_id = in_date_id
+        order by coalesce(rep.first_order_id, rep.parent_order_id), rep.parent_order_id, rep.street_order_id,
+                 rep.exec_id nulls first;
+end;
+$$
+
+ select ret_row from trash.so_print_obo_report(in_date_id := 20250218)
+
+ select * from trash.so_reprint_obo rep
+     where rep.exec_instruction is not null
+
+
+ select sum(order_qty) from trash.so_reprint_obo rep
+ where create_date_id = 20250401
