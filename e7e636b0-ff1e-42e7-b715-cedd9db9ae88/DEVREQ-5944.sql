@@ -43,7 +43,7 @@ begin
         select array_to_string(ARRAY [
                                    '1' , -- as "Version",
                                    'CREATE' , -- as "ActionType",
-                                   alt.alloc_instr_id , -- as "ExternalID",
+                                   alt.alloc_instr_id::text, -- as "ExternalID",
                                    'ALLOCATION' , -- as "TransactionType",
                                    null::text , -- as "TransactionAccountNumber",
                                    'MARGIN' , -- as "TransactionAccountType",
@@ -53,8 +53,8 @@ begin
                                        when tr.side in ('5', '6') then 'SLD SHORT'
                                        end , -- as "TransactionSideType",
                                    ai.total_qty::text , -- as "TransactionQuantity",
-                                   sum(tr.last_qty * tr.last_px) /
-                                   nullif(sum(tr.last_qty), 0)::text , -- as "TransactionPrice",
+                                   (sum(tr.last_qty * tr.last_px) /
+                                    nullif(sum(tr.last_qty), 0))::text , -- as "TransactionPrice",
                                    (min(tr.street_trade_record_time)::timestamp at time zone 'UTC')::text , -- as "TransactionDateTime",2025-04-07T16:17:16-04:00
                                    case
                                        when di.instrument_type_id = 'E' then null
@@ -74,7 +74,7 @@ begin
                                    'OCC_SYMBOL' , -- as "InstrumentIDType",
                                    oc.opra_symbol , -- as "InstrumentID",
                                    case
-                                       when di.instrument_type_id = 'O' then ai.total_qty * 0.1
+                                       when di.instrument_type_id = 'O' then (ai.total_qty * 0.1)::text
                                        end -- as "ChargeCommissionAmount"
                                    ], ',', '')
         from genesis2.trade_record tr
