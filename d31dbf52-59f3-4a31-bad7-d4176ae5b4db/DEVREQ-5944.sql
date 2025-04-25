@@ -74,6 +74,7 @@ where ac.trading_firm_id = 'laniakea';
 					 ),0.0 ), 2)                                                as "SEC Fee",
                      --
                      ai.alloc_instr_id
+
               from dwh.flat_trade_record tr
                        join dwh.d_account a on (a.account_id = tr.account_id)
                        join dwh.historic_security_definition_all hsd
@@ -96,7 +97,7 @@ where ac.trading_firm_id = 'laniakea';
                        left join dwh.d_clearing_account ca
                                  on (ca.clearing_account_id = aie.clearing_account_id)
               where tr.date_id between :in_start_date_id and :in_end_date_id
---                 and tr.account_id = any(:l_account_ids)
+                and tr.account_id = any(:l_account_ids)
                 and tr.is_busted = 'N'
               group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), ca.clearing_account_number,
                        hsd.display_instrument_id, tr.side, ai.alloc_instr_id,
