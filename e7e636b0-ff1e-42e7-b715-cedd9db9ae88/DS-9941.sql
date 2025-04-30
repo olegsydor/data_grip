@@ -1,6 +1,6 @@
 select *
 from dash360.get_trade_records_for_allocation(in_date_id := 20250429, in_account_ids := '{68488,24849,63425}',
-                                              in_security_type := 'E',
+                                              in_security_type := 'O'),
                                               in_trade_record_ids := '{4152561582,4152597033,4152610217,4152610758,4152610759,4152629843,4152656809,4152673948,4152676829,4152696096}');
 -- drop function dash360.get_trade_records_for_allocation;
 create or replace function dash360.get_trade_records_for_allocation(in_date_id integer,
@@ -146,6 +146,7 @@ begin
                             where true
                               and case when in_account_ids = '{}' then false else a.account_id = any (in_account_ids) end
                               and a.date_id = in_date_id
+                              and ai2tr.date_id = in_date_id
                               and a.is_deleted = 'N') allocated_trades
                            on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
                  left join lateral (select rep.to_report, rep.db_create_time
