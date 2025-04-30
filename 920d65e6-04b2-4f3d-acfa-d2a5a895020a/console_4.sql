@@ -70,5 +70,28 @@ select * from blaze7.order_report
         SELECT client_order.cl_ord_id
                                                   FROM blaze7.client_order
                                                   WHERE client_order.order_id = co.parent_order_id
+select replace(:in_to, ';',',');
 
 
+select regexp_replace(:client_name, '[;|/|,/:,/{]', ',', 'g')
+
+	select replace(:in_to, ' ','');
+    select replace(:in_to, ',',';');
+
+select string_to_array(:in_to, ';')
+create or replace view blaze7.v_busted_trade as
+select exec_id,
+       order_id,
+       chain_id,
+       leg_ref_id,
+       db_create_time,
+       exec_ref_id,
+       multileg_reporting_type,
+       exec_type,
+       is_busted,
+       cl_ord_id
+from blaze7.order_report rep
+WHERE rep.multileg_reporting_type <> '3'
+  AND (rep.exec_type::text <> ALL (ARRAY ['f'::text, 'w'::text, 'W'::text, 'g'::text, 'G'::text, 'I'::text, 'i'::text]))
+  and rep.is_busted = 'Y'
+        and rep.db_create_time > current_date - '5 days'::interval

@@ -195,3 +195,13 @@ select * from d_exec_type et
     where et.exec_type in ('0', '4', '5', 'W')
 or
         et.exec_type in ('F', '4', '5', 'W')
+
+
+
+
+
+
+
+-- compare 1 PROD
+-- DROP PROCEDURE dash_reporting.imc_report_making(int4);
+

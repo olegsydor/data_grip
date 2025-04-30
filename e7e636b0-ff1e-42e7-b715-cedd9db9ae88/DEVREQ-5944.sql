@@ -48,18 +48,18 @@ begin
                                    null::text , -- as "TransactionAccountNumber",
                                    'MARGIN' , -- as "TransactionAccountType",
                                    case
-                                       when tr.side = '1' then 'BOT'
-                                       when tr.side = '2' then 'SLD'
-                                       when tr.side in ('5', '6') then 'SLD SHORT'
+                                       when tr.side = '1' then 'BUY'
+                                       when tr.side in ('2', '5', '6') then 'SELL'
                                        end , -- as "TransactionSideType",
                                    ai.total_qty::text , -- as "TransactionQuantity",
-                                   (sum(tr.last_qty * tr.last_px) /
-                                    nullif(sum(tr.last_qty), 0))::text , -- as "TransactionPrice",
-                                   (min(tr.street_trade_record_time)::timestamp at time zone 'UTC')::text , -- as "TransactionDateTime",2025-04-07T16:17:16-04:00
+                                   round(sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0),
+                                         4)::text , -- as "TransactionPrice",
+                                   to_char(min(tr.street_trade_record_time)::timestamp at time zone 'UTC',
+                                           'YYYY-MM-DD"T"HH24:MI:SSOF:00'), -- as "TransactionDateTime",2025-04-07T16:17:16-04:00
                                    case
                                        when di.instrument_type_id = 'E' then null
-                                       when tr.open_close = 'O' then 'Open'
-                                       when tr.open_close = 'C' then 'Close'
+                                       when tr.open_close = 'O' then 'OPEN'
+                                       when tr.open_close = 'C' then 'CLOSE'
                                        end , -- as "TransactionOpenClose",
                                    'AGENT' , -- as "TransactionBrokerCapacity",
                                    ac.account_name , -- as "AllocationSourceAccountNumber",
@@ -71,8 +71,13 @@ begin
                                    case
                                        when di.instrument_type_id = 'O' then 'OPTION'
                                        when di.instrument_type_id = 'E' then 'EQUITY' end , -- as "InstrumentType",
-                                   'OCC_SYMBOL' , -- as "InstrumentIDType",
-                                   oc.opra_symbol , -- as "InstrumentID",
+                                   case
+                                       when di.instrument_type_id = 'O' then 'OCC_SYMBOL'
+                                       when di.instrument_type_id = 'E'
+                                           then 'TICKER_SYMBOL' end, -- as "InstrumentIDType",
+                                   case
+                                       when di.instrument_type_id = 'O' then oc.opra_symbol
+                                       when di.instrument_type_id = 'E' then di.symbol end, -- as "InstrumentID",
                                    case
                                        when di.instrument_type_id = 'O' then (ai.total_qty * 0.1)::text
                                        end -- as "ChargeCommissionAmount"
@@ -91,7 +96,7 @@ begin
           and tr.account_id = any (l_account_ids)
           and tr.is_busted = 'N'
         group by alt.alloc_instr_id, tr.side, ai.total_qty, di.instrument_type_id, tr.open_close, ac.account_name,
-                 oc.opra_symbol;
+                 oc.opra_symbol, di.symbol;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
@@ -156,3 +161,6 @@ group by alt.alloc_instr_id, tr.side, ai.total_qty, di.instrument_type_id, tr.op
          oc.opra_symbol
 
 
+select to_char(clock_timestamp()::timestamp at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS-04:00'),
+       to_char(clock_timestamp()::timestamp at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'),
+       to_char(clock_timestamp()::timestamp at time zone 'UTC',  'YYYY-MM-DD"T"HH24:MI:SS-OF');
