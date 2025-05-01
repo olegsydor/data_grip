@@ -15,11 +15,12 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
 
              left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
     where true
---       and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
-      and tr.client_order_id = '20250325VSIND28939'
+      and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+--       and tr.client_order_id = '20250325VSIND28939'
       and tr.date_id between :l_start_date_id and :p_end_date_id
       and tr.account_id = any (:l_account_ids)
       and tr.is_busted = 'N'
+        and tr.order_id in (100000019696533965, 100000019696533916)
 --   and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE')
       and case
               when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
@@ -29,7 +30,11 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
 
 select * from dwh.execution
 where exec_date_id = 20250325
-and order_id = 100000019696533965
+and order_id in (100000019696533965, 100000019696533916)
+and secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+
+select * from dwh.d_account
+where account_id = 73660
 
 
 select * from client_order
