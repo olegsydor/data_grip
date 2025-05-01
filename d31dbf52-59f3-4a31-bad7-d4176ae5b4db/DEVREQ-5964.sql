@@ -4,6 +4,7 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            tr.account_id,
              coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
            coalesce(tr.exch_exec_id, '')               as "Tag17",
+           tr.order_id,
            *
     from dwh.flat_trade_record tr
              left join lateral (select jo.fix_message ->> '143'  as t_143
@@ -25,6 +26,14 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
                   then false
               else true end;
 
+
+select * from dwh.execution
+where exec_date_id = 20250325
+and order_id = 100000019696533965
+
+
+select * from client_order
+where parent_order_id = 100000019696533916
 
 
 
