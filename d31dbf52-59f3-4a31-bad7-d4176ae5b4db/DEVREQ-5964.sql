@@ -14,7 +14,7 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
 
              left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
     where true
-      and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+--       and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
       and tr.client_order_id = '20250325VSIND28939'
       and tr.date_id between :l_start_date_id and :p_end_date_id
       and tr.account_id = any (:l_account_ids)
@@ -24,3 +24,7 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
               when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
                   then false
               else true end;
+
+
+
+
