@@ -19,7 +19,7 @@ begin
     placer := left(reverse(blaze7.get_Hex_To_Bin(substring(part1 from 12 for 1))) || '0000000', 7);
 
     -- build out_string from part1 using placer
-    while bl < length(part1) loop
+    while is_undersc <= length(placer) and bl <= length(part1) loop
         if substring(placer from is_undersc for 1) = '0' then
             out_string := out_string || substring(part1 from bl for 1);
             bl := bl + 1;
@@ -27,7 +27,6 @@ begin
             out_string := out_string || '_';
         end if;
         is_undersc := is_undersc + 1;
-        raise notice '%', out_string;
     end loop;
 
     out_string := out_string || '_';
@@ -43,7 +42,7 @@ begin
         intval := ('x' || short_hex)::bit(48)::bigint;
 
         -- convert integer to 48-bit binary
-        binval := lpad(to_char(intval::bit(48), 'FM999999999999999999'), 48, '0');
+        binval := lpad((intval::bit(48))::text, 48, '0');
 
         bl := length(binval) - 7;
 
