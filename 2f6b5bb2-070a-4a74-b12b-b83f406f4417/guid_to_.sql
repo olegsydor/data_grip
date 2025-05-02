@@ -1,4 +1,4 @@
-create or replace function blaze7.get_guid_to_clordid(inp_guid varchar)
+create or replace function blaze7.get_guid_to_clordid(inp_guid varchar default '')
 returns varchar
 language plpgsql
 as $$
