@@ -15,7 +15,7 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
 
              left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
     where true
---       and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+       and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
 --       and tr.client_order_id = '20250325VSIND28939'
       and tr.date_id between :l_start_date_id and :p_end_date_id
       and tr.account_id = any (:l_account_ids)
@@ -38,7 +38,7 @@ where account_id = 73660
 
 
 select * from client_order
-where parent_order_id = 100000019696533916
+where parent_order_id = 100000019696533916;
 ---
 select * --ex.*, order_qty
 from client_order cl
@@ -62,7 +62,7 @@ from client_order cl
                       from dwh.execution ex
                       where ex.order_id = cl.order_id
                         and ex.exec_type = 'F'
-                      limit 100) ex on true
+                      ) ex on true
 
 		where cl.create_date_id = :in_date_id
  		and (cl.parent_order_id is null)-- or (cl.parent_order_id is not null and order_qty >= 250))
