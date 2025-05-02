@@ -1,7 +1,7 @@
 select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
-           coalesce(tr.client_order_id, '')            as "OrderID",
-           coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
-  case
+       coalesce(tr.client_order_id, '')            as "OrderID",
+       coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+       case
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
@@ -16,20 +16,20 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
-           end as aux_tag_street,
+           end                                     as aux_tag_street,
 
-           tr.account_id,
-             coalesce(tr.secondary_exch_exec_id, '')     as "ReportID",
-           coalesce(tr.exch_exec_id, '')               as "Tag17",
-           tr.order_id,
-           *
-    from dwh.flat_trade_record tr
-             left join lateral (select jo.fix_message ->> '143'  as t_143
-                                from fix_capture.fix_message_json jo
-                                where tr.order_fix_message_id = jo.fix_message_id
-                                  and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
-                                limit 1) jo on true
-     left join lateral (select jo.fix_message ->> '143'  as t_143,
+--        tr.account_id,
+       coalesce(tr.secondary_exch_exec_id, '')     as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
+       coalesce(tr.exch_exec_id, '')               as "Tag17"
+--            ,tr.order_id
+--        ,           *
+from dwh.flat_trade_record tr
+         left join lateral (select jo.fix_message ->> '143' as t_143
+                            from fix_capture.fix_message_json jo
+                            where tr.order_fix_message_id = jo.fix_message_id
+                              and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                            limit 1) jo on true
+         left join lateral (select jo.fix_message ->> '143'  as t_143,
                                    jo.fix_message ->> '9483' as t_9483,
                                    jo.fix_message ->> '1003' as t_1003,
                                    jo.fix_message ->> '880'  as t_880
@@ -37,19 +37,19 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
                             where tr.street_trade_fix_message_id = jo.fix_message_id
                               and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
                             limit 1) jos on true
-             left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
-    where true
-       and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+         left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
+where true
+--   and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
 --       and tr.client_order_id = '20250325VSIND28939'
-      and tr.date_id between :l_start_date_id and :p_end_date_id
-      and tr.account_id = any (:l_account_ids)
-      and tr.is_busted = 'N'
+  and tr.date_id between :l_start_date_id and :p_end_date_id
+  and tr.account_id = any (:l_account_ids)
+  and tr.is_busted = 'N'
 --         and tr.order_id in (100000019696533965, 100000019696533916)
 --   and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE')
-      and case
-              when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
-                  then false
-              else true end;
+  and case
+          when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
+              then false
+          else true end;
 
 
 select * from dwh.execution
@@ -67,9 +67,9 @@ select * from client_order
 where parent_order_id = 100000019696533916;
 ---
 select to_char(ex.exec_time, 'YYYY-MM-DD') as "Date",
-       cl.client_order_id            as "OrderID",
-       str.client_order_id as "ExchOrderID",
-         case
+       cl.client_order_id                  as "OrderID",
+       str.client_order_id                 as "ExchOrderID",
+       case
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
@@ -84,14 +84,19 @@ select to_char(ex.exec_time, 'YYYY-MM-DD') as "Date",
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
            when (di.instrument_type_id, cl.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
-           end as aux_tag_street,
-
-
-       cl.trading_firm_id, ac.account_name, fxm.*, ex.*, cl.* --ex.*, order_qty
+           end                             as aux_tag_street,
+       ex.secondary_exch_exec_id           as "ReportID",
+       ex.exch_exec_id                     as "Tag17"
+--        ,
+--        cl.trading_firm_id,
+--        ac.account_name,
+--        fxm.*,
+--        ex.*,
+--        cl.* --ex.*, order_qty
 from client_order cl
          inner join d_account ac on ac.account_id = cl.account_id and ac.is_active = true
-             join dwh.d_instrument di on di.instrument_id = cl.instrument_id
-left join dwh.d_exchange dex on dex.exchange_id = cl.exchange_id and dex.is_active
+         join dwh.d_instrument di on di.instrument_id = cl.instrument_id
+         left join dwh.d_exchange dex on dex.exchange_id = cl.exchange_id and dex.is_active
     -- 		inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
 --
 -- 		inner join d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
@@ -111,12 +116,15 @@ left join dwh.d_exchange dex on dex.exchange_id = cl.exchange_id and dex.is_acti
        and j.date_id = :in_date_id
      limit 1
     ) fxm on true
-    left join lateral(select client_order_id from dwh.client_order str where str.parent_order_id = cl.order_id limit 1) str on true
-             left join lateral (select exch_exec_id, exec_time, ex.fix_message_id
+         left join lateral (select client_order_id
+                            from dwh.client_order str
+                            where str.parent_order_id = cl.order_id
+                            limit 1) str on true
+         left join lateral (select exch_exec_id, exec_time, ex.fix_message_id, ex.secondary_exch_exec_id
                             from dwh.execution ex
                             where ex.order_id = cl.order_id
                               and ex.exec_type = 'F'
-        ) ex on true
+    ) ex on true
          left join lateral (select jo.fix_message ->> '143'  as t_143,
                                    jo.fix_message ->> '9483' as t_9483,
                                    jo.fix_message ->> '1003' as t_1003,
@@ -125,34 +133,7 @@ left join dwh.d_exchange dex on dex.exchange_id = cl.exchange_id and dex.is_acti
                             where ex.fix_message_id = jo.fix_message_id
                               and jo.date_id = cl.create_date_id
                             limit 1) jos on true
-
-
-
-
 where cl.create_date_id = :in_date_id
-/*		and cl.trans_type = 'D'
-		and (cl.multileg_reporting_type = '1' or (cl.sub_strategy_desc = 'VEGA' and cl.multileg_reporting_type = '2'))
-		and fc.is_high_frequency_trader = 'N'
-		and coalesce(tf.cat_imid,'NONE') not in ('NONE','DFIN')
-		and fc.fix_comp_id not in ('IRCHNY2EQPT1INT','IRCHNY2EQPT2INT','IRCHNY2EQPT3INT','IRCHNY2OPTPT1INT')
-		and (ac.trading_firm_id not in ('BMO','dynamex01','Guggen','nbcanf','daiwa','mirae','miradelta') or fc.fix_comp_id not in ('BOOKP','BOOKP2'))
-		--IMC
-		and (ac.trading_firm_id not in ('imc01','cutler') or fc.fix_comp_id <> 'IMCCONS')
-		--
-		and coalesce(tf.cat_suppress,'N') <> 'Y'
-		and coalesce(ac.cat_suppress,'N') <> 'Y'
-		and cl.ex_destination not in ('RPTR','SQHT','WEEDN','JSEB','TRAFX','FBMS','CTDH','DASH','OUTCR','SLXX','WEX','WEXE','PRIME','UBSPP','WEXX')
-		--
-		and (cl.ex_destination not in ('BRKPT','BLAZE') or ac.account_name in ('TASTYSPX','TDSPX_BP','TDSWIM_BP','CPRFA_BP','TDA_RFA_BP','ETRADE_RFAC_BP','SCHWABTDA_RFA_BP','FIDOFP_RFA_BP','TICKRS_BP','VSIN_BP'
-			))
-		and cl.order_id not in (select order_id from compliance.rejected_parent_order where not street_is_generated)
-		--and (cl.order_id not in (select ex.order_id from execution ex where ex.exec_date_id = in_date_id and ex.is_parent_level = true and ex.exec_type = '8') or cl.sub_strategy_desc = 'DMA')
-		--and not exists (select 1 from execution ex where ex.exec_date_id = in_date_id and ex.order_id  = cl.order_Id and ex.is_parent_level = true and ex.exec_type = '8' limit 1)
-		and os.root_symbol not in (select symbol from compliance.test_symbols)
---         and cl.order_id in (100000019696533965, 100000019696533916)
---         and ex.exch_exec_id in ('l25akrts0002', 'l25akrts0000')
-
- */
   and case
           when cl.parent_order_id is null then true
           when cl.parent_order_id is not null and cl.trading_firm_id in ('xfa', 'xfachi') and
