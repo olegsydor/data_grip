@@ -140,12 +140,14 @@ where cl.create_date_id = :in_date_id
                ac.account_name <> 'XFADESKTCM' then true -- XFA
           when cl.parent_order_id is not null and fxm.tag_143 in ('RFAC', 'DASH')
               then true -- routed to DASH Desk (143=DASH), Casey Securities (Tag 143 = RFAC)
-          when cl.parent_order_id is not null and ac.account_name in ('TASTYSPX', 'TDSPX_BP')
-              then true -- for SPX
+--           when cl.parent_order_id is not null and ac.account_name in ('TASTYSPX', 'TDSPX_BP')
+--               then true -- for SPX
           else false end
   and ac.account_id = 73660; -- e.g. Vision March 2025 example--BEAA0023-20250325
 
-
+select * from dwh.flat_trade_record
+where date_id = 20250325
+and account_id = 73660
 
 
 select * from dwh.execution ex
