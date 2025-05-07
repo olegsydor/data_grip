@@ -22,3 +22,23 @@ order by r.ExchangeTransactionID;
 
 select replace(ltrim(replace(left(replace(:inp_guid, '-', ''), 12), '0', ' ')), ' ', '0');
 select replace(left(replace(:inp_guid, '-', ''), 12), '0', ' ')
+
+
+'l25aks0c0000',
+'l25aks080000',
+'l25akrv00000',
+'l25aks0g0000',
+'l25akrvc0000',
+'l25akrvo0002',
+'l25aks040000',
+'l25akrug0000',
+'l25akruc0000',
+'l25akrvs0002',
+'l25akrvk0000',
+'l25akrts0000',
+'l25akrv40000',
+'l25akruo0000',
+'l25akrvk0004',
+'l25aks000002',
+'l25akru40000',
+'l25akrvg0000'

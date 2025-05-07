@@ -184,7 +184,34 @@ and account_id = 73660
 select * from dwh.execution ex
     where true
       and ex.exec_date_id = 20250325
-and row_to_json(ex.*)::text ilike 'l25akrts0002'--, 'l25akrts0000')
+and row_to_json(ex.*)::text ilike any(array['%l25akrts0002%', '%l25akrts0000%'])
+--~~* ANY(ARRAY['MARKET_DATA', '%list%']);
+
+
+select * from dwh.execution ex
+    where true
+      and ex.exec_date_id = 20250325
+and row_to_json(ex.*)::text ilike any(array['%l25akrts0000%'])
+
+
+    'l25aks0c0000',
+'l25aks080000',
+'l25akrv00000',
+'l25aks0g0000',
+'l25akrvc0000',
+'l25akrvo0002',
+'l25aks040000',
+'l25akrug0000',
+'l25akruc0000',
+'l25akrvs0002',
+'l25akrvk0000',
+'l25akrts0000',
+'l25akrv40000',
+'l25akruo0000',
+'l25akrvk0004',
+'l25aks000002',
+'l25akru40000',
+'l25akrvg0000'
 
 -------
 
