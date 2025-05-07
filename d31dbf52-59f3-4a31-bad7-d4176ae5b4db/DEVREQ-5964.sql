@@ -22,8 +22,9 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
        coalesce(tr.secondary_exch_exec_id, '')     as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
        coalesce(tr.exch_exec_id, '')               as "Tag17"
 --            ,tr.order_id
---        ,           *
+       ,           *
 from dwh.flat_trade_record tr
+--     LEFT JOIN (select * from compliance.blaze_execution cbe where cbe.)
          left join lateral (select jo.fix_message ->> '143' as t_143
                             from fix_capture.fix_message_json jo
                             where tr.order_fix_message_id = jo.fix_message_id
@@ -40,7 +41,7 @@ from dwh.flat_trade_record tr
          left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
 where true
 --   and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
---       and tr.client_order_id = '20250325VSIND28939'
+      and tr.client_order_id = '20250325VSIND28939'
   and tr.date_id between :l_start_date_id and :p_end_date_id
   and tr.account_id = any (:l_account_ids)
   and tr.is_busted = 'N'
@@ -160,17 +161,17 @@ select to_char(ex.exec_time, 'YYYY-MM-DD') as "Date",
 --               then true -- for SPX
                         else false end
                 and ac.account_id = 73660)
-select * from base
+select row_to_json(base.*), * from base
 where true
-    and row_to_json(base.*)::text ilike '%394215660%'
+    and row_to_json(base.*)::text ilike '%759044098874146816%'
 
 ; -- e.g. Vision March 2025 example--BEAA0023-20250325
 
 select row_to_json(ftr.*), * from dwh.flat_trade_record ftr
 where date_id = 20250325
 -- and account_id = 73660
-  and alternative_compliance_id = '20250325VSIND28939'
-and row_to_json(ftr.*)::text ilike '%1407944308%'
+--   and alternative_compliance_id = '370416750445'
+and row_to_json(ftr.*)::text ilike '%370416750445%'
 ;
 
 

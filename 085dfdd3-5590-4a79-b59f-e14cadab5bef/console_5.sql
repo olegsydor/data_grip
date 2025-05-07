@@ -34,7 +34,7 @@ select r.ID as reportid, r.ExchangeTransactionID as tag17, * From LiquidPoint_ED
 
 1_2j250325,
 F_16250325
-select Blaze7.dbo.Guid_To_ClOrdId_old('00000000-000F-0000-0000-00036313D1D5')
+select Blaze7.dbo.Guid_To_ClOrdId('00000000-000F-0000-0000-00036313D1D5')
 00000000-000F-0000-0000-00036313D1D5
 
 select * from EDW_Billing.dbo.Dash_Trade_Record
