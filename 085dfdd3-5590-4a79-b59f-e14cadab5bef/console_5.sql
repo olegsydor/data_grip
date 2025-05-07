@@ -1,7 +1,7 @@
 Select o.ID as orderID,
        r.ID as reportid,
        r.ExchangeTransactionID tag17,
-       feedcode as secondary_exch_exec_id,
+--        feedcode as secondary_exch_exec_id,
       *
 From LiquidPoint_EDW..TReports_EDW r
          inner join LiquidPoint_EDW..TOrder_EDW o

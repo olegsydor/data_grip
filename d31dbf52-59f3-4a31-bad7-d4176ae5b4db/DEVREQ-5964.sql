@@ -39,20 +39,19 @@ from dwh.flat_trade_record tr
                             limit 1) jos on true
          left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
 where true
-  and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+--   and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
 --       and tr.client_order_id = '20250325VSIND28939'
   and tr.date_id between :l_start_date_id and :p_end_date_id
   and tr.account_id = any (:l_account_ids)
   and tr.is_busted = 'N'
---         and tr.order_id in (100000019696533965, 100000019696533916)
---   and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') is distinct from 'DASH-CBOE')
+
   and case
           when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
               then false
           else true end
-and t = 360007058544
-;
 
+;
+report_id in ('00000000-3230-3030-7374-726b6135326c', '00000000-3030-3030-7374-726b6135326c') and
 
 select * from dwh.execution
 where exec_date_id = 20250325
