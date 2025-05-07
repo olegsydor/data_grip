@@ -188,32 +188,19 @@ and row_to_json(ex.*)::text ilike any(array['%l25akrts0002%', '%l25akrts0000%'])
 --~~* ANY(ARRAY['MARKET_DATA', '%list%']);
 
 
-select * from dwh.execution ex
+select exch_exec_id, secondary_exch_exec_id, * from dwh.execution ex
     where true
       and ex.exec_date_id = 20250325
-      and true
-and row_to_json(ex.*)::text ilike any(array['%l25akrts0002%'])
+      and (exch_exec_id = any('{l25aks000000,l25akrvo0000,l25aks040002,l25akruc0002,l25akruo0002,l25akrvc0002,l25akrv00002,l25akru40002,l25akrvs0000,l25akrts0002,l25akruk0000,l25aks0c0002,l25akrv80000,l25aks0g0002,l25aks000004,l25aks080002,l25akrvg0002,l25akrv00000,l25akrvo0002,l25aks0g0000,l25aks080000,l25akrvc0000,l25akrvk0002,l25akruo0000,l25aks040000,l25akrvs0002,l25akrug0000,l25akrvk0000,l25akruc0000,l25akrv40000,l25akrvk0004,l25aks000002,l25akru40000,l25aks0c0000,l25akrvg0000,l25akrts0000}')
+        or secondary_exch_exec_id = any('{l25aks000000,l25akrvo0000,l25aks040002,l25akruc0002,l25akruo0002,l25akrvc0002,l25akrv00002,l25akru40002,l25akrvs0000,l25akrts0002,l25akruk0000,l25aks0c0002,l25akrv80000,l25aks0g0002,l25aks000004,l25aks080002,l25akrvg0002,l25akrv00000,l25akrvo0002,l25aks0g0000,l25aks080000,l25akrvc0000,l25akrvk0002,l25akruo0000,l25aks040000,l25akrvs0002,l25akrug0000,l25akrvk0000,l25akruc0000,l25akrv40000,l25akrvk0004,l25aks000002,l25akru40000,l25aks0c0000,l25akrvg0000,l25akrts0000}'))
 
 
-    'l25aks0c0000','l25aks080000','l25akrv00000',
-'l25aks0g0000',
-'l25akrvc0000',
-'l25akrvo0002',
-'l25aks040000',
-'l25akrug0000',
-'l25akruc0000',
-'l25akrvs0002',
-'l25akrvk0000',
-'l25akrts0000',
-'l25akrv40000',
-'l25akruo0000',
-'l25akrvk0004',
-'l25aks000002',
-'l25akru40000',
-'l25akrvg0000'
 
--------
+    'l25aks0c0000','l25aks080000','l25akrv00000','l25aks0g0000','l25akrvc0000','l25akrvo0002','l25aks040000','l25akrug0000','l25akruc0000','l25akrvs0002','l25akrvk0000','l25akrts0000','l25akrv40000','l25akruo0000','l25akrvk0004','l25aks000002','l25akru40000','l25akrvg0000'
 
 select *  from dwh.client_order
 where account_id = 73660
 and create_date_id = 20250325
+
+
+
