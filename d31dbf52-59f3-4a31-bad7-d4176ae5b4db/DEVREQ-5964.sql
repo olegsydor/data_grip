@@ -66,7 +66,8 @@ where 	true
 select * from client_order
 where parent_order_id = 100000019696533916;
 ---
-with base as (select to_char(ex.exec_time, 'YYYY-MM-DD') as "Date",
+with base as (
+select to_char(ex.exec_time, 'YYYY-MM-DD') as "Date",
                      cl.client_order_id                  as "OrderID",
                      str.client_order_id                 as "ExchOrderID",
                      case
@@ -185,3 +186,8 @@ select * from dwh.execution ex
       and ex.exec_date_id = 20250325
 and row_to_json(ex.*)::text ilike 'l25akrts0002'--, 'l25akrts0000')
 
+-------
+
+select *  from dwh.client_order
+where account_id = 73660
+and create_date_id = 20250325
