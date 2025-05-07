@@ -1,6 +1,6 @@
-select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
-       coalesce(tr.client_order_id, '')            as "OrderID",
-       coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+select to_char(tr.trade_record_time, 'YYYY-MM-DD')              as "Date",
+       coalesce(cbe.order_id, tr.client_order_id, '')           as "OrderID",
+       coalesce(tr.secondary_order_id, '')                      as "ExchOrderID",
        case
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
@@ -16,15 +16,13 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
            when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
-           end                                     as aux_tag_street,
-
---        tr.account_id,
-       coalesce(tr.secondary_exch_exec_id, '')     as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
-       coalesce(tr.exch_exec_id, '')               as "Tag17"
---            ,tr.order_id
-       ,           *
+           end                                                  as aux_tag_street,
+       coalesce(cbe.report_id, tr.secondary_exch_exec_id)       as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
+       coalesce(cbe.ExchangeTransactionID, tr.exch_exec_id) as "Tag17"
 from dwh.flat_trade_record tr
---     LEFT JOIN (select * from compliance.blaze_execution cbe where cbe.)
+         LEFT JOIN (select order_id, report_id, feedcode, ExchangeTransactionID
+                    from compliance.blaze_execution cbe
+                    where cbe.fff = tr.fff) cbe on true
          left join lateral (select jo.fix_message ->> '143' as t_143
                             from fix_capture.fix_message_json jo
                             where tr.order_fix_message_id = jo.fix_message_id
@@ -41,11 +39,10 @@ from dwh.flat_trade_record tr
          left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
 where true
 --   and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
-      and tr.client_order_id = '20250325VSIND28939'
+  and tr.client_order_id = '20250325VSIND28939'
   and tr.date_id between :l_start_date_id and :p_end_date_id
   and tr.account_id = any (:l_account_ids)
   and tr.is_busted = 'N'
-
   and case
           when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
               then false
