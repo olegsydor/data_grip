@@ -191,12 +191,11 @@ and row_to_json(ex.*)::text ilike any(array['%l25akrts0002%', '%l25akrts0000%'])
 select * from dwh.execution ex
     where true
       and ex.exec_date_id = 20250325
-and row_to_json(ex.*)::text ilike any(array['%l25akrts0000%'])
+      and true
+and row_to_json(ex.*)::text ilike any(array['%l25akrts0002%'])
 
 
-    'l25aks0c0000',
-'l25aks080000',
-'l25akrv00000',
+    'l25aks0c0000','l25aks080000','l25akrv00000',
 'l25aks0g0000',
 'l25akrvc0000',
 'l25akrvo0002',
