@@ -39,7 +39,7 @@ from dwh.flat_trade_record tr
                             limit 1) jos on true
          left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
 where true
---   and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
+  and tr.secondary_exch_exec_id in ('l25akrts0002', 'l25akrts0000')
 --       and tr.client_order_id = '20250325VSIND28939'
   and tr.date_id between :l_start_date_id and :p_end_date_id
   and tr.account_id = any (:l_account_ids)
@@ -49,7 +49,9 @@ where true
   and case
           when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
               then false
-          else true end;
+          else true end
+and t = 360007058544
+;
 
 
 select * from dwh.execution
@@ -198,9 +200,12 @@ select exch_exec_id, secondary_exch_exec_id, * from dwh.execution ex
 
     'l25aks0c0000','l25aks080000','l25akrv00000','l25aks0g0000','l25akrvc0000','l25akrvo0002','l25aks040000','l25akrug0000','l25akruc0000','l25akrvs0002','l25akrvk0000','l25akrts0000','l25akrv40000','l25akruo0000','l25akrvk0004','l25aks000002','l25akru40000','l25akrvg0000'
 
-select *  from dwh.client_order
+select alternative_compliance_id, client_order_id, *  from dwh.client_order
 where account_id = 73660
-and create_date_id = 20250325
+and create_date_id between 20250325 and 20250326
+and client_order_id = 'BEAA0023-20250325'
 
-
-
+select * from dwh.flat_trade_record
+    where true
+and client_order_id = '20250325VSIND28939'
+and date_id between 20250325 and 20250326
