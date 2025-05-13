@@ -103,3 +103,5 @@ select first_value(decs_contargent_b2_id)
 from creator.decs_contargent_b2
 where decs_contragent_id = 1
   and contragent_type_id in (1, 2)
+
+
