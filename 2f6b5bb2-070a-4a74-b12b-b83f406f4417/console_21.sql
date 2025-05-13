@@ -77,4 +77,29 @@ exception
     when others then
         return null::int;
 end
-$fx$
+$fx$;
+
+create table creator.decs_contargent_b2
+(
+    decs_contargent_b2_id int4 not null,
+    decs_contragent_id    int4 not null,
+    phone                 text
+);
+
+insert into creator.decs_contargent_b2 (decs_contargent_b2_id, decs_contragent_id, phone)
+VALUES (1, 1, '067'),
+       (2, 1, '050'),
+       (3, 2, 'not');
+
+select * from creator.decs_contargent_b2;
+
+alter table creator.decs_contargent_b2 add column contragent_type_id int4;
+
+select first_value(decs_contargent_b2_id)
+       over (partition by decs_contragent_id order by contragent_type_id desc)                       as decs_contargent_b2_id,
+       first_value(phone)
+       over (partition by decs_contragent_id order by case when phone is not null then 0 else 1 end) as phone,
+       *
+from creator.decs_contargent_b2
+where decs_contragent_id = 1
+  and contragent_type_id in (1, 2)
