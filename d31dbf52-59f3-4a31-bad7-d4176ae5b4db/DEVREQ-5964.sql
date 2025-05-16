@@ -20,7 +20,7 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD')              as "Date",
        coalesce(cbe.report_id, tr.secondary_exch_exec_id)       as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
        coalesce(cbe.ExchangeTransactionID, tr.exch_exec_id) as "Tag17"
 from dwh.flat_trade_record tr
-         LEFT JOIN (select order_id, report_id, feedcode, ExchangeTransactionID
+         LEFT JOIN (select order_id, report_id, client_order_id,
                     from compliance.blaze_execution cbe
                     where cbe.fff = tr.fff) cbe on true
          left join lateral (select jo.fix_message ->> '143' as t_143
@@ -206,3 +206,75 @@ select * from dwh.flat_trade_record
     where true
 and client_order_id = '20250325VSIND28939'
 and date_id between 20250325 and 20250326
+
+
+
+select to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
+       str.torders_id                              as "OrderID",
+       coalesce(tr.secondary_order_id, '')         as "ExchOrderID",
+       case
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NSX', 'NSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NYSE', 'NYSE') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XPSX', 'PSX') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'AMEXP', 'AMEROP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'ARCAP', 'ARCAOP') then jos.t_9483
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'EPRL', 'PEARLEQ') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'EMLD', 'EMLD') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MIAX', 'MIAMI') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL') then jos.t_1003
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
+           when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP') then jos.t_880
+           end                                     as aux_tag_street,
+       str.treports_id                             as "ReportID", -- Based on execution.secondary_exch_exec_id of the parent order trade. Means exec_id of the street order that arrives form the exchange
+       par.exchange_transaction_id                 as "Tag17"
+from dwh.flat_trade_record tr
+         left join lateral (select order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+                            from compliance.blaze_execution cbe
+                            where cbe.client_order_id = tr.client_order_id
+                              and secondary_exch_exec_id = tr.secondary_exch_exec_id
+                              and cbe.date_id = tr.date_id
+                            limit 1) par on true
+         left join lateral (
+    select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, treports_id
+    from compliance.blaze_execution cbe
+    where cbe.client_order_id = tr.client_order_id
+      and exchange_transaction_id = par.exchange_transaction_id
+      and cbe.date_id = tr.date_id
+    ) str on true
+         left join lateral (select jo.fix_message ->> '143' as t_143
+                            from fix_capture.fix_message_json jo
+                            where tr.order_fix_message_id = jo.fix_message_id
+                              and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                            limit 1) jo on true
+         left join lateral (select jo.fix_message ->> '143'  as t_143,
+                                   jo.fix_message ->> '9483' as t_9483,
+                                   jo.fix_message ->> '1003' as t_1003,
+                                   jo.fix_message ->> '880'  as t_880
+                            from fix_capture.fix_message_json jo
+                            where tr.street_trade_fix_message_id = jo.fix_message_id
+                              and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                            limit 1) jos on true
+         left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
+where true
+  and tr.client_order_id = '20250325VSIND28939'
+  and tr.date_id between :l_start_date_id and :p_end_date_id
+  and tr.account_id = any (:l_account_ids)
+  and tr.is_busted = 'N'
+  and case
+          when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
+              then false
+          else true end;
+
+select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, *
+from compliance.blaze_execution cbe
+where cbe.client_order_id = '20250325VSIND28939'
+  and secondary_exch_exec_id = 'l25akrts0000';
+
+
+select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, *
+from compliance.blaze_execution cbe
+where cbe.client_order_id = '20250325VSIND28939'
+and exchange_transaction_id = '360007058544'
