@@ -234,14 +234,14 @@ from dwh.flat_trade_record tr
          left join lateral (select order_id, report_id, client_order_id, torders_id, exchange_transaction_id
                             from compliance.blaze_execution cbe
                             where cbe.client_order_id = tr.client_order_id
-                              and secondary_exch_exec_id = tr.secondary_exch_exec_id
+                              and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
                               and cbe.date_id = tr.date_id
                             limit 1) par on true
          left join lateral (
     select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, treports_id
     from compliance.blaze_execution cbe
     where cbe.client_order_id = tr.client_order_id
-      and exchange_transaction_id = par.exchange_transaction_id
+      and cbe.exchange_transaction_id = par.exchange_transaction_id
       and cbe.date_id = tr.date_id
     ) str on true
          left join lateral (select jo.fix_message ->> '143' as t_143
