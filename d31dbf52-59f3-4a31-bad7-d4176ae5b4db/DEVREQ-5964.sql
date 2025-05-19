@@ -287,8 +287,11 @@ and trading_firm_id = 'OFP0050';
 
 
 select *
-from trash.exchanges_execid_to_tag17_cross_reference(20250325, 20250325, '{"OFP0050"}'::character varying[],
-                                                     'Y'::bpchar, '{73660}');
+from trash.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325, p_end_date_id := 20250325,
+                                                     p_trading_firm_ids := '{"OFP0050"}',
+                                                     p_add_exchange_order_id := 'Y', p_account_ids := '{73660}');
+
+
 create or replace function trash.exchanges_execid_to_tag17_cross_reference(p_start_date_id integer default null::integer,
                                                                            p_end_date_id integer default null::integer,
                                                                            p_trading_firm_ids character varying[] default '{}'::character varying[],
