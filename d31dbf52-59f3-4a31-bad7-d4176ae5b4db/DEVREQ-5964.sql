@@ -285,6 +285,13 @@ where true
 and trading_firm_id = 'OFP0050';
 
 
+select bar.*
+from dash_reporting.bofa_allocation_report as bar
+where to_report = 'R';
+
+select btr.*
+from dash_reporting.bofa_trade_record as btr
+where to_report = 'R';
 
 select *
 from trash.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325, p_end_date_id := 20250325,
