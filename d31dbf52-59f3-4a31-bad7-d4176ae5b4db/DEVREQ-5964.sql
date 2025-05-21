@@ -481,3 +481,14 @@ $function$
 ;
 
 select * from tmp_606_isi_bill_changes
+;
+alter function dash360.exchanges_execid_to_tag17_cross_reference rename to exchanges_execid_to_tag17_cross_reference_old;
+alter function dash360.exchanges_execid_to_tag17_cross_reference_old set schema trash;
+alter function trash.exchanges_execid_to_tag17_cross_reference(int4, int4, _varchar, bpchar, _int4) set schema dash360;
+
+
+select *
+from dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325, p_end_date_id := 20250325,
+                                                     p_trading_firm_ids := '{"OFP0050"}',
+                                                     p_add_exchange_order_id := 'Y', p_account_ids := '{73660}');
+
