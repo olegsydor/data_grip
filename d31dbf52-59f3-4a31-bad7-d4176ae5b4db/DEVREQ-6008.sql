@@ -1,6 +1,8 @@
-select * from dash360.report_compliance_avg_parent_order_count(in_date_id := 20250503,
---                                                                in_trading_firm_ids := _,
-                                                               in_account_ids := '{71912, 72420, 72917}');
+select *
+from dash360.report_compliance_avg_parent_order_count(in_date_id := 20250503
+    , in_trading_firm_ids := '{alpaca,caerus}'
+    , in_account_ids := '{71912, 72420, 72917}'
+     );
 
 
 -- DROP FUNCTION dash360.report_fintech_adh_parent_order_count_review(int4, int4, bpchar);
@@ -60,12 +62,13 @@ begin
 
     drop table if exists t_report;
     create temp table t_report as
-    select hods."StatusDate"                 as "Period",
-           count(distinct "StatusDate")      as "Actually Trading Days",
-           tf.trading_firm_name::varchar     as "Firm",
-           a.account_name::varchar           as "Account",
-           cf.customer_or_firm_name::varchar as "Capacity",
-           count(distinct hods."ClOrdID")    as "Parent Order Count"
+    select to_char(hods."StatusDate", 'Month') as "Month",
+           to_char(hods."StatusDate", 'YYYY')  as "Year",
+           count(distinct "StatusDate")        as "Actually Trading Days",
+           tf.trading_firm_name::varchar       as "Firm",
+           a.account_name::varchar             as "Account",
+           cf.customer_or_firm_name::varchar   as "Capacity",
+           count(distinct hods."ClOrdID")      as "Parent Order Count"
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on (a.account_id = hods."AccountID")
              join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
@@ -76,7 +79,8 @@ begin
 --       and case when in_instrument_type_id is null then true else hods."InstrumentType" = in_instrument_type_id end
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (l_account_ids) -- '{71912, 72420, 72917}'
-    group by hods."StatusDate", a.account_name, cf.customer_or_firm_name, tf.trading_firm_name;
+    group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
+             cf.customer_or_firm_name, tf.trading_firm_name;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -91,8 +95,8 @@ begin
                                    "Firm",
                                    "Account",
                                    "Capacity",
-                                   to_char("Period", 'YYYY'),
-                                   trim(to_char("Period", 'Month')),
+                                   "Year",
+                                   trim("Month"),
                                    l_all_days::text,
                                    "Actually Trading Days"::text,
                                    "Parent Order Count"::text
@@ -107,4 +111,11 @@ begin
 end;
 $function$
 ;
-select trim(to_char(:"Period", 'Month')) May
+
+select * from t_report
+select trim(to_char(:"Period", 'Month')) May;
+
+select to_char(to_date(:proforma_invoice_date, 'DD/MM/YYYY'), 'Month')
+
+    select to_date(:proforma_invoice_date, 'DD/MM/YYYY')
+January
