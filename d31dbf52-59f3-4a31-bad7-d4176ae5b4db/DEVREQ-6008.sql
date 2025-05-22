@@ -1,13 +1,13 @@
 select *
-from dash360.report_compliance_avg_parent_order_count(in_date_id := 20250503
+from dash360.report_compliance_avg_parent_order_count(in_date_id := 20250303
     , in_trading_firm_ids := '{alpaca,caerus}'
     , in_account_ids := '{71912, 72420, 72917}'
      );
 
 
--- DROP FUNCTION dash360.report_fintech_adh_parent_order_count_review(int4, int4, bpchar);
+-- drop function dash360.report_compliance_avg_parent_order_count
 
-create or replace function dash360.report_compliance_avg_parent_order_count(in_date_id integer,
+create or replace function dash360.report_compliance_avg_parent_order_count(in_date_id integer default null,
                                                                  in_trading_firm_ids character varying[] default '{}'::character varying[],
                                                                  in_account_ids int4[] default '{}'::int4[])
     returns table
@@ -17,14 +17,20 @@ create or replace function dash360.report_compliance_avg_parent_order_count(in_d
     language plpgsql
 as
 $function$
+    -- https://dashfinancial.atlassian.net/browse/DEVREQ-6008
 declare
     l_load_id       int;
     l_row_cnt       int;
     l_step_id       int;
     l_account_ids   int4[];
     l_message       text;
-    l_start_date    date := date_trunc('month', in_date_id::text::date)::date;
-    l_end_date      date := (date_trunc('month', in_date_id::text::date + '1 month'::interval) - '1 day'::interval)::date;
+    l_start_date date := case
+                             when in_date_id is not null then date_trunc('month', in_date_id::text::date)::date
+                             else date_trunc('month', current_date - '1 month'::interval)::date end;
+    l_end_date   date := case
+                             when in_date_id is not null then (
+                                 date_trunc('month', in_date_id::text::date + '1 month'::interval) - '1 day'::interval)::date
+                             else (date_trunc('month', current_date) - '1 day'::interval)::date end;
     l_start_date_id int4 := to_char(l_start_date, 'YYYYMMDD');
     l_end_date_id   int4 := to_char(l_end_date, 'YYYYMMDD');
     l_all_days      int4;
