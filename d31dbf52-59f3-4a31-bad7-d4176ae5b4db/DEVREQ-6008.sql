@@ -62,11 +62,14 @@ begin
     end if;
 
     l_message =
-            'report_compliance_avg_parent_order_count, ' ||
-            case when in_account_ids = '{}' then '' else 'accounts-' || left(array_to_string(in_account_ids::int4[], ',', '')::text, 50) end ||
+            'report_compliance_avg_parent_order_count' ||
+            case
+                when in_account_ids = '{}' then ''
+                else ' accounts-' || left(array_to_string(in_account_ids::int4[], ',', '')::text, 50) end ||
             case
                 when in_trading_firm_ids = '{}' then ''
-                else 'trading_firm-' || left(array_to_string(in_trading_firm_ids::varchar[], ',', '')::text, 50) end ||
+                else ' trading_firm-' ||
+                     left(array_to_string(in_trading_firm_ids::varchar[], ',', '')::text, 50) end ||
             ' for ' || l_start_date_id::text || '-' || l_end_date_id::text ||
             ' ';
 
