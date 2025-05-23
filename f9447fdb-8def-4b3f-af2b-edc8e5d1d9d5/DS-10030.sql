@@ -29,7 +29,7 @@ declare
 begin
     l_step_id := 0;
     select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
-    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
+--     select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
 
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0,
                              'S'::char)
@@ -62,7 +62,7 @@ begin
     into l_step_id;
 
     insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, is_deleted)
-    values (l_alloc_instr, in_date_id, clock_timestamp(), 'I');
+    values (l_alloc_instr, in_date_id, clock_timestamp(), 'O');
     get diagnostics l_row_cnt = row_count;
 
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to allocation_instruction. COMPLETED =======', l_row_cnt,
@@ -76,7 +76,7 @@ $fx$;
 
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_create(in_date_id integer, in_user_id integer, in_change_vector character varying)
+CREATE FUNCTION dash360.allocation_instructions_create_complete(in_date_id integer, in_user_id integer, in_change_vector character varying, in_alloc_instr_id int8)
  RETURNS bigint
  LANGUAGE plpgsql
 AS $function$
@@ -96,7 +96,7 @@ declare
 
 begin
   l_step_id:=0;
-  select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
+  select in_alloc_instr_id  into l_alloc_instr;
   select nextval('load_batch_load_batch_id_seq')  into l_load_batch_id;
 
   select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocations_create STARTED =====', 0, 'S'::char)
