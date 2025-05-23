@@ -98,13 +98,14 @@ begin
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on (a.account_id = hods."AccountID")
              join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+--              left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+                 left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = a.opt_customer_or_firm)
     where true
       and "Status_Date_id" >= l_start_date_id
       and "Status_Date_id" <= l_end_date_id
       and case when in_instrument_type_id is null then true else hods."InstrumentType" = in_instrument_type_id end
       and hods."CustomerOrderID" is null
-      and hods."AccountID" = any (l_account_ids) -- '{54612,54613,54690,54691,62093,62577,72945,73094}'
+      and hods."AccountID" = any (l_account_ids)
     group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
              cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType";
 
@@ -167,13 +168,14 @@ select to_char(hods."StatusDate", 'Month') as "Month",
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on (a.account_id = hods."AccountID")
              join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
-             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = a.opt_customer_or_firm)
     where true
       and "Status_Date_id" >= :l_start_date_id
       and "Status_Date_id" <= :l_end_date_id
       and case when :in_instrument_type_id is null then true else hods."InstrumentType" = :in_instrument_type_id end
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (:l_account_ids) -- '{54612,54613,54690,54691,62093,62577,72945,73094}'
+      and hods."AccountID" = 71783
     group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
              cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType";
 
@@ -189,8 +191,11 @@ select to_char(hods."StatusDate", 'Month') as "Month",
                  join dwh.d_instrument i on (i.instrument_id = co.instrument_id)
                  join dwh.d_account a on (a.account_id = co.account_id)
                  join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+--                  left join dwh.d_customer_or_firm cf
+--                            on (cf.customer_or_firm_id = coalesce(co.customer_or_firm_id, a.opt_customer_or_firm))
                  left join dwh.d_customer_or_firm cf
-                           on (cf.customer_or_firm_id = coalesce(co.customer_or_firm_id, a.opt_customer_or_firm))
+                           on (cf.customer_or_firm_id = coalesce(a.opt_customer_or_firm))
+
 
         where true
           and co.create_date_id between :l_start_date_id and :l_end_date_id
