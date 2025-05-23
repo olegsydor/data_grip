@@ -11,63 +11,67 @@ comment on column genesis2.alloc_instr2sent_trade_record.trade_record_id is 'old
 
 
 drop function if exists dash360.allocation_instructions_create_init;
-create function dash360.allocation_instructions_create_init(in_date_id integer, in_user_id integer, in_change_vector character varying)
-returns int8 -- created alloc_instr_id
-language plpgsql
-as $fx$
+create function dash360.allocation_instructions_create_init(in_date_id integer, in_user_id integer,
+                                                            in_change_vector character varying)
+    returns int8 -- created alloc_instr_id
+    language plpgsql
+as
+$fx$
 declare
- l_change_vector jsonb;
- scr record;
- l_alloc_instr int;
- l_load_batch_id bigint;
- l_step_id int;
-     l_row_cnt int;
+    l_change_vector jsonb;
+    scr             record;
+    l_alloc_instr   int;
+    l_load_batch_id bigint;
+    l_step_id       int;
+    l_row_cnt       int;
 
 
 begin
-  l_step_id:=0;
-  select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
-  select nextval('load_batch_load_batch_id_seq')  into l_load_batch_id;
+    l_step_id := 0;
+    select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
+    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
 
-  select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0, 'S'::char)
-	into l_step_id;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0,
+                             'S'::char)
+    into l_step_id;
 
 
- l_change_vector:=in_change_vector::jsonb;
+    l_change_vector := in_change_vector::jsonb;
 
-  select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_change_vector converted to jsonb', 1, 'I'::char)
-  into l_step_id;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_change_vector converted to jsonb', 1, 'I'::char)
+    into l_step_id;
 
-  for scr in (select e.clearing_instr_id
-              from clearing_instruction_entry e
-                       inner join clearing_instruction ca
-                                  on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
-              where e.date_id = in_date_id
-                and ca.status in ('P', 'C')
-                and e.trade_record_id in (select jsonb_object_keys(:l_change_vector)::bigint)
-              limit 1)
-      loop
-          raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode = 'CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint = 'Please finish or reject clearing request before allocating it';
-      end loop;
+    for scr in (select e.clearing_instr_id
+                from clearing_instruction_entry e
+                         inner join clearing_instruction ca
+                                    on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
+                where e.date_id = in_date_id
+                  and ca.status in ('P', 'C')
+                  and e.trade_record_id in (select jsonb_object_keys(:l_change_vector)::bigint)
+                limit 1)
+        loop
+            raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode = 'CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint = 'Please finish or reject clearing request before allocating it';
+        end loop;
 
-  insert into genesis2.alloc_instr2sent_trade_record (alloc_instr_id, trade_record_id)
+    insert into genesis2.alloc_instr2sent_trade_record (alloc_instr_id, trade_record_id)
     select :l_alloc_instr, jsonb_object_keys(:l_change_vector)::bigint;
-  get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
 
-    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to alloc_instr2sent_trade_record', l_row_cnt, 'I'::char)
-	into l_step_id;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to alloc_instr2sent_trade_record',
+                             l_row_cnt, 'I'::char)
+    into l_step_id;
 
-  insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, is_deleted)
+    insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, is_deleted)
     values (l_alloc_instr, in_date_id, clock_timestamp(), 'I');
-  get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
 
-    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to allocation_instruction', l_row_cnt, 'I'::char)
-	into l_step_id;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to allocation_instruction. COMPLETED =======', l_row_cnt,
+                             'I'::char)
+    into l_step_id;
+    return l_alloc_instr;
+end;
+$fx$;
 
-
-    end;
-
-    $fx$
 -- select '{"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}'::jsonb
 
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
