@@ -93,7 +93,8 @@ begin
            tf.trading_firm_name::varchar       as "Firm",
            a.account_name::varchar             as "Account",
            cf.customer_or_firm_name::varchar   as "Capacity",
-           count(distinct hods."ClOrdID")      as "Parent Order Count"
+           count(distinct hods."ClOrdID")      as "Parent Order Count",
+           hods."InstrumentType"
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on (a.account_id = hods."AccountID")
              join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
@@ -105,7 +106,7 @@ begin
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (l_account_ids) -- '{54612,54613,54690,54691,62093,62577,72945,73094}'
     group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
-             cf.customer_or_firm_name, tf.trading_firm_name;
+             cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType";
 
     get diagnostics l_row_cnt = row_count;
 
@@ -152,3 +153,49 @@ select 'report_compliance_avg_parent_order_count, ' ||
                 else ', trading_firm-' || left(array_to_string(:in_trading_firm_ids::varchar[], ',', '')::text, 50) end ||
             ' for ' || :l_start_date_id::text || '-' || :l_end_date_id::text ||
             ' ';
+
+
+
+select to_char(hods."StatusDate", 'Month') as "Month",
+           to_char(hods."StatusDate", 'YYYY')  as "Year",
+           count(distinct "StatusDate")        as "Actually Trading Days",
+           tf.trading_firm_name::varchar       as "Firm",
+           a.account_name::varchar             as "Account",
+           cf.customer_or_firm_name::varchar   as "Capacity",
+           count(distinct hods."ClOrdID")      as "Parent Order Count",
+           hods."InstrumentType"
+    from dwh.historic_order_details_storage hods
+             join dwh.d_account a on (a.account_id = hods."AccountID")
+             join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+    where true
+      and "Status_Date_id" >= :l_start_date_id
+      and "Status_Date_id" <= :l_end_date_id
+      and case when :in_instrument_type_id is null then true else hods."InstrumentType" = :in_instrument_type_id end
+      and hods."CustomerOrderID" is null
+      and hods."AccountID" = any (:l_account_ids) -- '{54612,54613,54690,54691,62093,62577,72945,73094}'
+    group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
+             cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType";
+
+
+
+
+        select --co.create_time::date                as "Period",
+               tf.trading_firm_name::varchar       as "Trading Firm",
+               a.account_name::varchar             as "Account",
+               cf.customer_or_firm_name::varchar   as "Capacity",
+               count(distinct co.client_order_id)  as "Parent Order Count"
+        from dwh.client_order co
+                 join dwh.d_instrument i on (i.instrument_id = co.instrument_id)
+                 join dwh.d_account a on (a.account_id = co.account_id)
+                 join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+                 left join dwh.d_customer_or_firm cf
+                           on (cf.customer_or_firm_id = coalesce(co.customer_or_firm_id, a.opt_customer_or_firm))
+
+        where true
+          and co.create_date_id between :l_start_date_id and :l_end_date_id
+          and co.parent_order_id is null
+        and co.account_id = 71783
+--           and case when in_instrument_type_id is null then true else i.instrument_type_id = in_instrument_type_id end
+        group by --"Period",
+                 "Account", "Capacity", "Trading Firm";
