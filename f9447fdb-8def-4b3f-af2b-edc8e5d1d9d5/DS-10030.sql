@@ -1,6 +1,78 @@
+-- drop table if exists genesis2.alloc_instr2sent_trade_record;
+create table genesis2.alloc_instr2sent_trade_record
+(
+    alloc_instr_id  int8      not null, -- alloc_instr_id. Don't use foreign key because here rows are expected to be created before the allocation_instruction
+    trade_record_id int8      not null, -- old trade_record_id to be allocated and busted later
+    db_create_time  timestamp not null default clock_timestamp()
+);
+comment on table genesis2.alloc_instr2sent_trade_record is 'The auxilary table for allocation process https://dashfinancial.atlassian.net/browse/DS-10041';
+comment on column genesis2.alloc_instr2sent_trade_record.alloc_instr_id is 'alloc_instr_id. We do not use foreign key because here rows are expected to be created before the allocation_instruction';
+comment on column genesis2.alloc_instr2sent_trade_record.trade_record_id is 'old trade_record_id to be allocated and busted later';
+
+
+drop function if exists dash360.allocation_instructions_create_init;
+create function dash360.allocation_instructions_create_init(in_date_id integer, in_user_id integer, in_change_vector character varying)
+returns int8 -- created alloc_instr_id
+language plpgsql
+as $fx$
+declare
+ l_change_vector jsonb;
+ scr record;
+ l_alloc_instr int;
+ l_load_batch_id bigint;
+ l_step_id int;
+     l_row_cnt int;
+
+
+begin
+  l_step_id:=0;
+  select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
+  select nextval('load_batch_load_batch_id_seq')  into l_load_batch_id;
+
+  select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0, 'S'::char)
+	into l_step_id;
+
+
+ l_change_vector:=in_change_vector::jsonb;
+
+  select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_change_vector converted to jsonb', 1, 'I'::char)
+  into l_step_id;
+
+  for scr in (select e.clearing_instr_id
+              from clearing_instruction_entry e
+                       inner join clearing_instruction ca
+                                  on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
+              where e.date_id = in_date_id
+                and ca.status in ('P', 'C')
+                and e.trade_record_id in (select jsonb_object_keys(:l_change_vector)::bigint)
+              limit 1)
+      loop
+          raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode = 'CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint = 'Please finish or reject clearing request before allocating it';
+      end loop;
+
+  insert into genesis2.alloc_instr2sent_trade_record (alloc_instr_id, trade_record_id)
+    select :l_alloc_instr, jsonb_object_keys(:l_change_vector)::bigint;
+  get diagnostics l_row_cnt = row_count;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to alloc_instr2sent_trade_record', l_row_cnt, 'I'::char)
+	into l_step_id;
+
+  insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, is_deleted)
+    values (l_alloc_instr, in_date_id, clock_timestamp(), 'I');
+  get diagnostics l_row_cnt = row_count;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to allocation_instruction', l_row_cnt, 'I'::char)
+	into l_step_id;
+
+
+    end;
+
+    $fx$
+-- select '{"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}'::jsonb
+
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
 
-CREATE FUNCTION trash.so_allocations_create(in_date_id integer, in_user_id integer, in_change_vector character varying)
+CREATE OR REPLACE FUNCTION dash360.allocations_create(in_date_id integer, in_user_id integer, in_change_vector character varying)
  RETURNS bigint
  LANGUAGE plpgsql
 AS $function$
@@ -9,7 +81,6 @@ AS $function$
 -- SY 20240716 https://dashfinancial.atlassian.net/browse/DS-8581 disable trade_record_update_ccru because the same is done inside ptm_process_trades for all commissions via flat_trade_record_inherit_fees subscription
 -- SY 20240813 https://dashfinancial.atlassian.net/browse/DS-8581 Reverted
 -- SY 20240816 https://dashfinancial.atlassian.net/browse/DS-8208 in_user_id has been propagated to f_get_clearing_account_id to make possible user_id autocreation save
--- SO 20250520 https://dashfinancial.atlassian.net/browse/DS-10030 rebuilding flow
 declare
  l_change_vector jsonb;
  l_new_trade_record_ids bigint[];
@@ -33,29 +104,20 @@ begin
   select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_change_vector converted to jsonb', 1, 'I'::char)
   into l_step_id;
 
-  -- checking if any of the trades from change_vector is in progress of clearing change request now
   for scr in (select e.clearing_instr_id
-              from clearing_instruction_entry e
-                       inner join clearing_instruction ca
-                                  on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
-              where e.date_id = in_date_id
-                and ca.status in ('P', 'C')
-                and e.trade_record_id in (select jsonb_object_keys(l_change_vector)::bigint)
-              limit 1)
-      loop
-          --   raise exception using message = 'S 167', detail = 'D 167', hint = 'H 167', errcode = 'P3333';
+                 from  clearing_instruction_entry e
+                 inner join clearing_instruction ca on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
+                 where e.date_id = in_date_id
+                 and ca.status in ('P', 'C')
+                 and e.trade_record_id in (select jsonb_object_keys (l_change_vector)::bigint )
+                 limit 1) loop
+--   raise exception using message = 'S 167', detail = 'D 167', hint = 'H 167', errcode = 'P3333';
 
-          raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode = 'CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint = 'Please finish or reject clearing request before allocating it';
-      end loop;
+     raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode='CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint='Please finish or reject clearing request before allocating it' ;
+     end loop;
 
   select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Before PTM', 1, 'I'::char)
   into l_step_id;
-
-  insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, created_by_user_id)
-  select l_alloc_instr, in_date_id, clock_timestamp(), in_user_id;
-
-INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty)
-
 
     l_new_trade_record_ids:=dash360.ptm_process_trades(in_date_id, in_user_id, l_change_vector);
 
@@ -148,66 +210,3 @@ INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_acco
 end;
  $function$
 ;
-
-/*
-
-
-
---Executing procedure:("dash360.allocations_create").
--- Parameters: "@in_user_id=6690; @in_date_id=20250509; 
--- @in_change_vector={"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}; "
-
-select jsonb_object_keys (:l_change_vector)::bigint;
-
-select '{"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}'::jsonb;
-
-select e.clearing_instr_id
-                 from  clearing_instruction_entry e
---                  inner join clearing_instruction ca on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
-                 where true
---     and e.date_id = :in_date_id
---                  and ca.status in ('P', 'C')
-                 and e.trade_record_id in (select jsonb_object_keys (:l_change_vector)::bigint );
-
-
-select * from genesis2.trade_record
-                 where true
---     and e.date_id = :in_date_id
---                  and ca.status in ('P', 'C')
-                 and trade_record_id in (select jsonb_object_keys (:l_change_vector)::bigint );
-
-
-
-   create temp table whole as
- 	with base as
- 	(select key::bigint as id, jsonb_array_elements(value) as val
-		from jsonb_each(:in_change_vector::jsonb)),
-	nuls as
-   ( select y.id, jsonb_object_agg(y.key, null) as val from (select id, (jsonb_each_text(val)).*
-	 from base ) y
-	 where value = 'NULL'
-	 group by y.id)
-
-	 select base.id, base.val||
-	  jsonb_build_object(
-		'trade_record_id', nextval('trade_record_trade_record_id_seq'),
-		'db_create_time', clock_timestamp(),
-		'orig_trade_record_id', base.id,
-		'load_batch_id', :l_load_batch_id,
-		'user_id', :in_user_id)||
-		coalesce(nuls.val,'{}') as jsn
-	from base
-	left join nuls on nuls.id = base.id;
-
-
-create temp table slct as
-  select   null::genesis2.trade_record as rw, row_to_json(tr)::jsonb || whole.jsn  as jsn-- CONCAT OLD trade_record with new values
-	from whole
-	left join genesis2.trade_record tr on (tr.trade_record_id = whole.id and tr.date_id = :in_date_id);
-
-
-  create temp table slct2 as
-  select   (jsonb_populate_record(rw, jsn)).*
-	from slct;
-
-select * from slct2
