@@ -114,25 +114,31 @@ create temp table t_trade_record
                and tr.is_busted = 'N'
     		 );
 
-      with       aie as (
-     insert into genesis2.allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
-                                               account_nickname, alloc_qty)
-         select l_alloc_instr
-              , in_date_id
-              , dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number, tr.account_nickname,
-                                                  tr.street_account_name, tr.instrument_type_id,
-                                                  in_user_id) as clearing_account_id
-              , tr.street_account_name
-              , tr.account_nickname
-              , sum(last_qty),
-                array_agg(tr.trade_record_id)
-         from t_trade_record tr
-			     group by clearing_account_id, street_account_name, account_nickname
-               returning *)
+    drop table if exists t_aie;
+    create temp table t_aie as (select l_alloc_instr as alloc_instr_id,
+                                     in_date_id as date_id,
+                                     dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number,
+                                                                         tr.account_nickname,
+                                                                         tr.street_account_name,
+                                                                         tr.instrument_type_id,
+                                                                         in_user_id)                                       as clearing_account_id,
+                                     tr.street_account_name as occ_actionable_id,
+                                     tr.account_nickname,
+                                     sum(last_qty)                                                                       as alloc_qty,
+                                     array_agg(tr.trade_record_id)                                                       as trade_record_ids,
+                                     nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id
+                                from t_trade_record tr
+                                group by clearing_account_id, street_account_name, account_nickname);
 
-    ,        a2tr as (insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id)
+              insert into genesis2.allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
+                                               account_nickname, alloc_qty, allocation_instruction_entry_id)
+                  select alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
+                                               account_nickname, alloc_qty, allocation_instruction_entry_id from t_aie;
+
+    ,      insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id)
                  select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id
-                 from tr
+                 from t_trade_record tr
+                     join 
                 /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
                                    coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
                                    coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */
