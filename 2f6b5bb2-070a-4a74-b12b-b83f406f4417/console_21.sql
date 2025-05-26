@@ -123,3 +123,5 @@ values (1, 1, 1, 20250526, '1', '6')
 insert into genesis2.allocation_instruction_entry (alloc_instr_id, clearing_account_id, alloc_qty, date_id, occ_actionable_id, account_nickname, allocation_instruction_entry_id)
 values (1, 1, 1, 20250526, '1', '5', nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq'))
 
+
+

@@ -38,7 +38,6 @@ $$;
 
 
 
-
 drop function if exists dash360.allocation_instructions_create_init;
 create function dash360.allocation_instructions_create_init(in_date_id integer, in_user_id integer,
                                                             in_change_vector character varying)
@@ -57,7 +56,7 @@ declare
 begin
     l_step_id := 0;
     select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
---     select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
+    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
 
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0,
                              'S'::char)
@@ -90,75 +89,101 @@ begin
                              l_row_cnt, 'I'::char)
     into l_step_id;
 
-drop table if exists t_trade_record;
-
-create temp table t_trade_record
+    drop table if exists t_trade_record;
+    create temp table t_trade_record
 --     on commit drop
- as
-            (select tr.trade_record_id,
-                    tr.account_id,
-                    tr.instrument_id,
-                    tr.last_qty,
-                    tr.allocation_avg_price,
-                    tr.open_close,
-                    tr.side,
-                    tr.street_account_name,
-                    tr.account_nickname,
-                    tr.cmta,
-                    tr.clearing_account_number,
-                    i.instrument_type_id
-             from genesis2.trade_record tr
-                      join genesis2.alloc_instr2sent_trade_record str on str.trade_record_id = tr.trade_record_id
-                      inner join genesis2.instrument i on tr.instrument_id = i.instrument_id
-             where tr.date_id = in_date_id
-               and tr.is_busted = 'N'
-    		 );
+    as
+        (select tr.trade_record_id,
+                tr.account_id,
+                tr.instrument_id,
+                tr.last_qty,
+                tr.allocation_avg_price,
+                tr.open_close,
+                tr.side,
+                tr.street_account_name,
+                tr.account_nickname,
+                tr.cmta,
+                tr.clearing_account_number,
+                i.instrument_type_id
+         from genesis2.trade_record tr
+                  join genesis2.alloc_instr2sent_trade_record str on str.trade_record_id = tr.trade_record_id
+                  inner join genesis2.instrument i on tr.instrument_id = i.instrument_id
+         where tr.date_id = in_date_id
+           and tr.is_busted = 'N'
+           and str.alloc_instr_id = l_alloc_instr);
+    get diagnostics l_row_cnt = row_count;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Old trade records were counted',
+                             l_row_cnt, 'N'::char)
+    into l_step_id;
 
     drop table if exists t_aie;
-    create temp table t_aie as (select l_alloc_instr as alloc_instr_id,
-                                     in_date_id as date_id,
-                                     dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number,
+    create temp table t_aie as (select :l_alloc_instr                                                                      as alloc_instr_id,
+                                       :in_date_id                                                                         as date_id,
+                                       dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number,
                                                                          tr.account_nickname,
                                                                          tr.street_account_name,
                                                                          tr.instrument_type_id,
-                                                                         in_user_id)                                       as clearing_account_id,
-                                     tr.street_account_name as occ_actionable_id,
-                                     tr.account_nickname,
-                                     sum(last_qty)                                                                       as alloc_qty,
-                                     array_agg(tr.trade_record_id)                                                       as trade_record_ids,
-                                     nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id
+                                                                         :in_user_id)                                      as clearing_account_id,
+                                       tr.street_account_name                                                              as occ_actionable_id,
+                                       tr.account_nickname,
+                                       sum(last_qty)                                                                       as alloc_qty,
+                                       array_agg(tr.trade_record_id)                                                       as trade_record_ids,
+                                       nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id
                                 from t_trade_record tr
                                 group by clearing_account_id, street_account_name, account_nickname);
-
-              insert into genesis2.allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
-                                               account_nickname, alloc_qty, allocation_instruction_entry_id)
-                  select alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
-                                               account_nickname, alloc_qty, allocation_instruction_entry_id from t_aie;
-
-    ,      insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id)
-                 select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id
-                 from t_trade_record tr
-                     join 
-                /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
-                                   coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
-                                   coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */
-            )
-   INSERT INTO allocation_instruction
-	(alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side, created_by_user_id,  dataset_id)
-	select l_alloc_instr, in_date_id, clock_timestamp(), account_id , instrument_id,  sum(last_qty), allocation_avg_price, open_close , side, in_user_id, l_load_batch_id
-    from tr
-    group by account_id , instrument_id, allocation_avg_price, open_close, side;
+    get diagnostics l_row_cnt = row_count;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Allocation_instruction_entries were counted',
+                             l_row_cnt, 'N'::char)
+    into l_step_id;
 
 
-
-/*    insert into genesis2.allocation_instruction (alloc_instr_id, date_id, create_time, is_deleted)
-    values (l_alloc_instr, in_date_id, clock_timestamp(), 'O');
+    insert into genesis2.allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id,
+                                                       account_nickname, alloc_qty, allocation_instruction_entry_id)
+    select alloc_instr_id,
+           date_id,
+           clearing_account_id,
+           occ_actionable_id,
+           account_nickname,
+           alloc_qty,
+           allocation_instruction_entry_id
+    from t_aie;
     get diagnostics l_row_cnt = row_count;
 
-    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to allocation_instruction. COMPLETED =======', l_row_cnt,
-                             'I'::char)
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Allocation_instruction_entries were inserted',
+                             l_row_cnt, 'I'::char)
+    into l_step_id;
 
- */
+    insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id,
+                                          allocation_instruction_entry_id)
+    select trade_record_id, :l_alloc_instr, :in_date_id, :l_load_batch_id, t_aie.allocation_instruction_entry_id
+    from t_trade_record tr
+             join t_aie on tr.trade_record_id = any (t_aie.trade_record_ids);
+    get diagnostics l_row_cnt = row_count;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'alloc_instr2trade_record were inserted',
+                             l_row_cnt, 'I'::char)
+    into l_step_id;
+    insert into genesis2.allocation_instruction
+    (alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side,
+     created_by_user_id, dataset_id)
+    select l_alloc_instr,
+           in_date_id,
+           clock_timestamp(),
+           account_id,
+           instrument_id,
+           sum(last_qty),
+           allocation_avg_price,
+           open_close,
+           side,
+           in_user_id,
+           l_load_batch_id
+    from t_trade_record
+    group by account_id, instrument_id, allocation_avg_price, open_close, side;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instruction were inserted',
+                             l_row_cnt, 'I'::char)
     into l_step_id;
     return l_alloc_instr;
 end;
