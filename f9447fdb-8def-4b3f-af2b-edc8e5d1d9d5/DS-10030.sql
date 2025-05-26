@@ -165,7 +165,7 @@ begin
     into l_step_id;
     insert into genesis2.allocation_instruction
     (alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side,
-     created_by_user_id, dataset_id)
+     created_by_user_id, dataset_id, status)
     select l_alloc_instr,
            in_date_id,
            clock_timestamp(),
@@ -176,7 +176,8 @@ begin
            open_close,
            side,
            in_user_id,
-           l_load_batch_id
+           l_load_batch_id,
+           'O'
     from t_trade_record
     group by account_id, instrument_id, allocation_avg_price, open_close, side;
 
