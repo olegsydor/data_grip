@@ -52,8 +52,19 @@ declare
     l_load_batch_id bigint;
     l_step_id       int;
     l_row_cnt       int;
-
 begin
+    -- inside the script
+    -- 1. Generating alloc_instr_id
+    -- 2. Generating load_batch_id
+    -- 3. Filling alloc_instr2sent_trade_record (the new table) with alloc_instr_id and old trade_record_ids
+    -- 4. Populating allocation_instruction based with data based on data from OLD trade_record with status 'O'
+    -- 5. Populating aloocation_instruction_entry -> allocation_instructions_create_complete (please confirm)
+    -- 6. Populating alloc_instr2trade_record -> allocation_instructions_create_complete (please confirm)
+
+    -- Returning value(s)
+    -- generated alloc_instr_id
+    -- generated load_batch_id (questionable)
+
     l_step_id := 0;
     select nextval('genesis2.allocation_instruction_alloc_instr_id_seq'::regclass) into l_alloc_instr;
     select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
@@ -61,7 +72,6 @@ begin
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocation_instructions_create_init STARTED =====', 0,
                              'S'::char)
     into l_step_id;
-
 
     l_change_vector := in_change_vector::jsonb;
 
@@ -75,14 +85,14 @@ begin
                                     on e.clearing_instr_id = ca.clearing_instr_id and e.date_id = ca.date_id
                 where e.date_id = in_date_id
                   and ca.status in ('P', 'C')
-                  and e.trade_record_id in (select jsonb_object_keys(:l_change_vector)::bigint)
+                  and e.trade_record_id in (select jsonb_object_keys(l_change_vector)::bigint)
                 limit 1)
         loop
             raise exception 'Error: Clearing change request is in progress. Please wait till it is processed' using errcode = 'CLRIP', /*message='Can''t be allocated due to pending clearing',*/ hint = 'Please finish or reject clearing request before allocating it';
         end loop;
 
     insert into genesis2.alloc_instr2sent_trade_record (alloc_instr_id, trade_record_id)
-    select :l_alloc_instr, jsonb_object_keys(:l_change_vector)::bigint;
+    select l_alloc_instr, jsonb_object_keys(l_change_vector)::bigint;
     get diagnostics l_row_cnt = row_count;
 
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Records were added to alloc_instr2sent_trade_record',
@@ -139,7 +149,7 @@ $fx$;
 -- select '{"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}'::jsonb
 
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
-
+drop function if exists dash360.allocation_instructions_create_complete;
 create function dash360.allocation_instructions_create_complete(in_date_id integer, in_user_id integer,
                                                                 in_change_vector character varying,
                                                                 in_alloc_instr_id int8)
@@ -147,11 +157,21 @@ create function dash360.allocation_instructions_create_complete(in_date_id integ
     language plpgsql
 AS
 $function$
-    -- SY 20210319 Initial creation
-    -- SY 20210420 DS-3363 Fix CCRU has been added
--- SY 20240716 https://dashfinancial.atlassian.net/browse/DS-8581 disable trade_record_update_ccru because the same is done inside ptm_process_trades for all commissions via flat_trade_record_inherit_fees subscription
--- SY 20240813 https://dashfinancial.atlassian.net/browse/DS-8581 Reverted
--- SY 20240816 https://dashfinancial.atlassian.net/browse/DS-8208 in_user_id has been propagated to f_get_clearing_account_id to make possible user_id autocreation save
+    -- additional input parameter
+    -- alloc_instr_id
+    -- load_batch_id if we want to have the same load_batch_id across all allocation process
+    -- inside the script
+    -- 1. PTM itself
+    -- 2. Populating aloocation_instruction_entry -> allocation_instructions_create_complete (depends on the INIT - please confirm)
+    -- 3. Filling alloc_instr2sent_trade_record (the new table) with alloc_instr_id and old trade_record_ids
+    -- 4. CCRU
+    -- 5. Changing status in allocation_instruction into 'L'
+    -- 6. Subscriptions
+
+    -- Returning value(s)
+    -- processed alloc_instr_id
+
+
 declare
     l_change_vector        jsonb;
     l_new_trade_record_ids bigint[];
@@ -200,13 +220,13 @@ begin
 
 
     create temp table t_aie as
-    select :l_alloc_instr                                                                      as alloc_instr_id,
-           :in_date_id                                                                         as date_id,
+    select l_alloc_instr                                                                       as alloc_instr_id,
+           in_date_id                                                                          as date_id,
            dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number,
                                              tr.account_nickname,
                                              tr.street_account_name,
                                              di.instrument_type_id,
-                                             :in_user_id)                                      as clearing_account_id,
+                                             in_user_id)                                       as clearing_account_id,
            tr.street_account_name                                                              as occ_actionable_id,
            tr.account_nickname,
            sum(last_qty)                                                                       as alloc_qty,
@@ -242,7 +262,7 @@ begin
 
     insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id,
                                           allocation_instruction_entry_id)
-    select trade_record_id, :l_alloc_instr, :in_date_id, :l_load_batch_id, t_aie.allocation_instruction_entry_id
+    select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id, t_aie.allocation_instruction_entry_id
     from genesis2.trade_record tr
              join t_aie on tr.trade_record_id = any (t_aie.trade_record_ids)
     where tr.trade_record_id = any (l_new_trade_record_ids)
@@ -253,6 +273,14 @@ begin
                              l_row_cnt, 'I'::char)
     into l_step_id;
 
+    update genesis2.allocation_instruction
+    set status = 'L'
+    where alloc_instr_id = in_alloc_instr_id
+      and status = 'I';
+    get diagnostics l_row_cnt = row_count;
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'Status in allocation_instruction was updated',
+                             l_row_cnt, 'U'::char)
+    into l_step_id;
 
     -- Fix CCRU
 --    select count(1)
