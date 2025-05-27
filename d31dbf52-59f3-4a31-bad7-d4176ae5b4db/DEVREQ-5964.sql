@@ -488,7 +488,17 @@ alter function trash.exchanges_execid_to_tag17_cross_reference(int4, int4, _varc
 
 
 select *
-from dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325, p_end_date_id := 20250325,
+from dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250303, p_end_date_id := 20250331,
                                                        p_trading_firm_ids := '{"OFP0050"}',
                                                        p_add_exchange_order_id := 'Y')--, p_account_ids := '{73660}');
 
+gs
+
+-- p_start_date_id := 20250303, p_end_date_id := 20250331,
+--                                                        p_trading_firm_ids := '{"OFP0050"}',
+--                                                        p_add_exchange_order_id := 'Y' (I didn't see this selection in DASH360 APP), p_account_ids := I select all accounts under OFP0050)
+
+;
+
+select *
+from tmp_606_isi_bill_changes s
