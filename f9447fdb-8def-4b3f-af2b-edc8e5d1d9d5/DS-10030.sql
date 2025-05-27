@@ -153,6 +153,7 @@ begin
                              l_row_cnt, 'I'::char)
     into l_step_id;
 
+    /*
     insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id,
                                           allocation_instruction_entry_id)
     select trade_record_id, :l_alloc_instr, :in_date_id, :l_load_batch_id, t_aie.allocation_instruction_entry_id
@@ -163,6 +164,8 @@ begin
     select genesis2.load_log(l_load_batch_id::int, l_step_id, 'alloc_instr2trade_record were inserted',
                              l_row_cnt, 'I'::char)
     into l_step_id;
+     */
+
     insert into genesis2.allocation_instruction
     (alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side,
      created_by_user_id, dataset_id, status)
@@ -246,8 +249,19 @@ begin
   select genesis2.load_log(l_load_batch_id::int, l_step_id, 'PTM DONE', cardinality (l_new_trade_record_ids), 'I'::char)
   into l_step_id;
 
+    /*
+    insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id,
+                                          allocation_instruction_entry_id)
+    select trade_record_id, :l_alloc_instr, :in_date_id, :l_load_batch_id, t_aie.allocation_instruction_entry_id
+    from t_trade_record tr
+             join t_aie on tr.trade_record_id = any (t_aie.trade_record_ids);
+    get diagnostics l_row_cnt = row_count;
 
- with tr as materialized
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'alloc_instr2trade_record were inserted',
+                             l_row_cnt, 'I'::char)
+    into l_step_id;
+     */
+ with tr as
             (select tr.trade_record_id, tr.account_id , tr.instrument_id,  tr.last_qty, tr.allocation_avg_price, tr.open_close , tr.side, tr.street_account_name , tr.account_nickname, tr.cmta, tr.clearing_account_number, i.instrument_type_id
               from genesis2.trade_record tr
               inner join genesis2.instrument i on tr.instrument_id =i.instrument_id
@@ -255,30 +269,13 @@ begin
     			and trade_record_id = any(l_new_trade_record_ids)
     			and is_busted ='N'
     		 ),
-       aie as( INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty)
-			   select l_alloc_instr, in_date_id, dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number, tr.account_nickname , tr.street_account_name , tr.instrument_type_id, in_user_id) as clearing_account_id
-			   , tr.street_account_name, tr.account_nickname,  sum(last_qty)
-			   from tr
-			  /* inner join clearing_account ca on tr.clearing_account_number = ca.clearing_account_number
-			   									and tr.account_id = ca.account_id
-			   									and coalesce(tr.occ_actionable_id, '---') = coalesce(ca.occ_actionable_id, '---')
-			   									and coalesce(tr.account_nickname, '---') = coalesce(ca.clearing_account_name, '---')
-			   									and ca.is_deleted ='N'*/
-              -- group by  tr.clearing_account_id, tr.occ_actionable_id, tr.account_nickname
-			     group by 3, 4, 5
-
-               returning *),
-        a2tr as (INSERT INTO alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id)
-                 select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id
-                 from tr
-                /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
-                                   coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
-                                   coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */ )
-   INSERT INTO allocation_instruction
-	(alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side, created_by_user_id,  dataset_id)
-	select l_alloc_instr, in_date_id, clock_timestamp(), account_id , instrument_id,  sum(last_qty), allocation_avg_price, open_close , side, in_user_id, l_load_batch_id
+       aie as( select * from )
+ insert into alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id,
+                                          allocation_instruction_entry_id)
+    select trade_record_id, :l_alloc_instr, :in_date_id, :l_load_batch_id, t_aie.allocation_instruction_entry_id
     from tr
-    group by account_id , instrument_id, allocation_avg_price, open_close, side;
+             join t_aie on tr.trade_record_id = any (t_aie.trade_record_ids);
+
 
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
 
