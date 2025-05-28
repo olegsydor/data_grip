@@ -372,7 +372,8 @@ begin
 --                                                ON COMMIT drop
     as
     select to_char(tr.trade_record_time, 'YYYY-MM-DD')                as "Date",
-           coalesce(str.torders_id::text, tr.client_order_id)         as "OrderID",
+           tr.client_order_id                                         as "OrderID",
+--            coalesce(str.torders_id::text, tr.client_order_id)         as "OrderID",
            tr.secondary_order_id                                      as "ExchOrderID",
            case
                when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
@@ -511,7 +512,7 @@ from tmp_606_isi_bill_changes s
      tr.secondary_exch_exec_id,
 
      to_char(tr.trade_record_time, 'YYYY-MM-DD') as "Date",
-           str.torders_id                              as "OrderID",
+           tr.client_order_id/*str.torders_id*/        as "OrderID",
            tr.secondary_order_id                       as "ExchOrderID",
            case
                when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
