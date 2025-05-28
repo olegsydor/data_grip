@@ -344,8 +344,8 @@ begin
 
     end if;
 
-    l_gtc_date_id :=
-            to_char((to_date(l_start_date_id::varchar, 'YYYYMMDD') - interval '6 months'), 'YYYYMMDD')::integer;
+--     l_gtc_date_id :=
+--             to_char((to_date(l_start_date_id::varchar, 'YYYYMMDD') - interval '6 months'), 'YYYYMMDD')::integer;
 
     l_trading_firm_ids := case when p_trading_firm_ids = '{}' then ARRAY ['isigroup'] else p_trading_firm_ids end;
 
