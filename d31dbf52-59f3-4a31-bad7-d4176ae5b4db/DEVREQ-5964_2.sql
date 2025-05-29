@@ -158,3 +158,75 @@ begin
 end;
 $function$
 ;
+
+
+
+ drop table if exists t_execution;
+  create temp table t_execution as
+  select exchange_transaction_id,
+         treports_id,
+         order_id,
+         report_id,
+         client_order_id,
+         torders_id,
+         secondary_exch_exec_id,
+         date_id
+  from compliance.blaze_execution cbe
+  where true
+    and cbe.date_id between :l_start_date_id and :l_end_date_id
+    and (exchange_transaction_id is not null
+      or treports_id is not null);
+
+
+  create index on t_execution (date_id);
+  create index on t_execution (client_order_id, secondary_exch_exec_id);
+  create index on t_execution (client_order_id, exchange_transaction_id);
+
+with alll as (
+/*select to_char(tr.trade_record_time, 'YYYY-MM-DD')            as date_
+                   , tr.order_id
+--           , tr.trade_record_id as report_id
+--           , coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as report_id -- changed
+                   , coalesce(str.treports_id, tr.trade_record_id)          as report_id -- changed
+--           , tr.exch_exec_id as tag_17
+                   , coalesce(par.exchange_transaction_id, tr.exch_exec_id) as tag_17
+--           , tr.secondary_exch_exec_id as street_tag_17
+                   --
+--           , to_char(tr.order_process_time, 'YYYYMMDD')::integer as order_date_id
+                   , jo.fix_message ->> '143'                               as t_143
+                   , tr.ex_destination
+ */
+  select *
+
+              from dwh.flat_trade_record tr
+                  left join fix_capture.fix_message_json jo
+              on tr.order_fix_message_id = jo.fix_message_id and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                  left join lateral (select exchange_transaction_id, order_id, report_id, client_order_id, torders_id
+                  from t_execution cbe -- compliance.blaze_execution cbe
+                  where cbe.client_order_id = tr.client_order_id
+                  and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
+                  and cbe.date_id = tr.date_id
+                  and cbe.date_id between :l_start_date_id and :l_end_date_id
+                  limit 1) par on true
+                  left join lateral (
+                  select treports_id, order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+                  from t_execution cbe --compliance.blaze_execution cbe
+                  where cbe.client_order_id = tr.client_order_id
+                  and cbe.exchange_transaction_id = par.exchange_transaction_id
+                  and cbe.date_id = tr.date_id
+                  and cbe.date_id between :l_start_date_id and :l_end_date_id
+                  ) str on true
+              where tr.date_id between :l_start_date_id            and :l_end_date_id
+--                 and tr.account_id = any (:l_account_ids)
+--                 and tr.is_busted = 'N'
+--                 and not (tr.ex_destination = 'BRKPT'
+--                 and coalesce (jo.fix_message ->> '143'
+--                   , '-1') <> 'DASH-CBOE') -- DEVREQ-4314 Exclude any execution on orders routed to non-DASH DASHOMS orders.
+--                 and tr.order_id = 100000019696533916
+    and trade_record_id = 4081308813
+              )
+select * from alll
+where row_to_json(alll.*)::text ilike '%4080716370%'
+
+select * from dwh.d_account
+    where d_account.trading_firm_id in('vision01', 'OFP0050'
