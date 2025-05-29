@@ -320,7 +320,6 @@ declare
     l_row_cnt          integer;
     l_start_date_id    integer;
     l_end_date_id      integer;
-    l_gtc_date_id      integer;
     l_trading_firm_ids character varying[];
     l_account_ids      int4[];
     l_load_id          integer;
@@ -344,18 +343,21 @@ begin
 
     end if;
 
---     l_gtc_date_id :=
---             to_char((to_date(l_start_date_id::varchar, 'YYYYMMDD') - interval '6 months'), 'YYYYMMDD')::integer;
-
-    l_trading_firm_ids := case when p_trading_firm_ids = '{}' then ARRAY ['isigroup'] else p_trading_firm_ids end;
-
-
-    select array_agg(ac.account_id)
-    into l_account_ids
-    from dwh.d_account ac
-    where ac.trading_firm_id = any (l_trading_firm_ids)
-      and case when coalesce(p_account_ids, '{}') = '{}' then true else ac.account_id = any (p_account_ids) end;
-
+        if coalesce(p_account_ids, '{}') = '{}' and coalesce(p_trading_firm_ids, '{}') = '{}' then
+        l_account_ids := '{}';
+    else
+        select array_agg(account_id)
+        into l_account_ids
+        from dwh.d_account
+        where true
+          and case
+                  when coalesce(p_trading_firm_ids, '{}') <> '{}'::varchar[]
+                      then trading_firm_id = ANY (p_trading_firm_ids)
+                  else true end
+          and case
+                  when coalesce(p_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (p_account_ids)
+                  else true end;
+    end if;
 
     select public.load_log(l_load_id, l_step_id, left(' trading_firm_ids = ' || l_trading_firm_ids::varchar, 200), 0,
                            'O')
@@ -366,6 +368,28 @@ begin
     into l_step_id;
     select public.load_log(l_load_id, l_step_id, ' Account_ids: ' || left(l_account_ids::text, 50), 0, 'O')
     into l_step_id;
+
+
+    drop table if exists t_execution;
+    create temp table t_execution as
+    select exchange_transaction_id,
+           treports_id,
+           order_id,
+           report_id,
+           client_order_id,
+           torders_id,
+           secondary_exch_exec_id,
+           date_id
+    from compliance.blaze_execution cbe
+    where true
+      and cbe.date_id between l_start_date_id and l_end_date_id
+      and (exchange_transaction_id is not null
+        or treports_id is not null);
+
+    create index on t_execution (date_id);
+    create index on t_execution (client_order_id, secondary_exch_exec_id);
+    create index on t_execution (client_order_id, exchange_transaction_id);
+
 
     DROP TABLE IF EXISTS tmp_606_isi_bill_changes;
     create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
@@ -401,20 +425,20 @@ begin
            coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as "ReportID",
            coalesce(par.exchange_transaction_id, tr.exch_exec_id)     as "Tag17"
     from dwh.flat_trade_record tr
-             left join lateral (select order_id, report_id, client_order_id, torders_id, exchange_transaction_id
-                                from compliance.blaze_execution cbe
+             left join lateral (select exchange_transaction_id --order_id, report_id, client_order_id, torders_id
+                                from t_execution cbe -- compliance.blaze_execution cbe
                                 where cbe.client_order_id = tr.client_order_id
                                   and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
                                   and cbe.date_id = tr.date_id
-                                  and cbe.date_id between l_start_date_id and p_end_date_id
+                                  and cbe.date_id between l_start_date_id and l_end_date_id
                                 limit 1) par on true
              left join lateral (
-        select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, treports_id
-        from compliance.blaze_execution cbe
+        select treports_id --order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+        from t_execution cbe --compliance.blaze_execution cbe
         where cbe.client_order_id = tr.client_order_id
           and cbe.exchange_transaction_id = par.exchange_transaction_id
           and cbe.date_id = tr.date_id
-          and cbe.date_id between l_start_date_id and p_end_date_id
+          and cbe.date_id between l_start_date_id and l_end_date_id
         ) str on true
              left join lateral (select jo.fix_message ->> '143' as t_143
                                 from fix_capture.fix_message_json jo
@@ -431,7 +455,7 @@ begin
                                 limit 1) jos on true
              left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
     where true
-      and tr.date_id between l_start_date_id and p_end_date_id
+      and tr.date_id between l_start_date_id and l_end_date_id
       and tr.account_id = any (l_account_ids)
       and tr.is_busted = 'N'
       and case
@@ -745,6 +769,20 @@ end;
 $function$
 
 --------- TEST EXCEUTION PLAN
+drop table t_execution;
+create temp table t_execution as
+select exchange_transaction_id, treports_id, order_id, report_id, client_order_id, torders_id, secondary_exch_exec_id, date_id
+from compliance.blaze_execution cbe
+where true
+  and cbe.date_id between :l_start_date_id and :p_end_date_id
+  and (exchange_transaction_id is not null
+    or treports_id is not null);
+
+create index on t_execution (date_id);
+create index on t_execution (client_order_id, secondary_exch_exec_id);
+create index on t_execution (client_order_id, exchange_transaction_id);
+
+
 EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select to_char(tr.trade_record_time, 'YYYY-MM-DD')                as "Date",
            tr.client_order_id                                         as "OrderID",
@@ -776,16 +814,16 @@ select to_char(tr.trade_record_time, 'YYYY-MM-DD')                as "Date",
            coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as "ReportID",
            coalesce(par.exchange_transaction_id, tr.exch_exec_id)     as "Tag17"
     from dwh.flat_trade_record tr
-             left join lateral (select order_id, report_id, client_order_id, torders_id, exchange_transaction_id
-                                from compliance.blaze_execution cbe
+             left join lateral (select exchange_transaction_id -- order_id, report_id, client_order_id, torders_id
+                                from t_execution cbe--compliance.blaze_execution cbe
                                 where cbe.client_order_id = tr.client_order_id
                                   and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
                                   and cbe.date_id = tr.date_id
                                   and cbe.date_id between :l_start_date_id and :p_end_date_id
                                 limit 1) par on true
              left join lateral (
-        select order_id, report_id, client_order_id, torders_id, exchange_transaction_id, treports_id
-        from compliance.blaze_execution cbe
+        select treports_id -- order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+        from t_execution cbe--compliance.blaze_execution cbe
         where cbe.client_order_id = tr.client_order_id
           and cbe.exchange_transaction_id = par.exchange_transaction_id
           and cbe.date_id = tr.date_id
