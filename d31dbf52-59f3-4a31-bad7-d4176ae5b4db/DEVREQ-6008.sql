@@ -16,11 +16,20 @@ from dash360.report_compliance_avg_parent_order_count(
 
 -- DROP FUNCTION dash360.report_compliance_avg_parent_order_count(int4, int4, _varchar, _int4, bpchar);
 
-CREATE OR REPLACE FUNCTION dash360.report_compliance_avg_parent_order_count(in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_account_ids integer[] DEFAULT '{}'::integer[], in_instrument_type_id character DEFAULT 'O'::bpchar)
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION dash360.report_compliance_avg_parent_order_count(in_start_date_id integer DEFAULT NULL::integer,
+                                                                            in_end_date_id integer DEFAULT NULL::integer,
+                                                                            in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                            in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                                            in_instrument_type_id character DEFAULT 'O'::bpchar)
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- https://dashfinancial.atlassian.net/browse/DEVREQ-6008
+    -- 20250529 OS Changed Data source from hods to client_order
 declare
     l_load_id       int;
     l_row_cnt       int;
@@ -80,27 +89,33 @@ begin
 
     drop table if exists t_report;
     create temp table t_report as
-    select to_char(hods."StatusDate", 'Month') as "Month",
-           to_char(hods."StatusDate", 'YYYY')  as "Year",
-           count(distinct "StatusDate")        as "Actual Trading Days",
-           tf.trading_firm_name::varchar       as "Firm",
-           a.account_name::varchar             as "Account",
-           cf.customer_or_firm_name::varchar   as "Capacity",
-           count(distinct hods."ClOrdID")      as "Parent Order Count",
-           hods."InstrumentType"
-    from dwh.historic_order_details_storage hods
-             join dwh.d_account a on (a.account_id = hods."AccountID")
+    select to_char(co.create_time, 'Month')              as "Month",
+           to_char(co.create_time, 'YYYY')               as "Year",
+           count(distinct co.create_date_id)             as "Actual Trading Days",
+           tf.trading_firm_name::varchar                 as "Firm",
+           coalesce(fmj.t10147, a.account_name::varchar) as "Account",
+           cf.customer_or_firm_name::varchar             as "Capacity",
+           count(distinct co.client_order_id)            as "Parent Order Count",
+           i.instrument_type_id
+    from dwh.client_order co
+             join dwh.d_instrument i on (i.instrument_id = co.instrument_id)
+             join dwh.d_account a on (a.account_id = co.account_id)
              join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
---              left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
-                 left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = a.opt_customer_or_firm)
+             left join dwh.d_customer_or_firm cf
+                       on (cf.customer_or_firm_id = coalesce(co.customer_or_firm_id, a.opt_customer_or_firm))
+             left join lateral (select fmj.fix_message ->> '10147' as t10147
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = co.fix_message_id
+                                  and fmj.date_id = co.create_date_id
+                                limit 1) fmj on true
     where true
-      and "Status_Date_id" >= l_start_date_id
-      and "Status_Date_id" <= l_end_date_id
-      and case when in_instrument_type_id is null then true else hods."InstrumentType" = in_instrument_type_id end
-      and hods."CustomerOrderID" is null
-      and hods."AccountID" = any (l_account_ids)
-    group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
-             cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType";
+      and co.create_date_id >= l_start_date_id
+      and co.create_date_id <= l_end_date_id
+      and co.parent_order_id is null
+      and co.trans_type <> 'F'
+      and case when in_instrument_type_id is null then true else i.instrument_type_id = in_instrument_type_id end
+      and co.account_id = any (l_account_ids)
+    group by "Month", "Year", "Firm", "Account", "Capacity", i.instrument_type_id;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -262,13 +277,16 @@ where true
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (:l_account_ids)
 
-
+drop table t_os;
 create temp table t_os as
+    insert into t_os
  select to_char(hods."StatusDate", 'Month') as "Month",
            to_char(hods."StatusDate", 'YYYY')  as "Year",
            count(distinct "StatusDate")        as "Actual Trading Days",
            tf.trading_firm_name::varchar       as "Firm",
-           a.account_name::varchar             as "Account",
+           case when a.account_name = 'T3_BTIG_DESK' then 'TG814083'
+               when a.account_name = 'T3_OPCO_DESK' then 'TG814083'
+               else a.account_name end as "Account",
            cf.customer_or_firm_name::varchar   as "Capacity",
            count(distinct hods."ClOrdID")      as "Parent Order Count",
            hods."InstrumentType"
@@ -283,7 +301,7 @@ create temp table t_os as
       and case when :in_instrument_type_id is null then true else hods."InstrumentType" = :in_instrument_type_id end
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (:l_account_ids)
-    group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), a.account_name,
+    group by to_char(hods."StatusDate", 'Month'), to_char(hods."StatusDate", 'YYYY'), "Account",
              cf.customer_or_firm_name, tf.trading_firm_name,hods."InstrumentType"
 
 except
@@ -292,8 +310,8 @@ except
                to_char(co.create_time, 'YYYY')  as "Year",
                count(distinct co.create_date_id)        as "Actual Trading Days",
                tf.trading_firm_name::varchar       as "Firm",
---                coalesce(fmj.t10147, a.account_name::varchar)             as "Account",
-               a.account_name::varchar             as "Account",
+               coalesce(fmj.t10147, a.account_name::varchar)             as "Account",
+--                a.account_name::varchar             as "Account",
                cf.customer_or_firm_name::varchar   as "Capacity",
                count(distinct co.client_order_id)  as "Parent Order Count",
                i.instrument_type_id
@@ -304,7 +322,7 @@ except
                  join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
                  left join dwh.d_customer_or_firm cf
                            on (cf.customer_or_firm_id = coalesce(co.customer_or_firm_id, a.opt_customer_or_firm))
---         left join lateral (select fmj.fix_message ->> '10147' as t10147 from fix_capture.fix_message_json fmj where fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id limit 1) fmj on true
+        left join lateral (select fmj.fix_message ->> '10147' as t10147 from fix_capture.fix_message_json fmj where fmj.fix_message_id = co.fix_message_id and fmj.date_id = co.create_date_id limit 1) fmj on true
 
         where true
           and co.create_date_id >= :l_start_date_id
@@ -315,8 +333,15 @@ except
           and co.account_id = any (:l_account_ids)
         group by "Month", "Year","Firm", "Account", "Capacity", i.instrument_type_id;
 
+select "Month", "Year", "Actual Trading Days", "Firm", "Account", "Capacity", "Parent Order Count", "InstrumentType" from t_os
+where src = 'exc'
+
+except
+select "Month", "Year", "Actual Trading Days", "Firm", "Account", "Capacity", "Parent Order Count", "InstrumentType" from t_os
+where src = 'new';
+
 select * from t_os
-where "Account" = 'TG814465';
+where "Account" in('T3_OPCO_DESK','T3_BTIG_DESK','TG813803','TG814654','TG813938')
 
 
 
@@ -331,7 +356,7 @@ with base as (select distinct hods."ClOrdID"
       and case when :in_instrument_type_id is null then true else hods."InstrumentType" = :in_instrument_type_id end
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (:l_account_ids)
-and a.account_name = 'T3T3GJAS')
+and a.account_name = 'T3_OPCO_DESK')
 
 select client_order_id, trans_type, case when exists (select null from base where base."ClOrdID" = co.client_order_id) then true else false end as chk,
         *
@@ -345,10 +370,10 @@ from dwh.client_order co
           and co.create_date_id >= :l_start_date_id
           and co.create_date_id <= :l_end_date_id
            and co.parent_order_id is null
---           and orig_order_id is null
+           and co.trans_type <> 'F'
           and case when :in_instrument_type_id is null then true else i.instrument_type_id = :in_instrument_type_id end
           and co.account_id = any (:l_account_ids)
-and a.account_name = 'T3T3GJAS';
+and a.account_name = 'T3_OPCO_DESK';
 
 select hods."ClOrdID"
  from dwh.historic_order_details_storage hods
@@ -366,9 +391,14 @@ and a.account_name = 'T3T3GJAS';
 
 select *
 from dwh.historic_order_details_storage hods
-where "ClOrdID" = 'STE-CXL-2368028784'
+where "ClOrdID" = '525139001DT'
   and "Status_Date_id" >= :l_start_date_id
-  and "Status_Date_id" <= :l_end_date_id;
+  and "Status_Date_id" <= :l_end_date_id
+and "Status_Date_id" = 20250519;
 
 select trans_type, * from dwh.client_order
 where client_order_id = 'STE-CXL-2368028784'
+
+select *
+from dash360.report_compliance_avg_parent_order_count(in_start_date_id := 20250501, in_end_date_id := 20250528,
+                                                      in_trading_firm_ids := '{OFP0058,OFP0077,t3trade01}');
