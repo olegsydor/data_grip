@@ -298,12 +298,12 @@ from trash.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325
                                                      p_trading_firm_ids := '{"OFP0050"}',
                                                      p_add_exchange_order_id := 'Y', p_account_ids := '{73660}');
 
-
-create or replace function trash.exchanges_execid_to_tag17_cross_reference_2(p_start_date_id integer default null::integer,
-                                                                             p_end_date_id integer default null::integer,
-                                                                             p_trading_firm_ids character varying[] default '{}'::character varying[],
-                                                                             p_add_exchange_order_id character default 'N'::bpchar,
-                                                                             p_account_ids int4[] default '{}'::int4[]
+drop function dash360.exchanges_execid_to_tag17_cross_reference;
+create function dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id integer default null::integer,
+                                                                  p_end_date_id integer default null::integer,
+                                                                  p_trading_firm_ids character varying[] default '{}'::character varying[],
+                                                                  p_add_exchange_order_id character default 'N'::bpchar,
+                                                                  p_account_ids int4[] default '{}'::int4[]
 )
     returns table
             (
@@ -316,6 +316,7 @@ $function$
     -- 2024-05-21 DS DEVREQ-4314 Exclude BLAZE/DASH OMS routes on "Billing ExecutionID to Tag17 cross reference"
     -- 2025-03-06 OS https://dashfinancial.atlassian.net/browse/DEVREQ-5704
     -- 2025-05-19 OS https://dashfinancial.atlassian.net/browse/DS-9961
+    -- 2025-05-29 OS performance tuning and changed logging messages
 declare
     l_row_cnt          integer;
     l_start_date_id    integer;
@@ -329,7 +330,7 @@ begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly STARTED===', 0,
+    select public.load_log(l_load_id, l_step_id, 'dash360.exchanges_execid_to_tag17_cross_reference STARTED===', 0,
                            'O')
     into l_step_id;
 
@@ -343,7 +344,7 @@ begin
 
     end if;
 
-        if coalesce(p_account_ids, '{}') = '{}' and coalesce(p_trading_firm_ids, '{}') = '{}' then
+    if coalesce(p_account_ids, '{}') = '{}' and coalesce(p_trading_firm_ids, '{}') = '{}' then
         l_account_ids := '{}';
     else
         select array_agg(account_id)
@@ -359,14 +360,14 @@ begin
                   else true end;
     end if;
 
-    select public.load_log(l_load_id, l_step_id, left(' trading_firm_ids = ' || l_trading_firm_ids::varchar, 200), 0,
+    select public.load_log(l_load_id, l_step_id, left('trading_firm_ids = ' || l_trading_firm_ids::varchar, 200), 0,
                            'O')
     into l_step_id;
     select public.load_log(l_load_id, l_step_id,
-                           ' Period: l_start_date_id = ' || l_start_date_id::varchar || ', l_end_date_id = ' ||
+                           'Period: l_start_date_id = ' || l_start_date_id::varchar || ', l_end_date_id = ' ||
                            l_end_date_id::varchar, 0, 'O')
     into l_step_id;
-    select public.load_log(l_load_id, l_step_id, ' Account_ids: ' || left(l_account_ids::text, 50), 0, 'O')
+    select public.load_log(l_load_id, l_step_id, 'Account_ids: ' || left(l_account_ids::text, 50), 0, 'O')
     into l_step_id;
 
 
@@ -390,9 +391,12 @@ begin
     create index on t_execution (client_order_id, secondary_exch_exec_id);
     create index on t_execution (client_order_id, exchange_transaction_id);
 
+    select public.load_log(l_load_id, l_step_id, 'temp table for billing executions was created', 0,
+                           'O')
+    into l_step_id;
 
-    DROP TABLE IF EXISTS tmp_606_isi_bill_changes;
-    create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
+    drop table if exists tmp_report;
+    create temp table tmp_report with (parallel_workers = 4)
 --                                                ON COMMIT drop
     as
     select to_char(tr.trade_record_time, 'YYYY-MM-DD')                as "Date",
@@ -464,11 +468,11 @@ begin
               else true end;
 
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
-    select public.load_log(l_load_id, l_step_id, 'tmp_606_isi_bill_changes - Initial load', l_row_cnt, 'I')
+    select public.load_log(l_load_id, l_step_id, 'tmp_report - Initial load', l_row_cnt, 'I')
     into l_step_id;
 
 
-    analyze tmp_606_isi_bill_changes;
+    analyze tmp_report;
 
     if p_add_exchange_order_id = 'Y' then
         return query
@@ -481,7 +485,7 @@ begin
                                        s."Tag17",
                                        s."ExchOrderID"
                                        ], ',', '')
-            from tmp_606_isi_bill_changes s
+            from tmp_report s
             order by s."Date", s."ExchOrderID", s."ReportID";
     else
         return query
@@ -493,11 +497,11 @@ begin
                                        coalesce(aux_tag_street, s."ReportID"::text) ,
                                        s."Tag17"
                                        ], ',', '')
-            from tmp_606_isi_bill_changes s
+            from tmp_report s
             order by s."Date", s."ReportID";
     end if;
 
-    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly (modified) COMPLETE===',
+    select public.load_log(l_load_id, l_step_id, 'dash360.exchanges_execid_to_tag17_cross_reference COMPLETE===',
                            coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
 
