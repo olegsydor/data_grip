@@ -36,15 +36,16 @@ declare
     l_step_id       int;
     l_account_ids   int4[];
     l_message       text;
-    l_start_date    date := case
-                                when in_start_date_id is not null then in_start_date_id::text::date
-                                else date_trunc('month', current_date - '1 month'::interval)::date end;
-    l_end_date      date := case
-                                when in_end_date_id is not null then in_end_date_id::text::date
-                                else (date_trunc('month', current_date) - '1 day'::interval)::date end;
-    l_start_date_id int4 := to_char(l_start_date, 'YYYYMMDD');
-    l_end_date_id   int4 := to_char(l_end_date, 'YYYYMMDD');
+    l_start_date    date   := case
+                                  when in_start_date_id is not null then in_start_date_id::text::date
+                                  else date_trunc('month', current_date - '1 month'::interval)::date end;
+    l_end_date      date   := case
+                                  when in_end_date_id is not null then in_end_date_id::text::date
+                                  else (date_trunc('month', current_date) - '1 day'::interval)::date end;
+    l_start_date_id int4   := to_char(l_start_date, 'YYYYMMDD');
+    l_end_date_id   int4   := to_char(l_end_date, 'YYYYMMDD');
     l_all_days      int4;
+    l_removed_tf    text[] := '{OFP0058,OFP0077,t3trade01}'::text[];
 begin
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
         l_account_ids := '{}';
@@ -107,6 +108,7 @@ begin
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = co.fix_message_id
                                   and fmj.date_id = co.create_date_id
+                                  and co.trading_firm_id = any (l_removed_tf)
                                 limit 1) fmj on true
     where true
       and co.create_date_id >= l_start_date_id
