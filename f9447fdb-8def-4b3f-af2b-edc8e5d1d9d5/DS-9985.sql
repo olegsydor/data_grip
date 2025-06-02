@@ -1,6 +1,14 @@
+alter function dash360.get_trade_records_for_allocation rename to get_trade_records_for_allocation_bkp;
+
+
 -- DROP FUNCTION dash360.get_trade_records_for_allocation(int4, _int4, bpchar, _varchar, _int8, _int8);
-select * from genesis2.alloc2sent_trade_records
-CREATE OR REPLACE FUNCTION dash360.get_trade_records_for_allocation(in_date_id integer, in_account_ids integer[] DEFAULT '{}'::integer[], in_security_type character DEFAULT NULL::character(1), in_root_symbol character varying[] DEFAULT '{}'::character varying[], in_trade_record_ids bigint[] DEFAULT '{}'::bigint[], in_alloc_instr_ids bigint[] DEFAULT '{}'::bigint[])
+
+CREATE OR REPLACE FUNCTION dash360.get_trade_records_for_allocation(in_date_id integer,
+                                                                    in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                                    in_security_type character DEFAULT NULL::character(1),
+                                                                    in_root_symbol character varying[] DEFAULT '{}'::character varying[],
+                                                                    in_trade_record_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                    in_alloc_instr_ids bigint[] DEFAULT '{}'::bigint[])
  RETURNS TABLE(date_id integer, trade_record_id bigint, account_id integer, instrument_id bigint, side character, open_close character, symbol character varying, exec_qty integer, avg_px numeric, expiration_date date, instrument_type_id character, street_exec_time timestamp without time zone, principal_amount numeric, is_allocated boolean, is_bundle boolean, exec_broker character varying, reported_status character, reported_time timestamp without time zone, last_trade_date timestamp without time zone, opt_customer_firm character)
  LANGUAGE plpgsql
  COST 1
@@ -76,36 +84,45 @@ begin
         from genesis2.trade_record tr
                  inner join genesis2.instrument di on (tr.instrument_id = di.instrument_id)
                  left join genesis2.account ac on ac.account_id = tr.account_id
-                 left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
-                            from genesis2.allocation_instruction a
-                                     inner join genesis2.alloc_instr2trade_record ai2tr
-                                                on (a.alloc_instr_id = ai2tr.alloc_instr_id and ai2tr.date_id = a.date_id)
+
+                 left join lateral (select ai2.trade_record_id, ai.alloc_instr_id, ai.date_id
+                            from genesis2.allocation_instruction ai
+                                     inner join genesis2.alloc_instr2trade_record ai2
+                                                on (ai.alloc_instr_id = ai2.alloc_instr_id and ai2.date_id = ai.date_id)
                             where true
-                              and case when a.status in ('O','I') then false else true end
-                              and case when in_account_ids = '{}' then true else a.account_id = any (in_account_ids) end
-                              and a.date_id = in_date_id
-                              and ai2tr.date_id = in_date_id
-                              and a.is_deleted = 'N') allocated_trades on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
+                              and ai2.trade_record_id = tr.trade_record_id
+                              and ai2.date_id = in_date_id
+                              and case
+                                      when in_account_ids = '{}' then true
+                                      else ai.account_id = any (in_account_ids) end
+                              and ai.date_id = in_date_id
+                              and case when ai.status in ('O', 'I') then false else true end
+                              and case
+                                      when in_alloc_instr_ids = '{}' then true
+                                      else ai.alloc_instr_id = any (in_alloc_instr_ids) end
+                              and ai.is_deleted = 'N') all_t on true
 
-                 left join (select ai2tr.trade_record_id, a.alloc_instr_id, a.date_id
-                            from genesis2.allocation_instruction a
-                                     inner join genesis2.alloc2sent_trade_records ai2tr
-                                                on (a.alloc_instr_id = ai2tr.alloc_instr_id and ai2tr.date_id = a.date_id)
+                 left join lateral (select ais.trade_record_id, ai.alloc_instr_id, ai.date_id
+                            from genesis2.allocation_instruction ai
+                                     inner join genesis2.alloc_instr2sent_trade_record ais
+                                                on (ai.alloc_instr_id = ais.alloc_instr_id)
                             where true
-                              and case when a.status in ('O','I') then false else true end
-                              and case when in_account_ids = '{}' then true else a.account_id = any (in_account_ids) end
-                              and a.date_id = in_date_id
-                              and ai2tr.date_id = in_date_id
-                              and a.is_deleted = 'N') allocated_trades on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
-
-
+                              and ais.trade_record_id = tr.trade_record_id
+                              and case
+                                      when in_account_ids = '{}' then true
+                                      else ai.account_id = any (in_account_ids) end
+                              and ai.date_id = in_date_id
+                              and case when ai.status in ('O', 'I') then true else false end
+                              and case
+                                      when in_alloc_instr_ids = '{}' then true
+                                      else ai.alloc_instr_id = any (in_alloc_instr_ids) end
+                              and ai.is_deleted = 'N') all_sent on true
                  left join lateral (select rep.to_report, rep.db_create_time
                                     from t_trade_record rep
                                     where rep.trade_record_id = tr.trade_record_id
                                     limit 1) rep on true
                  left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
-
         where tr.date_id = in_date_id
           and case when in_security_type is null then true else di.instrument_type_id = in_security_type end
           and case when coalesce(in_account_ids, '{}') = '{}' then true else tr.account_id = any (in_account_ids) end
@@ -113,11 +130,19 @@ begin
           and case when in_trade_record_ids = '{}' then true else tr.trade_record_id = any (in_trade_record_ids) end
           and case
                   when in_alloc_instr_ids = '{}' then true
-                  else allocated_trades.alloc_instr_id = any (in_alloc_instr_ids) end
+                  else (all_t.alloc_instr_id = any (in_alloc_instr_ids)
+                      or
+                        all_sent.alloc_instr_id = any (in_alloc_instr_ids))
+            end
           and tr.is_busted = 'N'
-          and allocated_trades.alloc_instr_id is NULL    ;
+    ;
 --     raise notice '3 - %', clock_timestamp();
 
 end ;
 $function$
 ;
+
+
+select * from dash360.get_trade_records_for_allocation(in_date_id := 20250530,
+                                                                    in_account_ids := '{262707,258653}',
+                                                                    in_root_symbol := '{META,IBM,BABA}')
