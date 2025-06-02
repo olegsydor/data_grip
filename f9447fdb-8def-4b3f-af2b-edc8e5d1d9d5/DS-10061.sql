@@ -2,8 +2,8 @@
 
 CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character,
                                                                     in_allocation_type integer,
-                                                                    in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
-in_account_ids int4[] default '{}'::int4[])
+                                                                    in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                                    in_account_ids int4[] default '{}'::int4[])
     RETURNS integer
     LANGUAGE plpgsql
     SET application_name TO 'ETL:  AutoAllocation'
@@ -25,17 +25,16 @@ AS $function$
 --  SO:  20250602 https://dashfinancial.atlassian.net/browse/DS-10061 Added account_id list as an input parameter that is calculated in the wrapper (see https://dashfinancial.atlassian.net/browse/DS-10060)
 
 
-
 DECLARE
 --  ai RECORD;
 --  ai_id integer;
 --  cl_acc_id integer;
-  l_date_id integer;
-   l_max_trade_id int8;
-  l_cnt_rows int;
-  l_load_id int;
-  l_step_id int;
-  l_load_batch_id bigint;
+    l_date_id       integer;
+    l_max_trade_id  int8;
+    l_cnt_rows      int;
+    l_load_id       int;
+    l_step_id       int;
+    l_load_batch_id bigint;
 begin
 
   select nextval('load_timing_seq') into l_load_id;
