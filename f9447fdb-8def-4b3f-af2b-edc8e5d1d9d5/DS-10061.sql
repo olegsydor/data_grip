@@ -416,10 +416,10 @@ alter table genesis2.account add column is_intraday_auto_allocate bpchar;
 comment on column genesis2.account.is_intraday_auto_allocate is 'enables intraday auto allocation for options only and only for PTA_Accounts';
 
 
-CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
-                                                          in_exec_broker text, in_is_eod boolean DEFAULT false,
-                                                          in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[],
-in_run_intraday_option_auto_allocation bool default true)
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report_wrapper(in_start_date_id integer, in_end_date_id integer,
+                                                                  in_exec_broker text, in_is_eod boolean DEFAULT false,
+                                                                  in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[],
+                                                                  in_run_intraday_option_auto_allocation bool default true)
     RETURNS TABLE
             (
                 ret_row text
@@ -428,14 +428,57 @@ in_run_intraday_option_auto_allocation bool default true)
 AS
 $fn$
 declare
+    l_row_cnt       int;
+    l_load_id       int;
+    l_step_id       int;
+    l_load_batch_id bigint;
+    l_account_ids   int4[];
+begin
+    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
 
-    begin
--- 1. Select account_ids
+    select public.load_log(l_load_id, l_step_id, 'bofa_allocation_report_wrapper STARTED =======', 0, 'S')
+    into l_step_id;
 
--- 2. Call autoallocations
+    if in_run_intraday_option_auto_allocation = 'Y' then
+        -- 1. Select account_ids
+        select array_agg(account_id)
+        into l_account_ids
+        from genesis2.account ac
+        where true
+          and ac.is_deleted = 'N'
+          and ac.is_intraday_auto_allocate = 'Y'
+          and ac.opt_report_to_mpid = 'MLCB';
 
--- 3. Call dash360.bofa_allocation_report
+        l_row_cnt = array_length(l_account_ids, 1);
 
-    end;
+        select public.load_log(l_load_id, l_step_id, 'bofa_allocation_report_wrapper account_ids calculated =======',
+                               l_row_cnt, 'I')
+        into l_step_id;
+
+        -- 2. Call autoallocations
+        select x
+        into l_row_cnt
+        from genesis2.auto_allocate_unallocated_trade(in_instrument_type_id := 'O',
+                                                      in_allocation_type := 0,
+                                                      in_account_ids := l_account_ids) as x;
+
+        select public.load_log(l_load_id, l_step_id,
+                               'bofa_allocation_report_wrapper account_ids auto allocation performed =======',
+                               l_row_cnt,
+                               'I')
+        into l_step_id;
+    end if;
+    -- 3. Call dash360.bofa_allocation_report
+    return query
+        select ret_row
+        from dash360.bofa_allocation_report(in_start_date_id, in_end_date_id,
+                                            in_exec_broker, in_is_eod,
+                                            in_removed_account_ids);
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'bofa_allocation_report_wrapper account_ids COMLETED =======',
+                           l_row_cnt, 'I')
+    into l_step_id;
+
 end;
+
 $fn$
