@@ -1,5 +1,6 @@
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4);
-
+drop function trash.auto_allocate_unallocated_trade;
+alter function genesis2.auto_allocate_unallocated_trade set schema trash;
 CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character,
                                                                     in_allocation_type integer,
                                                                     in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
