@@ -410,3 +410,32 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+
+
+alter table genesis2.account add column is_intraday_auto_allocate bpchar;
+comment on column genesis2.account.is_intraday_auto_allocate is 'enables intraday auto allocation for options only and only for PTA_Accounts';
+
+
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer,
+                                                          in_exec_broker text, in_is_eod boolean DEFAULT false,
+                                                          in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[],
+in_run_intraday_option_auto_allocation bool default true)
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$fn$
+declare
+
+    begin
+-- 1. Select account_ids
+
+-- 2. Call autoallocations
+
+-- 3. Call dash360.bofa_allocation_report
+
+    end;
+end;
+$fn$
