@@ -1,10 +1,17 @@
--- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar);
+select array_length('{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ,52549002U3,52549002U4,T3TRDG0596OFX92VE5M1,T3TRDGYBJNCJ7VE5M100,T3TRDG6ZPMJ50TE5M100,T3TRDG057RCE1LYTE5M1,T3TRDGJAQ7GU3UE5M100,T3TRDGECQ7GU3UE5M100,62550001ZQ, 62550002ZV,625500000G,625500000B, 625500000C, 625500000D,  625500000E,T3TRDGHAOMJ50TE5M100,STE-2331657589,STE-2330480322,STE-2331857889,T3TRDG6UP7GU3UE5M100,T3TRDG05M9NFX92VE5M1,T3TRDG05O9NFX92VE5M1,5255200367,4625520004W,STE-2330581058,STE-2331207676,4425490004J}'::text[], 1)
+
+
+select *
+from trash.report_obo_compliance_xls(in_date_begin_id := 20250218, in_date_end_id := 20250221,
+                                     in_client_order_ids := '{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ,52549002U3,52549002U4,T3TRDG0596OFX92VE5M1,T3TRDGYBJNCJ7VE5M100,T3TRDG6ZPMJ50TE5M100,T3TRDG057RCE1LYTE5M1,T3TRDGJAQ7GU3UE5M100,T3TRDGECQ7GU3UE5M100,62550001ZQ, 62550002ZV,625500000G,625500000B, 625500000C, 625500000D,  625500000E,T3TRDGHAOMJ50TE5M100,STE-2331657589,STE-2330480322,STE-2331857889,T3TRDG6UP7GU3UE5M100,T3TRDG05M9NFX92VE5M1,T3TRDG05O9NFX92VE5M1,5255200367,4625520004W,STE-2330581058,STE-2331207676,4425490004J}')
+
 
 CREATE FUNCTION trash.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
-                                                             in_instrument_type character DEFAULT NULL::bpchar,
-                                                             in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                             in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
-                                                             in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+                                                in_instrument_type character DEFAULT NULL::bpchar,
+                                                in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
+                                                in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                in_client_order_ids character varying[] default null::character varying[])
     RETURNS TABLE
             (
                 "OrderID"                   character varying,
@@ -94,8 +101,13 @@ begin
         into l_account_ids
         from dwh.d_account
         where true
-            and case when coalesce(in_trading_firm_ids, '{}') <> '{}'::varchar[] then trading_firm_id = ANY (in_trading_firm_ids) else true end
-            and case when coalesce(in_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (in_account_ids) else true end;
+          and case
+                  when coalesce(in_trading_firm_ids, '{}') <> '{}'::varchar[]
+                      then trading_firm_id = ANY (in_trading_firm_ids)
+                  else true end
+          and case
+                  when coalesce(in_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (in_account_ids)
+                  else true end;
     end if;
 
     select public.load_log(l_load_id, l_step_id,
@@ -123,7 +135,7 @@ begin
 
         -- Event Details
         'New Order'                                         as event_type,
-        to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS')  as event_ts,
+        null::timestamp                                     as event_ts,
         cl.client_order_id                                  as parent_clorderid,
         null::text                                          as street_clorderid,
         cl.order_qty                                        as event_order_qty,
@@ -158,7 +170,13 @@ begin
         ex.cum_qty,
         ot.order_type_name,
         cl.price,
-        cl.create_time                                      as order_creation_ts,
+        case
+            when os.order_status_description = 'Cancelled' then cl.create_time
+            else coalesce(to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
+                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
+                          'UTC') end                        as order_creation_ts,
+        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
+        'UTC'                                               as par_tag_5050,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -231,7 +249,7 @@ begin
                                        fix_message ->> '109'   as tag_109,
                                        fix_message ->> '58'    as tag_58,
                                        fix_message ->> '10061' as tag_10061,
-                                       fix_message ->> '5050' as tag_5050
+                                       fix_message ->> '5050'  as tag_5050
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.fix_message_id
                                 limit 1) fmj on true
@@ -247,7 +265,8 @@ begin
               else cl.order_id = any (in_parent_order_ids) end
       and cl.create_date_id between l_date_begin_id and l_date_end_id
       and case when l_account_ids = '{}' then true else ac.account_id = any (l_account_ids) end
-    and cl.client_order_id = any('{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ,52549002U3,52549002U4,T3TRDG0596OFX92VE5M1,T3TRDGYBJNCJ7VE5M100,T3TRDG6ZPMJ50TE5M100,T3TRDG057RCE1LYTE5M1,T3TRDGJAQ7GU3UE5M100,T3TRDGECQ7GU3UE5M100,62550001ZQ, 62550002ZV,625500000G,625500000B, 625500000C, 625500000D,  625500000E,T3TRDGHAOMJ50TE5M100,STE-2331657589,STE-2330480322,STE-2331857889,T3TRDG6UP7GU3UE5M100,T3TRDG05M9NFX92VE5M1,T3TRDG05O9NFX92VE5M1,5255200367,4625520004W,STE-2330581058,STE-2331207676,4425490004J}');
+      and case when in_client_order_ids is null then true else cl.client_order_id = any (in_client_order_ids) end;
+
     --and case when in_trading_firm_ids <> '{}' then ac.trading_firm_id = any(in_trading_firm_ids) else true end;
 
     get diagnostics l_row_cnt = row_count;
@@ -314,7 +333,12 @@ begin
         ex.cum_qty,
         cl.order_type_name,
         cl.price,
-        cl.order_creation_ts,
+--         cl.order_creation_ts,
+        case
+            when ex.exec_type in ('A', '0', '5', 's') then cl.par_tag_5050
+            when ex.exec_type in ('4') then ex.exec_time
+            else to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
+                 'UTC' end                                                                      as order_creation_ts,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -366,11 +390,11 @@ begin
              left join dwh.d_order_status os on ex.order_status = os.order_status
              left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active
              left join dwh.d_exec_type et on et.exec_type = ex.exec_type
-             left join lateral (select fix_message ->> '17'   as tag_17,
-                                       fix_message ->> '50'   as tag_50,
-                                       fix_message ->> '109'  as tag_109,
-                                       fix_message ->> '58'   as tag_58,
-                                       fix_message ->> '5050' as tag_5050
+             left join lateral (select fix_message ->> '17'                                     as tag_17,
+                                       fix_message ->> '50'                                     as tag_50,
+                                       fix_message ->> '109'                                    as tag_109,
+                                       fix_message ->> '58'                                     as tag_58,
+                                       coalesce(fix_message ->> '5050', fix_message ->> '5051') as tag_5050
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = ex.fix_message_id
                                 limit 1) fmj on true
@@ -449,7 +473,7 @@ begin
                case
                    when rep.exec_instruction like '1%' then 'NH'
                    when rep.exec_instruction like '5%' then 'H'
---                   else 'NH'
+                   --                   else 'NH'
                    end,                                                                 -- as "Is Held",
                case when rep.cross_order_id is not null then 'Y' else 'N' end,          -- as "Is Cross",
                rep.fee_sensitivity,                                                     -- as "Fee Sensitivity",
@@ -477,9 +501,10 @@ begin
 
                -- CAT Details
                rep.cat_imid                                                             -- as "CAT Reporting Firm IMID"
---  ], ',', '')
+        --  ], ',', '')
         from t_sor rep
-        order by coalesce(rep.first_order_id, rep.parent_order_id), rep.parent_order_id, rep.street_order_id, rep.exec_id nulls first;
+        order by coalesce(rep.first_order_id, rep.parent_order_id), rep.parent_order_id, rep.street_order_id,
+                 rep.exec_id nulls first;
 
     select public.load_log(l_load_id, l_step_id,
                            'dash360.report_obo_compliance_xls for ' || l_date_begin_id::text || ' - ' ||
