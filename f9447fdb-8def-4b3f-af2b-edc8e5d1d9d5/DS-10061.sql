@@ -579,7 +579,7 @@ CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id 
                                                                   in_is_auto_allocate character,
                                                                   in_instrumnt_type_id character DEFAULT 'O'::bpchar,
                                                                   in_user_id integer DEFAULT NULL::integer,
-                                                                  in_is_intraday_auto_allocate bpchar default 'Y'::bpchar)
+                                                                  in_is_intraday_auto_allocate bpchar default null::bpchar)
     RETURNS integer
     LANGUAGE plpgsql
     COST 1
@@ -599,8 +599,8 @@ begin
     then
 -- set is_autoallocate value
         update account acc
-        set is_auto_allocate          = in_is_auto_allocate,
-            is_intraday_auto_allocate = in_is_intraday_auto_allocate
+        set is_auto_allocate = in_is_auto_allocate
+
         where acc.account_id = in_account_id
           and acc.is_deleted = 'N'
           and acc.is_auto_allocate <> in_is_auto_allocate;
@@ -610,12 +610,20 @@ begin
     then
 -- set is_option_auto_allocate value
         update account acc
-        set is_option_auto_allocate   = in_is_auto_allocate,
-            is_intraday_auto_allocate = in_is_intraday_auto_allocate
+        set is_option_auto_allocate = in_is_auto_allocate
         where acc.account_id = in_account_id
           and acc.is_deleted = 'N'
           and acc.is_option_auto_allocate <> in_is_auto_allocate;
     end if;
+
+    if in_is_intraday_auto_allocate is not null then
+        update account acc
+        set is_intraday_auto_allocate = in_is_intraday_auto_allocate
+        where acc.account_id = in_account_id
+          and acc.is_deleted = 'N'
+          and acc.is_option_auto_allocate <> in_is_auto_allocate;
+    end if;
+
 
 -- close all current configuration for the account if any
 
