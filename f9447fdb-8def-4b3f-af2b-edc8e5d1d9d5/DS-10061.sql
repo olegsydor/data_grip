@@ -595,18 +595,17 @@ declare
     l_row_cnt               int;
 
 begin
-    if in_instrumnt_type_id = 'E'
+    if in_instrumnt_type_id = 'E' and in_is_auto_allocate is not null
     then
 -- set is_autoallocate value
         update account acc
         set is_auto_allocate = in_is_auto_allocate
-
         where acc.account_id = in_account_id
           and acc.is_deleted = 'N'
           and acc.is_auto_allocate <> in_is_auto_allocate;
     end if;
 
-    if in_instrumnt_type_id = 'O'
+    if in_instrumnt_type_id = 'O' and in_is_auto_allocate is not null
     then
 -- set is_option_auto_allocate value
         update account acc
