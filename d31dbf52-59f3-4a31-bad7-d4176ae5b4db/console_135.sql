@@ -3,7 +3,8 @@ select array_length('{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ
 
 select *
 from trash.report_obo_compliance_xls(in_date_begin_id := 20250218, in_date_end_id := 20250221,
-                                     in_client_order_ids := '{525490000G}')
+                                     in_client_order_ids := '{525490000G}');
+
 
 select * from t_sor;
 
@@ -13,7 +14,7 @@ from trash.report_obo_compliance_xls(in_date_begin_id := 20250218, in_date_end_i
                                      in_client_order_ids := '{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ,52549002U3,52549002U4,T3TRDG0596OFX92VE5M1,T3TRDGYBJNCJ7VE5M100,T3TRDG6ZPMJ50TE5M100,T3TRDG057RCE1LYTE5M1,T3TRDGJAQ7GU3UE5M100,T3TRDGECQ7GU3UE5M100,62550001ZQ, 62550002ZV,625500000G,625500000B, 625500000C, 625500000D,  625500000E,T3TRDGHAOMJ50TE5M100,STE-2331657589,STE-2330480322,STE-2331857889,T3TRDG6UP7GU3UE5M100,T3TRDG05M9NFX92VE5M1,T3TRDG05O9NFX92VE5M1,5255200367,4625520004W,STE-2330581058,STE-2331207676,4425490004J}')
 
 
-CREATE FUNCTION trash.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
+CREATE or replace FUNCTION trash.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
                                                 in_instrument_type character DEFAULT NULL::bpchar,
                                                 in_account_ids integer[] DEFAULT '{}'::integer[],
                                                 in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
@@ -178,12 +179,10 @@ begin
         ot.order_type_name,
         cl.price,
         case
-            when os.order_status_description = 'Cancelled' then cl.create_time
+            when os.order_status_description = 'Cancelled-------' then cl.create_time
             else coalesce(to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
-                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
-                          'UTC') end                        as order_creation_ts,
-        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
-        'UTC'                                               as par_tag_5050,
+                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC') end as order_creation_ts,
+        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' as par_tag_5050,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -309,7 +308,7 @@ begin
 
         -- Event Details
         'Execution'                                                                             as event_type,
-        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS')                                       as event_ts,
+        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC'         as event_ts,
         cl.parent_clorderid                                                                     as parent_clorderid,
         cl.street_clorderid                                                                     as street_clorderid,
         ex.last_qty                                                                             as event_qty,
@@ -343,9 +342,8 @@ begin
 --         cl.order_creation_ts,
         case
             when ex.exec_type in ('A', '0', '5', 's') then cl.par_tag_5050
-            when ex.exec_type in ('4') then ex.exec_time
-            else to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone
-                 'UTC' end                                                                      as order_creation_ts,
+--             when ex.exec_type in ('4') then ex.exec_time
+            else to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' end as order_creation_ts,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -459,7 +457,7 @@ begin
                rep.underlying_symbol,                                                   -- as "Underlying Symbol",
                rep.pcv,                                                                 -- as "P/C/S",
                to_char(rep.expiration_ts, 'MM/DD/YYYY'),                                -- as "Expiration Date",
-               to_char(rep.expiration_ts, 'HH24:MI:SS.MS'),                             -- as "Expiration Time",
+               to_char(rep.expiration_ts::timestamp, 'HH24:MI:SS.MS'),                  -- as "Expiration Time",
                case
                    when rep.side = '1' then 'Buy'
                    when rep.side = '2' then 'Sell'
