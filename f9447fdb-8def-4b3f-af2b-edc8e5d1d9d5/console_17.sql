@@ -1,3 +1,41 @@
+  create temp table t_tr
+  as
+  select TR.ACCOUNT_ID,
+         TR.INSTRUMENT_ID,
+         TR.SIDE,
+         TR.OPEN_CLOSE,
+         tr.cmta,
+         acc.opt_is_fix_custfirm_processed,
+         tr.market_participant_id,
+         tr.compliance_id,
+         tr.alternative_compliance_id,
+         TR.LAST_PX,
+         TR.LAST_QTY,
+         tr.trade_record_id
+  from genesis2.trade_record tr
+           inner join genesis2.account acc on (acc.account_id = tr.account_id)
+           inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+  where TR.DATE_ID = :l_date_id
+    and TR.IS_BUSTED = 'N'
+    and case :in_instrument_type_id
+            when 'E' then ACC.IS_AUTO_ALLOCATE
+            else ACC.IS_OPTION_AUTO_ALLOCATE
+            end = 'Y'
+    and I.INSTRUMENT_TYPE_ID = :in_instrument_type_id
+    and ((:in_instrument_type_id = 'O' and coalesce(ACC.OPT_REPORT_TO_MPID, 'NONE') <> 'NONE') or
+         (:in_instrument_type_id = 'E' and coalesce(ACC.EQ_REPORT_TO_MPID, 'NONE') <> 'NONE'))
+    and TR.TRADE_RECORD_ID <= :l_max_trade_id
+    and TR.TRADE_RECORD_ID <= :l_max_trade_id
+    and tr.order_id > 0 /* excluding Blaze originated Away trades */
+    and (:in_allocation_type = 0
+      or (:in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N')
+      or (:in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y')
+      OR (:in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T'))
+    and case  -- added DS-10061
+            when coalesce(:in_account_ids, '{}') = '{}' then true
+            else acc.account_id = any (:in_account_ids) end;
+
+select * from t_tr
 select TR.ACCOUNT_ID,
                TR.INSTRUMENT_ID,
                TR.SIDE,
@@ -13,7 +51,7 @@ select TR.ACCOUNT_ID,
         from t_tr tr
                  /* SY: Just to be sure clearing account already configured */
                  inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
-                                                             CA.MARKET_TYPE = in_instrument_type_id and
+                                                             CA.MARKET_TYPE = :in_instrument_type_id and
                                                              CA.IS_DEFAULT = 'Y')
             /* We need to exclude manual allocations */
                  left join lateral (select A.ALLOC_INSTR_ID
@@ -52,3 +90,11 @@ select TR.ACCOUNT_ID,
                  case :in_allocation_type
                      when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id)
                      else null end
+
+
+
+select ca.*, * from genesis2.trade_record tr
+                 inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
+                                                             CA.MARKET_TYPE = :in_instrument_type_id and
+                                                             CA.IS_DEFAULT = 'Y')
+where tr.date_id = 20250603

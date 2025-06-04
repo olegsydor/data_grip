@@ -299,19 +299,10 @@ from trash.exchanges_execid_to_tag17_cross_reference(p_start_date_id := 20250325
                                                      p_add_exchange_order_id := 'Y', p_account_ids := '{73660}');
 
 drop function dash360.exchanges_execid_to_tag17_cross_reference;
-create function dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id integer default null::integer,
-                                                                  p_end_date_id integer default null::integer,
-                                                                  p_trading_firm_ids character varying[] default '{}'::character varying[],
-                                                                  p_add_exchange_order_id character default 'N'::bpchar,
-                                                                  p_account_ids int4[] default '{}'::int4[]
-)
-    returns table
-            (
-                export_row text
-            )
-    language plpgsql
-as
-$function$
+CREATE OR REPLACE FUNCTION dash360.exchanges_execid_to_tag17_cross_reference(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer, p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], p_add_exchange_order_id character DEFAULT 'N'::bpchar, p_account_ids integer[] DEFAULT '{}'::integer[])
+ RETURNS TABLE(export_row text)
+ LANGUAGE plpgsql
+AS $function$
     -- https://dashfinancial.atlassian.net/browse/DEVREQ-2469
     -- 2024-05-21 DS DEVREQ-4314 Exclude BLAZE/DASH OMS routes on "Billing ExecutionID to Tag17 cross reference"
     -- 2025-03-06 OS https://dashfinancial.atlassian.net/browse/DEVREQ-5704
@@ -507,7 +498,7 @@ begin
 
 end;
 $function$
-;
+
 
 select * from tmp_606_isi_bill_changes
 ;
