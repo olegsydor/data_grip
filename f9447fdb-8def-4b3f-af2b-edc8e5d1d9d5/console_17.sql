@@ -93,8 +93,9 @@ select TR.ACCOUNT_ID,
 
 
 
-select ca.*, * from genesis2.trade_record tr
+select * from genesis2.trade_record tr
                  inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
                                                              CA.MARKET_TYPE = :in_instrument_type_id and
                                                              CA.IS_DEFAULT = 'Y')
 where tr.date_id = 20250603
+and tr.account_id = 258492
