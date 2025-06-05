@@ -1,3 +1,5 @@
+select * from dwh.d_exec_type
+
 select array_length('{525490000G,625490007F,STE-2330456497,52549002QR,52549002TZ,52549002U3,52549002U4,T3TRDG0596OFX92VE5M1,T3TRDGYBJNCJ7VE5M100,T3TRDG6ZPMJ50TE5M100,T3TRDG057RCE1LYTE5M1,T3TRDGJAQ7GU3UE5M100,T3TRDGECQ7GU3UE5M100,62550001ZQ, 62550002ZV,625500000G,625500000B, 625500000C, 625500000D,  625500000E,T3TRDGHAOMJ50TE5M100,STE-2331657589,STE-2330480322,STE-2331857889,T3TRDG6UP7GU3UE5M100,T3TRDG05M9NFX92VE5M1,T3TRDG05O9NFX92VE5M1,5255200367,4625520004W,STE-2330581058,STE-2331207676,4425490004J}'::text[], 1)
 
 
@@ -181,10 +183,7 @@ begin
         cl.price,
         case
             when os.order_status_description = 'Cancelled-------' then cl.create_time
-            else coalesce(cl.process_time,
-                --to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
-                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
-                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC') end as order_creation_ts,
+            else cl.process_time end as order_creation_ts,
         to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' as par_tag_5050,
         cl.open_close,
         cl.exec_instruction,
@@ -216,7 +215,8 @@ begin
         exc.mic_code,
         ex.trade_liquidity_indicator,
     -- CAT Details
-    ex.exec_id as ex_exec_id
+    ex.exec_id as ex_exec_id,
+    ex.exec_type
 
     from dwh.client_order as cl
              left join dwh.client_order mleg
@@ -297,7 +297,7 @@ begin
      expiration_ts, side, tif, good_till_ts, order_qty, cum_qty, order_type_name, price, order_creation_ts, open_close,
      exec_instruction, cross_order_id, fee_sensitivity, stop_price, max_floor, customer_or_firm_name, ex_destination,
      ratio_qty, user_, account_name, account_id, account_holder_type, cat_fdid, cat_imid, crd_number,
-     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id)
+     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id, exec_type)
 
     select
         true as is_street,
@@ -346,13 +346,18 @@ begin
         cl.order_type_name,
         cl.price,
 --         cl.order_creation_ts,
-        case
-            when ex.exec_type in ('A', '0', '5', 's') then cl.order_creation_ts
-            when ex.exec_type in ('4', 'a', 'S', 'b') then cl.order_creation_ts
+/*        case
+            when ex.exec_type in ('4') then ex.exec_time
+--             when ex.exec_type in ('A', '0', '5', 's') then cl.order_creation_ts
+--             when ex.exec_type in ('4', 'a', 'S', 'b') then cl.order_creation_ts
 --             else ex.exec_time
             else coalesce(to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
-                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC')
+                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
+                          ex.exec_time)
                           end as order_creation_ts,
+
+ */
+        ex.exec_time as order_creation_ts,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -379,7 +384,8 @@ begin
         exc.mic_code,
         ex.trade_liquidity_indicator,
     -- CAT Details
-    ex.exec_id as ex_exec_id
+    ex.exec_id as ex_exec_id,
+    ex.exec_type
     from t_sor cl
              left join dwh.d_account ac on cl.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
