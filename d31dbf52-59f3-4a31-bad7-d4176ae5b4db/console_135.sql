@@ -129,6 +129,7 @@ begin
     -- parent level
     create temp table t_sor as
     select
+        false as is_street,
         -- head
         staging.last_orig_order(in_order_id := cl.order_id) as first_order_id,
         cl.order_id                                         as parent_order_id,
@@ -180,8 +181,9 @@ begin
         cl.price,
         case
             when os.order_status_description = 'Cancelled-------' then cl.create_time
-            else coalesce(to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
-                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC') end as order_creation_ts,
+            else coalesce(--to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
+                          to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
+                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC') end as order_creation_ts,
         to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' as par_tag_5050,
         cl.open_close,
         cl.exec_instruction,
@@ -211,8 +213,9 @@ begin
         -- Execution Details
         ex.last_mkt,
         exc.mic_code,
-        ex.trade_liquidity_indicator
+        ex.trade_liquidity_indicator,
     -- CAT Details
+    ex.exec_id as ex_exec_id
 
     from dwh.client_order as cl
              left join dwh.client_order mleg
@@ -255,7 +258,8 @@ begin
                                        fix_message ->> '109'   as tag_109,
                                        fix_message ->> '58'    as tag_58,
                                        fix_message ->> '10061' as tag_10061,
-                                       fix_message ->> '5050'  as tag_5050
+                                       fix_message ->> '5050'  as tag_5050,
+                                       fix_message ->> '5051'  as tag_5051
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.fix_message_id
                                 limit 1) fmj on true
@@ -284,7 +288,7 @@ begin
 
     -- exec level
     insert into t_sor
-    (first_order_id, parent_order_id, street_order_id, exec_id, create_date_id, trading_firm_name, firm_cat_imid,
+    (is_street, first_order_id, parent_order_id, street_order_id, exec_id, create_date_id, trading_firm_name, firm_cat_imid,
      firm_cat_crd,
      event_type, event_ts, parent_clorderid, street_clorderid, event_order_qty, event_price, net_price,
      multileg_reporting_type, no_legs, multileg_order_id, manual_flag, exec_text, order_status_description,
@@ -292,9 +296,10 @@ begin
      expiration_ts, side, tif, good_till_ts, order_qty, cum_qty, order_type_name, price, order_creation_ts, open_close,
      exec_instruction, cross_order_id, fee_sensitivity, stop_price, max_floor, customer_or_firm_name, ex_destination,
      ratio_qty, user_, account_name, account_id, account_holder_type, cat_fdid, cat_imid, crd_number,
-     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator)
+     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id)
 
     select
+        true as is_street,
         -- head
         cl.first_order_id,
         cl.parent_order_id                                                                      as parent_order_id,
@@ -341,9 +346,12 @@ begin
         cl.price,
 --         cl.order_creation_ts,
         case
-            when ex.exec_type in ('A', '0', '5', 's') then cl.par_tag_5050
---             when ex.exec_type in ('4') then ex.exec_time
-            else to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' end as order_creation_ts,
+            when ex.exec_type in ('A', '0', '5', 's') then cl.order_creation_ts
+            when ex.exec_type in ('4', 'a', 'S', 'b') then cl.order_creation_ts
+--             else ex.exec_time
+            else coalesce(to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
+                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC')
+                          end as order_creation_ts,
         cl.open_close,
         cl.exec_instruction,
         cl.cross_order_id,
@@ -368,8 +376,9 @@ begin
         -- Execution Details
         ex.last_mkt,
         exc.mic_code,
-        ex.trade_liquidity_indicator
+        ex.trade_liquidity_indicator,
     -- CAT Details
+    ex.exec_id as ex_exec_id
     from t_sor cl
              left join dwh.d_account ac on cl.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -399,7 +408,9 @@ begin
                                        fix_message ->> '50'                                     as tag_50,
                                        fix_message ->> '109'                                    as tag_109,
                                        fix_message ->> '58'                                     as tag_58,
-                                       coalesce(fix_message ->> '5050', fix_message ->> '5051') as tag_5050
+                                       fix_message ->> '5050' as tag_5050,
+                                       fix_message ->> '5051' as tag_5051,
+                                       fix_message ->> '10061' as tag_10061
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = ex.fix_message_id
                                 limit 1) fmj on true
@@ -508,8 +519,8 @@ begin
                rep.cat_imid                                                             -- as "CAT Reporting Firm IMID"
         --  ], ',', '')
         from t_sor rep
-        order by coalesce(rep.first_order_id, rep.parent_order_id), rep.parent_order_id, rep.street_order_id,
-                 rep.exec_id nulls first;
+        order by coalesce(rep.first_order_id, rep.parent_order_id), rep.parent_order_id, rep.is_street, rep.street_order_id,
+                 rep.ex_exec_id nulls first;
 
     select public.load_log(l_load_id, l_step_id,
                            'dash360.report_obo_compliance_xls for ' || l_date_begin_id::text || ' - ' ||
