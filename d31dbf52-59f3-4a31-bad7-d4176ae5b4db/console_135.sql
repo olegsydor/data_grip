@@ -181,7 +181,8 @@ begin
         cl.price,
         case
             when os.order_status_description = 'Cancelled-------' then cl.create_time
-            else coalesce(--to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
+            else coalesce(cl.process_time,
+                --to_timestamp(fmj.tag_10061, 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC',
                           to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
                           to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC') end as order_creation_ts,
         to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' as par_tag_5050,

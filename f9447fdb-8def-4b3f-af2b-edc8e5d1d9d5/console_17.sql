@@ -93,9 +93,30 @@ select TR.ACCOUNT_ID,
 
 
 
-select * from genesis2.trade_record tr
-                 inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
-                                                             CA.MARKET_TYPE = :in_instrument_type_id and
-                                                             CA.IS_DEFAULT = 'Y')
-where tr.date_id = 20250603
-and tr.account_id = 258492
+  select
+      TR.INSTRUMENT_ID, TR.SIDE, TR.OPEN_CLOSE, tr.cmta,
+           tr.market_participant_id,
+      round(sum(TR.LAST_PX * TR.LAST_QTY) / sum(TR.LAST_QTY), 6) as AVG_PX,
+         sum(TR.LAST_QTY)                                           as TOTAL_QTY,
+         array_agg(tr.trade_record_id)                              as trade_ids
+  from genesis2.trade_record tr
+           inner join trash.so_clearing_account CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
+                                                       CA.MARKET_TYPE = :in_instrument_type_id and
+                                                       CA.IS_DEFAULT = 'Y')
+  where tr.date_id = 20250603
+    and tr.account_id = 258492
+  and tr.instrument_id = 181973550
+  group by TR.ACCOUNT_ID, TR.INSTRUMENT_ID, TR.SIDE, TR.OPEN_CLOSE, tr.cmta,
+           tr.market_participant_id,
+           case :in_allocation_type
+               when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id)
+               else null end;
+
+insert_sor_obo_mooc_record_2d
+select *
+into trash.so_clearing_account
+from genesis2.clearing_account
+where account_id = 258492
+
+
+alter table trash.so_clearing_account add column default_alloc_ratio numeric
