@@ -217,7 +217,13 @@ begin
         ex.trade_liquidity_indicator,
     -- CAT Details
     ex.exec_id as ex_exec_id,
-    ex.exec_type
+    ex.exec_type,
+    case
+        when di.instrument_type_id = 'E' then compliance.get_eq_sor_trading_session(in_order_id := cl.order_id,
+                                                     in_date_id := cl.create_date_id)
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A') then 'ALL'
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B') then 'REGPOST'
+			else 'REG' end as trading_session
 
     from dwh.client_order as cl
              left join dwh.client_order mleg
@@ -261,7 +267,9 @@ begin
                                        fix_message ->> '58'    as tag_58,
                                        fix_message ->> '10061' as tag_10061,
                                        fix_message ->> '5050'  as tag_5050,
-                                       fix_message ->> '5051'  as tag_5051
+                                       fix_message ->> '5051'  as tag_5051,
+                                       fix_message->>'9281' as tag_9281,
+                                       fix_message->>'22017' as tag_22017
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.fix_message_id
                                 limit 1) fmj on true
@@ -298,7 +306,7 @@ begin
      expiration_ts, side, tif, good_till_ts, order_qty, cum_qty, order_type_name, price, order_creation_ts, open_close,
      exec_instruction, cross_order_id, fee_sensitivity, stop_price, max_floor, customer_or_firm_name, ex_destination,
      ratio_qty, user_, account_name, account_id, account_holder_type, cat_fdid, cat_imid, crd_number,
-     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id, exec_type)
+     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id, exec_type, trading_session)
 
     select
         true as is_street,
@@ -386,7 +394,8 @@ begin
         ex.trade_liquidity_indicator,
     -- CAT Details
     ex.exec_id as ex_exec_id,
-    ex.exec_type
+    ex.exec_type,
+    cl.trading_session
     from t_sor cl
              left join dwh.d_account ac on cl.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -492,8 +501,7 @@ begin
                to_char(rep.order_creation_ts, 'DD.MM.YYYY'),                            -- as "Order Creation Date",
                to_char(rep.order_creation_ts, 'HH24:MI:SS.MS'),                         -- as "Order Creation Time",
                rep.open_close,                                                          -- as "Open/Close",
-               compliance.get_eq_sor_trading_session(in_order_id := rep.order_id,
-                                                     in_date_id := rep.create_date_id), -- as "Trading Session",
+               rep.trading_session, -- as "Trading Session",
                case
                    when rep.exec_instruction like '1%' then 'NH'
                    when rep.exec_instruction like '5%' then 'H'
@@ -544,6 +552,7 @@ $function$
 
 
 --- PROD VERSION WITHOUT client_order_id list as the input parameter
+alter function dash360.report_obo_compliance_xls rename to report_obo_compliance_xls_bkp;
 
 CREATE or replace FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
                                                 in_instrument_type character DEFAULT NULL::bpchar,
@@ -710,7 +719,9 @@ begin
         ex.cum_qty,
         ot.order_type_name,
         cl.price,
-        cl.process_time as order_creation_ts,
+        case
+            when os.order_status_description = 'Cancelled-------' then cl.create_time
+            else cl.process_time end as order_creation_ts,
         to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC' as par_tag_5050,
         cl.open_close,
         cl.exec_instruction,
@@ -743,7 +754,13 @@ begin
         ex.trade_liquidity_indicator,
     -- CAT Details
     ex.exec_id as ex_exec_id,
-    ex.exec_type
+    ex.exec_type,
+    case
+        when di.instrument_type_id = 'E' then compliance.get_eq_sor_trading_session(in_order_id := cl.order_id,
+                                                     in_date_id := cl.create_date_id)
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A') then 'ALL'
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B') then 'REGPOST'
+			else 'REG' end as trading_session
 
     from dwh.client_order as cl
              left join dwh.client_order mleg
@@ -787,7 +804,9 @@ begin
                                        fix_message ->> '58'    as tag_58,
                                        fix_message ->> '10061' as tag_10061,
                                        fix_message ->> '5050'  as tag_5050,
-                                       fix_message ->> '5051'  as tag_5051
+                                       fix_message ->> '5051'  as tag_5051,
+                                       fix_message->>'9281' as tag_9281,
+                                       fix_message->>'22017' as tag_22017
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = cl.fix_message_id
                                 limit 1) fmj on true
@@ -802,9 +821,7 @@ begin
               when coalesce(in_parent_order_ids, '{}') = '{}' then true
               else cl.order_id = any (in_parent_order_ids) end
       and cl.create_date_id between l_date_begin_id and l_date_end_id
-      and case when l_account_ids = '{}' then true else ac.account_id = any (l_account_ids) end
---       and case when in_client_order_ids is null then true else cl.client_order_id = any (in_client_order_ids) end
-    ;
+      and case when l_account_ids = '{}' then true else ac.account_id = any (l_account_ids) end;
 
     --and case when in_trading_firm_ids <> '{}' then ac.trading_firm_id = any(in_trading_firm_ids) else true end;
 
@@ -825,7 +842,7 @@ begin
      expiration_ts, side, tif, good_till_ts, order_qty, cum_qty, order_type_name, price, order_creation_ts, open_close,
      exec_instruction, cross_order_id, fee_sensitivity, stop_price, max_floor, customer_or_firm_name, ex_destination,
      ratio_qty, user_, account_name, account_id, account_holder_type, cat_fdid, cat_imid, crd_number,
-     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id, exec_type)
+     sender_sub_id, last_mkt, mic_code, trade_liquidity_indicator, ex_exec_id, exec_type, trading_session)
 
     select
         true as is_street,
@@ -873,6 +890,18 @@ begin
         ex.cum_qty,
         cl.order_type_name,
         cl.price,
+--         cl.order_creation_ts,
+/*        case
+            when ex.exec_type in ('4') then ex.exec_time
+--             when ex.exec_type in ('A', '0', '5', 's') then cl.order_creation_ts
+--             when ex.exec_type in ('4', 'a', 'S', 'b') then cl.order_creation_ts
+--             else ex.exec_time
+            else coalesce(to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
+                          to_timestamp(fmj.tag_5051, 'YYYYMMDD-HH24:MI:SS.US')::timestamp at time zone 'UTC',
+                          ex.exec_time)
+                          end as order_creation_ts,
+
+ */
         ex.exec_time as order_creation_ts,
         cl.open_close,
         cl.exec_instruction,
@@ -901,7 +930,8 @@ begin
         ex.trade_liquidity_indicator,
     -- CAT Details
     ex.exec_id as ex_exec_id,
-    ex.exec_type
+    ex.exec_type,
+    cl.trading_session
     from t_sor cl
              left join dwh.d_account ac on cl.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on ac.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -1007,8 +1037,7 @@ begin
                to_char(rep.order_creation_ts, 'DD.MM.YYYY'),                            -- as "Order Creation Date",
                to_char(rep.order_creation_ts, 'HH24:MI:SS.MS'),                         -- as "Order Creation Time",
                rep.open_close,                                                          -- as "Open/Close",
-               compliance.get_eq_sor_trading_session(in_order_id := rep.order_id,
-                                                     in_date_id := rep.create_date_id), -- as "Trading Session",
+               rep.trading_session, -- as "Trading Session",
                case
                    when rep.exec_instruction like '1%' then 'NH'
                    when rep.exec_instruction like '5%' then 'H'
