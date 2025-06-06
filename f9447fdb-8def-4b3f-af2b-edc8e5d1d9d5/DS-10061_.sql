@@ -207,21 +207,27 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   into l_step_id;
 
 
-  --------------
-
+  -------------- DS-10060 Support multiple default CTMAs in auto-allocation job
+  create temp table t_aie as
+  select ai.alloc_instr_id,
+         ca.clearing_account_id,
+         ai.total_qty * ca.default_alloc_ratio as alloc_qty,
+         l_date_id                             as date_id,
+         ca.occ_actionable_id
+  from genesis2.allocation_instruction ai
+           inner join genesis2.clearing_account ca on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
+                                                       ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
+  where ai.date_id = l_date_id
+    and ai.dataset_id = l_load_batch_id
+    and ai.is_deleted = 'n'
+  group by alloc_instr_id, total_qty, occ_actionable_id, ca.clearing_account_id;
+  -------------------------------------------------------------------------------------
 
   insert into genesis2.ALLOCATION_INSTRUCTION_ENTRY (ALLOC_INSTR_ID, CLEARING_ACCOUNT_ID, ALLOC_QTY, DATE_ID,
                                                      occ_actionable_id)
-  select ALLOC_INSTR_ID, CA.CLEARING_ACCOUNT_ID, TOTAL_QTY * ca.default_alloc_ratio, l_date_id, occ_actionable_id
-  from genesis2.ALLOCATION_INSTRUCTION ai
-           /*SY: Why do we use Left join there */
-           inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = ai.ACCOUNT_ID and CA.IS_DELETED = 'N' and
-                                                       CA.MARKET_TYPE = in_instrument_type_id and CA.IS_DEFAULT = 'Y')
+  select ALLOC_INSTR_ID, CLEARING_ACCOUNT_ID, ALLOC_QTY, DATE_ID,
+                                                     occ_actionable_id from t_aie;
 
-  where ai.date_id = l_date_id
-    and ai.dataset_id = l_load_batch_id
-    and ai.is_deleted = 'N'
-  group by ALLOC_INSTR_ID, TOTAL_QTY, occ_actionable_id,CA.CLEARING_ACCOUNT_ID;
 
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
 
@@ -501,10 +507,11 @@ $fn$
 
 
 select * from genesis2.allocation_instruction_entry
-where account_nickname is not null
+where account_nickname is not null;
 
-
+/*
 select 5 / 2.0
 1. greater %
 2. smaller cmta
 3, primary key
+*/
