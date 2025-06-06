@@ -484,7 +484,7 @@ end;
 $fn$
 
 
-alter table genesis2.clearing_account add column default_alloc_ratio numeric;
+alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
 
 
 
