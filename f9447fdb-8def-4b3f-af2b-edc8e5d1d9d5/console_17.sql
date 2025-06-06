@@ -112,10 +112,11 @@ select TR.ACCOUNT_ID,
                when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id)
                else null end;
 
-insert_sor_obo_mooc_record_2d
+
 select *
-into trash.so_clearing_account
-from genesis2.clearing_account
+from trash.so_clearing_account
+;
+    from genesis2.clearing_account
 where account_id = 258492
 
 
