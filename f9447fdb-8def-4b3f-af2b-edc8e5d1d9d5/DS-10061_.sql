@@ -1,10 +1,13 @@
+alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
+
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4);
-drop function trash.auto_allocate_unallocated_trade;
-alter function genesis2.auto_allocate_unallocated_trade set schema trash;
-CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character,
+-- drop function trash.auto_allocate_unallocated_trade;
+-- alter function genesis2.auto_allocate_unallocated_trade set schema trash;
+CREATE OR REPLACE FUNCTION trash.auto_allocate_unallocated_trade(in_instrument_type_id character,
                                                                     in_allocation_type integer,
                                                                     in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                    in_account_ids int4[] default '{}'::int4[])
+                                                                    in_account_ids int4[] default '{}'::int4[]
+)
     RETURNS integer
     LANGUAGE plpgsql
     SET application_name TO 'ETL:  AutoAllocation'
@@ -23,8 +26,8 @@ AS $function$
 -- 																	condition on cmta is not null has been removed from that join.
 --  SY:  20240221 https://dashfinancial.atlassian.net/browse/DS-8077	having count(1) has been added
 --  SY:  20241114 https://dashfinancial.atlassian.net/browse/DS-9151 tr table has been introduced
---  SO:  20250602 https://dashfinancial.atlassian.net/browse/DS-10061 Added account_id list as an input parameter that is calculated in the wrapper (see https://dashfinancial.atlassian.net/browse/DS-10060)
-
+--  SO:  20250602 https://dashfinancial.atlassian.net/browse/DS-10060 Added account_id list as an input parameter that is calculated in the wrapper (see https://dashfinancial.atlassian.net/browse/DS-10060)
+--  SO:  20250606 https://dashfinancial.atlassian.net/browse/DS-10060 Support multiple default CTMAs in auto-allocation job
 
 DECLARE
 --  ai RECORD;
@@ -130,9 +133,14 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                array_agg(tr.trade_record_id)                                                              as trade_ids --, nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
         from t_tr tr
                  /* SY: Just to be sure clearing account already configured */
-                 inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = TR.ACCOUNT_ID and CA.IS_DELETED = 'N' and
-                                                             CA.MARKET_TYPE = in_instrument_type_id and
-                                                             CA.IS_DEFAULT = 'Y')
+                 inner join lateral (select 'nothing'
+                                     from genesis2.CLEARING_ACCOUNT CA
+                                     where CA.ACCOUNT_ID = TR.ACCOUNT_ID
+                                       and CA.IS_DELETED = 'N'
+                                       and CA.MARKET_TYPE = in_instrument_type_id
+                                       and CA.IS_DEFAULT = 'Y'
+                                     limit 1) ca
+                            on true -- added for DS-10060 - Support multiple default CTMAs in auto-allocation job
             /* We need to exclude manual allocations */
                  left join lateral (select A.ALLOC_INSTR_ID
                                     from genesis2.ALLOC_INSTR2TRADE_RECORD AT
@@ -198,9 +206,13 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION', l_cnt_rows, 'I')
   into l_step_id;
 
+
+  --------------
+
+
   insert into genesis2.ALLOCATION_INSTRUCTION_ENTRY (ALLOC_INSTR_ID, CLEARING_ACCOUNT_ID, ALLOC_QTY, DATE_ID,
                                                      occ_actionable_id)
-  select ALLOC_INSTR_ID, max(CA.CLEARING_ACCOUNT_ID), TOTAL_QTY, l_date_id, occ_actionable_id
+  select ALLOC_INSTR_ID, CA.CLEARING_ACCOUNT_ID, TOTAL_QTY * ca.default_alloc_ratio, l_date_id, occ_actionable_id
   from genesis2.ALLOCATION_INSTRUCTION ai
            /*SY: Why do we use Left join there */
            inner join genesis2.CLEARING_ACCOUNT CA on (CA.ACCOUNT_ID = ai.ACCOUNT_ID and CA.IS_DELETED = 'N' and
@@ -209,7 +221,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   where ai.date_id = l_date_id
     and ai.dataset_id = l_load_batch_id
     and ai.is_deleted = 'N'
-  group by ALLOC_INSTR_ID, TOTAL_QTY, occ_actionable_id;
+  group by ALLOC_INSTR_ID, TOTAL_QTY, occ_actionable_id,CA.CLEARING_ACCOUNT_ID;
 
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
 
@@ -484,7 +496,7 @@ end;
 $fn$
 
 
-alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
+
 
 
 
