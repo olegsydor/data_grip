@@ -209,61 +209,49 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
 
   -------------- DS-10060 Support multiple default CTMAs in auto-allocation job
   create temp table t_aie as
-  select ai.alloc_instr_id,
-         ca.clearing_account_id,
-         ai.total_qty * ca.default_alloc_ratio as alloc_qty,
-         l_date_id                             as date_id,
-         ca.occ_actionable_id
-  from genesis2.allocation_instruction ai
-           inner join genesis2.clearing_account ca on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                                       ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
-  where ai.date_id = l_date_id
-    and ai.dataset_id = l_load_batch_id
-    and ai.is_deleted = 'N'
-  group by alloc_instr_id, total_qty, occ_actionable_id, ca.clearing_account_id;
-
-
-
-
-
-create temp table t_aie as
-  with base as (select
-                    ai.alloc_instr_id,
-                    ai.dataset_id,
-                    clearing_account_id,
-                     ai.account_id,
-                     default_alloc_ratio,
-                     ai.total_qty                           as qty,
-                     ai.total_qty * default_alloc_ratio                    as pre_sum,
-                     floor(ai.total_qty * default_alloc_ratio)             as rnd_sum,
-                     sum(floor(ai.total_qty * default_alloc_ratio)) over w as acc_rnd_sum,
-                     row_number() over w            as rn
-from genesis2.allocation_instruction ai
-           inner join genesis2.clearing_account ca on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                                       ca.market_type = :in_instrument_type_id and ca.is_default = 'Y')
-  where ai.date_id = :l_date_id
-    and ai.dataset_id = :l_load_batch_id
-    and ai.is_deleted = 'N'
-  group by alloc_instr_id, total_qty, occ_actionable_id, ca.clearing_account_id
-              window w as (partition by ai.account_id order by default_alloc_ratio, clearing_account_id)
-              )
-select clearing_account_id,
-       default_alloc_ratio,
-       pre_sum,
-       rnd_sum,
-       case
-           when rn != (select max(rn) from base) then rnd_sum
-           else qty - lag(base.acc_rnd_sum)
-                       over (partition by account_id order by default_alloc_ratio) end,
-       rn
-from base
-;
+  with base as (select ai.alloc_instr_id,
+--                     ai.dataset_id,
+                       clearing_account_id,
+                       ai.account_id,
+                       ca.default_alloc_ratio,
+                       ai.total_qty                                          as qty,
+                       ai.total_qty * default_alloc_ratio                    as pre_sum,
+                       floor(ai.total_qty * default_alloc_ratio)             as rnd_sum,
+                       sum(floor(ai.total_qty * default_alloc_ratio)) over w as acc_rnd_sum,
+                       row_number() over w                                   as rn,
+                       ca.occ_actionable_id,
+                       ai.date_id
+                from genesis2.allocation_instruction ai
+                         inner join genesis2.clearing_account ca
+                                    on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
+                                        ca.market_type = :in_instrument_type_id and ca.is_default = 'Y')
+                where ai.date_id = l_date_id
+                  and ai.dataset_id = l_load_batch_id
+                  and ai.is_deleted = 'N'
+                group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
+                         ai.account_id, ca.default_alloc_ratio
+                window w as ( partition by ai.alloc_instr_id, ai.account_id
+                        order by ca.default_alloc_ratio, ca.clearing_account_id ))
+  select alloc_instr_id,
+         clearing_account_id,
+         case
+             when rn != (select max(rn) from base b where b.alloc_instr_id = base.alloc_instr_id) then rnd_sum
+             else qty - lag(base.acc_rnd_sum)
+                        over (partition by alloc_instr_id order by default_alloc_ratio) end as alloc_qty,
+         rn,
+         occ_actionable_id,
+         date_id
+  from base;
   -------------------------------------------------------------------------------------
 
-  insert into genesis2.ALLOCATION_INSTRUCTION_ENTRY (ALLOC_INSTR_ID, CLEARING_ACCOUNT_ID, ALLOC_QTY, DATE_ID,
+  insert into genesis2.allocation_instruction_entry (alloc_instr_id, clearing_account_id, alloc_qty, date_id,
                                                      occ_actionable_id)
-  select ALLOC_INSTR_ID, CLEARING_ACCOUNT_ID, ALLOC_QTY, DATE_ID,
-                                                     occ_actionable_id from t_aie;
+  select alloc_instr_id,
+         clearing_account_id,
+         alloc_qty,
+         date_id,
+         occ_actionable_id
+  from t_aie;
 
 
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
@@ -602,18 +590,20 @@ with base as (select ai.alloc_instr_id,
               and ai.account_id = 9908
               group by ai.alloc_instr_id, ai.total_qty, occ_actionable_id, ca.clearing_account_id,ai.account_id, ca.default_alloc_ratio
               window w as ( partition by ai.alloc_instr_id, ai.account_id order by ca.default_alloc_ratio, ca.clearing_account_id )
-              order by ai.alloc_instr_id, ca.clearing_account_id
+--               order by ai.alloc_instr_id, ca.default_alloc_ratio, ca.clearing_account_id
               )
 select alloc_instr_id,
        clearing_account_id,
        account_id,
 --        default_alloc_ratio,
 --        pre_sum,
---        rnd_sum,
+       qty,
+        rnd_sum,
+
        case
            when rn != (select max(rn) from base b where b.alloc_instr_id = base.alloc_instr_id) then rnd_sum
            else qty - lag(base.acc_rnd_sum)
-                      over (partition by account_id order by default_alloc_ratio) end as final_qty,
+                      over (partition by alloc_instr_id order by default_alloc_ratio) end as final_qty,
        rn
 from base
 order by alloc_instr_id, clearing_account_id;
@@ -624,7 +614,7 @@ order by alloc_instr_id, clearing_account_id;
 select ctid, * from trash.so_clearing_account
 where account_id = 9908
 and market_type = 'O'
-and ctid in (select  ctid from trash.so_clearing_account
+and ctid = '(109,35)'in (select  ctid from trash.so_clearing_account
 where account_id = 9908
 and market_type = 'O'
 order by 1 desc
@@ -646,4 +636,17 @@ select *
  into trash.so_clearing_account
  from genesis2.clearing_account
 where is_deleted = 'N'
-  and is_default = 'Y'
+  and is_default = 'Y';
+
+select ca.account_id, sum(default_alloc_ratio), array_agg(default_alloc_ratio)
+from trash.so_clearing_account ca
+join lateral (select * from trash.so_allocation_instruction ai
+                         where true
+and ai.date_id = :l_date_id
+                  and ai.dataset_id = :l_load_batch_id
+                  and ai.is_deleted = 'N'
+and
+                             (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
+                                        ca.market_type = :in_instrument_type_id and ca.is_default = 'Y')
+limit 1) ai on true
+group by ca.account_id
