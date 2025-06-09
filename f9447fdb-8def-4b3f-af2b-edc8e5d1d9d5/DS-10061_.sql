@@ -208,6 +208,25 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
 
 
   -------------- DS-10060 Support multiple default CTMAs in auto-allocation job
+  -- 1. Check if all accounts for the current dataset have a sum of default_alloc_ratio equals 1
+  if exists (select distinct on (account_id) 'smth'
+             from genesis2.allocation_instruction ai
+                      join lateral (select sum(ca.default_alloc_ratio) as sum_ratio
+                                    from genesis2.clearing_account ca
+                                    where true
+                                      and ca.account_id = ai.account_id
+                                      and ca.is_deleted = 'N'
+                                      and ca.market_type = :in_instrument_type_id
+                                      and ca.is_default = 'Y'
+                 ) ca on sum_ratio != 1
+             where true
+               and ai.date_id = l_date_id
+               and ai.dataset_id = l_load_batch_id
+               and ai.is_deleted = 'N') then
+      raise exception 'The account with the sum of default_alloc_ratio less than 1 exists in the clearing account';
+  end if;
+
+-- 2. insert into allocation_instruction_entry
   create temp table t_aie as
   with base as (select ai.alloc_instr_id,
 --                     ai.dataset_id,
@@ -252,6 +271,9 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
          date_id,
          occ_actionable_id
   from t_aie;
+
+  -------------- DS-10060 Support multiple default CTMAs in auto-allocation job
+  -- End of the insertion into genesis2.allocation_instruction_entry
 
 
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
@@ -638,15 +660,35 @@ select *
 where is_deleted = 'N'
   and is_default = 'Y';
 
-select ca.account_id, sum(default_alloc_ratio), array_agg(default_alloc_ratio)
-from trash.so_clearing_account ca
-join lateral (select * from trash.so_allocation_instruction ai
-                         where true
-and ai.date_id = :l_date_id
-                  and ai.dataset_id = :l_load_batch_id
-                  and ai.is_deleted = 'N'
-and
-                             (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                        ca.market_type = :in_instrument_type_id and ca.is_default = 'Y')
-limit 1) ai on true
-group by ca.account_id
+select ai.account_id, sum(ca.default_alloc_ratio), array_agg(ca.default_alloc_ratio)
+from genesis2.clearing_account ca
+         join lateral (select account_id
+                       from genesis2.allocation_instruction ai
+                       where true
+                         and ai.date_id = :l_date_id
+                         and ai.dataset_id = :l_load_batch_id
+                         and ai.is_deleted = 'N'
+                         and ca.account_id = ai.account_id
+                         and ca.is_deleted = 'N'
+                         and ca.market_type = :in_instrument_type_id
+                         and ca.is_default = 'Y'
+                       limit 1) ai on true
+group by ai.account_id;
+
+
+select distinct on (account_id) *
+from genesis2.allocation_instruction ai
+         join lateral (select sum(ca.default_alloc_ratio) as sum_ratio
+                       from genesis2.clearing_account ca
+                       where true
+                         and ca.account_id = ai.account_id
+                         and ca.is_deleted = 'N'
+                         and ca.market_type = :in_instrument_type_id
+                         and ca.is_default = 'Y'
+    ) ca on sum_ratio != 1
+where true
+  and ai.date_id = :l_date_id
+--   and ai.dataset_id = :l_load_batch_id
+  and ai.is_deleted = 'N'
+
+
