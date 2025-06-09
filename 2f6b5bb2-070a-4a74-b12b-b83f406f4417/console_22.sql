@@ -51,7 +51,7 @@ select id,
        rnd_sum,
        case
            when rn != (select max(rn) from base) then rnd_sum
-           else :qty - lag(base.acc_rnd_sum)
-                       over (partition by account_id order by koef) end,
+           else qty - lag(base.acc_rnd_sum)
+                       over (partition by account_id order by koef) end as final_qty,
        rn
 from base;
