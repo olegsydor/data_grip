@@ -575,7 +575,7 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_set_account_config(int8, jsonb, bpchar, bpchar, int4);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts jsonb,
+CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts text,
                                                                   in_is_auto_allocate character,
                                                                   in_instrumnt_type_id character DEFAULT 'O'::bpchar,
                                                                   in_user_id integer DEFAULT NULL::integer,
@@ -593,8 +593,10 @@ $function$
 declare
     l_clearing_account_type smallint;
     l_row_cnt               int;
+    l_clearing_accounts jsonb;
 
 begin
+    l_clearing_accounts := in_clearing_accounts::jsonb;
     if in_instrumnt_type_id = 'E' and in_is_auto_allocate is not null
     then
 -- set is_autoallocate value
@@ -665,7 +667,7 @@ begin
            in_user_id,
            (sj ->> 'visible')::bool       as is_visible_for_manual_allocation
     from (select value as sj
-          from jsonb_array_elements(in_clearing_accounts)) l1;
+          from jsonb_array_elements(l_clearing_accounts)) l1;
 
     GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
     return l_row_cnt;
