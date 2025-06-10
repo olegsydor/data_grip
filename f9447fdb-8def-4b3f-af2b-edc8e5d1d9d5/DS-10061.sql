@@ -622,7 +622,8 @@ begin
         set is_intraday_auto_allocate = in_is_intraday_auto_allocate
         where acc.account_id = in_account_id
           and acc.is_deleted = 'N'
-          and acc.is_option_auto_allocate <> in_is_auto_allocate;
+--           and acc.is_option_auto_allocate <> in_is_auto_allocate
+        ;
     end if;
 
 
