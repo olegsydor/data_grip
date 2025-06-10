@@ -673,3 +673,51 @@ begin
 end;
 $function$
 ;
+
+
+-- DROP FUNCTION dash360.allocations_clearing_accounts_by_account_id(int8, bpchar);
+
+CREATE OR REPLACE FUNCTION dash360.allocations_clearing_accounts_by_account_id(in_account_id bigint, in_market_type character)
+    RETURNS TABLE
+            (
+                clearing_account_id              integer,
+                clearing_account_number          character varying,
+                clearing_account_name            character varying,
+                is_default                       character,
+                clearing_account_type            character,
+                market_type                      character,
+                cmta                             character varying,
+                occ_actionable_id                character varying,
+                account_id                       integer,
+                is_visible_for_manual_allocation boolean,
+                default_alloc_ratio              numeric
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208
+-- SO: 20250610 https://dashfinancial.atlassian.net/browse/D360-15839
+begin
+
+    return query
+        select ca.clearing_account_id::integer,
+               ca.clearing_account_number,
+               ca.clearing_account_name,
+               ca.is_default::character,
+               ca.clearing_account_type::character,
+               ca.market_type::character,
+               ca.cmta,
+               ca.occ_actionable_id,
+               ca.account_id,
+               ca.is_visible_for_manual_allocation,
+               ca.default_alloc_ratio
+        from genesis2.clearing_account ca
+        where ca.account_id = in_account_id
+          and ca.market_type = in_market_type
+          and ca.is_deleted = 'N'
+        order by ca.is_default desc, ca.clearing_account_number;
+
+end;
+$function$
+;
