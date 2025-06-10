@@ -3,6 +3,8 @@ alter table genesis2.clearing_account add column default_alloc_ratio numeric def
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4);
 -- drop function trash.auto_allocate_unallocated_trade;
 -- alter function genesis2.auto_allocate_unallocated_trade set schema trash;
+
+drop function trash.auto_allocate_unallocated_trade
 CREATE OR REPLACE FUNCTION trash.auto_allocate_unallocated_trade(in_instrument_type_id character,
                                                                     in_allocation_type integer,
                                                                     in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
@@ -216,7 +218,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                                     where true
                                       and ca.account_id = ai.account_id
                                       and ca.is_deleted = 'N'
-                                      and ca.market_type = :in_instrument_type_id
+                                      and ca.market_type = in_instrument_type_id
                                       and ca.is_default = 'Y'
                  ) ca on sum_ratio != 1
              where true
@@ -243,7 +245,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                 from genesis2.allocation_instruction ai
                          inner join genesis2.clearing_account ca
                                     on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                        ca.market_type = :in_instrument_type_id and ca.is_default = 'Y')
+                                        ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
                 where ai.date_id = l_date_id
                   and ai.dataset_id = l_load_batch_id
                   and ai.is_deleted = 'N'
