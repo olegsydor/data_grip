@@ -258,20 +258,24 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
          case
              when rn != (select max(rn) from base b where b.alloc_instr_id = base.alloc_instr_id) then rnd_sum
              else qty - lag(base.acc_rnd_sum)
-                        over (partition by alloc_instr_id order by default_alloc_ratio) end as alloc_qty,
+                        over (partition by alloc_instr_id order by default_alloc_ratio) end  as alloc_qty,
          rn,
          occ_actionable_id,
-         date_id
-  from base;
+         date_id,
+         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
+         ta.trade_ids
+  from base
+  join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
   -------------------------------------------------------------------------------------
 
   insert into genesis2.allocation_instruction_entry (alloc_instr_id, clearing_account_id, alloc_qty, date_id,
-                                                     occ_actionable_id)
+                                                     occ_actionable_id, allocation_instruction_entry_id)
   select alloc_instr_id,
          clearing_account_id,
          alloc_qty,
          date_id,
-         occ_actionable_id
+         occ_actionable_id,
+         allocation_instruction_entry_id
   from t_aie;
 
   -------------- DS-10060 Support multiple default CTMAs in auto-allocation job
@@ -283,9 +287,22 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION_ENTRY', l_cnt_rows, 'I')
   into l_step_id;
 
-  insert into genesis2.ALLOC_INSTR2TRADE_RECORD(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id)
-  select unnest(trade_ids), ALLOC_INSTR_ID, in_date_id, l_load_batch_id
-  from trade_for_allocations;
+
+  insert into genesis2.alloc_instr2trade_record(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id, allocation_instruction_entry_id)
+  with base as (select unnest(:trade_ids) as id,
+                       ALLOC_INSTR_ID,
+                       in_date_id,
+                       l_load_batch_id
+                from trade_for_allocations)
+  select tr.id, tr.ALLOC_INSTR_ID, in_date_id, l_load_batch_id, aie.allocation_instruction_entry_id
+  from base tr
+  join lateral ( select allocation_instruction_entry_id from genesis2.allocation_instruction_entry aie where aie.alloc_instr_id = tr.alloc_instr_id limit 1) aie on true;
+
+
+--   with base as (select unnest(ids) as id, txt from t_os)
+-- select * from base
+-- join trade_record tr on tr.trade_record_id = base.id
+
 
        GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
        select public.load_log(l_load_id, l_step_id, 'insert into ALLOC_INSTR2TRADE_RECORD', l_cnt_rows, 'I')
@@ -398,8 +415,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
 		   into l_step_id;
 
 
-  insert into genesis2.ALLOC_INSTR2TRADE_RECORD(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id)
-  select coalesce(cie.new_trade_record_id, cie.trade_record_id), aie.ALLOC_INSTR_ID, l_date_id, l_load_batch_id
+  insert into genesis2.ALLOC_INSTR2TRADE_RECORD(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id,allocation_instruction_entry_id)
+  select coalesce(cie.new_trade_record_id, cie.trade_record_id), aie.ALLOC_INSTR_ID, l_date_id, l_load_batch_id, aie.allocation_instruction_entry_id
   from genesis2.ALLOCATION_INSTRUCTION ai
            inner join genesis2.ALLOCATION_INSTRUCTION_ENTRY aie
                       on ai.alloc_instr_id = aie.alloc_instr_id and is_deleted = 'N' and ai.date_id = aie.date_id
@@ -693,4 +710,20 @@ where true
 --   and ai.dataset_id = :l_load_batch_id
   and ai.is_deleted = 'N'
 
+drop table t_os
+create temp table t_os (ids int[], txt text);
 
+insert into t_os (ids, txt) values ('{1954227,1948382,1948459}'::int[], 'os'), ('{1948460,1947924,6}'::int[], 'so')
+
+select t_os.*--, tr.*
+from trade_record tr
+join lateral (  select unnest(ids), txt from t_os where tr.trade_record_id = any(t_os.ids) ) t_os on true
+
+
+select trade_record_id from trade_record
+where trade_record_id = 1954227
+
+
+with base as (select unnest(ids) as id, txt from t_os)
+select * from base
+join trade_record tr on tr.trade_record_id = base.id
