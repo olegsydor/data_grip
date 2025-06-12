@@ -484,89 +484,51 @@ end;
 $fn$
 
 
-
--- DROP FUNCTION dash360.allocations_get_accounts_config(bpchar);
-
-CREATE OR REPLACE FUNCTION dash360.allocations_get_accounts_config(in_market_type character DEFAULT 'O'::character(1))
- RETURNS TABLE(account_id bigint, is_auto_allocate character, clearing_accounts jsonb)
- LANGUAGE plpgsql
- COST 1
-AS $function$
-   /*
-    13-04-2021 - MG - add is_option_auto_allocate field to output
-SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208   The is_visible_for_manual_allocation field has been introduced
-    */
-#variable_conflict use_variable
-begin
-    return query
-        select
-            acc.account_id::bigint,
-            (case
-                when in_market_type = 'E' then acc.is_auto_allocate
-                when in_market_type = 'O' then acc.is_option_auto_allocate
-                else acc.is_auto_allocate
-            end) as is_auto_allocate,
-            jsonb_agg( jsonb_object(array['ca_number', 'def' , 'ca_name', 'oaid', 'visible'],
-                array[ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::text ]))
-        from  genesis2.account acc
-        inner join genesis2.clearing_account ca
-            on acc.account_id = ca.account_id
-            and ca.is_deleted ='N'
-            and ca.market_type =in_market_type
-        where acc.is_deleted ='N'
-        group by acc.account_id,
-            (case
-                when in_market_type = 'E' then acc.is_auto_allocate
-                when in_market_type = 'O' then acc.is_option_auto_allocate
-                else acc.is_auto_allocate
-            end)
---limit 10
-;
-
-end;
-$function$
-;
-
-
 -- DROP FUNCTION dash360.allocations_get_accounts_config(bpchar);
 select * from dash360.allocations_get_accounts_config(in_market_type := 'O');
 
 CREATE FUNCTION dash360.allocations_get_accounts_config(in_market_type character DEFAULT 'O'::character(1))
- RETURNS TABLE(account_id bigint, is_auto_allocate character, clearing_accounts jsonb, is_intraday_auto_allocate bpchar)
- LANGUAGE plpgsql
- COST 1
-AS $function$
+    RETURNS TABLE
+            (
+                account_id                bigint,
+                is_auto_allocate          character,
+                clearing_accounts         jsonb,
+                is_intraday_auto_allocate bpchar
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
 
--- MG: 20210413 -- add is_option_auto_allocate field to output
+    -- MG: 20210413 -- add is_option_auto_allocate field to output
 -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208   The is_visible_for_manual_allocation field has been introduced
 -- OS: 20250604 https://dashfinancial.atlassian.net/browse/DS-10060 added is_intraday_auto_allocate, removed #variable_conflict use_variable
 
 begin
     return query
-        select
-            acc.account_id::bigint,
-            (case
-                when in_market_type = 'E' then acc.is_auto_allocate
-                when in_market_type = 'O' then acc.is_option_auto_allocate
-                else acc.is_auto_allocate
-            end) as is_auto_allocate,
-            jsonb_agg( jsonb_object(array['ca_number', 'def' , 'ca_name', 'oaid', 'visible'],
-                array[ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::text ])),
-        acc.is_intraday_auto_allocate
-        from  genesis2.account acc
-        inner join genesis2.clearing_account ca
-            on acc.account_id = ca.account_id
-            and ca.is_deleted ='N'
-            and ca.market_type =in_market_type
-        where acc.is_deleted ='N'
+        select acc.account_id::bigint,
+               (case
+                    when in_market_type = 'E' then acc.is_auto_allocate
+                    when in_market_type = 'O' then acc.is_option_auto_allocate
+                    else acc.is_auto_allocate
+                   end) as is_auto_allocate,
+               jsonb_agg(jsonb_object(array ['ca_number', 'def' , 'ca_name', 'oaid', 'visible', 'def_ratio'],
+                                      array [ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::text, ca.default_alloc_ratio::text ])),
+               acc.is_intraday_auto_allocate
+        from genesis2.account acc
+                 inner join genesis2.clearing_account ca
+                            on acc.account_id = ca.account_id
+                                and ca.is_deleted = 'N'
+                                and ca.market_type = in_market_type
+        where acc.is_deleted = 'N'
         group by acc.account_id,
-            (case
-                when in_market_type = 'E' then acc.is_auto_allocate
-                when in_market_type = 'O' then acc.is_option_auto_allocate
-                else acc.is_auto_allocate
-            end)
+                 (case
+                      when in_market_type = 'E' then acc.is_auto_allocate
+                      when in_market_type = 'O' then acc.is_option_auto_allocate
+                      else acc.is_auto_allocate
+                     end)
 --limit 10
-;
+    ;
 
 end;
 $function$
@@ -654,7 +616,7 @@ begin
 
     insert into genesis2.clearing_account (account_id, clearing_account_type, clearing_account_number, is_default,
                                            market_type, is_deleted, cmta, clearing_account_name, occ_actionable_id,
-                                           user_id, is_visible_for_manual_allocation)
+                                           user_id, is_visible_for_manual_allocation, default_alloc_ratio)
     select in_account_id,
            l_clearing_account_type::varchar,
            sj ->> 'ca_number'             as clearing_account_number,
@@ -666,7 +628,8 @@ begin
            coalesce(sj ->> 'ca_name', '') as clearing_account_name,
            sj ->> 'oaid'                  as occ_actionable_id,
            in_user_id,
-           (sj ->> 'visible')::bool       as is_visible_for_manual_allocation
+           (sj ->> 'visible')::bool       as is_visible_for_manual_allocation,
+           sj -> 'def_ratio'::numeric
     from (select value as sj
           from jsonb_array_elements(l_clearing_accounts)) l1;
 
