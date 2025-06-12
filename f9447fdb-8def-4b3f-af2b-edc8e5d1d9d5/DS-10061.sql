@@ -458,7 +458,7 @@ begin
         -- 2. Call autoallocations
         select x
         into l_row_cnt
-        from genesis2.auto_allocate_unallocated_trade(in_instrument_type_id := 'O',
+        from trash.auto_allocate_unallocated_trade(in_instrument_type_id := 'O',
                                                       in_allocation_type := 0,
                                                       in_account_ids := l_account_ids) as x;
 
@@ -468,6 +468,7 @@ begin
                                'I')
         into l_step_id;
     end if;
+
     -- 3. Call dash360.bofa_allocation_report
     return query
         select ret_row
@@ -642,7 +643,7 @@ $function$
 
 
 -- DROP FUNCTION dash360.allocations_clearing_accounts_by_account_id(int8, bpchar);
-
+select * from dash360.allocations_clearing_accounts_by_account_id(257078, 'O')
 CREATE OR REPLACE FUNCTION dash360.allocations_clearing_accounts_by_account_id(in_account_id bigint, in_market_type character)
     RETURNS TABLE
             (

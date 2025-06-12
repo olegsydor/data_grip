@@ -39,4 +39,4 @@ SELECT
   END as res
 FROM prepped_data
 
-C:\Users\Oleh_Sydor\AppData\Roaming\JetBrains\DataGrip2024.1\consoles\db\2f6b5bb2-070a-4a74-b12b-b83f406f4417\console_3.sql
+C:\Users\Oleh_Sydor\AppData\Roaming\JetBrains\DataGrip2024.1\consoles\db\2f6b5bb2-070a-4a74-b12b-b83f406f4417\DS-100010_PG.sql

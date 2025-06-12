@@ -1,10 +1,19 @@
-alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
+5
+1.1 -> 1,
+1,9 -> 1,
+2  => 5 - (1+1) => 3
 
+
+
+
+alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
+comment on column genesis2.clearing_account.default_alloc_ratio is 'Ratio used to allocate share of a bundle during auto-allocation. 1 means 100%';
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4);
 -- drop function trash.auto_allocate_unallocated_trade;
 -- alter function genesis2.auto_allocate_unallocated_trade set schema trash;
 
-drop function trash.auto_allocate_unallocated_trade
+
+drop function trash.auto_allocate_unallocated_trade;
 CREATE OR REPLACE FUNCTION trash.auto_allocate_unallocated_trade(in_instrument_type_id character,
                                                                     in_allocation_type integer,
                                                                     in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
@@ -252,7 +261,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
                          ai.account_id, ca.default_alloc_ratio
                 window w as ( partition by ai.alloc_instr_id, ai.account_id
-                        order by ca.default_alloc_ratio, ca.clearing_account_id ))
+                        order by ca.default_alloc_ratio, ca.clearing_account_number desc, ca.clearing_account_id)
+                )
   select alloc_instr_id,
          clearing_account_id,
          case
@@ -290,7 +300,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
 
   insert into genesis2.alloc_instr2trade_record(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id,
                                                 allocation_instruction_entry_id)
-  with base as (select unnest(:trade_ids) as id,
+  with base as (select unnest(trade_ids) as id,
                        ALLOC_INSTR_ID,
                        in_date_id,
                        l_load_batch_id
