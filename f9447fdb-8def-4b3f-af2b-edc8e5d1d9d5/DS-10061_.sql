@@ -288,7 +288,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   into l_step_id;
 
 
-  insert into genesis2.alloc_instr2trade_record(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id, allocation_instruction_entry_id)
+  insert into genesis2.alloc_instr2trade_record(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id,
+                                                allocation_instruction_entry_id)
   with base as (select unnest(:trade_ids) as id,
                        ALLOC_INSTR_ID,
                        in_date_id,
@@ -296,7 +297,10 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                 from trade_for_allocations)
   select tr.id, tr.ALLOC_INSTR_ID, in_date_id, l_load_batch_id, aie.allocation_instruction_entry_id
   from base tr
-  join lateral ( select allocation_instruction_entry_id from genesis2.allocation_instruction_entry aie where aie.alloc_instr_id = tr.alloc_instr_id limit 1) aie on true;
+           join lateral ( select allocation_instruction_entry_id
+                          from genesis2.allocation_instruction_entry aie
+                          where aie.alloc_instr_id = tr.alloc_instr_id
+                          limit 1) aie on true;
 
 
 --   with base as (select unnest(ids) as id, txt from t_os)
