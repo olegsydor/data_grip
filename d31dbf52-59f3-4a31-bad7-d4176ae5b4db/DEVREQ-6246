@@ -1,9 +1,9 @@
 
-select * from dash360.report_fintech_clear_street_booking(20250603, 20250604);
+select * from dash360.report_fintech_clear_street_booking(20250612, 20250612);
 drop function if exists report_fintech_clear_street_booking;
 
-create function dash360.report_fintech_clear_street_booking(in_start_date_id integer default null::integer,
-                                                 in_end_date_id integer default null::integer)
+create or replace function dash360.report_fintech_clear_street_booking(in_start_date_id integer default null::integer,
+                                                            in_end_date_id integer default null::integer)
     returns table
             (
                 ret_row text
@@ -18,7 +18,7 @@ declare
     l_account_ids int4[];
     l_load_id     integer;
     l_step_id     integer;
-    l_ts text := extract(epoch from clock_timestamp())::text;
+    l_ts          text := extract(epoch from clock_timestamp())::text;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -32,44 +32,44 @@ begin
     into l_account_ids
     from dwh.d_account ac
     where true
-      and ac.trading_firm_id in ('abnus', 'abnnv');
+      and ac.trading_firm_id in ('saxo');
 
 
     return query
         select 'type,timestamp,client_trade_id,date,account_id,quantity,price,behalf_of_account_id,instrument.identifier,instrument.identifier_type,instrument.country,instrument.currency,side.direction,side.qualifier,target_account_id,capacity,exec_mpid,fees.commission,fees.omit_taf';
 
-
-
     return query
-        select --array_to_string(ARRAY [to_char(ft.trade_record_time, 'MM/DD/YY') , -- as "Date",
-               'allocation_trade'                                                          as "type",
-               :l_ts                                                                       as "timestamp",
-               tr.date_id::text || 'DASH' || to_char(row_number() over (), 'FM0000')       as "client_trade_id",
-               tr.date_id::text                                                            as "date",
-               tr.account_id::text                                                         as "account_id",
-               sum(tr.last_qty)::text                                                      as "quantity",
-               round(sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0), 6)::text as "price",
-               null                                                                        as "behalf_of_account_id",
-               i.display_instrument_id                                                     as "instrument.identifier",
-               'ticker'                                                                    as "instrument.identifier_type",
-               'USA'                                                                       as "instrument.country",
-               'USD'                                                                       as "instrument.currency",
-               case when tr.side in ('2', '5') then 'sell' else 'buy' end                  as "side.direction",
-               null                                                                        as "side.qualifier",
-               'Dash XYZ'                                                                  as "target_account_id",
-               'agency'                                                                    as "capacity",
-               null                                                                        as "exec_mpid",
-               '0'                                                                         as "fees.commission",
-               'FALSE'                                                                     as "fees.omit_taf"
+        select array_to_string(ARRAY [
+                                   'allocation_trade' , -- as "type",
+                                   l_ts , -- as "timestamp",
+                                   tr.date_id::text || 'DASH' || to_char(row_number() over (), 'FM00000') , -- as "client_trade_id",
+                                   tr.date_id::text , -- as "date",
+--                tr.account_id::text                                                         , -- as "account_id",
+                                   '104151' , -- as "account_id",
+                                   sum(tr.last_qty)::text , -- as "quantity",
+                                   round(sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0),
+                                         6)::text , -- as "price",
+                                   null , -- as "behalf_of_account_id",
+                                   i.display_instrument_id , -- as "instrument.identifier",
+                                   'ticker' , -- as "instrument.identifier_type",
+                                   'USA' , -- as "instrument.country",
+                                   'USD' , -- as "instrument.currency",
+                                   case when tr.side in ('2', '5') then 'sell' else 'buy' end , -- as "side.direction",
+                                   null , -- as "side.qualifier",
+                                   'Dash XYZ' , -- as "target_account_id",
+                                   'agency' , -- as "capacity",
+                                   null , -- as "exec_mpid",
+                                   '0' , -- as "fees.commission",
+                                   'FALSE' -- as "fees.omit_taf"
+                                   ], ',', '')
         from dwh.flat_trade_record tr
                  inner join dwh.d_instrument i on (tr.instrument_id = i.instrument_id)
                  inner join dwh.d_account acc on (tr.account_id = acc.account_id)
-        where date_id between :in_start_date_id and :in_end_date_id
---           and tr.account_id = any (l_account_ids)
+        where date_id between in_start_date_id and in_end_date_id
+          and tr.account_id = any (l_account_ids)
           and is_busted = 'N'
         group by tr.date_id, tr.account_id, i.display_instrument_id, tr.side
---         order by to_char(tr.trade_record_time, 'MM/DD/YY'), i.display_instrument_id
-    ;
+        order by tr.date_id, tr.account_id, i.display_instrument_id;
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'dash360.report_fintech_clear_street_booking COMPLETED===', l_row_cnt,
