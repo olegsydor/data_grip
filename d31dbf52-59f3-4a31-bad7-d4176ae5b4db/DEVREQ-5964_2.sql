@@ -230,3 +230,162 @@ where row_to_json(alll.*)::text ilike '%4080716370%'
 
 select * from dwh.d_account
     where d_account.trading_firm_id in('vision01', 'OFP0050'
+;
+
+
+    if coalesce(p_account_ids, '{}') = '{}' and coalesce(p_trading_firm_ids, '{}') = '{}' then
+        l_account_ids := '{}';
+    else
+        select string_agg(account_id::text,',')
+--         into l_account_ids
+        from dwh.d_account
+        where true
+          and case
+                  when coalesce(:p_trading_firm_ids, '{}') <> '{}'::varchar[]
+                      then trading_firm_id = ANY (:p_trading_firm_ids)
+                  else true end
+          and case
+                  when coalesce(p_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (p_account_ids)
+                  else true end;
+    end if;
+--'{70524,70525,70029,71611,68234,70526,70527,70528,70529,70530,70531,70532,70600,70601,70602,73627,68232,68233,68235,68236,69981,70094,70095,70096,70097,70098,70099,70100,70101,70102,70103,70104,70105,70106,70107,70108,70109,70110,70111,70112,70113,73537,73658,73659,73681,74532,68212,68405,68406,73660}'
+
+
+    drop table if exists t_execution;
+    create temp table t_execution as
+    select exchange_transaction_id,
+           treports_id,
+           order_id,
+           report_id,
+           client_order_id,
+           torders_id,
+           secondary_exch_exec_id,
+           date_id
+    from compliance.blaze_execution cbe
+    where true
+      and cbe.date_id between :l_start_date_id and :l_end_date_id
+      and (exchange_transaction_id is not null
+        or treports_id is not null);
+
+    create index on t_execution (date_id);
+    create index on t_execution (client_order_id, secondary_exch_exec_id);
+    create index on t_execution (client_order_id, exchange_transaction_id);
+
+    select public.load_log(l_load_id, l_step_id, 'temp table for billing executions was created', 0,
+                           'O')
+    into l_step_id;
+
+    drop table if exists tmp_report;
+    create temp table tmp_report with (parallel_workers = 4)
+--                                                ON COMMIT drop
+    as
+    select to_char(tr.trade_record_time, 'YYYY-MM-DD')                as "Date",
+           tr.client_order_id                                         as "OrderID",
+--            coalesce(str.torders_id::text, tr.client_order_id)         as "OrderID",
+           tr.secondary_order_id                                      as "ExchOrderID",
+           case
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XASE', 'AMER') then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'ARCAE', 'ARCA')
+                   then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XCHI', 'CHX') then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NSX', 'NSX') then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'NYSE', 'NYSE') then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'XPSX', 'PSX') then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'AMEXP', 'AMEROP')
+                   then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'ARCAP', 'ARCAOP')
+                   then jos.t_9483
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'EPRL', 'PEARLEQ')
+                   then jos.t_1003
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'EMLD', 'EMLD') then jos.t_1003
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MIAX', 'MIAMI')
+                   then jos.t_1003
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MPRL', 'PEARL')
+                   then jos.t_1003
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('E', 'MEMX', 'MEMX') then jos.t_880
+               when (tr.instrument_type_id, tr.exchange_id, dex.cat_exchange_id) = ('O', 'MXOP', 'MEMXOP')
+                   then jos.t_880
+               end                                                    as aux_tag_street,
+           coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as "ReportID",
+           coalesce(par.exchange_transaction_id, tr.exch_exec_id)     as "Tag17",
+           jo.t_17,
+           jos.t_17,
+           par.exchange_transaction_id, tr.exch_exec_id
+    from dwh.flat_trade_record tr
+             left join lateral (select exchange_transaction_id --order_id, report_id, client_order_id, torders_id
+                                from t_execution cbe -- compliance.blaze_execution cbe
+                                where cbe.client_order_id = tr.client_order_id
+                                  and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
+                                  and cbe.date_id = tr.date_id
+                                  and cbe.date_id between :l_start_date_id and :l_end_date_id
+                                limit 1) par on true
+             left join lateral (
+        select treports_id --order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+        from t_execution cbe --compliance.blaze_execution cbe
+        where cbe.client_order_id = tr.client_order_id
+          and cbe.exchange_transaction_id = par.exchange_transaction_id
+          and cbe.date_id = tr.date_id
+          and cbe.date_id between :l_start_date_id and :l_end_date_id
+        ) str on true
+             left join lateral (select jo.fix_message ->> '143' as t_143,
+                                       jo.fix_message ->> '17' as t_17
+                                from fix_capture.fix_message_json jo
+                                where tr.order_fix_message_id = jo.fix_message_id
+                                  and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                                limit 1) jo on true
+             left join lateral (select jo.fix_message ->> '143'  as t_143,
+                                       jo.fix_message ->> '9483' as t_9483,
+                                       jo.fix_message ->> '1003' as t_1003,
+                                       jo.fix_message ->> '880'  as t_880,
+                                       jo.fix_message ->> '17'  as t_17
+                                from fix_capture.fix_message_json jo
+                                where tr.street_trade_fix_message_id = jo.fix_message_id
+                                  and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+                                limit 1) jos on true
+             left join dwh.d_exchange dex on dex.exchange_id = tr.exchange_id and dex.is_active
+    where true
+      and tr.date_id between :l_start_date_id and :l_end_date_id
+      and tr.account_id = any (:l_account_ids)
+      and tr.is_busted = 'N'
+      and case
+              when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
+                  then false
+              else true end
+    and tr.order_id = '100000020803992963';
+
+1410797555
+
+
+
+    analyze tmp_report;
+
+    if p_add_exchange_order_id = 'Y' then
+        return query
+            select 'Date,OrderID,ReportID,Tag17,ExchOrderID';
+        return query
+            select array_to_string(ARRAY [
+                                       s."Date",
+                                       s."OrderID"::text,
+                                       coalesce(aux_tag_street, s."ReportID"::text),
+                                       s."Tag17",
+                                       s."ExchOrderID"
+                                       ], ',', '')
+            from tmp_report s
+            order by s."Date", s."ExchOrderID", s."ReportID";
+    else
+        return query
+            select 'Date,OrderID,ReportID,Tag17';
+        return query
+            select array_to_string(ARRAY [
+                                       s."Date",
+                                       s."OrderID"::text,
+                                       coalesce(aux_tag_street, s."ReportID"::text) ,
+                                       s."Tag17"
+                                       ], ',', '')
+            from tmp_report s
+            order by s."Date", s."ReportID";
+    end if;
+
+ select * from dwh.client_order cl
+--           join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
+ where cl.client_order_id like '100000020803992963%'
