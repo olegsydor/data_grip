@@ -307,10 +307,11 @@ select * from dwh.d_account
                    then jos.t_880
                end                                                    as aux_tag_street,
            coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as "ReportID",
-           coalesce(par.exchange_transaction_id, tr.exch_exec_id)     as "Tag17",
+           coalesce(tr.exch_exec_id, par.exchange_transaction_id)     as "Tag17",
            jo.t_17,
            jos.t_17,
-           par.exchange_transaction_id, tr.exch_exec_id
+           par.exchange_transaction_id, tr.exch_exec_id,
+           str.treports_id::text, tr.secondary_exch_exec_id
     from dwh.flat_trade_record tr
              left join lateral (select exchange_transaction_id --order_id, report_id, client_order_id, torders_id
                                 from t_execution cbe -- compliance.blaze_execution cbe
@@ -351,8 +352,8 @@ select * from dwh.d_account
               when tr.ex_destination = 'BRKPT' and coalesce(jo.t_143, '-1') is distinct from 'DASH-CBOE'
                   then false
               else true end
-    and tr.order_id = '100000020803992963';
-
+    and tr.order_id = '100000020803992963'
+and coalesce(str.treports_id::text, tr.secondary_exch_exec_id) = '1410797555';
 1410797555
 
 
