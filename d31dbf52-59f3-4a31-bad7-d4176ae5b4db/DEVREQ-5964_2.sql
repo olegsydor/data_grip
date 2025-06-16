@@ -387,6 +387,9 @@ and coalesce(str.treports_id::text, tr.secondary_exch_exec_id) = '1410797555';
             order by s."Date", s."ReportID";
     end if;
 
- select * from dwh.client_order cl
---           join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
- where cl.client_order_id like '100000020803992963%'
+ select fmj.fix_message ->> '17', * from dwh.client_order cl
+           join fix_capture.fix_message_json fmj on fmj.fix_message_id = cl.fix_message_id
+ where true
+--      and cl.order_id = 100000020803992963
+--  and cl.client_order_id = '20250529VSIND27914'
+ and cl.client_order_id = '1_32250529'
