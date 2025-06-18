@@ -112,13 +112,15 @@ where fyc.status_date_id between :in_start_date_id and :in_end_date_id
 
 
 
-select to_char(cl.create_time, 'DD/MM/YYYY'),
-       to_char(cl.create_time, 'HH24:MI:SS.MS'),
-       'Equity',
-       case when cl.side in ('1', '3') then 'Buy' else 'Sell' end,
-       di.symbol,
-       cl.order_qty,
-       cl.price
+select
+--     cl.order_id,
+to_char(cl.create_time, 'DD/MM/YYYY'),
+to_char(cl.create_time, 'HH24:MI:SS.MS'),
+'Equity',
+case when cl.side in ('1', '3') then 'Buy' else 'Sell' end,
+di.symbol,
+cl.order_qty,
+cl.price
 from trash.so_equity_trade_file ord
          join dwh.client_order cl on cl.order_id = ord.order_id
          join dwh.d_instrument di on di.instrument_id = cl.instrument_id
