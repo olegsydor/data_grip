@@ -296,3 +296,19 @@ begin
 end;
 $function$
 
+select '[{"ca_number":"005","def":"Y","ca_name":"nick name test","oaid":"test","visible":true,"def_ratio":0.1},{"ca_number":"234","def":"Y","ca_name":"","oaid":"test","visible":true,"def_ratio":0.1},{"ca_number":"352","def":"Y","ca_name":"","oaid":"test","visible":true,"def_ratio":0.1},{"ca_number":"501","def":"Y","ca_name":"","oaid":"test","visible":true,"def_ratio":0.1},{"ca_number":"551","def":"Y","ca_name":"nick","oaid":"test","visible":true,"def_ratio":0.6}]'::jsonb
+
+
+    select
+           sj ->> 'ca_number'             as clearing_account_number,
+           sj ->> 'def'                   as is_default,
+
+           'N'                            as is_deleted,
+           sj ->> 'ca_number'             as cmta,
+           coalesce(sj ->> 'ca_name', '') as clearing_account_name,
+           sj ->> 'oaid'                  as occ_actionable_id,
+
+           (sj ->> 'visible')::bool       as is_visible_for_manual_allocation,
+           (sj -> 'def_ratio')::numeric
+    from (select value as sj
+          from jsonb_array_elements(:l_clearing_accounts)) l1;

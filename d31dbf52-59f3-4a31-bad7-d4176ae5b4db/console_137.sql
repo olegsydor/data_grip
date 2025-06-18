@@ -77,4 +77,20 @@ select order_id, order_qty, order_price
 select * from dwh.client_order
 where order_id = 100000019928855616;
 
+select cl.order_id, cl.order_qty, cl.price
+from dwh.client_order cl
+         inner join dwh.d_target_strategy dts
+                    on (dts.target_strategy_id = cl.sub_strategy_id)
+         join dwh.d_account a on cl.account_id = a.account_id
+where cl.create_date_id between :in_start_date_id and :in_end_date_id
+  and parent_order_id is not null
+  and dts.target_strategy_name in ('SENSOR')
+  and cl.account_id in (select account_id
+                        from dwh.d_trading_firm tf
+                                 join dwh.d_account ac using (trading_firm_id)
+                        where trading_firm_name in ('Pleasant Lake Partners', 'Stifel Nicolaus',
+                                                    'Cowen Prime Services')
+                          and ac.is_active
+                          and tf.is_active);
+
 
