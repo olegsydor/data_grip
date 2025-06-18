@@ -1,10 +1,3 @@
-5
-1.1 -> 1,
-1,9 -> 1,
-2  => 5 - (1+1) => 3
-
-
-
 
 alter table genesis2.clearing_account add column default_alloc_ratio numeric default 1.00;
 comment on column genesis2.clearing_account.default_alloc_ratio is 'Ratio used to allocate share of a bundle during auto-allocation. 1 means 100%';
@@ -302,8 +295,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                                                 allocation_instruction_entry_id)
   with base as (select unnest(trade_ids) as id,
                        ALLOC_INSTR_ID,
-                       in_date_id,
-                       l_load_batch_id
+                       in_date_id as date_id,
+                       l_load_batch_id as batch_id
                 from trade_for_allocations)
   select tr.id, tr.ALLOC_INSTR_ID, in_date_id, l_load_batch_id, aie.allocation_instruction_entry_id
   from base tr
@@ -741,3 +734,13 @@ where trade_record_id = 1954227
 with base as (select unnest(ids) as id, txt from t_os)
 select * from base
 join trade_record tr on tr.trade_record_id = base.id
+
+
+*/
+
+SELECT trash.auto_allocate_unallocated_trade(
+  'O'::char,
+  0,
+  20250618,
+  ARRAY[257078]::integer[]
+);
