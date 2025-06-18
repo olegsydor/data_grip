@@ -77,20 +77,29 @@ select order_id, order_qty, order_price
 select * from dwh.client_order
 where order_id = 100000019928855616;
 
-select cl.order_id, cl.order_qty, cl.price
-from dwh.client_order cl
-         inner join dwh.d_target_strategy dts
-                    on (dts.target_strategy_id = cl.sub_strategy_id)
-         join dwh.d_account a on cl.account_id = a.account_id
+
+
+with ord as (select distinct order_id
+             from data_marts.f_yield_capture fyc
+                      inner join dwh.d_target_strategy dts
+                                 on (dts.target_strategy_id = fyc.parent_sub_strategy_id)
+                      join dwh.d_account a on fyc.account_id = a.account_id
+             where fyc.status_date_id between :in_start_date_id and :in_end_date_id
+               and parent_order_id is not null
+               and dts.target_strategy_name in ('SENSOR')
+               and fyc.instrument_type_id = 'E'
+               and fyc.account_id in (select account_id
+                                      from dwh.d_trading_firm tf
+                                               join dwh.d_account ac using (trading_firm_id)
+                                      where trading_firm_name in ('Pleasant Lake Partners', 'Stifel Nicolaus',
+                                                                  'Cowen Prime Services')
+                                        and ac.is_active
+                                        and tf.is_active))
+select cl.create_time, cl.order_id, di.instrument_type_id, cl.side, di.symbol, cl.order_qty, cl.price
+from ord
+join dwh.client_order cl on cl.order_id = ord.order_id
+--          join lateral (select * from ord where ord.order_id = cl.order_id limit 1) ord on true
+         join dwh.d_instrument di on di.instrument_id = cl.instrument_id
 where cl.create_date_id between :in_start_date_id and :in_end_date_id
   and parent_order_id is not null
-  and dts.target_strategy_name in ('SENSOR')
-  and cl.account_id in (select account_id
-                        from dwh.d_trading_firm tf
-                                 join dwh.d_account ac using (trading_firm_id)
-                        where trading_firm_name in ('Pleasant Lake Partners', 'Stifel Nicolaus',
-                                                    'Cowen Prime Services')
-                          and ac.is_active
-                          and tf.is_active);
-
-
+and di.instrument_type_id = 'E'
