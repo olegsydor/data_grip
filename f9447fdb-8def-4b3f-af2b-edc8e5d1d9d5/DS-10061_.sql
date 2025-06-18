@@ -68,6 +68,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
  select public.load_log(l_load_id, l_step_id, 'l_max_trade_id='||l_max_trade_id, 1 , 'S')
 	into l_step_id;
 
+  drop table if exists t_tr;
   create temp table t_tr on commit drop
   as
   select TR.ACCOUNT_ID,
@@ -110,6 +111,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
     	select public.load_log(l_load_id, l_step_id, 'create temp table TR', l_cnt_rows, 'I')
 		into l_step_id;
 
+  drop table if exists trade_for_allocations;
   create temp table trade_for_allocations on commit drop
   as
   select L1.ACCOUNT_ID,
@@ -231,7 +233,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   end if;
 
 -- 2. insert into allocation_instruction_entry
-  create temp table t_aie as
+  drop table if exists t_aie;
+  create temp table t_aie on commit drop as
   with base as (select ai.alloc_instr_id,
 --                     ai.dataset_id,
                        clearing_account_id,
