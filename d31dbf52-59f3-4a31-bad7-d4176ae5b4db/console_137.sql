@@ -78,49 +78,38 @@ select * from dwh.client_order
 where order_id = 100000019928855616;
 
 
-
+drop table trash.so_equity_trade_file;
 create table trash.so_equity_trade_file as
-select distinct order_id
-from data_marts.f_yield_capture fyc
-         inner join dwh.d_target_strategy dts on (dts.target_strategy_id = fyc.parent_sub_strategy_id)
-         join dwh.l1_snapshot l1 on
-    (fyc.status_date_id = l1.start_date_id
-        and fyc.instrument_id = l1.instrument_id
-        and fyc.routed_time <= l1.transaction_time
-        and fyc.order_end_time >= l1.transaction_time
-        and l1.exchange_id = 'NBBO'
-        and case
-                when fyc.side in ('1', '3') and l1.ask_price <= fyc.order_price
-                    then true -- buy order is marketable
-                when fyc.side not in ('1', '3') and l1.bid_price >= fyc.order_price
-                    then true -- sell order is marketable
-                else false end
-        )
-where fyc.status_date_id between :in_start_date_id and :in_end_date_id
-  and l1.start_date_id between :in_start_date_id and :in_end_date_id
-  and parent_order_id is not null
-  and dts.target_strategy_name = 'SENSOR'
-  and fyc.instrument_type_id = 'E'
 
-  and fyc.account_id in (select account_id
-                         from dwh.d_trading_firm tf
-                                  join dwh.d_account ac using (trading_firm_id)
-                         where trading_firm_name in
-                               ('Pleasant Lake Partners', 'Stifel Nicolaus', 'Cowen Prime Services')
-                           and ac.is_active
-                           and tf.is_active);
-
-
-
-select
---     cl.order_id,
-to_char(cl.create_time, 'DD/MM/YYYY'),
-to_char(cl.create_time, 'HH24:MI:SS.MS'),
-'Equity',
-case when cl.side in ('1', '3') then 'Buy' else 'Sell' end,
-di.symbol,
-cl.order_qty,
-cl.price
+with ord as (select distinct order_id
+             from data_marts.f_yield_capture fyc
+                      inner join dwh.d_target_strategy dts on (dts.target_strategy_id = fyc.parent_sub_strategy_id)
+             where fyc.status_date_id between :in_start_date_id and :in_end_date_id
+               and parent_order_id is not null
+               and dts.target_strategy_name = 'SENSOR'
+               and fyc.instrument_type_id = 'E'
+               and case
+                       when fyc.side in ('1', '3') and fyc.nbbo_ask_price <= fyc.order_price
+                           then true -- buy order is marketable
+                       when fyc.side not in ('1', '3') and fyc.nbbo_bid_price >= fyc.order_price
+                           then true -- sell order is marketable
+                       when coalesce(fyc.order_price, 0) = 0 then true
+                       else false end
+               and fyc.account_id in (select account_id
+                                      from dwh.d_trading_firm tf
+                                               join dwh.d_account ac using (trading_firm_id)
+                                      where trading_firm_name in
+                                            ('Pleasant Lake Partners', 'Stifel Nicolaus', 'Cowen Prime Services')
+                                        and ac.is_active
+                                        and tf.is_active))
+select --cl.order_type_id,
+       to_char(cl.create_time, 'MM/DD/YYYY'),
+       to_char(cl.create_time, 'HH24:MI:SS.MS'),
+       'Equity',
+       case when cl.side in ('1', '3') then 'Buy' else 'Sell' end,
+       di.symbol,
+       cl.order_qty,
+       cl.price
 from trash.so_equity_trade_file ord
          join dwh.client_order cl on cl.order_id = ord.order_id
          join dwh.d_instrument di on di.instrument_id = cl.instrument_id
@@ -129,22 +118,8 @@ where cl.create_date_id between :in_start_date_id and :in_end_date_id
   and di.instrument_type_id = 'E';
 
 
-select ord.order_id, order_type from ord
-join reporting_606.orders_street os on os.order_id = ord.order_id
-where os.date_id between :in_start_date_id and :in_end_date_id
-and order_type <> 'Other'
-;
+select distinct order_type_id
+from trash.so_equity_trade_file ord
+join dwh.client_order cl on cl.order_id = ord.order_id
 
-select street_order_id from dwh.flat_trade_record tr
-                       join ord on ord.order_id = tr.street_order_id
-where tr.account_id in (select account_id
-                                      from dwh.d_trading_firm tf
-                                               join dwh.d_account ac using (trading_firm_id)
-                                      where trading_firm_name in ('Pleasant Lake Partners', 'Stifel Nicolaus',
-                                                                  'Cowen Prime Services')
-                                        and ac.is_active
-                                        and tf.is_active)
-and tr.date_id between :in_start_date_id and :in_end_date_id
-
-
-select relid::regclass, index_relid::regclass, * from pg_stat_progress_create_index;
+select * from dwh.d_order_type
