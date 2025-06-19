@@ -754,3 +754,11 @@ from dash360.bofa_allocation_report_wrapper(in_start_date_id => 20250617, in_end
                                             in_is_eod => case when 'No' = 'Yes' then true else false end,
                                             in_run_intraday_option_auto_allocation => case when 'No' = 'Yes' then true else false end,
                                             in_exec_broker => '333')
+
+
+
+select *
+from dash360.bofa_allocation_report_wrapper(in_start_date_id => 20250618, in_end_date_id => 20250618,
+                                            in_is_eod => false,
+                                            in_run_intraday_option_auto_allocation => true,
+                                            in_exec_broker => '792')
