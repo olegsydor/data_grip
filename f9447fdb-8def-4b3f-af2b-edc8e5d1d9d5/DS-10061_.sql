@@ -761,4 +761,4 @@ select *
 from dash360.bofa_allocation_report_wrapper(in_start_date_id => 20250618, in_end_date_id => 20250618,
                                             in_is_eod => false,
                                             in_run_intraday_option_auto_allocation => true,
-                                            in_exec_broker => '792')
+                                            in_exec_broker => '792');
