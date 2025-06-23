@@ -546,16 +546,17 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_set_account_config(int8, jsonb, bpchar, bpchar, int4);
 
+-- DROP FUNCTION dash360.allocations_set_account_config(int8, text, bpchar, bpchar, int4, bpchar);
+
 CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts text,
-                                                                  in_is_auto_allocate character,
+                                                                  in_is_auto_allocate character default null::character,
                                                                   in_instrumnt_type_id character DEFAULT 'O'::bpchar,
                                                                   in_user_id integer DEFAULT NULL::integer,
-                                                                  in_is_intraday_auto_allocate bpchar default null::bpchar)
+                                                                  in_is_intraday_auto_allocate character DEFAULT NULL::bpchar)
     RETURNS integer
     LANGUAGE plpgsql
     COST 1
-AS
-$function$
+AS $function$
     -- MG: 20210413 add support to is_option_auto_allocate field
 -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208 is_visible_for_manual_allocation  and user_id fields have been introduced
 -- OS: 20250604 https://dashfinancial.atlassian.net/browse/DS-10060 added is_intraday_auto_allocate, removed #variable_conflict use_variable
@@ -638,7 +639,7 @@ begin
            sj ->> 'oaid'                  as occ_actionable_id,
            in_user_id,
            (sj ->> 'visible')::bool       as is_visible_for_manual_allocation,
-           sj -> 'def_ratio'::numeric
+           (sj -> 'def_ratio')::numeric
     from (select value as sj
           from jsonb_array_elements(l_clearing_accounts)) l1;
 
