@@ -67,7 +67,7 @@ from dash360.orders_historical_orders_dmp_count(in_status_date_id_from := 202505
 Parameters: "@in_status_date_id_from=20250504; @in_status_date_id_to=20250516; @in_user_filters= and \"OrderStatus\" in ('2','4','C','8','3') and \"InstrumentType\" = 'O' and \"PutCall\" = '0' and \"Side\" = '1' and \"OrderQty\" >= 1 and \"TimeInForce\" in ('0','1','6') and \"MultilegReportingType\" in ('1','2'); @in_limit=5001; "
              EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 -- select case when exists (select null from (
-select row_number() over () as cnt
+select *--row_number() over () as cnt
  from dwh.historic_order_details_storage hods
 --                       from partitions.historic_order_details_storage_202505 hods
                                inner join dwh.d_account acc on hods."AccountID" = acc.account_id
