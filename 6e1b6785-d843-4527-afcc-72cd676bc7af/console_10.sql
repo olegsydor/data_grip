@@ -91,3 +91,9 @@ select row_number() over () as cnt
                       limit 100000) x
 where x.cnt = 100000) then true else false end;
 
+
+
+select *
+from dash360.orders_historical_orders_dmp_count(in_status_date_id_from := 20250510, in_status_date_id_to := 20250520,
+                                                in_user_filters := 'and "OrderStatus" in (''2'',''4'',''C'',''8'',''3'') and "InstrumentType" = ''O'' and "PutCall" = ''0'' and "Side" = ''1'' and "OrderQty" < 1 and "TimeInForce" in (''0'',''1'',''6'') and "MultilegReportingType" in (''1'',''2'')',
+                                                in_limit := 50000)
