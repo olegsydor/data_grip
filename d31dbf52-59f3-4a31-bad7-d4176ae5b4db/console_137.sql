@@ -123,3 +123,13 @@ from trash.so_equity_trade_file ord
 join dwh.client_order cl on cl.order_id = ord.order_id
 
 select * from dwh.d_order_type
+
+
+select *
+from dwh.flat_trade_record ftr
+         join lateral (select *
+                       from dwh.client_order co
+                       where co.order_id = ftr.order_id and co.create_time = ftr.order_process_time
+                       limit 1) co on true
+where true
+  and ftr.date_id = 20250623
