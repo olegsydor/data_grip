@@ -132,4 +132,6 @@ from dwh.flat_trade_record ftr
                        where co.order_id = ftr.order_id and co.create_time = ftr.order_process_time
                        limit 1) co on true
 where true
-  and ftr.date_id = 20250623
+  and ftr.date_id = 20250623;
+
+
