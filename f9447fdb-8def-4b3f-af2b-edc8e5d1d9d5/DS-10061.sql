@@ -1,13 +1,13 @@
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4);
 drop function trash.auto_allocate_unallocated_trade;
 alter function genesis2.auto_allocate_unallocated_trade set schema trash;
-CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character,
-                                                                    in_allocation_type integer,
-                                                                    in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                    in_account_ids int4[] default '{}'::int4[])
-    RETURNS integer
-    LANGUAGE plpgsql
-    SET application_name TO 'ETL:  AutoAllocation'
+-- compare 1 PROD
+-- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4, _int4);
+
+CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
+ RETURNS integer
+ LANGUAGE plpgsql
+ SET application_name TO 'ETL:  AutoAllocation'
 AS $function$
 --in_allocation_type = 0: options
 --in_allocation_type = 1: equities with ACC.IS_SPECIFIC_ALLOCATED = 'N'
@@ -95,7 +95,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
       or (in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y')
       OR (in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T'))
     and case  -- added DS-10061
-            when coalesce(in_account_ids, '{}') = '{}' then true
+            when in_account_ids = '{}' then true
+            when in_account_ids is null then false
             else acc.account_id = any (in_account_ids) end;
 
     	GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
@@ -331,8 +332,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
 		   into l_step_id;
 
 
-  insert into genesis2.ALLOC_INSTR2TRADE_RECORD(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id)
-  select coalesce(cie.new_trade_record_id, cie.trade_record_id), aie.ALLOC_INSTR_ID, l_date_id, l_load_batch_id
+  insert into genesis2.ALLOC_INSTR2TRADE_RECORD(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id,allocation_instruction_entry_id)
+  select coalesce(cie.new_trade_record_id, cie.trade_record_id), aie.ALLOC_INSTR_ID, l_date_id, l_load_batch_id, aie.allocation_instruction_entry_id
   from genesis2.ALLOCATION_INSTRUCTION ai
            inner join genesis2.ALLOCATION_INSTRUCTION_ENTRY aie
                       on ai.alloc_instr_id = aie.alloc_instr_id and is_deleted = 'N' and ai.date_id = aie.date_id
