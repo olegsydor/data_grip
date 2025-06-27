@@ -223,7 +223,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
                                       and ca.account_id = ai.account_id
                                       and ca.is_deleted = 'N'
                                       and ca.market_type = in_instrument_type_id
-                                      and ca.is_default = 'Y'
+                                      and ca.is_default = 'Y' -- should be replaced with the new column
                  ) ca on sum_ratio != 1
              where true
                and ai.date_id = l_date_id
@@ -293,7 +293,7 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
   select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION_ENTRY', l_cnt_rows, 'I')
   into l_step_id;
 
-
+----?????????????????????????????
   insert into genesis2.alloc_instr2trade_record(TRADE_RECORD_ID, ALLOC_INSTR_ID, DATE_ID, dataset_id,
                                                 allocation_instruction_entry_id)
   with base as (select unnest(trade_ids) as id,
