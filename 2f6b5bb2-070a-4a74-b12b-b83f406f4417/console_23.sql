@@ -13,39 +13,49 @@ FROM Recur
 ORDER BY LEN(Combination), Combination;
 
 
+select * from training.comb;
+
+
 
 
 create table training.comb (
     list_id int4,
     list_sum int4
 );
-insert into training.comb(list_id, list_sum) values (6, 1), (7, 2), (8, 3), (9, 5), (10, 4)
+insert into training.comb(list_id, list_sum) values (0, 1), (22, 1), (23, 1), (24, 1), (25, 1);
+insert into training.comb(list_id, list_sum) values (26, 1), (27, 1), (28, 1), (29, 1), (30, 1);
 
-with recursive subset_sum as (
-    select
-        array[list_id] as ids,
-        list_id as max_id,
-        list_sum,
-        1 as depth
-    from training.comb
 
-    union all
+with recursive subset_sum as (select array [list_id] as ids,
+                                      list_id         as max_id,
+                                      list_sum,
+                                      1               as depth
+                               from training.comb
+                               where true
+                                 and list_sum <= :sum
 
-    select
-        ss.ids || c.list_id,
-        c.list_id,
-        ss.list_sum + c.list_sum,
-        ss.depth + 1
-    from subset_sum ss
-    join training.comb c
-      on c.list_id > ss.max_id
-    where ss.list_sum + c.list_sum <= :sum
-)
+
+                                  union all
+
+                              select
+                                  ss.ids || c.list_id, c.list_id, ss.list_sum + c.list_sum, ss.depth + 1
+                              from subset_sum ss
+                                  join training.comb c
+                              on c.list_id > ss.max_id
+                              where ss.list_sum + c.list_sum <= :sum
+--                               and depth <= 5
+                              )
 select *
 from subset_sum
 where list_sum = :sum
-order by depth, ids
+-- order by depth, ids
 limit 1;
+
+truncate training.comb;
+
+INSERT INTO training.comb
+SELECT id+61, power(2, id)
+FROM    generate_series(0, 30) AS id;
 
 
 with months (month_numb, month_name, ret_val) as (select *
