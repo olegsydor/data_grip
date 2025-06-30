@@ -47,6 +47,7 @@ where list_sum = :sum
 order by depth, ids
 limit 1;
 
+
 with months (month_numb, month_name, ret_val) as (select *
                                                   from (values ('1', 'січень', 1),
                                                                ('2', 'лютий', 2),
@@ -60,9 +61,10 @@ with months (month_numb, month_name, ret_val) as (select *
                                                                ('10', 'жовтень', 10),
                                                                ('11', 'листопад', 11),
                                                                ('12', 'грудень', 12)))
-    select * from months
+    select array_agg(ret_val) from months
+where month_name = any('{січень,лютий}')
 
 
 
 select array_agg(mnt) from regexp_split_to_table('01,02,03,січень',',') as mnt
-where mnt ~* '[1-9]'
+where mnt ~* '[A]'
