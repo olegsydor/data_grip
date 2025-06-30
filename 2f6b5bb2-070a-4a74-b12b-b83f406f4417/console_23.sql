@@ -65,8 +65,9 @@ with months (month_numb, month_name, ret_val) as (select *
 where month_name = any('{січень,лютий}');
 
 
-select array_agg(mnt) from regexp_split_to_table('01,02,03,січень',',') as mnt
-where mnt ~* '[A]'
+select mnt
+from regexp_split_to_array('01,02,03',',') as mnt
+
 
 
 
