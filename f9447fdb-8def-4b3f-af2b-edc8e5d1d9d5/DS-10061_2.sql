@@ -476,3 +476,7 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+
+
+alter function genesis2.auto_allocate_unallocated_trade rename to auto_allocate_unallocated_trade_bkp_20250630;
+alter function trash.auto_allocate_unallocated_trade set schema genesis2;
