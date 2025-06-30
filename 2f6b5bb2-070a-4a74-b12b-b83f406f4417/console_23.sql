@@ -62,8 +62,7 @@ with months (month_numb, month_name, ret_val) as (select *
                                                                ('11', 'листопад', 11),
                                                                ('12', 'грудень', 12)))
     select array_agg(ret_val) from months
-where month_name = any('{січень,лютий}')
-
+where month_name = any('{січень,лютий}');
 
 
 select array_agg(mnt) from regexp_split_to_table('01,02,03,січень',',') as mnt
