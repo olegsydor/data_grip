@@ -46,3 +46,23 @@ from subset_sum
 where list_sum = :sum
 order by depth, ids
 limit 1;
+
+with months (month_numb, month_name, ret_val) as (select *
+                                                  from (values ('1', 'січень', 1),
+                                                               ('2', 'лютий', 2),
+                                                               ('3', 'березень', 3),
+                                                               ('4', 'квітень', 4),
+                                                               ('5', 'травень', 5),
+                                                               ('6', 'червень', 6),
+                                                               ('7', 'липень', 7),
+                                                               ('8', 'серпень', 8),
+                                                               ('9', 'вересень', 9),
+                                                               ('10', 'жовтень', 10),
+                                                               ('11', 'листопад', 11),
+                                                               ('12', 'грудень', 12)))
+    select * from months
+
+
+
+select array_agg(mnt) from regexp_split_to_table('01,02,03,січень',',') as mnt
+where mnt ~* '[1-9]'
