@@ -23,6 +23,7 @@ AS $function$
 --  SY:  20241114 https://dashfinancial.atlassian.net/browse/DS-9151 tr table has been introduced
 --  SO:  20250602 https://dashfinancial.atlassian.net/browse/DS-10060 Added account_id list as an input parameter that is calculated in the wrapper (see https://dashfinancial.atlassian.net/browse/DS-10060)
 --  SO:  20250606 https://dashfinancial.atlassian.net/browse/DS-10060 Support multiple default CTMAs in auto-allocation job
+--  SO:  20250630 https://dashfinancial.atlassian.net/browse/DS-10060 REMOVING support multiple default CTMAs in auto-allocation job
 
 DECLARE
 --  ai RECORD;

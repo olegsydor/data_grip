@@ -67,3 +67,6 @@ where month_name = any('{січень,лютий}');
 
 select array_agg(mnt) from regexp_split_to_table('01,02,03,січень',',') as mnt
 where mnt ~* '[A]'
+
+
+
