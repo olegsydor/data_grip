@@ -495,7 +495,7 @@ select parent_order_id                                               as parent_o
        trade_liquidity_indicator                                     as "Liquidity Indicator",
        exec_id                                                       as "ExecutionID",
        ac_imid                                                       as "CAT Reporting Firm IMID"
-from (select *
+from (select event_ts, *
 -- into trash.so_obo
       from t_exs
       where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
