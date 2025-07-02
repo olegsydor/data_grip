@@ -96,7 +96,12 @@ select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_orde
        case
            when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
                then ac.crd_number end                              as crd_number,
-       tf.trading_firm_unq_id
+       tf.trading_firm_unq_id,
+                                   case
+                                when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
+                                when cl.exec_instruction like '5%' then 'H'
+                                else 'NH'
+                                end                                                             as is_held
 --                              , *
 -- Execution Details
 from dwh.client_order cl
@@ -128,7 +133,8 @@ from dwh.client_order cl
                                    fmj.fix_message ->> '9000'         as tag_9000,
                                    fmj.fix_message ->> '58'           as tag_58,
                                    fmj.fix_message ->> '17'           as tag_17,
-                                   fmj.fix_message ->> '52'           as tag_52
+                                   fmj.fix_message ->> '52'           as tag_52,
+                                   fmj.fix_message ->> '9291'         as tag_9291
                             from fix_capture.fix_message_json fmj
                             where cl.fix_message_id = fmj.fix_message_id
                               and fmj.date_id >= cl.create_date_id
@@ -205,11 +211,7 @@ select b.first_order_id,
        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'      as order_creation_ts,
        b.open_close,
        compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)   as trading_session,
-       case
-           when b.exec_instruction like '1%' then 'NH'
-           when b.exec_instruction like '5%' then 'H'
---                                else 'NH'
-           end                                                                                 as is_held,
+       b.is_held                                                                               as is_held,
        case
            when b.cross_order_id is not null then 'Y'
            else 'N' end                                                                        as is_cross,
@@ -253,7 +255,8 @@ from t_base b
                                    fmj.fix_message ->> '109'            as tag_109,
                                    fmj.fix_message ->> '9000'           as tag_9000,
                                    fmj.fix_message ->> '17'             as tag_17,
-                                   fmj.fix_message ->> '14'             as tag_14
+                                   fmj.fix_message ->> '14'             as tag_14,
+                                   fmj.fix_message ->> '9291'           as tag_9291
                             from fix_capture.fix_message_json fmj
                             where fmj.fix_message_id = ex.fix_message_id
                               and fmj.date_id >= ex.exec_date_id
@@ -338,11 +341,7 @@ select b.first_order_id                                                    as fi
        coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
        b.open_close,
        compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id) as trading_session,
-       case
-           when b.exec_instruction like '1%' then 'NH'
-           when b.exec_instruction like '5%' then 'H'
---                                else 'NH'
-           end                                                             as is_held,
+       b.is_held                                                           as is_held,
        case
            when b.cross_order_id is not null then 'Y'
            else 'N' end                                                    as is_cross,
@@ -404,17 +403,66 @@ from t_base b
          left join dwh.d_exec_type et on et.exec_type = ex.exec_type
          left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
 
-select
-    parent_order_id as parent_order_id,
-    trading_firm_name as "Trading Firm Name",
-tf_cat_imid as "Trading Firm IMID",
-tf_cat_crd as "Trading Firm CRD",
-event_type as "Event Type",
-to_char(event_ts, 'MM/DD/YYYY') as "Event Date",
+select parent_order_id                                               as parent_order_id,
+       trading_firm_name                                             as "Trading Firm Name",
+       tf_cat_imid                                                   as "Trading Firm IMID",
+       tf_cat_crd                                                    as "Trading Firm CRD",
+       event_type                                                    as "Event Type",
+       to_char(event_ts, 'MM/DD/YYYY')                               as "Event Date",
        case
            when event_type = 'Cancelled' then coalesce(to_char(event_ts, 'HH24:MI:SS:MS'), '')
            else coalesce(to_char(event_ts, 'HH24:MI:SS:US'), '') end as "Event Time",
+       client_order_id                                               as "Client clOrderID",
+       street_client_order_id                                        as "Street clOrderID",
+       event_qty                                                     as "Event Qty",
+       event_price                                                   as "Event Price",
+       net_price                                                     as "Net Price",
+       case
+           when multileg_indicator <> '1' then 'Y'
+           else 'N'
+           end,                                                                       -- as "Multi Leg Indicator",
+       no_legs                                                       as "Number of legs",
+       multileg_order_id                                             as "Leg Order ID",
+       manual_flag                                                   as "Manual Flag",
+       exec_text                                                     as "Free Text",
+       -- Order Detail
+       order_status_description                                      as "Order Status",
+       case
+           when event_type = 'New Order' then ''
+           else coalesce(orig_client_order_id, '') end               as "Original Client clOrderID",
+       case
+           when event_type = 'Order Route'
+               then orig_client_order_id end                         as "Original Street clOrderID",
+       opra_symbol                                                   as "OSI Symbol",
+       root_symbol                                                   as "Base symbol",
+       symbol                                                        as "Symbol",
+       case instrument_type_id
+           when 'O' then 'Option'
+           when 'E' then 'Equity'
+           else coalesce(instrument_type_id, '') end                 as "Security Type",
 
+    underlying_symbol as "Underlying Symbol",
+pcv as "P/C/S",
+               to_char(expiration_ts, 'MM/DD/YYYY') as "Expiration Date",
+               to_char(expiration_ts, 'HH24:MI:SS.MS') as "Expiration Time",
+       case
+           when side = '1' then 'Buy'
+           when side = '2' then 'Sell'
+           when side in ('5', '6') then 'Sell Short'
+           end as "Side",
+    tif as "TIF",
+               to_char(good_till_ts, 'MM/DD/YYYY') as "Good Till Date",
+               to_char(good_till_ts, 'HH24:MI:SS.MS') as "Good Till Time",
+event_qty as "Order Qty",
+cum_qty as "Filled Qty",
+order_type_name as "Order Type Code",
+       event_price  as "Order Price",
+       to_char(order_creation_ts, 'DD.MM.YYYY') as "Order Creation Date",
+to_char(order_creation_ts, 'HH24:MI:SS.MS') as "Order Creation Time",
+open_close  as "Open/Close",
+trading_session as "Trading Session",
+is_held as "Is Held",
+is_cross as "Is Cross",
 
 
 
