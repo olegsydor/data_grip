@@ -4,9 +4,12 @@ alter function genesis2.auto_allocate_unallocated_trade set schema trash;
 -- compare 1 PROD
 -- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4, _int4);
 
-CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
- RETURNS integer
- LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character,
+                                                                    in_allocation_type integer,
+                                                                    in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                                    in_account_ids integer[] DEFAULT '{}'::integer[])
+    RETURNS integer
+    LANGUAGE plpgsql
  SET application_name TO 'ETL:  AutoAllocation'
 AS $function$
 --in_allocation_type = 0: options

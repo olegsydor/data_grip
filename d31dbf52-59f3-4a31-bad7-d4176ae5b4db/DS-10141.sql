@@ -8,7 +8,6 @@ select * from dwh.client_order
     l_date_end_id := coalesce(in_date_end_id, to_char(current_date, 'YYYYMMDD')::int4);
 
     return query
---     select 'OrderID,exec_id,Trading Firm Name,Trading Firm IMID,Trading Firm CRD,Event Type,Event Date,Event Time,Orig clOrderID,Street clOrderID,Event Qty,Event Price,Net Price,Multi Leg Indicator,Number of legs,Leg Order ID,Manual Flag,Free Text,Order Status,OSI Symbol,Base symbol,Symbol,Security Type,Underlying Symbol,Expiration Date,Expiration Time,Side,TIF,Good Till Date,Good Till Time,Order Qty,Filled Qty,Order Type Code,Order Price,Order Creation Date,Order Creation Time,Open/Close,Trading Session,Is Held,Is Cross,Fee Sensitivity,Stop Price,Max Floor,Capacity,ExDestination,Leg ratio,User,Account Name,Account ID,Account Holder Type,Account FDID,Account IMID,Account CRD,Sender type,Last Mkt,MIC Code,Liquidity Indicator,ExecutionID,CAT Reporting Firm IMID';
         select 'OrderID|exec_id|Trading Firm Name|Event Type|Event Date|Event Time|Orig clOrderID|Street clOrderID|Event Qty|Event Price|Executed Timestamp|Multi Leg Indicator|Number of legs|Leg Order ID|Free Text|Order Status|OSI Symbol|Base symbol|Symbol|Security Type|Underlying Symbol|P/C/V|Expiration Date|Side|TIF|Good Till Date|Good Till Time|Order Qty|Filled Qty|Order Type Code|Order Price|Order Creation Date|Order Creation Time|Open/Close|Trading Session|Is Held|Is Cross|Stop Price|Max Floor|Capacity|ExDestination|Leg ratio|User|Account Name|Account ID|Last Mkt|MIC Code|Liquidity Indicator';
 
 create temp table t_base as
@@ -136,7 +135,13 @@ where cl.parent_order_id is null
 
 drop table t_exs;
 create temp table t_exs as
-select b.first_order,
+select b.first_order_id,
+       b.order_id as parent_order_id,
+
+
+
+
+       -----
        b.orig_client_order_id,
        3                                                                                  as rn,
 --                             b.leg_cl_ord_id, b.client_order_id,
@@ -255,7 +260,8 @@ insert into t_exs
                                        ('G', 'Order Modify', 1),
                                        ('G', 'Order Modify Route', 2))
                                    as t(trans_type, order_type_value, rn))
-select b.first_order,
+select b.first_order as first_order_id,
+       b.order_id as parent_order_id,
                             b.orig_client_order_id,
                             ot.rn,
 --                             case
@@ -388,4 +394,8 @@ select b.first_order,
                               left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active
 
 
-select * from t_exs
+select *
+into trash.so_obo
+from t_exs;
+
+select * from trash.so_obo
