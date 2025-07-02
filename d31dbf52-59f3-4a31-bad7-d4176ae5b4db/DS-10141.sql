@@ -97,11 +97,11 @@ select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_orde
            when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
                then ac.crd_number end                              as crd_number,
        tf.trading_firm_unq_id,
-                                   case
-                                when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
-                                when cl.exec_instruction like '5%' then 'H'
-                                else 'NH'
-                                end                                                             as is_held
+       case
+           when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
+           when cl.exec_instruction like '5%' then 'H'
+           else 'NH'
+           end                                                     as is_held
 --                              , *
 -- Execution Details
 from dwh.client_order cl
@@ -207,10 +207,10 @@ select b.first_order_id,
 --                     ex.cum_qty,
        fmj.tag_14                                                                              as cum_qty,
        b.order_type_name,
---                            b.create_time                                                   as order_creation_ts,
-       to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'      as order_creation_ts,
+       b.process_time                                                                          as order_creation_ts,
+--        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'      as order_creation_ts,
        b.open_close,
-       compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)   as trading_session,
+       compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)                     as trading_session,
        b.is_held                                                                               as is_held,
        case
            when b.cross_order_id is not null then 'Y'
@@ -300,8 +300,8 @@ select b.first_order_id                                                    as fi
        case
            when ot.trans_type = 'G' and rn = 1 then null
            else b.client_order_id end                                      as street_client_order_id,
-                            b.order_qty                                                         as event_qty,
-                            b.price                                                             as event_price,
+       b.order_qty                                                         as event_qty,
+       b.price                                                             as event_price,
        b.net_price                                                         as net_price,
        b.multileg_reporting_type                                           as multileg_indicator,
        b.no_legs,
@@ -337,8 +337,8 @@ select b.first_order_id                                                    as fi
                then ex.cum_qty::text end                                   as cum_qty,
 --                     ex.cum_qty,
        b.order_type_name,
---                            b.create_time                                                       as order_creation_ts,
-       coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
+       ex.exec_time                                                        as order_creation_ts,
+--        coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
        b.open_close,
        compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id) as trading_session,
        b.is_held                                                           as is_held,
@@ -403,6 +403,8 @@ from t_base b
          left join dwh.d_exec_type et on et.exec_type = ex.exec_type
          left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
 
+
+
 select parent_order_id                                               as parent_order_id,
        trading_firm_name                                             as "Trading Firm Name",
        tf_cat_imid                                                   as "Trading Firm IMID",
@@ -420,7 +422,7 @@ select parent_order_id                                               as parent_o
        case
            when multileg_indicator <> '1' then 'Y'
            else 'N'
-           end,                                                                       -- as "Multi Leg Indicator",
+           end, -- as "Multi Leg Indicator",
        no_legs                                                       as "Number of legs",
        multileg_order_id                                             as "Leg Order ID",
        manual_flag                                                   as "Manual Flag",
@@ -441,105 +443,53 @@ select parent_order_id                                               as parent_o
            when 'E' then 'Equity'
            else coalesce(instrument_type_id, '') end                 as "Security Type",
 
-    underlying_symbol as "Underlying Symbol",
-pcv as "P/C/S",
-               to_char(expiration_ts, 'MM/DD/YYYY') as "Expiration Date",
-               to_char(expiration_ts, 'HH24:MI:SS.MS') as "Expiration Time",
+       underlying_symbol                                             as "Underlying Symbol",
+       pcv                                                           as "P/C/S",
+       to_char(expiration_ts, 'MM/DD/YYYY')                          as "Expiration Date",
+       to_char(expiration_ts, 'HH24:MI:SS.MS')                       as "Expiration Time",
        case
            when side = '1' then 'Buy'
            when side = '2' then 'Sell'
            when side in ('5', '6') then 'Sell Short'
-           end as "Side",
-    tif as "TIF",
-               to_char(good_till_ts, 'MM/DD/YYYY') as "Good Till Date",
-               to_char(good_till_ts, 'HH24:MI:SS.MS') as "Good Till Time",
-event_qty as "Order Qty",
-cum_qty as "Filled Qty",
-order_type_name as "Order Type Code",
-       event_price  as "Order Price",
-       to_char(order_creation_ts, 'DD.MM.YYYY') as "Order Creation Date",
-to_char(order_creation_ts, 'HH24:MI:SS.MS') as "Order Creation Time",
-open_close  as "Open/Close",
-trading_session as "Trading Session",
-is_held as "Is Held",
-is_cross as "Is Cross",
+           end                                                       as "Side",
+       tif                                                           as "TIF",
+       to_char(good_till_ts, 'MM/DD/YYYY')                           as "Good Till Date",
+       to_char(good_till_ts, 'HH24:MI:SS.MS')                        as "Good Till Time",
+       event_qty                                                     as "Order Qty",
+       cum_qty                                                       as "Filled Qty",
+       order_type_name                                               as "Order Type Code",
+       event_price                                                   as "Order Price",
+       to_char(order_creation_ts, 'DD.MM.YYYY')                      as "Order Creation Date",
+       to_char(order_creation_ts, 'HH24:MI:SS.MS')                   as "Order Creation Time",
+       open_close                                                    as "Open/Close",
+       trading_session                                               as "Trading Session",
+       is_held                                                       as "Is Held",
+       is_cross                                                      as "Is Cross",
+       fee_sensitivity                                               as "Fee Sensitivity",
+       stop_price                                                    as "Stop Price",
+       max_floor::text                                               as "Max Floor",
+       customer_or_firm_name                                         as "Capacity",
+       ex_destination                                                as "ExDestination",
+       ratio_qty                                                     as "Leg ratio",
+       user_                                                         as "User",
 
+-- Account Details
+       account_name                                                  as "Account Name",
+       account_id::text                                              as "Account ID",
+       account_holder_type                                           as "Account Holder Type",
+       ac_fdid                                                       as "Account FDID",
+       ac_imid                                                       as "Account IMID",
+       ac_number                                                     as "Account CRD",
+       sender_sub_id                                                 as "Sender Type",
 
-
-    coalesce(client_order_id, ''),                                          -- -- cl_ord_id,
-       coalesce(exec_id, ''),                                                  -- -- exec_id,
-       coalesce(trading_firm_name, ''),                                        -- -- Trading Firm Name
---        coalesce(cat_imid, '')                                                       , -- -- Trading Firm IMID
---        coalesce(cat_crd, '')                                                        , -- -- Trading Firm CRD
-       coalesce(event_type, ''),                                               -- -- event_type,
-       coalesce(to_char(event_ts, 'MM/DD/YYYY'), ''),                          -- -- Event Date
-       case
-           when event_type = 'Cancelled' then coalesce(to_char(event_ts, 'HH24:MI:SS:MS'), '')
-           else coalesce(to_char(event_ts, 'HH24:MI:SS:US'), '') end,          -- -- Event Time
-       case
-           when event_type = 'Trade' then ''
-           else coalesce(orig_client_order_id, '') end,                        -- -- Orig clOrderID,
-       coalesce(street_client_order_id, ''),                                   -- -- str_cl_ord_id,
-       coalesce(event_qty::text, ''),                                          -- -- event_qty
-       coalesce(event_price::text, ''),                                        -- -- event_price,
-       coalesce(to_char(trade_exec_time, 'HH24:MI:SS:MS'), ''),                -- -- exec_time for trade event,
---        coalesce(net_price::text, '')                                                 , -- -- net_price,
-       case when multileg_indicator <> '1' then 'Y' else 'N' end,              -- -- Multi Leg Indicator,
-       coalesce(no_legs::text, ''),                                            -- -- Number of legs
-       coalesce(multileg_order_id::text, ''),                                  -- -- Leg Order ID,
---        coalesce(manual_flag::text, '')                                              , -- -- Manual Flag
-       coalesce(exec_text, ''),                                                -- -- "Free Text",
-       coalesce(order_status_description, ''),                                 -- -- Order Status
-       coalesce(opra_symbol, ''),                                              -- -- OSI Symbol
-       coalesce(root_symbol, ''),                                              -- -- as "Base symbol",
-       coalesce(symbol, ''),                                                   -- -- as "Symbol",
-       case instrument_type_id
-           when 'O' then 'Option'
-           when 'E' then 'Equity'
-           else coalesce(instrument_type_id, '') end,                          -- -- as "Security Type",
-       coalesce(underlying_symbol, ''),                                        -- -- as "Underlying Symbol",
-       coalesce(pcv, ''),                                                      -- -- as "Underlying Symbol",
-       coalesce(to_char(expiration_ts, 'MM/DD/YYYY'), ''),                     -- -- Expiration Date
---        coalesce(to_char(expiration_ts, 'HH24:MI:SS.MS'), '')                        , -- -- Expiration Time
-       case
-           when side = '1' then 'Buy'
-           when side = '2' then 'Sell'
-           when side in ('5', '6') then 'Sell Short'
-           else ''
-           end,                                                                -- -- as "Side",
-       coalesce(tif, ''),                                                      -- -- as "TIF",
-       coalesce(to_char(good_till_ts, 'MM/DD/YYYY'), ''),                      -- -- as "Good Till Date",
-       coalesce(to_char(good_till_ts, 'HH24:MI:SS.MS'), ''),                   -- -- as "Good Till Time",
-       coalesce(event_qty::text, ''),                                          -- -- as "Order Qty",
-       coalesce(cum_qty::text, ''),                                            -- -- as "Filled Qty",
-       coalesce(order_type_name, ''),                                          -- -- as "Order Type Code",
-       coalesce(event_price::text, ''),                                        -- -- as "Order Price",
-       to_char(order_creation_ts, 'DD.MM.YYYY'),                               -- -- as "Order Creation Date",
-       case
-           when exec_type = '4' then coalesce(to_char(order_creation_ts, 'HH24:MI:SS:US'), '')
-           else coalesce(to_char(order_creation_ts, 'HH24:MI:SS:US'), '') end, --
-       coalesce(open_close, ''),                                               -- --  as "Open/Close",
-       coalesce(trading_session, ''),                                          -- --  as Trading Session
-       coalesce(is_held, ''),                                                  -- --  as Is Held
-       coalesce(is_cross, ''),                                                 -- --  as Is Cross,
---        coalesce(fee_sensitivity::text, '')                                          , -- --  as Fee Sensitivity
-       coalesce(stop_price::text, ''),                                         -- --  as Stop Price
-       coalesce(max_floor::text, ''),                                          -- --  as Max Floor
-       coalesce(customer_or_firm_name, ''),                                    -- --  as Capacity
-       coalesce(ex_destination, ''),                                           -- --  as ExDestination
-       coalesce(ratio_qty::text, ''),                                          -- --  as Leg ratio
-       coalesce(user_, ''),                                                    -- --  as User
-       coalesce(account_name, ''),                                             -- --  as "Account Name",
-       coalesce(account_id::text, ''),                                         -- --  as "Account ID",
-       coalesce(last_mkt, ''),                                                 -- --  as "Last Mkt",
-       coalesce(mic_code, ''),                                                 -- --  as "MIC Code",
-       coalesce(trade_liquidity_indicator, '')                                 --  as "Liquidity Indicator",
-
+       -- Execution Details
+       last_mkt                                                      as "Last Mkt",
+       mic_code                                                      as "MIC Code",
+       trade_liquidity_indicator                                     as "Liquidity Indicator",
+       exec_id                                                       as "ExecutionID",
+       ac_imid                                                       as "CAT Reporting Firm IMID"
 from (select *
 -- into trash.so_obo
       from t_exs
       where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
       order by 1, 2 nulls first, 3, rn, event_ts) x;
-
-select *
-from trash.so_obo
