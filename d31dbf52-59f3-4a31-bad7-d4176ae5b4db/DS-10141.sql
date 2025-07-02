@@ -219,7 +219,8 @@ select b.first_order_id,
        b.stop_price,
        b.max_floor,
        b.customer_or_firm_name,
-       b.par_tag_9000                                                                          as ex_destination,
+--        b.par_tag_9000                                                                          as ex_destination,
+b.ex_destination                                                   as ex_destination,
        b.ratio_qty,
        coalesce(fmj.tag_50, tag_109, b.account_name)                                           as user_,
 --                     b.account_name,
@@ -279,16 +280,18 @@ select b.first_order_id                                                    as fi
        ot.rn,
        b.client_order_id                                                   as client_order_id,
        b.exec_id                                                           as exec_id,
-       case
-           when ot.order_type_value = 'New Order'
-               then b.trading_firm_name end                                as trading_firm_name,
-       case
-           when ot.order_type_value = 'New Order'
-               then b.tf_cat_imid end                                      as tf_cat_imid,
-       case
-           when ot.order_type_value = 'New Order'
-               then b.tf_cat_crd end                                       as tf_cat_crd,
-
+--        case
+--            when ot.order_type_value = 'New Order'
+--                then b.trading_firm_name end                                as trading_firm_name,
+       b.trading_firm_name                                as trading_firm_name,
+--        case
+--            when ot.order_type_value = 'New Order'
+--                then b.tf_cat_imid end                                      as tf_cat_imid,
+       b.tf_cat_imid                                      as tf_cat_imid,
+--        case
+--            when ot.order_type_value = 'New Order'
+--                then b.tf_cat_crd end                                       as tf_cat_crd,
+       b.tf_cat_crd                                       as tf_cat_crd,
        ot.order_type_value                                                 as event_type,
 
 --                            case
@@ -310,9 +313,10 @@ select b.first_order_id                                                    as fi
        case
            when ot.rn = 1 then 'true'
            else 'false' end                                                as manual_flag,
-       case
-           when ot.order_type_value != 'New Order'
-               then b.exec_text end                                        as exec_text,
+--        case
+--            when ot.order_type_value != 'New Order'
+--                then b.exec_text end                                        as exec_text,
+       b.exec_text                                        as exec_text,
        os.order_status_description,-- et.exec_type_description, ex.order_status,
        b.opra_symbol,
        b.root_symbol,
@@ -349,18 +353,21 @@ select b.first_order_id                                                    as fi
        b.stop_price,
        b.max_floor,
        b.customer_or_firm_name,
-       case
-           when ot.rn = 1 then ''
-           else b.par_tag_9000 end                                         as ex_destination,
+--        case
+--            when ot.rn = 1 then ''
+--            else b.par_tag_9000 end                                         as ex_destination,
+       b.ex_destination                                                   as ex_destination,
        b.ratio_qty,
        coalesce(b.par_tag_50, b.par_tag_109, b.account_name)               as user_,
 ----
-       case
-           when ot.order_type_value = 'New Order'
-               then b.account_name end                                     as account_name,
-       case
-           when ot.order_type_value = 'New Order'
-               then b.account_id end                                       as account_id,
+--        case
+--            when ot.order_type_value = 'New Order'
+--                then b.account_name end                                     as account_name,
+       b.account_name                                     as account_name,
+--        case
+--            when ot.order_type_value = 'New Order'
+--                then b.account_id end                                       as account_id,
+       b.account_id                                       as account_id,
        b.account_holder_type,
        b.ac_fdid,
        b.ac_imid,
@@ -493,3 +500,7 @@ from (select *
       from t_exs
       where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
       order by 1, 2 nulls first, 3, rn, event_ts) x;
+
+
+
+select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20250626, in_date_end_id := 20250626, in_account_ids := '{74339}')
