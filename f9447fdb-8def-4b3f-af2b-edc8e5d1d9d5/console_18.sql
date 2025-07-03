@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
 
-CREATE FUNCTION trash.allocations_create(in_date_id integer, in_user_id integer, in_change_vector character varying)
+CREATE or replace FUNCTION trash.allocations_create(in_date_id integer, in_user_id integer, in_change_vector character varying)
  RETURNS bigint
  LANGUAGE plpgsql
 AS $function$
@@ -62,7 +62,7 @@ begin
     			and is_busted ='N'
     		 ),
      pre_aie as (select l_alloc_instr
-                      , in_date_id
+                      , in_date_id as date_id
                       , dash360.f_get_clearing_account_id(tr.account_id, tr.clearing_account_number,
                                                           tr.account_nickname, tr.street_account_name,
                                                           tr.instrument_type_id, in_user_id)                as clearing_account_id
@@ -75,13 +75,12 @@ begin
                  group by clearing_account_id, street_account_name, account_nickname
 )
  ,      aie as( INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty, allocation_instruction_entry_id)
-			   select l_alloc_instr, in_date_id, clearing_account_id, street_account_name, account_nickname,  last_qty, alloc_instr_entry_id
+			   select pre_aie.l_alloc_instr, in_date_id, clearing_account_id, street_account_name, account_nickname,  last_qty, alloc_instr_entry_id
 			   from pre_aie
-               returning *),
+               ),
         a2tr as (INSERT INTO alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id, allocation_instruction_entry_id)
-                 select trade_record_id, l_alloc_instr, in_date_id, l_load_batch_id
-                 from tr
-                        join pre_aie on tr.trade_record_id = any (pre_aie.trade_record_ids)
+                 select unnest(trade_record_ids), pre_aie.l_alloc_instr, in_date_id, l_load_batch_id, alloc_instr_entry_id
+                 from pre_aie
                 /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
                                    coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
                                    coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */ )
@@ -143,3 +142,45 @@ begin
 end;
  $function$
 ;
+
+
+
+
+
+ with tr as materialized
+            (select tr.trade_record_id, tr.account_id , tr.instrument_id,  tr.last_qty, tr.allocation_avg_price, tr.open_close , tr.side, tr.street_account_name , tr.account_nickname, tr.cmta, tr.clearing_account_number, i.instrument_type_id
+              from genesis2.trade_record tr
+              inner join genesis2.instrument i on tr.instrument_id =i.instrument_id
+              where date_id = :in_date_id
+     			and trade_record_id = any(:l_new_trade_record_ids)
+    			and is_busted ='N'
+    		 )
+--      , pre_aie as (
+     select :l_alloc_instr
+                      , :in_date_id
+                      , 'cia' as clearing_account_id
+                      , tr.street_account_name
+                      , tr.account_nickname
+                      , sum(last_qty) as last_qty
+                      , nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as alloc_instr_entry_id,
+                        array_agg(trade_record_id) as trade_record_ids
+                 from tr
+                 group by clearing_account_id, street_account_name, account_nickname
+)
+ ,      aie as( --INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty, allocation_instruction_entry_id)
+			   select :l_alloc_instr, :in_date_id, clearing_account_id, street_account_name, account_nickname,  last_qty, alloc_instr_entry_id
+			   from pre_aie
+--                returning *
+			   )
+--         ,a2tr as (
+--         INSERT INTO alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id, allocation_instruction_entry_id)
+                 select unnest(trade_record_ids), :l_alloc_instr, :in_date_id, :l_load_batch_id, alloc_instr_entry_id
+                 from pre_aie
+                /* inner join aie on aie.clearing_account_id = tr.clearing_account_id and
+                                   coalesce(tr.occ_actionable_id, '---') = coalesce(aie.occ_actionable_id, '---') and
+                                   coalesce(tr.account_nickname, '---') = coalesce(aie.account_nickname, '---') */ )
+   INSERT INTO allocation_instruction
+	(alloc_instr_id, date_id, create_time, account_id, instrument_id, total_qty, avg_px, open_close, side, created_by_user_id,  dataset_id)
+	select l_alloc_instr, in_date_id, clock_timestamp(), account_id , instrument_id,  sum(last_qty), allocation_avg_price, open_close , side, in_user_id, l_load_batch_id
+    from tr
+    group by account_id , instrument_id, allocation_avg_price, open_close, side;
