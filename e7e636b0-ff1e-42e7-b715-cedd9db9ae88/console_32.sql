@@ -795,4 +795,4 @@ $function$
 ;
 
 
-select * from genesis2.account
+select nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq')
