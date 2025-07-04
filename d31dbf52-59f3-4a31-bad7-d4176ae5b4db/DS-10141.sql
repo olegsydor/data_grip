@@ -1,14 +1,15 @@
 ---working place
-select * from dwh.client_order
-    where client_order.order_id = 100000021238170475
+select *
+from dwh.client_order
+where client_order.order_id = 100000021238170475
 
 
 --
     l_date_begin_id := coalesce(in_date_begin_id, to_char(current_date, 'YYYYMMDD')::int4);
-    l_date_end_id := coalesce(in_date_end_id, to_char(current_date, 'YYYYMMDD')::int4);
+l_date_end_id := coalesce(in_date_end_id, to_char(current_date, 'YYYYMMDD')::int4);
 
-    return query
-        select 'OrderID|exec_id|Trading Firm Name|Event Type|Event Date|Event Time|Orig clOrderID|Street clOrderID|Event Qty|Event Price|Executed Timestamp|Multi Leg Indicator|Number of legs|Leg Order ID|Free Text|Order Status|OSI Symbol|Base symbol|Symbol|Security Type|Underlying Symbol|P/C/V|Expiration Date|Side|TIF|Good Till Date|Good Till Time|Order Qty|Filled Qty|Order Type Code|Order Price|Order Creation Date|Order Creation Time|Open/Close|Trading Session|Is Held|Is Cross|Stop Price|Max Floor|Capacity|ExDestination|Leg ratio|User|Account Name|Account ID|Last Mkt|MIC Code|Liquidity Indicator';
+return query
+select 'OrderID|exec_id|Trading Firm Name|Event Type|Event Date|Event Time|Orig clOrderID|Street clOrderID|Event Qty|Event Price|Executed Timestamp|Multi Leg Indicator|Number of legs|Leg Order ID|Free Text|Order Status|OSI Symbol|Base symbol|Symbol|Security Type|Underlying Symbol|P/C/V|Expiration Date|Side|TIF|Good Till Date|Good Till Time|Order Qty|Filled Qty|Order Type Code|Order Price|Order Creation Date|Order Creation Time|Open/Close|Trading Session|Is Held|Is Cross|Stop Price|Max Floor|Capacity|ExDestination|Leg ratio|User|Account Name|Account ID|Last Mkt|MIC Code|Liquidity Indicator';
 
 drop table if exists t_base;
 create temp table t_base as
@@ -158,12 +159,11 @@ select b.first_order_id,
        b.client_order_id                                                                       as client_order_id,
 --                     ex.secondary_exch_exec_id                                      as exec_id,
        tag_17                                                                                  as exec_id,
---                     b.trading_firm_name,
-       null                                                                                    as trading_firm_name,
+       b.trading_firm_name                                                                     as trading_firm_name,
 --                     b.cat_imid,
-       null                                                                                    as tf_cat_imid,
+       b.tf_cat_imid                                                       as tf_cat_imid,
 --                     b.cat_crd,
-       null                                                                                    as tf_cat_crd,
+       b.tf_cat_crd                                                        as tf_cat_crd,
        case
            when ex.exec_type in ('A', '0', '5') then 'Order Ack'
            when ex.exec_type = '4' then 'Cancelled'
@@ -180,13 +180,14 @@ select b.first_order_id,
        b.client_order_id                                                                       as street_client_order_id,
        b.order_qty                                                                             as event_qty,
        b.price                                                                                 as event_price,
-       null::numeric                                                                           as net_price,
+--        null::numeric                                                                           as net_price,
+       b.net_price                                                         as net_price,
        b.multileg_reporting_type                                                               as multileg_indicator,
        b.no_legs,
        b.leg_cl_ord_id                                                                         as multileg_order_id,
        case
            when ex.exec_type in ('A', 'F', '5', 'W', '4') then 'false'
-           else '?' end                                                                        as manual_flag,
+           else '' end                                                                        as manual_flag,
        case when ex.exec_type not in ('A', '0', '5') then ex.exec_text end                     as exec_text,
        os.order_status_description,
        b.opra_symbol,
@@ -204,10 +205,10 @@ select b.first_order_id,
        b.side,
        b.tif,
        b.expire_time                                                                           as good_till_ts,
---                     ex.cum_qty,
-       fmj.tag_14                                                                              as cum_qty,
+                    ex.cum_qty as cum_qty,
+--        fmj.tag_14                                                                              as cum_qty,
        b.order_type_name,
-       b.process_time                                                                          as order_creation_ts,
+       ex.exec_time                                                                            as order_creation_ts,
 --        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'      as order_creation_ts,
        b.open_close,
        compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)                     as trading_session,
@@ -220,13 +221,13 @@ select b.first_order_id,
        b.max_floor,
        b.customer_or_firm_name,
 --        b.par_tag_9000                                                                          as ex_destination,
-b.ex_destination                                                   as ex_destination,
+       b.ex_destination                                                                        as ex_destination,
        b.ratio_qty,
        coalesce(fmj.tag_50, tag_109, b.account_name)                                           as user_,
---                     b.account_name,
-       null                                                                                    as account_name,
---                     b.account_id,
-       null::int                                                                               as account_id,
+                     b.account_name as account_name,
+--        null                                                                                    as account_name,
+                    b.account_id as account_id,
+--        null::int                                                                               as account_id,
        b.account_holder_type,
        b.ac_fdid,
        b.ac_imid,
@@ -283,15 +284,15 @@ select b.first_order_id                                                    as fi
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.trading_firm_name end                                as trading_firm_name,
-       b.trading_firm_name                                as trading_firm_name,
+       b.trading_firm_name                                                 as trading_firm_name,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.tf_cat_imid end                                      as tf_cat_imid,
-       b.tf_cat_imid                                      as tf_cat_imid,
+       b.tf_cat_imid                                                       as tf_cat_imid,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.tf_cat_crd end                                       as tf_cat_crd,
-       b.tf_cat_crd                                       as tf_cat_crd,
+       b.tf_cat_crd                                                        as tf_cat_crd,
        ot.order_type_value                                                 as event_type,
 
 --                            case
@@ -300,9 +301,10 @@ select b.first_order_id                                                    as fi
        case
            when ot.order_type_value = 'Cancelled' then b.create_time
            else coalesce(b.par_tag_5050, b.par_tag_10061) end              as event_ts,
-       case
-           when ot.trans_type = 'G' and rn = 1 then null
-           else b.client_order_id end                                      as street_client_order_id,
+--        case
+--            when ot.trans_type = 'G' and rn = 1 then null
+--            else b.client_order_id end                                      as street_client_order_id,
+    b.client_order_id                                      as street_client_order_id,
        b.order_qty                                                         as event_qty,
        b.price                                                             as event_price,
        b.net_price                                                         as net_price,
@@ -316,7 +318,7 @@ select b.first_order_id                                                    as fi
 --        case
 --            when ot.order_type_value != 'New Order'
 --                then b.exec_text end                                        as exec_text,
-       b.exec_text                                        as exec_text,
+       b.exec_text                                                         as exec_text,
        os.order_status_description,-- et.exec_type_description, ex.order_status,
        b.opra_symbol,
        b.root_symbol,
@@ -336,10 +338,10 @@ select b.first_order_id                                                    as fi
        b.side,
        b.tif,
        b.expire_time                                                       as good_till_ts,
-       case
-           when ot.order_type_value != 'New Order'
-               then ex.cum_qty::text end                                   as cum_qty,
---                     ex.cum_qty,
+--        case
+--            when ot.order_type_value != 'New Order'
+--                then ex.cum_qty::text end                                   as cum_qty,
+                    ex.cum_qty as cum_qty,
        b.order_type_name,
        ex.exec_time                                                        as order_creation_ts,
 --        coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
@@ -356,18 +358,18 @@ select b.first_order_id                                                    as fi
 --        case
 --            when ot.rn = 1 then ''
 --            else b.par_tag_9000 end                                         as ex_destination,
-       b.ex_destination                                                   as ex_destination,
+       b.ex_destination                                                    as ex_destination,
        b.ratio_qty,
        coalesce(b.par_tag_50, b.par_tag_109, b.account_name)               as user_,
 ----
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.account_name end                                     as account_name,
-       b.account_name                                     as account_name,
+       b.account_name                                                      as account_name,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.account_id end                                       as account_id,
-       b.account_id                                       as account_id,
+       b.account_id                                                        as account_id,
        b.account_holder_type,
        b.ac_fdid,
        b.ac_imid,
@@ -433,7 +435,7 @@ select parent_order_id                                               as parent_o
        no_legs                                                       as "Number of legs",
        multileg_order_id                                             as "Leg Order ID",
        manual_flag                                                   as "Manual Flag",
-       exec_text                                                     as "Free Text",
+--        exec_text                                                     as "Free Text",
        -- Order Detail
        order_status_description                                      as "Order Status",
        case
@@ -495,7 +497,7 @@ select parent_order_id                                               as parent_o
        trade_liquidity_indicator                                     as "Liquidity Indicator",
        exec_id                                                       as "ExecutionID",
        ac_imid                                                       as "CAT Reporting Firm IMID"
-from (select event_ts, *
+from (select *
 -- into trash.so_obo
       from t_exs
       where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
@@ -503,4 +505,6 @@ from (select event_ts, *
 
 
 
-select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20250626, in_date_end_id := 20250626, in_account_ids := '{74339}')
+select *
+from dash360.report_obo_compliance_xls(in_date_begin_id := 20250626, in_date_end_id := 20250626,
+                                       in_account_ids := '{74339}')
