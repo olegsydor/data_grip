@@ -1,6 +1,6 @@
 select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id = 20250703
 
-CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
+
 
   drop table if exists t_tr;
   create temp table t_tr --on commit drop

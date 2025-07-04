@@ -1,4 +1,8 @@
 -- DROP FUNCTION trash.auto_allocate_unallocated_trade(bpchar, int4, int4, _int4);
+select *
+from genesis2.auto_allocate_unallocated_trade(in_instrument_type_id := 'O',
+                                              in_allocation_type := 0,
+                                              in_date_id := 20250703);
 
 alter function trash.auto_allocate_unallocated_trade rename to auto_allocate_unallocated_trade_for_multiple_cmta;
 
