@@ -79,5 +79,8 @@ select mnt
 from regexp_split_to_array('01,02,03',',') as mnt
 
 
+-- <h1.+>(.*?)</h1>
 
+SELECT REGEXP_MATCHES('and ci = 1 and f = 0 and oc = 2  and rc = 3', '(and [^(and)]+)', 'g');
 
+SELECT REGEXP_MATCHES('Фінансування на виплату за 01,02,03 січня 2025 року. Без ПДВ.', 'за ([\d]{2}(?:,[\d]{2})*) \w+ \d{4} року');
