@@ -13,7 +13,23 @@ FROM Recur
 ORDER BY LEN(Combination), Combination;
 
 
-select * from training.comb;
+select * from training.comb
+where list_id between 1 and 30;
+
+
+with base as (
+select list_id,
+       array_agg(list_id) over (order by list_sum desc) as l,
+       list_sum, sum(list_sum) over (order by list_sum desc) as sm
+from training.comb
+where list_id between 1 and 15
+    )
+select array_agg(list_id) as list_id,
+       sm
+from base where
+
+
+
 
 
 
@@ -84,3 +100,45 @@ from regexp_split_to_array('01,02,03',',') as mnt
 SELECT REGEXP_MATCHES('and ci = 1 and f = 0 and oc = 2  and rc = 3', '(and [^(and)]+)', 'g');
 
 SELECT REGEXP_MATCHES('Фінансування на виплату за 01,02,03 січня 2025 року. Без ПДВ.', 'за ([\d]{2}(?:,[\d]{2})*) \w+ \d{4} року');
+
+
+WITH input(text) AS (
+    VALUES
+    ('Виплата за січень, лютий і березень 2025 року')
+)
+
+-- Витягуємо блок місяців і ділимо його на частини
+SELECT trim(both ' ' from value) AS month_name
+FROM input,
+     LATERAL regexp_match(text, 'за ((?:січень|лютий|березень|квітень|травень|червень|липень|серпень|вересень|жовтень|листопад|грудень)(?:, | і )?(?:січень|лютий|березень|квітень|травень|червень|липень|серпень|вересень|жовтень|листопад|грудень)*) \d{4} року') AS m(months_block),
+     LATERAL regexp_split_to_table(m.months_block::text, ', | і ') AS value;
+
+
+
+-- clearing account
+alter table genesis2.clearing_account add column if not exists is_autoalloc_to bpchar null;
+
+select *--clearing_account_id, account_id, cmta, is_default, is_autoalloc_to, default_alloc_ratio
+from genesis2.clearing_account
+where true
+  and account_id = 81;
+
+
+  create temp table t_clearing_account_aa as
+  with base as (
+      select ca.account_id,
+         ca.clearing_account_id,
+         coalesce(aa.cmta, ca.cmta)          as cmta,
+         coalesce(aa.default_alloc_ratio, 1) as ratio
+  from genesis2.clearing_account ca
+           left join genesis2.clearing_account aa on ca.account_id = aa.account_id and aa.is_autoalloc_to = 'Y'
+  where true
+    and ca.is_deleted = 'N'
+    and ca.market_type = 'O'
+    and ca.is_default = 'Y')
+  , check_sum_ratio as (select account_id, sum(ratio) as sum_ratio
+                        from base
+                        group by account_id
+                        having sum(ratio) = 1)
+  select * from base
+  join check_sum_ratio using (account_id)

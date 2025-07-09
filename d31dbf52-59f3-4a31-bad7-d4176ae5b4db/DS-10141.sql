@@ -1,9 +1,21 @@
 ---working place
 select *
 from dwh.client_order
-where client_order.order_id = 100000021238170475
-select * from trash.report_obo_compliance_new(20250626, 20250626, null, '{74339}');
+-- where client_order.order_id = 100000021143884112
+where client_order_id = '62517701G0Z'
+
+
+select *
+from trash.report_obo_compliance_new(20250626, 20250626, null, '{74339}');
+select *
+from trash.report_obo_compliance_new(in_date_begin_id := 20250626, in_date_end_id := 20250626,
+                                     in_instrument_type := null, in_account_ids := '{74339}',
+                                     in_parent_order_ids := '{100000021238170475}');
 select * from trash.report_obo_compliance_new(20250626, 20250626)
+
+
+
+
 -- drop FUNCTION trash.report_obo_compliance_new
 CREATE OR REPLACE FUNCTION trash.report_obo_compliance_new(in_date_begin_id integer, in_date_end_id integer,
                                                            in_instrument_type character DEFAULT NULL::bpchar,
@@ -128,6 +140,7 @@ begin
               when coalesce(l_account_ids, '{}') = '{}' then true
               else cl.account_id = any (l_account_ids) end;
 
+    l_retention_date_id := 20230101;
     select public.load_log(l_load_id, l_step_id,
                            'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text || ' - ' ||
                            l_date_end_id::text ||
@@ -222,13 +235,13 @@ begin
                else 'NH'
                end                                                     as is_held
     from dwh.client_order cl
-             left join dwh.client_order orig
-                       on orig.order_id = cl.orig_order_id and
-                          orig.create_date_id >= cl.create_date_id
-                           and orig.create_date_id >= l_retention_date_id
+             left join lateral (select * from dwh.client_order orig
+                       where orig.order_id = cl.orig_order_id and
+                          orig.create_date_id <= cl.create_date_id
+                           and orig.create_date_id >= l_retention_date_id limit 1) orig on true
              left join dwh.client_order mleg
-                       on (mleg.order_id = cl.multileg_order_id and
-                           mleg.create_date_id >= cl.create_date_id
+                       on (mleg.order_id = cl.multileg_order_id
+--                         and mleg.create_date_id >= cl.create_date_id
                            and mleg.create_date_id >= l_retention_date_id)
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -426,10 +439,10 @@ begin
            case
                when ot.order_type_value = 'Cancelled' then b.create_time
                else coalesce(b.par_tag_5050, b.par_tag_10061) end              as event_ts,
---        case
---            when ot.trans_type = 'G' and rn = 1 then null
---            else b.client_order_id end                                      as street_client_order_id,
-           b.client_order_id::text                                                   as street_client_order_id,
+       case
+           when ot.trans_type = 'G' and rn = 1 then null
+           else b.client_order_id end                                      as street_client_order_id,
+--            b.street_clorderid::text                                            as street_client_order_id,
            b.order_qty                                                         as event_qty,
            b.price                                                             as event_price,
            b.net_price                                                         as net_price,
@@ -468,7 +481,7 @@ begin
 --                then ex.cum_qty::text end                                   as cum_qty,
            ex.cum_qty                                                          as cum_qty,
            b.order_type_name,
-           ex.exec_time                                                        as order_creation_ts,
+           b.process_time                                                        as order_creation_ts,
 --        coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
            b.open_close,
            compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id) as trading_session,
@@ -576,7 +589,7 @@ begin
                order_status_description                                      as "Order Status",
                case
                    when event_type = 'New Order' then ''
-                   else coalesce(orig_client_order_id, '') end               as "Original Client clOrderID",
+                   else orig_client_order_id end                             as "Original Client clOrderID",
                case
                    when event_type = 'Order Route'
                        then orig_client_order_id end                         as "Original Street clOrderID",
@@ -643,4 +656,12 @@ $function$;
 
 select *
 from dash360.report_obo_compliance_xls(in_date_begin_id := 20250626, in_date_end_id := 20250626,
-                                       in_account_ids := '{74339}')
+                                       in_account_ids := '{74339}', in_parent_order_ids := '{100000021238170475,100000021238180133}')
+
+
+
+select *
+from trash.report_obo_compliance_new(in_date_begin_id := 20250626, in_date_end_id := 20250626,
+                                     in_instrument_type := null, in_account_ids := '{74339}',
+                                     in_parent_order_ids := '{100000021238170475,100000021238180133}');
+
