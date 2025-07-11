@@ -667,4 +667,7 @@ from trash.report_obo_compliance_new(in_date_begin_id := 20250626, in_date_end_i
 
 
 
-drop function if exists 
+drop function if exists dash360.report_obo_compliance_xls_bkp;
+alter function dash360.report_obo_compliance_xls rename to report_obo_compliance_xls_bkp;
+alter function trash.report_obo_compliance_new set schema dash360;
+alter function dash360.report_obo_compliance_new rename to report_obo_compliance_xls;
