@@ -371,15 +371,6 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
     	select public.load_log(l_load_id, l_step_id, 'create index on table trade_for_allocations', 0, 'I')
 		into l_step_id;
 
-  create temp table t_clearing_account_aa on commit drop as
-  select ca.clearing_account_id
-  from genesis2.clearing_account ca
-          left join genesis2.clearing_account aa on ca.account_id = aa.account_id and aa.is_auto_alloc_to
-      where true
-      and ca.is_deleted = 'N'
-      and ca.market_type = in_instrument_type_id
-      and ca.is_default = 'Y';
-
   insert into genesis2.ALLOCATION_INSTRUCTION(alloc_instr_id, DATE_ID, CREATE_TIME, ACCOUNT_ID, INSTRUMENT_ID, SIDE,
                                               OPEN_CLOSE, AVG_PX, TOTAL_QTY, CREATED_BY_SUBSYSTEM_ID, dataset_id)
   select tr.alloc_instr_id,
