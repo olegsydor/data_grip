@@ -198,15 +198,49 @@ drop table if exists t_aie;
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
 
-with base as (select tr, qty, sum(qty) over () as sm
-              from unnest(:trade_ids::int8[], :last_qtys::int4[]) as t(tr, qty))
-select *, qty * 1.0 / sm
-from base;
+
 
 
 
 
 select array[1,2,3,4,9] @> array[3,9];
+
+
+WITH
+    RECURSIVE base as (select *
+                       FROM training.comb
+                       where list_id between 0 and 4)
+   , combs AS (
+    -- стартуємо з одного елементу
+    SELECT ARRAY [list_id] AS ids,
+           list_id         AS max_id,
+           list_sum,
+           1               AS depth
+    FROM base
+
+    UNION ALL
+
+    -- додаємо нові унікальні list_id з більшими значеннями
+    SELECT c.ids || t.list_id,
+           t.list_id,
+           c.list_sum + t.list_sum,
+           c.depth + 1
+    FROM combs c
+             JOIN base t ON t.list_id > c.max_id
+    WHERE c.depth < 3 -- N=3
+)
+SELECT ids                                AS group_n_ids,
+       list_sum                           AS group_n_sum,
+       -- решта ID
+       (SELECT array_agg(list_id)
+        FROM base
+        WHERE list_id <> ALL (combs.ids)) AS rest_ids,
+       (SELECT sum(list_sum)
+        FROM base
+        WHERE list_id <> ALL (combs.ids)) AS rest_sum
+FROM combs
+WHERE depth = 3
+ORDER BY group_n_ids;
 
 
 
@@ -221,9 +255,30 @@ create function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qt
 as
 $fx$
 declare
-
+    f_total_qty int4;
 begin
+drop table if exists t_in;
+    create temp table t_in as
+    with base as (select tr, qty, sum(qty) over () as sm
+                  from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
+    select *, qty * 1.0 / sm
+    from base;
+select * from t_in;
 
+drop table if exists t_out;
+create temp table t_out as
+with base as (select alloc_instr_entry_id, ratio
+              from unnest(:in_alloc_instr_entry_ids::int8[], :in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
+select *
+from base;
+
+select * from t_out
+while true loop
+
+    end loop;
 
 end;
 $fx$
+
+
+select sum(sm) from unnest(:in_qty::int4[]) as sm
