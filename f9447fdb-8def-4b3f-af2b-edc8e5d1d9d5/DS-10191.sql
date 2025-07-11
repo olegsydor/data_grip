@@ -417,32 +417,6 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
   from base
            join check_sum_ratio using (account_id);
 
--- 2. insert into allocation_instruction_entry
-  /*
-  drop table if exists t_aie;
-  create temp table t_aie on commit drop as
-  with base as (select ai.alloc_instr_id,
-                       max(clearing_account_id)                              as clearing_account_id,
-                       ai.total_qty                                          as qty,
-                       ca.occ_actionable_id
-                from genesis2.allocation_instruction ai
-                         inner join genesis2.clearing_account ca
-                                    on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                        ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
-                where ai.date_id = l_date_id
-                  and ai.dataset_id = l_load_batch_id
-                  and ai.is_deleted = 'N'
-                group by ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id
-                )
-  select alloc_instr_id,
-         clearing_account_id,
-         qty as alloc_qty,
-         occ_actionable_id,
-         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
-         ta.trade_ids
-  from base
-  join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
-  */
 
   drop table if exists t_aie;
   create temp table t_aie on commit drop as

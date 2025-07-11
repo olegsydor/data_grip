@@ -194,6 +194,20 @@ select unnest(:trade_ids), unnest(:last_qtys), 'in'
 union all
 select unnest(:result_trade_ids), unnest(:result_qtys), 'out';
 
-create function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qty int4[], in_alloc_instr_entry_ids int4[], in_ratios numeric[])
-returns table (alloc_instr_entry_id int4, trade_record_id int8, in_ratios numeric)
-language plpgsql
+create function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qty int4[],
+                                               in_alloc_instr_entry_ids int4[], in_ratios numeric[])
+    returns table
+            (
+                alloc_instr_entry_id int4,
+                trade_record_id      int8
+            )
+    language plpgsql
+as
+$fx$
+declare
+
+begin
+
+
+end;
+$fx$
