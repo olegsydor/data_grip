@@ -121,9 +121,9 @@ alter table genesis2.clearing_account add column if not exists is_autoalloc_to b
 select *--clearing_account_id, account_id, cmta, is_default, is_autoalloc_to, default_alloc_ratio
 from genesis2.clearing_account
 where true
-  and account_id = 81;
+  and account_id = 4858;
 
-
+drop table t_clearing_account_aa;
   create temp table t_clearing_account_aa as
   with base as (
       select ca.account_id,
@@ -147,8 +147,8 @@ select * from genesis2.trade_for_allocations
 select * from t_clearing_account_aa
 
 
-select * from genesis2.trade_for_allocations
-join t_clearing_account_aa using(account_id)
+select * from genesis2.trade_for_allocations ta
+join lateral ( select coalesce(array_agg(ratio), '{1}'::numeric[]) as ratio from t_clearing_account_aa aa where aa.account_id = ta.account_id limit 1) aa on true
 
 
 

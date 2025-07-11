@@ -462,7 +462,7 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
                   and ai.dataset_id = l_load_batch_id
                   and ai.is_deleted = 'N'
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
-                         ai.account_id, ca.auto_alloc_ratio
+                         ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
                 window w as ( partition by ai.alloc_instr_id, ai.account_id
                         order by ca.auto_alloc_ratio, ca.clearing_account_number desc, ca.clearing_account_id)
                 )
