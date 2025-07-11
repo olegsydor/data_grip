@@ -41,6 +41,15 @@ create table training.comb (
 insert into training.comb(list_id, list_sum) values (0, 1), (22, 1), (23, 1), (24, 1), (25, 1);
 insert into training.comb(list_id, list_sum) values (26, 1), (27, 1), (28, 1), (29, 1), (30, 1);
 
+with base as (select *
+              from training.comb
+              where list_id between 0 and 4)
+select a.list_id as a_list, b.b_list
+from base as a
+         join lateral (select array_agg(b.list_id) as b_list from base as b where b.list_id != a.list_id limit 1) b on true;
+
+
+
 
 with recursive subset_sum as (select array [list_id] as ids,
                                       list_id         as max_id,
@@ -189,13 +198,20 @@ drop table if exists t_aie;
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
 
+with base as (select tr, qty, sum(qty) over () as sm
+              from unnest(:trade_ids::int8[], :last_qtys::int4[]) as t(tr, qty))
+select *, qty * 1.0 / sm
+from base;
 
-select unnest(:trade_ids), unnest(:last_qtys), 'in'
-union all
-select unnest(:result_trade_ids), unnest(:result_qtys), 'out';
+
+
+
+select array[1,2,3,4,9] @> array[3,9];
+
+
 
 create function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qty int4[],
-                                               in_alloc_instr_entry_ids int4[], in_ratios numeric[])
+                                               in_ratios numeric[], in_alloc_instr_entry_ids int4[])
     returns table
             (
                 alloc_instr_entry_id int4,
