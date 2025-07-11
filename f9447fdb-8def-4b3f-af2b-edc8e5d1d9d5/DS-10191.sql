@@ -397,11 +397,11 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
     -- creating temp table for account_id with sum(allocatin_ratio) = 1 only
   create temp table t_clearing_account_aa on commit drop as
   with base as (select ca.account_id,
-                       ca.clearing_account_id,
-                       ca.occ_actionable_id,
-                       ca.clearing_account_number,
-                       coalesce(aa.cmta, ca.cmta)          as cmta,
-                       coalesce(aa.auto_alloc_ratio, 1)    as auto_alloc_ratio
+                       coalesce(aa.clearing_account_id, ca.clearing_account_id)         as clearing_account_id,
+                       coalesce(aa.occ_actionable_id, ca.occ_actionable_id)             as occ_actionable_id,
+                       coalesce(aa.clearing_account_number, ca.clearing_account_number) as clearing_account_number,
+                       coalesce(aa.cmta, ca.cmta)                                       as cmta,
+                       coalesce(aa.auto_alloc_ratio, 1)                                 as auto_alloc_ratio
                 from genesis2.clearing_account ca
                          left join genesis2.clearing_account aa
                                    on ca.account_id = aa.account_id and aa.is_auto_alloc_to = 'Y'
@@ -412,8 +412,7 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
      , check_sum_ratio as (select account_id, sum(auto_alloc_ratio) as sum_ratio
                            from base
                            group by account_id
-                           having sum(auto_alloc_ratio) = 1
-                           )
+                           having sum(auto_alloc_ratio) = 1)
   select account_id, clearing_account_id, occ_actionable_id, clearing_account_number, cmta, auto_alloc_ratio
   from base
            join check_sum_ratio using (account_id);
@@ -448,7 +447,7 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
     drop table if exists t_aie;
   create temp table t_aie on commit drop as
   with base as (select ai.alloc_instr_id,
-                       clearing_account_id,
+                       ca.clearing_account_id,
                        ai.account_id,
                        ca.auto_alloc_ratio,
                        ai.total_qty                                          as qty,
