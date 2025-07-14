@@ -255,9 +255,27 @@ create function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qt
 as
 $fx$
 declare
-    f_total_qty int4;
-    l_row_count int4;
+    l_total_qty          int4;
+    l_row_count          int4;
+    l_trade_array_length int4 := array_length(in_trade_record_ids);
+    l_alloc_array_length int4 := array_length(in_alloc_instr_entry_ids);
 begin
+    -- case 1: when trade and alloc arrays have 1 element only
+    if l_trade_array_length = 1 and l_alloc_array_length = 1 then
+        return query
+        select unnest(:in_alloc_instr_entry_ids), unnest(:in_trade_record_ids)
+        return;
+    end if;
+
+    -- case 1: when trade has 1 element and alloc arrays have more than 1 element
+    -- we don't manage cases like this because it definitely requires PTM
+    if l_trade_array_length = 1 and l_alloc_array_length > 1 then
+        return query
+        select null, unnest(:in_trade_record_ids)
+        return;
+    end if;
+
+
     drop table if exists t_trades;
     create temp table t_trades as
     with base as (select tr, qty, sum(qty) over () as sm
@@ -273,7 +291,9 @@ begin
     select *
     from base;
 
-    if array_length(in_trade_record_ids, 1) = array_length(in_alloc_instr_entry_ids, 1) then
+
+    -- case: if ratios match 1:1 (excluding the case when ratios are equal like 0.5 and 0.5 or 4 * 0.25 etc
+    if l_trade_array_length = l_alloc_array_length then
         drop table if exists t_return;
         create temp table t_return as
         select ta.alloc_instr_entry_id,
@@ -290,14 +310,79 @@ begin
         end if;
     end if;
 
+    -- complicated cases
+    drop table if exists t_trade_combine;
+    create temp table t_trade_combine as
+    with base as (select tr,
+                         qty,
+                         -- 1
+                         sum(qty) over (order by tr rows 1 preceding)           as qty_with_1_prev,
+                         array_agg(tr) over (order by tr rows 1 preceding)      as tr_with_1_prev,
+
+                         -- 2
+                         sum(qty) over (order by tr desc rows 1 preceding)      as qty_with_1_next,
+                         array_agg(tr) over (order by tr desc rows 1 preceding) as tr_with_1_next,
+
+                         -- 3
+                         sum(qty) over (order by tr rows 2 preceding)           as qty_with_2_prev,
+                         array_agg(tr) over (order by tr rows 2 preceding)      as tr_with_2_prev,
+
+                         -- 4
+                         sum(qty) over (order by tr desc rows 2 preceding)      as qty_with_2_next,
+                         array_agg(tr) over (order by tr desc rows 2 preceding) as tr_with_2_next,
+
+                         sum(qty) over ()                                       as sum_total
+                  from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
+    select tr,
+           qty,
+           qty::numeric / sum_total as in_ratio_ind,
+
+           qty_with_1_prev,
+           tr_with_1_prev,
+
+           qty_with_1_next,
+           tr_with_1_next,
+
+           qty_with_2_prev,
+           tr_with_2_prev,
+
+           qty_with_2_next,
+           tr_with_2_next,
+
+           sum_total,
+           '{}'::int4[] as used_cases
+    from base;
+
+    select * from t_trade_combine;
+
+
+
 /*
-select * from t_return
+select * from t_allocations
 while true loop
 
     end loop;
 */
 end;
-$fx$
+$fx$;
+
+
+
+do $$
+declare
+  rc record;
+
+begin
+    for rc in (select * from t_allocations) loop
+        raise notice 'record - %', rc;
+        select * from t_allocations
+                 where
+                     case when tr_with_1_prev
+
+        end loop;
+
+end
+$$;
 
 
 select sum(sm) from unnest(:in_qty::int4[]) as sm;
