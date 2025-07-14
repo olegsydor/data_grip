@@ -375,11 +375,12 @@ $$
         rc          record;
         cs          int4;
         l_row_cnt   int4;
-        l_alloc     int4[];
-        l_trade     int4[];
+        l_alloc     int4[] := '{}';
+        l_trade     int8[] := '{}';
         l_new_trade int4[];
+        l_is_ok bool := true;
     begin
---         drop table if exists t_allocations;
+        --         drop table if exists t_allocations;
 --         create temp table t_allocations as
 --         with base as (select alloc_instr_entry_id, ratio
 --                       from unnest(:in_alloc_instr_entry_ids::int8[], :in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
@@ -387,30 +388,37 @@ $$
 --         from base;
 
 
-        for rc in (select * from t_allocations where alloc_instr_entry_id != all (l_alloc))
+        for rc in (select * from t_allocations order by ratio)
             loop
-            raise notice 'rc - %', rc;
+                raise notice 'rc - %', rc;
                 select tr_with_1_prev
                 into l_new_trade
                 from t_trade_combine
                 where in_ratio_1 = rc.ratio
+                  and not (tr_with_1_prev && l_trade)
                 limit 1;
-            raise notice 'l_new_trade - %', l_new_trade;
+                raise notice 'l_new_trade - %', l_new_trade;
 
                 get diagnostics l_row_cnt = row_count;
                 if l_row_cnt = 0 then
-                    raise notice 'sraka';
+                    l_is_ok = false;
+                    exit;
                 end if;
                 if l_row_cnt = 1 then
                     l_alloc = l_alloc || rc.alloc_instr_entry_id;
                     l_trade = l_trade || l_new_trade;
                 end if;
             end loop;
+        if l_is_ok then
+            return query
+            select 
+        end if;
 
-raise notice '%, %', l_alloc, l_trade;
+        raise notice '%, %', l_alloc, l_trade;
 
     end;
 $$
 
 
-select * from t_allocations where alloc_instr_entry_id != all(:l_alloc)
+select *
+from t_trade_combine

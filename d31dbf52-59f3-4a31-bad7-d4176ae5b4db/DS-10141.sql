@@ -671,3 +671,9 @@ drop function if exists dash360.report_obo_compliance_xls_bkp;
 alter function dash360.report_obo_compliance_xls rename to report_obo_compliance_xls_bkp;
 alter function trash.report_obo_compliance_new set schema dash360;
 alter function dash360.report_obo_compliance_new rename to report_obo_compliance_xls;
+
+
+
+select array_agg(distinct account_id) from dwh.d_account
+join dwh.d_trading_firm using (trading_firm_id)
+where trading_firm_name = 'Wall St Access'
