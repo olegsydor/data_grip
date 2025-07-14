@@ -378,7 +378,7 @@ $$
         l_alloc     int4[] := '{}';
         l_trade     int8[] := '{}';
         l_new_trade int4[];
-        l_is_ok bool := true;
+        l_is_ok     bool   := true;
     begin
         --         drop table if exists t_allocations;
 --         create temp table t_allocations as
@@ -387,7 +387,12 @@ $$
 --         select *
 --         from base;
 
-
+        drop table if exists t_ret;
+        create temp table t_ret
+        (
+            alloc_instr_entry_id int4,
+            trade_record_id      int8
+        );
         for rc in (select * from t_allocations order by ratio)
             loop
                 raise notice 'rc - %', rc;
@@ -402,23 +407,26 @@ $$
                 get diagnostics l_row_cnt = row_count;
                 if l_row_cnt = 0 then
                     l_is_ok = false;
+                    truncate table t_ret;
                     exit;
                 end if;
                 if l_row_cnt = 1 then
-                    l_alloc = l_alloc || rc.alloc_instr_entry_id;
                     l_trade = l_trade || l_new_trade;
+                    insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                    select rc.alloc_instr_entry_id, unnest(l_new_trade);
                 end if;
             end loop;
-        if l_is_ok then
-            return query
-            select
-        end if;
+        --         if l_is_ok then
+--             return query
+--             select
+--         end if;
 
         raise notice '%, %', l_alloc, l_trade;
 
     end;
 $$
 
+select * from t_ret
 
 
 
