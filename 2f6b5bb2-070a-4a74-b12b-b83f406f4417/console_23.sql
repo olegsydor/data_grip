@@ -411,13 +411,15 @@ $$
             end loop;
         if l_is_ok then
             return query
-            select 
+            select
         end if;
 
         raise notice '%, %', l_alloc, l_trade;
 
     end;
 $$
+
+
 
 
 select *
