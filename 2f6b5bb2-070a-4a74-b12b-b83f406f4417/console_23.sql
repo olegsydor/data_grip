@@ -337,16 +337,16 @@ begin
            qty,
            qty::numeric / sum_total as in_ratio_ind,
 
-           qty_with_1_prev,
+           qty_with_1_prev::numeric / sum_total as in_ratio_1,
            tr_with_1_prev,
 
-           qty_with_1_next,
+           qty_with_1_next::numeric / sum_total as in_ratio_2,
            tr_with_1_next,
 
-           qty_with_2_prev,
+           qty_with_2_prev::numeric / sum_total as in_ratio_3,
            tr_with_2_prev,
 
-           qty_with_2_next,
+           qty_with_2_next::numeric / sum_total as in_ratio_4,
            tr_with_2_next,
 
            sum_total,
@@ -359,31 +359,61 @@ begin
 
 /*
 select * from t_allocations
+select * from t_trade_combine;
 while true loop
 
     end loop;
 */
-end;
-$fx$;
+-- end;
+-- $fx$;
 
 
 
-do $$
-declare
-  rc record;
+do
+$$
+    declare
+        rc record;
+        cs int4;
 
-begin
-    for rc in (select * from t_allocations) loop
+    begin
+     for rc in (select * from t_allocations) loop
         raise notice 'record - %', rc;
-        select * from t_allocations
-                 where
-                     case when tr_with_1_prev
 
-        end loop;
-
-end
+select
+--     into cs, tr_list
+       case
+           when in_ratio_ind = :ratio then 0
+           when in_ratio_1 = :ratio then 1
+           when in_ratio_2 = :ratio then 2
+           when in_ratio_3 = :ratio then 3
+           when in_ratio_4 = :ratio then 4
+           else null
+       end as cs,
+       case
+           when in_ratio_ind = :ratio then array[tr]
+           when in_ratio_1 = :ratio then tr_with_1_prev
+           when in_ratio_2 = :ratio then tr_with_1_prev
+           when in_ratio_3 = :ratio then tr_with_2_prev
+           when in_ratio_4 = :ratio then tr_with_2_next
+           else null
+       end as tr_list,
+    array[tr] || tr_with_1_prev || tr_with_1_prev || tr_with_2_prev || tr_with_2_next as all_tr
+, *
+from t_trade_combine
+where
+    (in_ratio_ind = :ratio or
+    in_ratio_1 = :ratio or
+    in_ratio_2 = :ratio or
+    in_ratio_3 = :ratio or
+    in_ratio_4 = :ratio)
+and ((array[tr] || tr_with_1_prev || tr_with_1_prev || tr_with_2_prev || tr_with_2_next) && :used_cases)
+        limit 1;
+        raise notice 'cs - %', cs;
+--     end loop;
+    end
 $$;
 
+select array[1,2,3,4] && array[3,9];
 
 select sum(sm) from unnest(:in_qty::int4[]) as sm;
 
