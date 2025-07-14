@@ -333,11 +333,10 @@ begin
 
                          sum(qty) over ()                                       as sum_total
                   from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
-    select
-        row_number() over () as rn,
+    select row_number() over ()                 as rn,
            tr,
            qty,
-           qty::numeric / sum_total as in_ratio_ind,
+           qty::numeric / sum_total             as in_ratio_ind,
 
            qty_with_1_prev::numeric / sum_total as in_ratio_1,
            tr_with_1_prev,
@@ -351,11 +350,10 @@ begin
            qty_with_2_next::numeric / sum_total as in_ratio_4,
            tr_with_2_next,
 
-           sum_total,
-           '{}'::int4[] as used_cases
+           sum_total
     from base;
 
-    select * from t_trade_combine;
+    select rn, tr, qty, in_ratio_1, tr_with_1_prev from t_trade_combine;
 
 
 
@@ -374,89 +372,45 @@ while true loop
 do
 $$
     declare
-        rc record;
-        cs int4;
-
+        rc          record;
+        cs          int4;
+        l_row_cnt   int4;
+        l_alloc     int4[];
+        l_trade     int4[];
+        l_new_trade int4[];
     begin
-select '{1,2,3}'::int4[] = '{3,2,1}'::int4[]
-     for rc in (select * from t_allocations) loop
-        raise notice 'record - %', rc;
+--         drop table if exists t_allocations;
+--         create temp table t_allocations as
+--         with base as (select alloc_instr_entry_id, ratio
+--                       from unnest(:in_alloc_instr_entry_ids::int8[], :in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
+--         select *
+--         from base;
 
-select
---     into cs, tr_list
-       case
-           when in_ratio_ind = :ratio then 0
-           when in_ratio_1 = :ratio then 1
-           when in_ratio_2 = :ratio then 2
-           when in_ratio_3 = :ratio then 3
-           when in_ratio_4 = :ratio then 4
-           else null
-       end as cs,
-       case
-           when in_ratio_ind = :ratio then array[tr]
-           when in_ratio_1 = :ratio then tr_with_1_prev
-           when in_ratio_2 = :ratio then tr_with_1_prev
-           when in_ratio_3 = :ratio then tr_with_2_prev
-           when in_ratio_4 = :ratio then tr_with_2_next
-           else null
-       end as tr_list,
-    array[tr] || tr_with_1_prev || tr_with_1_prev || tr_with_2_prev || tr_with_2_next as all_tr
-, *
-from t_trade_combine
-where
-    (in_ratio_ind = :ratio and cs = or
-    in_ratio_1 = :ratio or
-    in_ratio_2 = :ratio or
-    in_ratio_3 = :ratio or
-    in_ratio_4 = :ratio)
-and ((array[tr] || tr_with_1_prev || tr_with_1_prev || tr_with_2_prev || tr_with_2_next) && :used_cases)
-        limit 1;
-        raise notice 'cs - %', cs;
---     end loop;
-    end
-$$;
 
-select array[1,2,3,4] && array[3,9];
+        for rc in (select * from t_allocations where alloc_instr_entry_id != all (l_alloc))
+            loop
+            raise notice 'rc - %', rc;
+                select tr_with_1_prev
+                into l_new_trade
+                from t_trade_combine
+                where in_ratio_1 = rc.ratio
+                limit 1;
+            raise notice 'l_new_trade - %', l_new_trade;
 
-select sum(sm) from unnest(:in_qty::int4[]) as sm;
+                get diagnostics l_row_cnt = row_count;
+                if l_row_cnt = 0 then
+                    raise notice 'sraka';
+                end if;
+                if l_row_cnt = 1 then
+                    l_alloc = l_alloc || rc.alloc_instr_entry_id;
+                    l_trade = l_trade || l_new_trade;
+                end if;
+            end loop;
 
-with base as (
-select tr,
-       qty,
-       -- 1
-       sum(qty) over(order by tr rows 1 preceding) as qty_with_1_prev,
-       array_agg(tr) over (order by tr rows 1 preceding) as tr_with_1_prev,
+raise notice '%, %', l_alloc, l_trade;
 
-       -- 2
-       sum(qty) over(order by tr desc rows 1 preceding) as qty_with_1_next,
-       array_agg(tr) over (order by tr desc rows 1 preceding) as tr_with_1_next,
+    end;
+$$
 
-       -- 3
-       sum(qty) over(order by tr rows 2 preceding) as qty_with_2_prev,
-       array_agg(tr) over (order by tr rows 2 preceding) as tr_with_2_prev,
 
-       -- 4
-       sum(qty) over(order by tr desc rows 2 preceding) as qty_with_2_next,
-       array_agg(tr) over (order by tr desc rows 2 preceding) as tr_with_2_next,
-
-       sum(qty) over () as sum_total
-                  from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
-    select
-        tr,
-        qty,
-        qty::numeric/sum_total as in_ratio_ind,
-
-        qty_with_1_prev,
-        tr_with_1_prev,
-
-        qty_with_1_next,
-        tr_with_1_next,
-
-        qty_with_2_prev,
-        tr_with_2_prev,
-
-        qty_with_2_next,
-        tr_with_2_next,
-
-        sum_total
-    from base;
+select * from t_allocations where alloc_instr_entry_id != all(:l_alloc)
