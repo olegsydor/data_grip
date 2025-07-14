@@ -333,7 +333,9 @@ begin
 
                          sum(qty) over ()                                       as sum_total
                   from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
-    select tr,
+    select
+        row_number() over () as rn,
+           tr,
            qty,
            qty::numeric / sum_total as in_ratio_ind,
 
@@ -376,6 +378,7 @@ $$
         cs int4;
 
     begin
+select '{1,2,3}'::int4[] = '{3,2,1}'::int4[]
      for rc in (select * from t_allocations) loop
         raise notice 'record - %', rc;
 
@@ -401,7 +404,7 @@ select
 , *
 from t_trade_combine
 where
-    (in_ratio_ind = :ratio or
+    (in_ratio_ind = :ratio and cs = or
     in_ratio_1 = :ratio or
     in_ratio_2 = :ratio or
     in_ratio_3 = :ratio or
