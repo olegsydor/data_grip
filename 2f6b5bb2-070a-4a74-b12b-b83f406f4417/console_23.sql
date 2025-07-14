@@ -256,27 +256,46 @@ as
 $fx$
 declare
     f_total_qty int4;
+    l_row_count int4;
 begin
-drop table if exists t_in;
-    create temp table t_in as
+    drop table if exists t_trades;
+    create temp table t_trades as
     with base as (select tr, qty, sum(qty) over () as sm
                   from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
-    select *, qty * 1.0 / sm
+    select *, qty * 1.0 / sm as ratio
     from base;
-select * from t_in;
+    select * from t_trades;
 
-drop table if exists t_out;
-create temp table t_out as
-with base as (select alloc_instr_entry_id, ratio
-              from unnest(:in_alloc_instr_entry_ids::int8[], :in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
-select *
-from base;
+    drop table if exists t_allocations;
+    create temp table t_allocations as
+    with base as (select alloc_instr_entry_id, ratio
+                  from unnest(:in_alloc_instr_entry_ids::int8[], :in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
+    select *
+    from base;
 
-select * from t_out
+    if array_length(in_trade_record_ids, 1) = array_length(in_alloc_instr_entry_ids, 1) then
+        drop table if exists t_return;
+        create temp table t_return as
+        select ta.alloc_instr_entry_id,
+               tt.tr
+        from t_allocations ta
+                 left join t_trades tt on tt.ratio = ta.ratio;
+        get diagnostics l_row_count = row_count;
+        if l_row_count = array_length(in_trade_record_ids, 1) and
+           not exists (select null from t_return where alloc_instr_entry_id is null) then
+            return query
+                select alloc_instr_entry_id, tr
+                from t_return;
+            return;
+        end if;
+    end if;
+
+/*
+select * from t_return
 while true loop
 
     end loop;
-
+*/
 end;
 $fx$
 
