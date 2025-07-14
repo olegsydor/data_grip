@@ -690,3 +690,6 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+
+
+alter table trade_record add constraint trade_record_fk foreign key (trade_record_id) references trade_record (trade_record_id)

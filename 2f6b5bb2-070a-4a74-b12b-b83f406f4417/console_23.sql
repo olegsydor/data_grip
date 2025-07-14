@@ -281,4 +281,45 @@ end;
 $fx$
 
 
-select sum(sm) from unnest(:in_qty::int4[]) as sm
+select sum(sm) from unnest(:in_qty::int4[]) as sm;
+
+with base as (
+select tr,
+       qty,
+       -- 1
+       sum(qty) over(order by tr rows 1 preceding) as qty_with_1_prev,
+       array_agg(tr) over (order by tr rows 1 preceding) as tr_with_1_prev,
+
+       -- 2
+       sum(qty) over(order by tr desc rows 1 preceding) as qty_with_1_next,
+       array_agg(tr) over (order by tr desc rows 1 preceding) as tr_with_1_next,
+
+       -- 3
+       sum(qty) over(order by tr rows 2 preceding) as qty_with_2_prev,
+       array_agg(tr) over (order by tr rows 2 preceding) as tr_with_2_prev,
+
+       -- 4
+       sum(qty) over(order by tr desc rows 2 preceding) as qty_with_2_next,
+       array_agg(tr) over (order by tr desc rows 2 preceding) as tr_with_2_next,
+
+       sum(qty) over () as sum_total
+                  from unnest(:in_trade_record_ids::int8[], :in_qty::int4[]) as t(tr, qty))
+    select
+        tr,
+        qty,
+        qty::numeric/sum_total as in_ratio_ind,
+
+        qty_with_1_prev,
+        tr_with_1_prev,
+
+        qty_with_1_next,
+        tr_with_1_next,
+
+        qty_with_2_prev,
+        tr_with_2_prev,
+
+        qty_with_2_next,
+        tr_with_2_next,
+
+        sum_total
+    from base;
