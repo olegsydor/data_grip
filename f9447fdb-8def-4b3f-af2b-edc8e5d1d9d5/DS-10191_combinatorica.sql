@@ -50,8 +50,8 @@ select L1.ACCOUNT_ID,
        L1.TOTAL_QTY,
        L1.trade_ids,
        L1.last_qtys,
---          nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
-       'alloc_instr_id'
+       nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
+--        'alloc_instr_id'
 from (select TR.ACCOUNT_ID,
              TR.INSTRUMENT_ID,
              TR.SIDE,

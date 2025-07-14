@@ -692,4 +692,3 @@ $function$
 ;
 
 
-alter table trade_record add constraint trade_record_fk foreign key (trade_record_id) references trade_record (trade_record_id)
