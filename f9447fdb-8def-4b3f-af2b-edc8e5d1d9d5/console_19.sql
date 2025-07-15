@@ -70,7 +70,7 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
          L1.AVG_PX,
          L1.TOTAL_QTY,
          L1.trade_ids,
-         -80870 as alloc_instr_id--nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
+         -80875 as alloc_instr_id--nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
   from (select TR.ACCOUNT_ID,
                TR.INSTRUMENT_ID,
                TR.SIDE,
@@ -142,7 +142,7 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
   insert into genesis2.ALLOCATION_INSTRUCTION(alloc_instr_id, DATE_ID, CREATE_TIME, ACCOUNT_ID, INSTRUMENT_ID, SIDE,
                                               OPEN_CLOSE, AVG_PX, TOTAL_QTY, CREATED_BY_SUBSYSTEM_ID, dataset_id)
   select tr.alloc_instr_id,
-         l_date_id,
+         :l_date_id,
          clock_timestamp(),
          TR.ACCOUNT_ID,
          TR.INSTRUMENT_ID,
@@ -151,7 +151,7 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
          tr.AVG_PX,
          tr.TOTAL_QTY,
          'RPS',
-         l_load_batch_id
+         :l_load_batch_id
   from trade_for_allocations TR;
 
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
@@ -171,9 +171,12 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
                        coalesce(aa.clearing_account_number, ca.clearing_account_number) as clearing_account_number,
                        coalesce(aa.cmta, ca.cmta)                                       as cmta,
                        coalesce(aa.auto_alloc_ratio, 1)                                 as auto_alloc_ratio
+--                 , aa.*
                 from genesis2.clearing_account ca
                          left join genesis2.clearing_account aa
                                    on ca.account_id = aa.account_id and aa.is_auto_alloc_to = 'Y'
+                                       and aa.is_deleted = 'N'
+                                       and aa.market_type = 'O'
                 where true
                   and ca.is_deleted = 'N'
                   and ca.market_type = 'O'
@@ -187,6 +190,7 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
            join check_sum_ratio using (account_id);
 
 select * from t_clearing_account_aa
+    where account_id = 257078
 -- 2. insert into allocation_instruction_entry
   /*
   drop table if exists t_aie;
@@ -232,6 +236,8 @@ select * from t_clearing_account_aa
                 where ai.date_id = :l_date_id
 --                   and ai.dataset_id = l_load_batch_id
                   and ai.is_deleted = 'N'
+                and ca.account_id = 257078
+                and alloc_instr_id = -80875
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
                          ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
                 window w as ( partition by ai.alloc_instr_id, ai.account_id
@@ -248,7 +254,7 @@ select * from t_clearing_account_aa
 --          qty as alloc_qty,
          occ_actionable_id,
 --         l_date_id,
-         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
+--          nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
          ta.trade_ids
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
@@ -265,7 +271,7 @@ select * from t_clearing_account_aa
          alloc_qty,
          :l_date_id,
          occ_actionable_id,
-         allocation_instruction_entry_id
+         :allocation_instruction_entry_id
   from t_aie;
 
 
@@ -283,7 +289,7 @@ select * from t_clearing_account_aa
                 from trade_for_allocations)
   select tr.id, tr.ALLOC_INSTR_ID, :in_date_id, :l_load_batch_id, aie.allocation_instruction_entry_id
   from base tr
-           join lateral ( select allocation_instruction_entry_id
+           left join lateral ( select allocation_instruction_entry_id
                           from genesis2.allocation_instruction_entry aie
                           where aie.alloc_instr_id = tr.alloc_instr_id
                           group by allocation_instruction_entry_id
