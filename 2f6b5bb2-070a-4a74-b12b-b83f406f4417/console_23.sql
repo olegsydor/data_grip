@@ -241,185 +241,9 @@ SELECT ids                                AS group_n_ids,
 FROM combs
 WHERE depth = 3
 ORDER BY group_n_ids;
-
-
-select *
-from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 20, 30, 40}',
-                                    in_ratios := '{0.1,0.2,0.3,0.5}', in_alloc_instr_entry_ids := '{100,101,102,103}');
-
-drop function if exists genesis2.combine_trade_records;
-create or replace function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qty int4[],
-                                                          in_ratios numeric[], in_alloc_instr_entry_ids int4[])
-    returns table
-            (
-                alloc_instr_entry_id int4,
-                trade_record_id      int8
-            )
-    language plpgsql
-as
-$fx$
-declare
-    l_total_qty          int4;
-    l_row_count          int4;
-    l_trade_array_length int4   := array_length(in_trade_record_ids, 1);
-    l_alloc_array_length int4   := array_length(in_alloc_instr_entry_ids, 1);
-    l_rc                 record;
-    l_alloc              int4[] := '{}';
-    l_trade              int8[] := '{}';
-    l_new_trade          int4[];
-    l_is_ok              bool   := true;
-    l_cnt_alloc          int4;
-    l_ratio_left         numeric;
-begin
-    -- case 1: when trade and alloc arrays have 1 element only
-    if l_trade_array_length = 1 and l_alloc_array_length = 1 then
-        return query
-            select unnest(in_alloc_instr_entry_ids),
-                   unnest(in_trade_record_ids)
-                       return;
-    end if;
-
-    -- case 1: when trade has 1 element and alloc arrays have more than 1 element
-    -- we don't manage cases like this because it definitely requires PTM
-    if l_trade_array_length = 1 and l_alloc_array_length > 1 then
-        return query
-            select null,
-                   unnest(in_trade_record_ids)
-                       return;
-    end if;
-
-
-    drop table if exists t_trades;
-    create temp table t_trades as
-    with base as (select tr, qty, sum(qty) over () as sm
-                  from unnest(in_trade_record_ids::int8[], in_qty::int4[]) as t(tr, qty))
-    select *, qty * 1.0 / sm as ratio
-    from base;
-
-
-    drop table if exists t_allocations;
-    create temp table t_allocations as
-    with base as (select t.alloc_instr_entry_id, t.ratio
-                  from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
-    select *
-    from base;
-
-
-    -- case: if ratios match 1:1 (excluding the case when ratios are equal like 0.5 and 0.5 or 4 * 0.25 etc
-    if l_trade_array_length = l_alloc_array_length then
-        drop table if exists t_return;
-        create temp table t_return as
-        select ta.alloc_instr_entry_id,
-               tt.tr
-        from t_allocations ta
-                 left join t_trades tt on tt.ratio = ta.ratio;
-        get diagnostics l_row_count = row_count;
-        if l_row_count = array_length(in_trade_record_ids, 1) and
-           not exists (select null from t_return t where t.alloc_instr_entry_id is null) then
-            return query
-                select t.alloc_instr_entry_id, t.tr
-                from t_return t;
-            return;
-        end if;
-    end if;
-
-    -- complicated cases
-    -- -- preparing
-    drop table if exists t_trade_combine;
-    create temp table t_trade_combine as
-    with base as (select tr,
-                         qty,
-                         -- 1
-                         sum(qty) over (order by tr rows 1 preceding)           as qty_with_1_prev,
-                         array_agg(tr) over (order by tr rows 1 preceding)      as tr_with_1_prev,
-
-                         -- 2
-                         sum(qty) over (order by tr desc rows 1 preceding)      as qty_with_1_next,
-                         array_agg(tr) over (order by tr desc rows 1 preceding) as tr_with_1_next,
-
-                         -- 3
-                         sum(qty) over (order by tr rows 2 preceding)           as qty_with_2_prev,
-                         array_agg(tr) over (order by tr rows 2 preceding)      as tr_with_2_prev,
-
-                         -- 4
-                         sum(qty) over (order by tr desc rows 2 preceding)      as qty_with_2_next,
-                         array_agg(tr) over (order by tr desc rows 2 preceding) as tr_with_2_next,
-
-                         sum(qty) over ()                                       as sum_total
-                  from unnest(in_trade_record_ids::int8[], in_qty::int4[]) as t(tr, qty))
-    select row_number() over ()                 as rn,
-           tr,
-           qty,
-           qty::numeric / sum_total             as in_ratio_ind,
-
-           qty_with_1_prev::numeric / sum_total as in_ratio_1,
-           tr_with_1_prev,
-
-           qty_with_1_next::numeric / sum_total as in_ratio_2,
-           tr_with_1_next,
-
-           qty_with_2_prev::numeric / sum_total as in_ratio_3,
-           tr_with_2_prev,
-
-           qty_with_2_next::numeric / sum_total as in_ratio_4,
-           tr_with_2_next,
-           sum_total
-    from base;
-    drop table if exists t_ret;
-    create temp table t_ret
-    (
-        alloc_instr_entry_id int4,
-        trade_record_id      int8
-    );
-    l_cnt_alloc = l_alloc_array_length;
-    l_ratio_left = 1;
-
-    for l_rc in (select * from t_allocations order by ratio)
-        loop
-            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
-                if l_ratio_left = l_rc.ratio then
-                    insert into t_ret
-                    select l_rc.alloc_instr_entry_id, tr
-                    from t_trades
-                    except
-                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
-                    return query
-                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
-                    return;
-                else
-                    truncate t_ret;
-                    exit;
-                end if;
-            end if;
-
-            select tr_with_1_prev
-            into l_new_trade
-            from t_trade_combine
-            where in_ratio_1 = l_rc.ratio
-              and not (tr_with_1_prev && l_trade)
-            limit 1;
-            get diagnostics l_row_count = row_count;
-            if l_row_count = 0 then
-                truncate t_ret;
-                exit;
-            else
-                l_trade = l_trade || l_new_trade;
-                insert into t_ret(alloc_instr_entry_id, trade_record_id)
-                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
-            end if;
-            l_cnt_alloc = l_cnt_alloc - 1;
-            l_ratio_left = l_ratio_left - l_rc.ratio;
-        end loop;
-
--- was not matched;
-    return query
-        select null, tr from t_trades;
-    return;
-
-end;
-$fx$;
------------------------
-
+------===
+    -----------------------
+select * from t_trade_combine
 
 do
 $$
@@ -480,9 +304,210 @@ $$
 
 select * from t_ret
 
-
+select ((:array_1 @> :array_2) and (:array_1 <@ :array_2) )
 
 select *
 from t_trade_combine
 
 
+select array_agg((val::numeric / total_sum)::numeric)
+from (
+    select val, sum(val) over () as total_sum
+    from unnest('{10,20,30,40,100}'::int[]) as t(val)
+) t;
+
+----------
+select *
+from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 20, 30, 40}',
+                                    in_ratios := '{0.1,0.2,0.4,0.3}', in_alloc_instr_entry_ids := '{100,101,102,103}');
+
+
+select *
+from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
+                                    in_ratios := '{0.1,0.6,0.3}', in_alloc_instr_entry_ids := '{101,102,103}');
+
+select *
+from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
+                                    in_ratios := '{0.1,0.9}', in_alloc_instr_entry_ids := '{101,102}');
+
+
+
+drop function if exists genesis2.combine_trade_records;
+create or replace function genesis2.combine_trade_records(in_trade_record_ids int8[], in_qty int4[],
+                                                          in_ratios numeric[], in_alloc_instr_entry_ids int4[])
+    returns table
+            (
+                alloc_instr_entry_id int4,
+                trade_record_id      int8
+            )
+    language plpgsql
+as
+$fx$
+declare
+    l_total_qty          int4;
+    l_row_count          int4;
+    l_trade_ratio        numeric[];
+    l_alloc_ratio        numeric[];
+    l_trade_array_length int4   := array_length(in_trade_record_ids, 1);
+    l_alloc_array_length int4   := array_length(in_alloc_instr_entry_ids, 1);
+    l_rc                 record;
+    l_trade              int8[] := '{}';
+    l_new_trade          int4[];
+    l_cnt_alloc          int4;
+    l_ratio_left         numeric;
+begin
+    -- case 1: when trade and alloc arrays have 1 element only
+    if l_trade_array_length = 1 and l_alloc_array_length = 1 then
+        return query
+            select unnest(in_alloc_instr_entry_ids),
+                   unnest(in_trade_record_ids)
+                       return;
+    end if;
+
+    -- case 1: when trade has more elements than alloc array has
+    -- we don't manage cases like this because it definitely requires PTM
+    if l_alloc_array_length > l_trade_array_length then
+        return query
+            select null,
+                   unnest(in_trade_record_ids)
+                       return;
+    end if;
+
+
+    drop table if exists t_trades;
+    create temp table t_trades as
+    with base as (select tr, qty, sum(qty) over () as sm
+                  from unnest(in_trade_record_ids::int8[], in_qty::int4[]) as t(tr, qty))
+    select *, qty * 1.0 / sm as ratio
+    from base;
+
+/*
+    drop table if exists t_allocations;
+    create temp table t_allocations as
+    with base as (select t.alloc_instr_entry_id, t.ratio
+                  from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
+    select *
+    from base;
+*/
+
+    select array_agg((val::numeric / total_sum)::numeric)
+    into l_trade_ratio
+    from (select val, sum(val) over () as total_sum
+          from unnest(in_qty) as t(val)
+          order by 1) t;
+
+
+    select array_agg(val::numeric)
+    into l_alloc_ratio
+    from (select val
+          from unnest(in_ratios) as t(val)
+          order by 1) t;
+
+
+    -- case: if ratios match 1:1 (excluding the case when ratios are equal like 0.5 and 0.5 or 4 * 0.25 etc
+    if l_trade_ratio = l_alloc_ratio then
+        raise notice 'case 1';
+        return query
+            select * from unnest(in_alloc_instr_entry_ids, in_trade_record_ids);
+        return;
+    end if;
+
+    -- complicated cases
+    -- -- preparing
+    drop table if exists t_trade_combine;
+    create temp table t_trade_combine as
+    with base as (select tr,
+                         qty,
+                         -- 1
+                         sum(qty) over (order by tr rows 1 preceding)           as qty_with_1_prev,
+                         array_agg(tr) over (order by tr rows 1 preceding)      as tr_with_1_prev,
+
+                         -- 2
+                         sum(qty) over (order by tr desc rows 1 preceding)      as qty_with_1_next,
+                         array_agg(tr) over (order by tr desc rows 1 preceding) as tr_with_1_next,
+
+                         -- 3
+                         sum(qty) over (order by tr rows 2 preceding)           as qty_with_2_prev,
+                         array_agg(tr) over (order by tr rows 2 preceding)      as tr_with_2_prev,
+
+                         -- 4
+                         sum(qty) over (order by tr desc rows 2 preceding)      as qty_with_2_next,
+                         array_agg(tr) over (order by tr desc rows 2 preceding) as tr_with_2_next,
+
+                         sum(qty) over ()                                       as sum_total
+                  from unnest(in_trade_record_ids::int8[], in_qty::int4[]) as t(tr, qty))
+    select row_number() over ()                 as rn,
+           tr,
+           qty,
+           qty::numeric / sum_total             as in_ratio_ind,
+
+           qty_with_1_prev::numeric / sum_total as in_ratio_1,
+           tr_with_1_prev,
+
+           qty_with_1_next::numeric / sum_total as in_ratio_2,
+           tr_with_1_next,
+
+           qty_with_2_prev::numeric / sum_total as in_ratio_3,
+           tr_with_2_prev,
+
+           qty_with_2_next::numeric / sum_total as in_ratio_4,
+           tr_with_2_next,
+           sum_total
+    from base;
+
+    drop table if exists t_ret;
+    create temp table t_ret
+    (
+        alloc_instr_entry_id int4,
+        trade_record_id      int8
+    );
+    l_cnt_alloc = l_alloc_array_length;
+    l_ratio_left = 1;
+
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
+        loop
+            raise notice 'l_rc - %, l_cnt_alloc - %, l_ratio_left - %', l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+                raise notice 'last chance';
+                if l_ratio_left = l_rc.ratio then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, tr
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    truncate t_ret;
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_1_prev
+            into l_new_trade
+            from t_trade_combine
+            where in_ratio_1 = l_rc.ratio
+              and not (tr_with_1_prev && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                truncate t_ret;
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+-- was not matched;
+    return query
+        select null::int4, tr from t_trades;
+    return;
+
+end;
+$fx$;
