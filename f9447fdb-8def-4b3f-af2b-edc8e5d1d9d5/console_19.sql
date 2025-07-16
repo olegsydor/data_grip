@@ -10,10 +10,14 @@
 
 -- {262707,257077,257078}
 
-
+        select *
+        from dash360.bofa_allocation_report_wrapper(in_start_date_id => 20250716, in_end_date_id => 20250716,
+                                                    in_is_eod => case when 'No' = 'Yes' then true else false end,
+                                                    in_run_intraday_option_auto_allocation => case when 'Yes' = 'Yes' then true else false end,
+                                                    in_exec_broker => '019')
 
 select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id = :l_date_id
-  into l_max_trade_id ; -- 2347371634
+  into l_max_trade_id ; -- 2347374821
 
 
   drop table if exists t_tr;
@@ -119,20 +123,16 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
             ) man_clear on true
 
         where true
---             and AA.ALLOC_INSTR_ID is null
---           and man_clear.cn is null
-        --and TR.TRADE_RECORD_ID <= l_max_trade_id
+            and AA.ALLOC_INSTR_ID is null
+          and man_clear.cn is null
+        and TR.TRADE_RECORD_ID <= :l_max_trade_id
         group by TR.ACCOUNT_ID, TR.INSTRUMENT_ID, TR.SIDE, TR.OPEN_CLOSE, tr.cmta,
                  case tr.opt_is_fix_custfirm_processed when 'Y' then tr.market_participant_id else null end,
                  case :in_allocation_type
                      when 3 then coalesce(tr.compliance_id, tr.alternative_compliance_id)
                      else null end) L1;
 
-    	select * from trade_for_allocations
-
-
-    	select public.load_log(l_load_id, l_step_id, 'create temp table trade_for_allocations', l_cnt_rows, 'I')
-		into l_step_id;
+    	select * from trade_for_allocations;
 
         create index on trade_for_allocations (alloc_instr_id);
 
@@ -236,7 +236,7 @@ select * from t_clearing_account_aa
                 where ai.date_id = :l_date_id
 --                   and ai.dataset_id = l_load_batch_id
                   and ai.is_deleted = 'N'
-                and ca.account_id = 257078
+--                 and ca.account_id = 257078
                 and alloc_instr_id = -80875
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
                          ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
@@ -258,7 +258,7 @@ select * from t_clearing_account_aa
          ta.trade_ids
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
-
+select * from t_aie;
 
   -------------------------------------------------------------------------------------
   select public.load_log(l_load_id, l_step_id, 'created temp table', l_cnt_rows, 'I')
