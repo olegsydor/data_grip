@@ -250,7 +250,6 @@ select * from t_aie;
                                                 allocation_instruction_entry_id)
   with base as (select unnest(trade_ids) as id,
                        ALLOC_INSTR_ID
-
                 from trade_for_allocations)
   select tr.id, tr.ALLOC_INSTR_ID, :in_date_id, :l_load_batch_id, aie.allocation_instruction_entry_id
   from base tr
