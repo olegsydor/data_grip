@@ -720,4 +720,354 @@ begin
 
 end;
 $fx$;
-select * from t_trade_combine
+--select * from t_trade_combine
+
+
+drop function if exists genesis2.combine_trade_records;
+create or replace function genesis2.combine_trade_records(in_trade_record_ids int8[], in_trade_qty int4[],
+                                                          in_alloc_instr_entry_ids int4[], in_alloc_qty int4[])
+    returns table
+            (
+                alloc_instr_entry_id int4,
+                trade_record_id      int8
+            )
+    language plpgsql
+as
+$fx$
+declare
+    l_row_count          int4;
+    l_trade_ratio        int4[];
+    l_alloc_ratio        int4[];
+    l_trade_array_length int4   := array_length(in_trade_record_ids, 1);
+    l_alloc_array_length int4   := array_length(in_alloc_instr_entry_ids, 1);
+    l_rc                 record;
+    l_trades              int8[] := '{}';
+    l_new_trades          int4[];
+    l_cnt_alloc          int4;
+    l_total_qty int4;
+    l_qty_left         int4;
+begin
+    -- case 1: when trade and alloc arrays have 1 element only
+    if l_trade_array_length = 1 and l_alloc_array_length = 1 then
+        return query
+            select unnest(in_alloc_instr_entry_ids),
+                   unnest(in_trade_record_ids)
+                       return;
+    end if;
+
+    -- case 1: when trade has more elements than alloc array has
+    -- we don't manage cases like this because it definitely requires PTM
+    if l_alloc_array_length > l_trade_array_length then
+        return query
+            select null::int4,
+                   unnest(in_trade_record_ids)
+                       return;
+    end if;
+
+
+
+    -- case: if ratios match 1:1 (excluding the case when ratios are equal like 0.5 and 0.5 or 4 * 0.25 etc
+    if ((in_trade_qty @> in_alloc_qty) AND (in_alloc_qty <@ in_trade_qty)) then
+        raise notice 'Matched CASE 0';
+        return query
+            select * from unnest(in_alloc_instr_entry_ids, in_trade_record_ids);
+        return;
+    end if;
+
+        drop table if exists t_trades;
+    create temp table t_trades as
+    select trade_record_id, trade_qty
+    from unnest(in_trade_record_ids::int8[], in_trade_qty::int4[]) as t(trade_record_id, trade_qty);
+
+    -- complicated cases
+    -- -- preparing
+    drop table if exists t_trade_combine;
+    create temp table t_trade_combine as
+    with base as (select trade_record_id,
+                         trade_qty,
+
+                         -- 1
+                         sum(trade_qty) over (order by trade_record_id rows 1 preceding) as qty_with_1_prev,
+                         array_agg(trade_record_id)
+                         over (order by trade_record_id rows 1 preceding)                as tr_with_1_prev,
+
+                         -- 2
+                         sum(trade_qty) over (order by trade_record_id rows 1 following) as qty_with_1_next,
+                         array_agg(trade_record_id)
+                         over (order by trade_record_id rows 1 following)                as tr_with_1_next,
+
+                         -- 3
+                         sum(trade_qty) over (order by trade_record_id rows 2 preceding) as qty_with_2_prev,
+                         array_agg(trade_record_id)
+                         over (order by trade_record_id rows 2 preceding)                as tr_with_2_prev,
+
+                         -- 4
+                         sum(trade_qty) over (order by trade_record_id rows 2 following) as qty_with_2_next,
+                         array_agg(trade_record_id)
+                         over (order by trade_record_id rows 2 following)                as tr_with_2_next
+                  from unnest(in_trade_record_ids, in_trade_qty) as t(trade_record_id, trade_qty))
+    select row_number() over () as rn,
+           trade_record_id,
+           trade_qty,
+           qty_with_1_prev,
+           tr_with_1_prev,
+
+           qty_with_1_next,
+           tr_with_1_next,
+
+           qty_with_2_prev,
+           tr_with_2_prev,
+
+           qty_with_2_next,
+           tr_with_2_next
+    from base;
+     select sum(trade_qty)
+     into l_total_qty
+     from t_trade_combine;
+    drop table if exists t_ret;
+    create temp table t_ret
+    (
+        alloc_instr_entry_id int4,
+        trade_record_id      int8
+    );
+
+    -- case 1C (1 complicated)
+    l_trade := '{}';
+    l_new_trade := '{}';
+    l_cnt_alloc = l_alloc_array_length;
+l_qty_left =l_total_qty;
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids, in_alloc_qty) as t(alloc_instr_entry_id, alloc_qty)
+                 order by in_alloc_qty desc)
+        loop
+            raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 1, l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /* Залишився останній запис і ми не вилетіли раніше */ then
+                raise notice 'last chance';
+                if l_qty_left = l_rc.alloc_qty then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, trade_record_id
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    raise notice 'Matched CASE 1C';
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_1_prev
+            into l_new_trades
+            from t_trade_combine
+            where qty_with_1_prev = l_rc.alloc_qty
+              and not (tr_with_1_prev && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+
+    -- case 2C (2 complicated)
+    truncate t_ret;
+    l_trade := '{}';
+    l_new_trade := '{}';
+    l_cnt_alloc = l_alloc_array_length;
+    l_ratio_left = 1;
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio)
+                 order by ratio desc)
+        loop
+            raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 2, l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+                raise notice 'last chance';
+                if l_ratio_left = l_rc.ratio then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, tr
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    raise notice 'Matched CASE 2C';
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_2_prev
+            into l_new_trade
+            from t_trade_combine
+            where in_ratio_3 = l_rc.ratio
+              and not (tr_with_2_prev && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+
+    -- case 3C (3 complicated)
+    truncate t_ret;
+    l_trade := '{}';
+    l_new_trade := '{}';
+    l_cnt_alloc = l_alloc_array_length;
+    l_ratio_left = 1;
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio)
+                 order by ratio desc)
+        loop
+            raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 3, l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+                raise notice 'last chance';
+                if l_ratio_left = l_rc.ratio then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, tr
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    raise notice 'Matched CASE 3C';
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_1_next
+            into l_new_trade
+            from t_trade_combine
+            where in_ratio_2 = l_rc.ratio
+              and not (tr_with_1_next && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+
+    -- case 4C (4 complicated)
+    truncate t_ret;
+    l_trade := '{}';
+    l_new_trade := '{}';
+    l_cnt_alloc = l_alloc_array_length;
+    l_ratio_left = 1;
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio)
+                 order by ratio desc)
+        loop
+            raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 4, l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+                raise notice 'last chance';
+                if l_ratio_left = l_rc.ratio then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, tr
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    raise notice 'Matched CASE 4C';
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_2_next
+            into l_new_trade
+            from t_trade_combine
+            where in_ratio_4 = l_rc.ratio
+              and not (tr_with_2_next && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+    -- case 5C (4 complicated)
+    truncate t_ret;
+    l_trade := '{}';
+    l_new_trade := '{}';
+    l_cnt_alloc = l_alloc_array_length;
+    l_ratio_left = 1;
+    for l_rc in (select *
+                 from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio)
+                 order by ratio) -- another order
+        loop
+            raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 5, l_rc, l_cnt_alloc, l_ratio_left;
+            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+                raise notice 'last chance';
+                if l_ratio_left = l_rc.ratio then
+                    insert into t_ret
+                    select l_rc.alloc_instr_entry_id, tr
+                    from t_trades
+                    except
+                    select l_rc.alloc_instr_entry_id, unnest(l_trade);
+                    raise notice 'Matched CASE 4C';
+                    return query
+                        select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
+                    return;
+                else
+                    exit;
+                end if;
+            end if;
+
+            select tr_with_2_next
+            into l_new_trade
+            from t_trade_combine
+            where in_ratio_4 = l_rc.ratio
+              and not (tr_with_2_next && l_trade)
+            limit 1;
+            get diagnostics l_row_count = row_count;
+            if l_row_count = 0 then
+                exit;
+            else
+                l_trade = l_trade || l_new_trade;
+                insert into t_ret(alloc_instr_entry_id, trade_record_id)
+                select l_rc.alloc_instr_entry_id, unnest(l_new_trade);
+            end if;
+            l_cnt_alloc = l_cnt_alloc - 1;
+            l_ratio_left = l_ratio_left - l_rc.ratio;
+        end loop;
+
+
+    -- was not matched;
+    return query
+        select null::int4, tr from t_trades;
+    return;
+
+end;
+$fx$;
