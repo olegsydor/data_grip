@@ -332,6 +332,12 @@ select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 20, 30, 41}',
                                     in_ratios := '{0.1,0.2,0.4,0.3}', in_alloc_instr_entry_ids := '{100,101,102,103}');
 
+-- wrong: more alloc_instr_entries than trades
+select *
+from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 20, 30, 41}',
+                                    in_ratios := '{0.1, 0.2, 0.4, 0.15, 0.15}', in_alloc_instr_entry_ids := '{100, 101, 102, 103, 104}');
+
+
 -- Good
 select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
@@ -393,7 +399,7 @@ begin
     -- we don't manage cases like this because it definitely requires PTM
     if l_alloc_array_length > l_trade_array_length then
         return query
-            select null,
+            select null::int4,
                    unnest(in_trade_record_ids)
                        return;
     end if;
