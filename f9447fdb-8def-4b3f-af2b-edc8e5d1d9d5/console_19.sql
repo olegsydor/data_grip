@@ -4,7 +4,7 @@
         where true
           and ac.is_deleted = 'N'
           and ac.is_intraday_auto_allocate = 'Y'
-          and ac.opt_report_to_mpid = 'MLCB'
+          and ac.opt_report_to_mpid = 'MLCB';
 --          and ac.account_id != all(in_removed_account_ids)
 
 
@@ -14,7 +14,7 @@
         from dash360.bofa_allocation_report_wrapper(in_start_date_id => 20250716, in_end_date_id => 20250716,
                                                     in_is_eod => case when 'No' = 'Yes' then true else false end,
                                                     in_run_intraday_option_auto_allocation => case when 'Yes' = 'Yes' then true else false end,
-                                                    in_exec_broker => '019')
+                                                    in_exec_broker => '019');
 
 select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id = :l_date_id
   into l_max_trade_id ; -- 2347374821
@@ -59,7 +59,7 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
             when :in_account_ids is null then false
             else acc.account_id = any (:in_account_ids) end;
 
-
+select * from t_tr
 
   drop table if exists trade_for_allocations;
   create temp table trade_for_allocations --on commit drop
@@ -74,7 +74,7 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
          L1.AVG_PX,
          L1.TOTAL_QTY,
          L1.trade_ids,
-         -80875 as alloc_instr_id--nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
+         nextval('allocation_instruction_alloc_instr_id_seq'::regclass) as alloc_instr_id
   from (select TR.ACCOUNT_ID,
                TR.INSTRUMENT_ID,
                TR.SIDE,
@@ -136,8 +136,8 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
 
         create index on trade_for_allocations (alloc_instr_id);
 
-    	select public.load_log(l_load_id, l_step_id, 'create index on table trade_for_allocations', 0, 'I')
-		into l_step_id;
+ai = -80939, -80940
+
 
   insert into genesis2.ALLOCATION_INSTRUCTION(alloc_instr_id, DATE_ID, CREATE_TIME, ACCOUNT_ID, INSTRUMENT_ID, SIDE,
                                               OPEN_CLOSE, AVG_PX, TOTAL_QTY, CREATED_BY_SUBSYSTEM_ID, dataset_id)
@@ -153,14 +153,6 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
          'RPS',
          :l_load_batch_id
   from trade_for_allocations TR;
-
-  GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
-
-select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION', l_cnt_rows, 'I')
-  into l_step_id;
-  -------------- DS-10060 Support multiple default CTMAs in auto-allocation job (removed default_ratio feature)
-  -------------- DS-10191 Support multiple CMTA in auto-allocation and Options Allocation Configuration
-
 
     -- creating temp table for account_id with sum(allocatin_ratio) = 1 only
   create temp table t_clearing_account_aa --on commit drop
@@ -190,37 +182,12 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
            join check_sum_ratio using (account_id);
 
 select * from t_clearing_account_aa
-    where account_id = 257078
--- 2. insert into allocation_instruction_entry
-  /*
-  drop table if exists t_aie;
-  create temp table t_aie on commit drop as
-  with base as (select ai.alloc_instr_id,
-                       max(clearing_account_id)                              as clearing_account_id,
-                       ai.total_qty                                          as qty,
-                       ca.occ_actionable_id
-                from genesis2.allocation_instruction ai
-                         inner join genesis2.clearing_account ca
-                                    on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                        ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
-                where ai.date_id = l_date_id
-                  and ai.dataset_id = l_load_batch_id
-                  and ai.is_deleted = 'N'
-                group by ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id
-                )
-  select alloc_instr_id,
-         clearing_account_id,
-         qty as alloc_qty,
-         occ_actionable_id,
-         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
-         ta.trade_ids
-  from base
-  join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
-  */
+    where account_id = 257077
+
 
     drop table if exists t_aie;
   create temp table t_aie --on commit drop
-      as
+         as
   with base as (select ai.alloc_instr_id,
                        ca.clearing_account_id,
                        ai.account_id,
@@ -234,10 +201,8 @@ select * from t_clearing_account_aa
                 from genesis2.allocation_instruction ai
                          inner join t_clearing_account_aa ca on (ca.account_id = ai.account_id)
                 where ai.date_id = :l_date_id
---                   and ai.dataset_id = l_load_batch_id
+                  and ai.dataset_id = :l_load_batch_id
                   and ai.is_deleted = 'N'
---                 and ca.account_id = 257078
-                and alloc_instr_id = -80875
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
                          ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
                 window w as ( partition by ai.alloc_instr_id, ai.account_id
@@ -246,7 +211,6 @@ select * from t_clearing_account_aa
   select alloc_instr_id,
          clearing_account_id,
          case
-
              when rn != (select max(rn) from base b where b.alloc_instr_id = base.alloc_instr_id) then rnd_sum
              else qty - coalesce(lag(base.acc_rnd_sum)
                         over (partition by alloc_instr_id order by auto_alloc_ratio), 0) end  as alloc_qty,
@@ -254,10 +218,11 @@ select * from t_clearing_account_aa
 --          qty as alloc_qty,
          occ_actionable_id,
 --         l_date_id,
---          nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
+         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
          ta.trade_ids
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
+
 select * from t_aie;
 
   -------------------------------------------------------------------------------------
@@ -271,7 +236,7 @@ select * from t_aie;
          alloc_qty,
          :l_date_id,
          occ_actionable_id,
-         :allocation_instruction_entry_id
+         allocation_instruction_entry_id
   from t_aie;
 
 
@@ -289,10 +254,10 @@ select * from t_aie;
                 from trade_for_allocations)
   select tr.id, tr.ALLOC_INSTR_ID, :in_date_id, :l_load_batch_id, aie.allocation_instruction_entry_id
   from base tr
-           left join lateral ( select allocation_instruction_entry_id
+           left join lateral ( select max(allocation_instruction_entry_id) as allocation_instruction_entry_id
                           from genesis2.allocation_instruction_entry aie
                           where aie.alloc_instr_id = tr.alloc_instr_id
-                          group by allocation_instruction_entry_id
+                          group by alloc_instr_id
                           having count(*) = 1 -- SO: to prevent adding multiple alloc_instr_entry_id
                ) aie on true;
 
