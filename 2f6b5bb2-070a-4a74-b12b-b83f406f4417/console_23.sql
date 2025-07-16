@@ -332,24 +332,30 @@ select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 20, 30, 41}',
                                     in_ratios := '{0.1,0.2,0.4,0.3}', in_alloc_instr_entry_ids := '{100,101,102,103}');
 
-
+-- Good
 select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
                                     in_ratios := '{0.1,0.6,0.3}', in_alloc_instr_entry_ids := '{101,102,103}');
 
+-- Good
 select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
                                     in_ratios := '{0.1,0.9}', in_alloc_instr_entry_ids := '{101,102}');
 
-
+-- Good
 select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
                                     in_ratios := '{0.9,0.1}', in_alloc_instr_entry_ids := '{101,102}');
 
-
+-- Good
 select *
 from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}', in_qty := '{10, 30, 30, 30, 40, 50, 10, 50, 50, 100}',
                                     in_ratios := '{0.25,0.75}', in_alloc_instr_entry_ids := '{101,102}');
+
+-- Good too
+select *
+from genesis2.combine_trade_records(in_trade_record_ids := '{1, 2, 3, 4}', in_qty := '{10, 30, 30, 30}',
+                                    in_ratios := '{1}', in_alloc_instr_entry_ids := '{101}');
 
 
 drop function if exists genesis2.combine_trade_records;
@@ -364,7 +370,6 @@ create or replace function genesis2.combine_trade_records(in_trade_record_ids in
 as
 $fx$
 declare
-    l_total_qty          int4;
     l_row_count          int4;
     l_trade_ratio        numeric[];
     l_alloc_ratio        numeric[];
@@ -401,28 +406,17 @@ begin
     select *, qty * 1.0 / sm as ratio
     from base;
 
-/*
-    drop table if exists t_allocations;
-    create temp table t_allocations as
-    with base as (select t.alloc_instr_entry_id, t.ratio
-                  from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio))
-    select *
-    from base;
-*/
-
     select array_agg((val::numeric / total_sum)::numeric)
     into l_trade_ratio
     from (select val, sum(val) over () as total_sum
           from unnest(in_qty) as t(val)
           order by 1) t;
 
-
     select array_agg(val::numeric)
     into l_alloc_ratio
     from (select val
           from unnest(in_ratios) as t(val)
           order by 1) t;
-
 
     -- case: if ratios match 1:1 (excluding the case when ratios are equal like 0.5 and 0.5 or 4 * 0.25 etc
     if l_trade_ratio = l_alloc_ratio then
@@ -458,8 +452,6 @@ begin
                   from unnest(in_trade_record_ids::int8[], in_qty::int4[]) as t(tr, qty))
     select row_number() over ()                 as rn,
            tr,
-           qty,
-           qty::numeric / sum_total             as in_ratio_ind,
 
            qty_with_1_prev::numeric / sum_total as in_ratio_1,
            tr_with_1_prev,
@@ -492,7 +484,7 @@ begin
                  order by ratio desc)
         loop
             raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 1, l_rc, l_cnt_alloc, l_ratio_left;
-            if l_cnt_alloc = 1 /*Залишився останній запис*/ then
+            if l_cnt_alloc = 1 /* Залишився останній запис і ми не вилетіли раніше */ then
                 raise notice 'last chance';
                 if l_ratio_left = l_rc.ratio then
                     insert into t_ret
@@ -505,7 +497,6 @@ begin
                         select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
                     return;
                 else
-                    truncate t_ret;
                     exit;
                 end if;
             end if;
@@ -518,7 +509,6 @@ begin
             limit 1;
             get diagnostics l_row_count = row_count;
             if l_row_count = 0 then
-                truncate t_ret;
                 exit;
             else
                 l_trade = l_trade || l_new_trade;
@@ -531,6 +521,7 @@ begin
 
 
     -- case 2C (2 complicated)
+    truncate t_ret;
     l_trade := '{}';
     l_new_trade := '{}';
     l_cnt_alloc = l_alloc_array_length;
@@ -553,7 +544,6 @@ begin
                         select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
                     return;
                 else
-                    truncate t_ret;
                     exit;
                 end if;
             end if;
@@ -566,7 +556,6 @@ begin
             limit 1;
             get diagnostics l_row_count = row_count;
             if l_row_count = 0 then
-                truncate t_ret;
                 exit;
             else
                 l_trade = l_trade || l_new_trade;
@@ -579,6 +568,7 @@ begin
 
 
     -- case 3C (3 complicated)
+    truncate t_ret;
     l_trade := '{}';
     l_new_trade := '{}';
     l_cnt_alloc = l_alloc_array_length;
@@ -601,7 +591,6 @@ begin
                         select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
                     return;
                 else
-                    truncate t_ret;
                     exit;
                 end if;
             end if;
@@ -614,7 +603,6 @@ begin
             limit 1;
             get diagnostics l_row_count = row_count;
             if l_row_count = 0 then
-                truncate t_ret;
                 exit;
             else
                 l_trade = l_trade || l_new_trade;
@@ -627,6 +615,7 @@ begin
 
 
     -- case 4C (4 complicated)
+    truncate t_ret;
     l_trade := '{}';
     l_new_trade := '{}';
     l_cnt_alloc = l_alloc_array_length;
@@ -649,7 +638,6 @@ begin
                         select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
                     return;
                 else
-                    truncate t_ret;
                     exit;
                 end if;
             end if;
@@ -662,7 +650,6 @@ begin
             limit 1;
             get diagnostics l_row_count = row_count;
             if l_row_count = 0 then
-                truncate t_ret;
                 exit;
             else
                 l_trade = l_trade || l_new_trade;
@@ -674,13 +661,14 @@ begin
         end loop;
 
     -- case 5C (4 complicated)
+    truncate t_ret;
     l_trade := '{}';
     l_new_trade := '{}';
     l_cnt_alloc = l_alloc_array_length;
     l_ratio_left = 1;
     for l_rc in (select *
                  from unnest(in_alloc_instr_entry_ids::int4[], in_ratios::numeric[]) as t(alloc_instr_entry_id, ratio)
-                 order by ratio)
+                 order by ratio) -- another order
         loop
             raise notice 'case - %, l_rc - %, l_cnt_alloc - %, l_ratio_left - %', 5, l_rc, l_cnt_alloc, l_ratio_left;
             if l_cnt_alloc = 1 /*Залишився останній запис*/ then
@@ -696,7 +684,6 @@ begin
                         select t_ret.alloc_instr_entry_id, t_ret.trade_record_id from t_ret;
                     return;
                 else
-                    truncate t_ret;
                     exit;
                 end if;
             end if;
@@ -709,7 +696,6 @@ begin
             limit 1;
             get diagnostics l_row_count = row_count;
             if l_row_count = 0 then
-                truncate t_ret;
                 exit;
             else
                 l_trade = l_trade || l_new_trade;
@@ -719,7 +705,6 @@ begin
             l_cnt_alloc = l_cnt_alloc - 1;
             l_ratio_left = l_ratio_left - l_rc.ratio;
         end loop;
-
 
 
     -- was not matched;
