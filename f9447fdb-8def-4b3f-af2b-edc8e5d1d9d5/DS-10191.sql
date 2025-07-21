@@ -692,3 +692,26 @@ $function$
 ;
 
 
+
+select ai.alloc_instr_id, aitr.*, aie.*
+from genesis2.allocation_instruction ai
+         join lateral (
+    select array_agg(trade_record_id) as trade_id,
+           array_agg(last_qty)
+    from genesis2.alloc_instr2trade_record aitr
+             join genesis2.trade_record tr using (trade_record_id, date_id)
+    where aitr.alloc_instr_id = ai.alloc_instr_id
+      and aitr.date_id = ai.date_id
+      and aitr.allocation_instruction_entry_id is null
+    and tr.is_busted = 'N'
+    limit 1) aitr on true
+         join lateral (select array_agg(aie.allocation_instruction_entry_id) as alloc_id,
+                              array_agg(alloc_qty)                           as alloc_qty
+                       from genesis2.allocation_instruction_entry aie
+                       where aie.date_id = ai.date_id
+                         and aie.alloc_instr_id = ai.alloc_instr_id
+                       limit 1) aie on true
+         join instrument i on ai.instrument_id = i.instrument_id and i.instrument_type_id = 'O'
+where ai.date_id = 20250718
+  and ai.created_by_subsystem_id = 'RPS'
+  and ai.is_deleted = 'N'
