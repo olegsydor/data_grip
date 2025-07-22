@@ -703,7 +703,7 @@ from genesis2.allocation_instruction ai
     where aitr.alloc_instr_id = ai.alloc_instr_id
       and aitr.date_id = ai.date_id
       and aitr.allocation_instruction_entry_id is null
-    and tr.is_busted = 'N'
+      and tr.is_busted = 'N'
     limit 1) aitr on true
          join lateral (select array_agg(aie.allocation_instruction_entry_id) as alloc_id,
                               array_agg(alloc_qty)                           as alloc_qty
