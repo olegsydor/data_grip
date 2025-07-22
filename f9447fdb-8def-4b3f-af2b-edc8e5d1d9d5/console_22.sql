@@ -147,4 +147,8 @@ drop table trade_for_allocations;
 select * from genesis2.auto_allocate_unallocated_trade(in_instrument_type_id := 'O', in_allocation_type := 0, in_date_id := 20250721)
 
 
-select 
+select max(allocation_instruction_entry_id) as allocation_instruction_entry_id, count(*)
+                          from genesis2.allocation_instruction_entry aie
+                          where aie.alloc_instr_id in (-81584)
+                          group by alloc_instr_id
+                          having count(*) = 1
