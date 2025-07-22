@@ -715,3 +715,5 @@ from genesis2.allocation_instruction ai
 where ai.date_id = 20250718
   and ai.created_by_subsystem_id = 'RPS'
   and ai.is_deleted = 'N'
+
+
