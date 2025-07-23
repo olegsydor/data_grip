@@ -697,7 +697,7 @@ select ai.alloc_instr_id, aitr.*, aie.*
 from genesis2.allocation_instruction ai
          join lateral (
     select array_agg(trade_record_id) as trade_id,
-           array_agg(last_qty)
+           array_agg(last_qty) as trade_qty
     from genesis2.alloc_instr2trade_record aitr
              join genesis2.trade_record tr using (trade_record_id, date_id)
     where aitr.alloc_instr_id = ai.alloc_instr_id
