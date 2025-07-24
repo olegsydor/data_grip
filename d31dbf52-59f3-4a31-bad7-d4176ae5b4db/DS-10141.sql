@@ -4,6 +4,9 @@ from dwh.client_order
 -- where client_order.order_id = 100000021143884112
 where client_order_id = '62517701G0Z'
 
+select *
+from dash360.report_obo_compliance_xls(20250218, 20250218, null, '{71827}',
+                                       '{19158555678,19159621489,19158555679,19159621495,19158555680,19159621501}')
 
 select *
 from trash.report_obo_compliance_new(20250626, 20250626, null, '{74339}');
@@ -130,7 +133,7 @@ begin
 
 
     select min(cl.create_date_id)
-        
+
 
     into l_retention_date_id
     from dwh.client_order cl
