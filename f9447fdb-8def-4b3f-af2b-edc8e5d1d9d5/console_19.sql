@@ -716,13 +716,13 @@ select * from genesis2.alloc_instr2trade_record
 
 select last_qty, * from genesis2.alloc_instr2trade_record aitr
          join genesis2.trade_record tr using (trade_record_id, date_id)
-where alloc_instr_id in (-77655);
+where alloc_instr_id in (-81583);
 
 select * from genesis2.allocation_instruction_entry
-where alloc_instr_id in (-77655);
+where alloc_instr_id in (-81583);
 
 select * from genesis2.allocation_instruction
-where alloc_instr_id = -77655;
+where alloc_instr_id = -81583;
 
 
 select ai.alloc_instr_id, aitr.*, aie.*
@@ -748,4 +748,4 @@ where true
     and ai.date_id = 20250718
   and ai.created_by_subsystem_id = 'RPS'
   and ai.is_deleted = 'N'
-and ai.alloc_instr_id = -77655
+and ai.alloc_instr_id = -81583
