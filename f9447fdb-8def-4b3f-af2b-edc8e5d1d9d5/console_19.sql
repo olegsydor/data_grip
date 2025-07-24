@@ -725,7 +725,7 @@ select * from genesis2.allocation_instruction
 where alloc_instr_id = -81583;
 
 
-select ai.alloc_instr_id, aitr.*, aie.*
+select ai.alloc_instr_id, aie.*, aitr.*
 from genesis2.allocation_instruction ai
          join lateral (
     select array_agg(trade_record_id) as trade_id,
