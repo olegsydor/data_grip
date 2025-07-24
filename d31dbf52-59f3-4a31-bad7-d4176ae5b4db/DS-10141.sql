@@ -130,6 +130,8 @@ begin
 
 
     select min(cl.create_date_id)
+        
+
     into l_retention_date_id
     from dwh.client_order cl
              join dwh.gtc_order_status gtc on gtc.order_id = cl.order_id and gtc.create_date_id = cl.create_date_id
