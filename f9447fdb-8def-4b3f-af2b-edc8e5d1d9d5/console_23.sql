@@ -118,7 +118,7 @@ begin
                      join genesis2.clearing_account ca
                           on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                               and ca.clearing_account_type = '1' and ca.market_type = 'O')
-                     join genesis2.account acc ON (acc.account_id = ca.account_id)
+                     join genesis2.account acc ON (acc.account_id = ca.account_id
 --                                                       and acc.is_deleted <> 'Y'
 --                 and acc.opt_report_to_mpid = 'MLCB'
 --                 and acc.trading_firm_id <> 'cantor'
@@ -133,7 +133,7 @@ begin
                                           and to_report = 'R'
                                         limit 1) ar on true
             where alin.date_id between in_start_date_id and in_end_date_id
-                         and MLCB
+              and ca.account_id = any (l_account_ids)
               and not exists (select null
                               from dash_reporting.bofa_allocation_report ar
                               where ar.alloc_instr_id = ae.alloc_instr_id
@@ -330,19 +330,22 @@ begin
                  left join t_trade_record_to_exclude tex
                            on tex.trade_record_id = ftr.trade_record_id and tex.date_id = ftr.date_id
         WHERE ftr.date_id between in_start_date_id and in_end_date_id
-          AND is_busted = 'N'
+          and ftr.is_busted = 'N'
+          and ftr.account_id = any(l_account_ids)
+          and ftr.is_billed is distinct from 'R'
 --          AND ftr.order_id > 0
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
-          and tex.trade_record_id is null
-          and acc.is_deleted <> 'Y'
-          AND acc.opt_report_to_mpid = 'MLCB'
-          AND acc.trading_firm_id <> 'cantor'
+          and tex.trade_record_id is null;
+--           and acc.is_deleted <> 'Y'
+--           AND acc.opt_report_to_mpid = 'MLCB'
+--           AND acc.trading_firm_id <> 'cantor'
+
         --           and not exists (select null
 --                           from t_trade_record_to_exclude rp
 --                           where rp.trade_record_id = any
 --                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
-        ;
+
         get diagnostics l_row_cnt = row_count;
         select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD temp table t_trade_record_to_report created',
                                l_row_cnt, 'O')

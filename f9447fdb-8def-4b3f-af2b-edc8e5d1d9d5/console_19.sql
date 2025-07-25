@@ -745,7 +745,7 @@ from genesis2.allocation_instruction ai
                        limit 1) aie on true
          join instrument i on ai.instrument_id = i.instrument_id and i.instrument_type_id = 'O'
 where true
-    and ai.date_id = 20250718
+--     and ai.date_id = 20250718
   and ai.created_by_subsystem_id = 'RPS'
   and ai.is_deleted = 'N'
-and ai.alloc_instr_id = -81583
+and ai.alloc_instr_id = -81413
