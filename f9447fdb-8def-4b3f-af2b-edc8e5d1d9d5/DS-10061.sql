@@ -701,3 +701,62 @@ begin
 end;
 $function$
 ;
+
+
+
+-- DROP FUNCTION dash360.allocations_clone_account_config(int8, _int8, bpchar, int4);
+
+CREATE OR REPLACE FUNCTION dash360.allocations_clone_account_config(in_account_id bigint, clone_account_ids bigint[], in_instrumnt_type_id character DEFAULT 'O'::bpchar, in_user_id integer DEFAULT NULL::integer)
+ RETURNS integer
+ LANGUAGE plpgsql
+ COST 1
+AS $function$
+-- SY 20240826 https://dashfinancial.atlassian.net/browse/DS-8794 Input parameter in_user_id has been added
+-- SY 20240826 https://dashfinancial.atlassian.net/browse/DS-8795 is_visible_for_manual_allocation has been propagated into allocations_set_account_config as key 'visible'
+-- SO 20250729 https://dashfinancial.atlassian.net/browse/DS-10191Support auto_alloc_ratio and is_auto_allocate_to in clone operation
+DECLARE
+
+    l_cnt_cln int;
+    /* The in_instrumnt_type_id variable should be implemented like input parameter to the function */
+  --  in_instrumnt_type_id character default 'O';
+
+BEGIN
+
+-- #variable_conflict use_variable
+/*
+13-04-2021 - MG - add support to is_option_auto_allocate field
+*/
+        select count(1)
+        into l_cnt_cln
+        from (select  dash360.allocations_set_account_config(
+                new_acc_id::bigint,
+                jsonb_agg(jsonb_object(array['ca_number', 'def' , 'ca_name', 'oaid', 'visible', 'alloc_ratio', 'auto_alloc_to'],
+                            array[ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::char, ca.auto_alloc_ratio, ca.is_auto_alloc_to]))::text,
+                (case
+                    when in_instrumnt_type_id = 'E' then acc.is_auto_allocate
+                    when in_instrumnt_type_id = 'O' then acc.is_option_auto_allocate
+                    else acc.is_auto_allocate
+                end),
+                in_instrumnt_type_id,
+				in_user_id,
+                acc.is_intraday_auto_allocate)
+        from clearing_account ca
+        inner join account acc on acc.account_id =ca.account_id and acc.is_deleted='N'
+        cross join unnest(clone_account_ids) new_acc_id
+        where ca.account_id = in_account_id
+        and ca.market_type = in_instrumnt_type_id
+        and ca.is_deleted = 'N'
+        group by new_acc_id,
+                 acc.is_intraday_auto_allocate,
+            (case
+                when in_instrumnt_type_id = 'E' then acc.is_auto_allocate
+                when in_instrumnt_type_id = 'O' then acc.is_option_auto_allocate
+                else acc.is_auto_allocate
+            end)) l ;
+
+
+       RETURN l_cnt_cln;
+
+END;
+$function$
+;
