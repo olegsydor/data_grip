@@ -670,7 +670,7 @@ begin
            sj ->> 'oaid'                  as occ_actionable_id,
            in_user_id,
            (sj ->> 'visible')::bool       as is_visible_for_manual_allocation,
-           coalesce((sj -> 'def_ratio')::numeric, 1)
+           coalesce((sj ->> 'def_ratio')::numeric, 1)
     from (select value as sj
           from jsonb_array_elements(l_clearing_accounts)) l1;
 
