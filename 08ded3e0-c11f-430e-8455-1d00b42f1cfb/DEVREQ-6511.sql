@@ -29,6 +29,9 @@ begin
                            in_end_date_id::text || ' STARTED ===', 0, 'O')
     into l_step_id;
 
+    return query 
+    select 'trading_firm_id,trading_firm_name,trade_day,trade_time,sending_firm,sessionid,executing_firm_id,clearing_account,client_order_id,bats_order_id,execution_id,symbol,osi_root,exercise_date,put_or_call,strike_price,side,price,"size",capacity,liquidity,access_fee,bats_subscriber_id,routing_instruction,route_strategy,contra,contra_capacity,subliquidity,fee_code,contra_fee_code,pfof_fee_code,directed_market_maker,pfof_access_fee,auction_order_type,auction_role,contra_auction_role,routing_broker,invoiced_to,breakup_credit_code,breakup_credit_dollars,qcc_rebate_code,orig_exec_id,complex_execution_id,complex_symbol_id,contra_trader,contra_broker,order_entry_date,cboe_member_id,occ_clearing_id,cmta_clearing_firm,complex_instrument_id,base_rate,breakup_credit_role,floor_trader,contra_floor_trader,type,underlying,frequent_trader_id,strategy_id,compression_trade,names_later_id,original_client_order_id,clearing_optional_data,account,total_surcharges,ors_cors';
+    
     return query
         select array_to_string(ARRAY [
                                    ep.trading_firm_id,
