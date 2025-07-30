@@ -567,3 +567,6 @@ EXCEPTION
         -- лог або трасування, якщо потрібно
         RAISE;
 END;
+
+
+select * from GENESIS2_QA_20100601.ACCT_COMM_opt_RATE
