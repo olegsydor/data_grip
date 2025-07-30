@@ -95,15 +95,14 @@ order by prt.min_price desc;
 SELECT GENESIS2_QA_20100601.get_commission_rate(
          'SQHT',         -- in_exchange_id
          'VB1',          -- in_symbol
-         'F',            -- in_instrument_type
-         10349,          -- in_account_id
-         'R',             -- in_trading_session_type
-       100
+         'O',            -- in_instrument_type
+         263201,          -- in_account_id
+         'G',             -- in_trading_session_type
+       1
        ) AS commission_rate
 FROM dual;
 
 ALTER FUNCTION GENESIS2_JAVA_TEST.GET_COMMISSION_RATE COMPILE;
-
 
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_commission_rate(
     in_exchange_id VARCHAR2,
@@ -122,7 +121,7 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_commission_rate(
         INDEX BY PLS_INTEGER;
 --     l_symbol_list_id_arr t_symbol_list_ids;
 --     l_is_list_found      BOOLEAN := FALSE;
-        l_symbol_list_id_cnt number;
+    l_symbol_list_id_cnt number;
 BEGIN
     -- 1. Визначити TOUCH_TYPE_ID
     SELECT C.TOUCH_TYPE_ID
@@ -142,6 +141,7 @@ BEGIN
     SELECT count(*)
     INTO l_symbol_list_id_cnt
     FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+             JOIN GENESIS2_JAVA_TEST.acct_comm_symbol_list sl ON optr.symbol_list_id = sl.symbol_list_id
              JOIN GENESIS2_QA_20100601.symbol2acct_comm_symbol_list asl ON asl.symbol_list_id = sl.symbol_list_id
              JOIN GENESIS2_QA_20100601.acct_comm_symbol_list sl ON optr.symbol_list_id = sl.symbol_list_id
              JOIN GENESIS2_QA_20100601.tf2acct_comm_symbol_list tfsl ON tfsl.symbol_list_id = sl.symbol_list_id
@@ -154,36 +154,49 @@ BEGIN
 
 
     -- 3. Знайти rate
-    SELECT rate
-    INTO l_rate
-    FROM (SELECT optr.rate
-          FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
-                   JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
-          WHERE optr.account_id = in_account_id
-            AND optr.touch_type_id = l_touch_type_id
-            AND optr.trading_session_type = in_trading_session_type
-            AND case
-                    when l_symbol_list_id_cnt > 0 and optr.symbol_list_id IN (SELECT optr.symbol_list_id
-                                                                                     FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
-                                                                                              JOIN GENESIS2_QA_20100601.acct_comm_symbol_list sl
-                                                                                                   ON optr.symbol_list_id = sl.symbol_list_id
-                                                                                              JOIN GENESIS2_QA_20100601.symbol2acct_comm_symbol_list asl
-                                                                                                   ON asl.symbol_list_id = sl.symbol_list_id
-                                                                                              JOIN GENESIS2_QA_20100601.tf2acct_comm_symbol_list tfsl
-                                                                                                   ON tfsl.symbol_list_id = sl.symbol_list_id
-                                                                                              JOIN GENESIS2_QA_20100601.trading_firm tf
-                                                                                                   ON tf.trading_firm_id = tfsl.trading_firm_id
-                                                                                              JOIN GENESIS2_QA_20100601.account ac
-                                                                                                   ON ac.trading_firm_id = tf.trading_firm_id
-                                                                                     WHERE sl.is_deleted = 'N'
-                                                                                       AND asl.symbol = in_symbol
-                                                                                       AND sl.instrument_type_id = in_instrument_type
-                                                                                       AND ac.account_id = in_account_id) then 1
-                    when l_symbol_list_id_cnt = 0 and optr.rate_scope = 'G' then 1
-                    else 0 end = 1
-            and prt.min_price < in_price
-          ORDER BY prt.min_price DESC)
-    WHERE ROWNUM = 1;
+    if in_instrument_type = 'O' then
+        SELECT rate
+        INTO l_rate
+        FROM (SELECT optr.rate
+              FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                       JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
+              WHERE optr.account_id = in_account_id
+                AND optr.touch_type_id = l_touch_type_id
+                AND optr.trading_session_type = in_trading_session_type
+                AND case
+                        when l_symbol_list_id_cnt > 0 and optr.symbol_list_id IN (SELECT optr.symbol_list_id
+                                                                                  FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                                                                                           JOIN GENESIS2_QA_20100601.acct_comm_symbol_list sl
+                                                                                                ON optr.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.symbol2acct_comm_symbol_list asl
+                                                                                                ON asl.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.tf2acct_comm_symbol_list tfsl
+                                                                                                ON tfsl.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.trading_firm tf
+                                                                                                ON tf.trading_firm_id = tfsl.trading_firm_id
+                                                                                           JOIN GENESIS2_QA_20100601.account ac
+                                                                                                ON ac.trading_firm_id = tf.trading_firm_id
+                                                                                  WHERE sl.is_deleted = 'N'
+                                                                                    AND asl.symbol = in_symbol
+                                                                                    AND sl.instrument_type_id = in_instrument_type
+                                                                                    AND ac.account_id = in_account_id)
+                            then 1
+                        when l_symbol_list_id_cnt = 0 and optr.rate_scope = 'G' then 1
+                        else 0 end = 1
+                and prt.min_price < in_price
+              ORDER BY prt.min_price DESC)
+        WHERE ROWNUM = 1;
+    else
+        SELECT rate
+        INTO l_rate
+        FROM (SELECT optr.rate
+              FROM GENESIS2_QA_20100601.acct_comm_eqt_rate optr
+              WHERE optr.account_id = in_account_id
+                AND optr.touch_type_id = l_touch_type_id
+                and optr.rate_scope = 'G'
+                )
+        WHERE ROWNUM = 1;
+    end if;
 
     RETURN l_rate;
 
@@ -194,8 +207,6 @@ EXCEPTION
         -- лог або трасування, якщо потрібно
         RAISE;
 END;
-
-
 
     select * from GENESIS2_QA_20100601.acct_comm_opt_premium_tier;
 
@@ -469,3 +480,90 @@ values (81, 'S', 263208, 'L', 'G', 0.15);
 INSERT INTO GENESIS2_QA_20100601.ACCT_COMM_EQT_RATE
 (RATE_ID, ACCOUNT_EDIT_SCOPE_ID, ACCOUNT_ID, TOUCH_TYPE_ID, RATE_SCOPE, RATE)
 values (89, 'S', 263208, 'H', 'G', 0.65);
+
+
+
+SELECT rate, optr.account_id, optr.touch_type_id, optr.trading_session_type
+    INTO l_rate
+    FROM (SELECT optr.rate, optr.account_id, optr.touch_type_id, optr.trading_session_type
+          FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                   JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
+          WHERE 1=1
+--               amd optr.account_id = in_account_id
+--             AND optr.touch_type_id = l_touch_type_id
+--             AND optr.trading_session_type = in_trading_session_type
+            and optr.rate_scope = 'G'
+--             and prt.min_price < in_price
+          ORDER BY prt.min_price DESC)
+    WHERE ROWNUM = 1;
+
+
+
+----
+
+
+    -- 1. Визначити TOUCH_TYPE_ID
+    SELECT C.TOUCH_TYPE_ID
+
+    FROM GENESIS2_QA_20100601.EXCHANGE E
+             JOIN GENESIS2_QA_20100601.EX_DESTINATION D ON D.EXCHANGE_ID = E.EXCHANGE_ID
+             JOIN GENESIS2_QA_20100601.EX_DESTINATION_CODE C ON C.EX_DESTINATION_CODE = D.EX_DESTINATION_CODE
+             JOIN GENESIS2_QA_20100601.RISK_MGMT_TOUCH_TYPE T ON C.TOUCH_TYPE_ID = T.TOUCH_TYPE_ID
+    WHERE E.IS_DELETED = 'N'
+      AND E.IS_ACTIVE = 'Y'
+      AND D.IS_DELETED = 'N'
+      AND C.IS_DELETED = 'N'
+      AND E.EXCHANGE_ID = 'SQHT'
+      AND ROWNUM = 1;
+
+    -- 2. Отримати всі релевантні symbol_list_id
+    SELECT count(*)
+--     INTO l_symbol_list_id_cnt
+    FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+             JOIN GENESIS2_JAVA_TEST.acct_comm_symbol_list sl ON optr.symbol_list_id = sl.symbol_list_id
+             JOIN GENESIS2_QA_20100601.symbol2acct_comm_symbol_list asl ON asl.symbol_list_id = sl.symbol_list_id
+             JOIN GENESIS2_QA_20100601.acct_comm_symbol_list sl ON optr.symbol_list_id = sl.symbol_list_id
+             JOIN GENESIS2_QA_20100601.tf2acct_comm_symbol_list tfsl ON tfsl.symbol_list_id = sl.symbol_list_id
+             JOIN GENESIS2_QA_20100601.trading_firm tf ON tf.trading_firm_id = tfsl.trading_firm_id
+             JOIN GENESIS2_QA_20100601.account ac ON ac.trading_firm_id = tf.trading_firm_id
+    WHERE sl.is_deleted = 'N'
+      AND asl.symbol = 'VB1'
+      AND sl.instrument_type_id = 'O'
+      AND ac.account_id = 263201
+
+
+    -- 3. Знайти rate
+    if in_instrument_type = 'O' then
+        SELECT rate
+
+        FROM (SELECT optr.rate, optr.tier_id, optr.touch_type_id, optr.trading_session_type, optr.rate_scope, prt.min_price
+              FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                       JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
+              WHERE optr.account_id = 263201
+                AND optr.touch_type_id = 'H'
+                AND optr.trading_session_type = 'R'
+  and optr.rate_scope = 'G'
+                and prt.min_price < in_price
+              ORDER BY prt.min_price DESC)
+        WHERE ROWNUM = 1;
+    else
+        SELECT rate
+        INTO l_rate
+        FROM (SELECT optr.rate
+              FROM GENESIS2_QA_20100601.acct_comm_eqt_rate optr
+              WHERE optr.account_id = in_account_id
+                AND optr.touch_type_id = l_touch_type_id
+                and optr.rate_scope = 'G'
+                )
+        WHERE ROWNUM = 1;
+    end if;
+
+    RETURN l_rate;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN NULL; -- або -1, або підставна ставка
+    WHEN OTHERS THEN
+        -- лог або трасування, якщо потрібно
+        RAISE;
+END;
