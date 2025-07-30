@@ -93,7 +93,7 @@ order by prt.min_price desc;
 
 
 SELECT GENESIS2_JAVA_TEST.get_commission_rate(
-         'XEUR',         -- in_exchange_id
+         'SQHT',         -- in_exchange_id
          'VB1',          -- in_symbol
          'F',            -- in_instrument_type
          10349,          -- in_account_id
@@ -118,8 +118,8 @@ CREATE OR REPLACE FUNCTION GENESIS2_JAVA_TEST.get_commission_rate(
     -- Для збереження списку symbol_list_id
     TYPE t_symbol_list_ids IS TABLE OF GENESIS2_JAVA_TEST.acct_comm_opt_rate.symbol_list_id%TYPE
         INDEX BY PLS_INTEGER;
-    l_symbol_list_id_arr t_symbol_list_ids;
-    l_is_list_found      BOOLEAN := FALSE;
+--     l_symbol_list_id_arr t_symbol_list_ids;
+--     l_is_list_found      BOOLEAN := FALSE;
         l_symbol_list_id_cnt number;
 BEGIN
     -- 1. Визначити TOUCH_TYPE_ID
@@ -161,7 +161,7 @@ BEGIN
             AND optr.touch_type_id = l_touch_type_id
             AND optr.trading_session_type = in_trading_session_type
             AND case
-                    when l_symbol_list_id_cnt > 0 then optr.symbol_list_id IN (SELECT optr.symbol_list_id
+                    when l_symbol_list_id_cnt > 0 and optr.symbol_list_id IN (SELECT optr.symbol_list_id
                                                                                      FROM GENESIS2_JAVA_TEST.acct_comm_opt_rate optr
                                                                                               JOIN GENESIS2_JAVA_TEST.acct_comm_symbol_list sl
                                                                                                    ON optr.symbol_list_id = sl.symbol_list_id
@@ -176,10 +176,9 @@ BEGIN
                                                                                      WHERE sl.is_deleted = 'N'
                                                                                        AND asl.symbol = in_symbol
                                                                                        AND sl.instrument_type_id = in_instrument_type
-                                                                                       AND ac.account_id = in_account_id)
-                    when l_symbol_list_id_cnt = 0 then optr.rate_scope = 'G'
-                    else 1 = 2 end
-            AND optr.rate_scope = 'G'
+                                                                                       AND ac.account_id = in_account_id) then 1
+                    when l_symbol_list_id_cnt = 0 and optr.rate_scope = 'G' then 1
+                    else 0 end = 1
             and prt.min_price < in_price
           ORDER BY prt.min_price DESC)
     WHERE ROWNUM = 1;
@@ -193,4 +192,3 @@ EXCEPTION
         -- лог або трасування, якщо потрібно
         RAISE;
 END;
-/
