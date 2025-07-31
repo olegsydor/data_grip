@@ -288,10 +288,14 @@ create index on t_clearing_account_aa (account_id);
            ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
   window w as ( partition by ai.alloc_instr_id, ai.account_id
           order by ca.auto_alloc_ratio, ca.clearing_account_number desc, ca.clearing_account_id );
+
     GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
+
   create index on t_base_aie (alloc_instr_id, auto_alloc_ratio);
+
     select public.load_log(l_load_id, l_step_id, 'created temp prepared table for aie', l_cnt_rows, 'I')
   into l_step_id;
+
   create temp table t_aie on commit drop as
   select alloc_instr_id,
          clearing_account_id,

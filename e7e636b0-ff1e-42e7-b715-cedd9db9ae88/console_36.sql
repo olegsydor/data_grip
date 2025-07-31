@@ -136,7 +136,7 @@
          'RPS',
          :l_load_batch_id
   from trade_for_allocations TR;
-
+l_load_batch_id: 15588947
   GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
 
 select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION', l_cnt_rows, 'I')
@@ -145,7 +145,7 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
   -------------- DS-10191 Support multiple CMTA in auto-allocation and Options Allocation Configuration
 
     -- creating temp table for account_id with sum(allocatin_ratio) = 1 only
-  create temp table t_clearing_account_aa  as
+  create temp table t_clearing_account_aa on commit drop as
   with base as (select ca.account_id,
                        coalesce(aa.clearing_account_id, ca.clearing_account_id)         as clearing_account_id,
                        coalesce(aa.occ_actionable_id, ca.occ_actionable_id)             as occ_actionable_id,
@@ -156,10 +156,10 @@ select public.load_log(l_load_id, l_step_id, 'insert into ALLOCATION_INSTRUCTION
                          left join genesis2.clearing_account aa
                                    on ca.account_id = aa.account_id and aa.is_auto_alloc_to = 'Y'
                                        and aa.is_deleted = 'N'
-                                       and aa.market_type = :in_instrument_type_id
+                                       and aa.market_type = in_instrument_type_id
                 where true
                   and ca.is_deleted = 'N'
-                  and ca.market_type = :in_instrument_type_id
+                  and ca.market_type = in_instrument_type_id
                   and ca.is_default = 'Y')
      , check_sum_ratio as (select account_id, sum(auto_alloc_ratio) as sum_ratio
                            from base
@@ -200,31 +200,9 @@ create index on t_clearing_account_aa (account_id);
   from base
   join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
   */
-execute 'SET enable_hashjoin = false';
-	execute 'SET enable_mergejoin = false';
-    drop table if exists t_aie;
 
-create temp table base as
-    select ai.alloc_instr_id,
-                       ca.clearing_account_id,
-                       ai.account_id,
-                       ca.auto_alloc_ratio,
-                       ai.total_qty                                          as qty,
-                       ai.total_qty * auto_alloc_ratio                    as pre_sum,
-                       floor(ai.total_qty * auto_alloc_ratio)             as rnd_sum,
-                       sum(floor(ai.total_qty * auto_alloc_ratio)) over w as acc_rnd_sum,
-                       row_number() over w                                   as rn,
-                       ca.occ_actionable_id
-                from genesis2.allocation_instruction ai
-                         inner join t_clearing_account_aa ca on (ca.account_id = ai.account_id)
-                where ai.date_id = :l_date_id
-                  and ai.dataset_id = :l_load_batch_id
-                  and ai.is_deleted = 'N'
-                group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
-                         ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
-                window w as ( partition by ai.alloc_instr_id, ai.account_id
-                        order by ca.auto_alloc_ratio, ca.clearing_account_number desc, ca.clearing_account_id);
-  create temp table t_aie as
+    drop table if exists t_aie;
+  create temp table t_aie on commit drop as
   with base as (select ai.alloc_instr_id,
                        ca.clearing_account_id,
                        ai.account_id,
@@ -237,8 +215,8 @@ create temp table base as
                        ca.occ_actionable_id
                 from genesis2.allocation_instruction ai
                          inner join t_clearing_account_aa ca on (ca.account_id = ai.account_id)
-                where ai.date_id = :l_date_id
-                  and ai.dataset_id = :l_load_batch_id
+                where ai.date_id = l_date_id
+                  and ai.dataset_id = l_load_batch_id
                   and ai.is_deleted = 'N'
                 group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
                          ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
@@ -502,3 +480,48 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+$function$
+
+
+  create temp table t_base_aie as
+  select ai.alloc_instr_id,
+         ca.clearing_account_id,
+         ai.account_id,
+         ca.auto_alloc_ratio,
+         ai.total_qty                                       as qty,
+         ai.total_qty * auto_alloc_ratio                    as pre_sum,
+         floor(ai.total_qty * auto_alloc_ratio)             as rnd_sum,
+         sum(floor(ai.total_qty * auto_alloc_ratio)) over w as acc_rnd_sum,
+         row_number() over w                                as rn,
+         ca.occ_actionable_id
+  from genesis2.allocation_instruction ai
+           inner join t_clearing_account_aa ca on (ca.account_id = ai.account_id)
+  where ai.date_id = l_date_id
+    and ai.dataset_id = l_load_batch_id
+    and ai.is_deleted = 'N'
+  group by ai.date_id, ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id, ca.clearing_account_id,
+           ai.account_id, ca.auto_alloc_ratio, ca.clearing_account_number
+  window w as ( partition by ai.alloc_instr_id, ai.account_id
+          order by ca.auto_alloc_ratio, ca.clearing_account_number desc, ca.clearing_account_id );
+    GET DIAGNOSTICS l_cnt_rows = ROW_COUNT;
+  create index on t_base_aie (alloc_instr_id, auto_alloc_ratio);
+    select public.load_log(l_load_id, l_step_id, 'created temp prepared table for aie', l_cnt_rows, 'I')
+  into l_step_id;
+  create temp table t_aie on commit drop as
+  select alloc_instr_id,
+         clearing_account_id,
+         case
+             when rn != (select max(rn) from base b where b.alloc_instr_id = base.alloc_instr_id) then rnd_sum
+             else qty - coalesce(lag(base.acc_rnd_sum)
+                                 over (partition by alloc_instr_id order by auto_alloc_ratio), 0) end as alloc_qty,
+--          rn,
+--          qty as alloc_qty,
+         occ_actionable_id,
+--         l_date_id,
+         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq')          as allocation_instruction_entry_id,
+         ta.trade_ids
+  from t_base_aie base
+           join lateral (select trade_ids
+                         from trade_for_allocations ta
+                         where ta.alloc_instr_id = base.alloc_instr_id
+                         limit 1) ta on true;
