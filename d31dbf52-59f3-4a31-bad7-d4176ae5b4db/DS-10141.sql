@@ -660,10 +660,10 @@ end;
 $function$;
 
 select *
-from dash360.report_obo_compliance_xls(in_date_begin_id := 20250626, in_date_end_id := 20250626,
-                                       in_account_ids := '{74339}', in_parent_order_ids := '{100000021238170475,100000021238180133}')
+from dash360.report_obo_compliance_xls(in_date_begin_id := 20250218, in_date_end_id := 20250218,
+                                       in_account_ids := '{71827}', in_parent_order_ids := '{19158555678,19158555679,19158555680}');
 
-
+select * from dwh.client_order where client_order.client_order_id = '525490000G'
 
 select *
 from trash.report_obo_compliance_new(in_date_begin_id := 20250626, in_date_end_id := 20250626,
@@ -681,4 +681,120 @@ alter function dash360.report_obo_compliance_new rename to report_obo_compliance
 
 select array_agg(distinct account_id) from dwh.d_account
 join dwh.d_trading_firm using (trading_firm_id)
-where trading_firm_name = 'Wall St Access'
+where trading_firm_name = 'Wall St Access';
+
+
+select b.first_order_id,
+           b.order_id                                                                              as parent_order_id,
+           b.create_date_id,
+           b.instrument_type_id,
+           compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)                     as trading_session,
+           compliance.get_sor_trading_session(b.order_id, b.instrument_type_id,b.create_date_id),
+           case
+			when tag_9281 in ('A','D','G') or tag_22017 = 'A' then 'ALL'
+			when tag_9281 in ('F','C') or tag_22017 = 'B' then 'REGPOST'
+			else 'REG' end,
+
+b.instrument_type_id
+    from t_base b
+             left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
+             left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
+             left join dwh.execution ex
+                       on ex.order_id = b.order_id and ex.exec_date_id >= b.create_date_id
+                           and ex.exec_type not in ('a', 'A', 'S', '0')
+             left join lateral (select fmj.fix_message ->> '10061'          as tag_10061,
+                                       coalesce(fmj.fix_message ->> '5050',
+                                                fmj.fix_message ->> '5051') as tag_5050,
+--                                                         fmj.fix_message ->> '52'             as tag_52,
+                                       fmj.fix_message ->> '50'             as tag_50,
+                                       fmj.fix_message ->> '109'            as tag_109,
+                                       fmj.fix_message ->> '9000'           as tag_9000,
+                                       fmj.fix_message ->> '17'             as tag_17,
+                                       fmj.fix_message ->> '14'             as tag_14,
+                                       fmj.fix_message ->> '9291'           as tag_9291,
+                                       fmj.fix_message ->> '9281'           as tag_9281,
+                                       fmj.fix_message ->> '22017'          as tag_22017
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = ex.fix_message_id
+                                  and fmj.date_id >= ex.exec_date_id
+                                limit 1) fmj on true
+             left join dwh.d_order_status os on ex.order_status = os.order_status
+             join dwh.d_exec_type et on et.exec_type = ex.exec_type
+             left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
+
+
+
+  select to_char(to_timestamp(fix_message->>'9003', 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC', 'HH24:MI:SS:MS'),
+  		 to_char(to_timestamp(fix_message->>'9004', 'YYYYMMDD-HH24:MI:SS.MS')::timestamp at time zone 'UTC', 'HH24:MI:SS:MS'),
+  		 fix_message->>'22017'
+--   into :l_algo_start_time, :l_algo_end_time, l_22017
+  from fix_capture.fix_message_json fmj
+  where fmj.date_id = :in_date_id
+    and fmj.fix_message_id = 39923626070
+  limit 1
+  ;
+
+  select
+      cl.cross_order_id,
+      cl.multileg_reporting_type,
+      cl.time_in_force_id,
+      dts.target_strategy_group_id,
+  	case
+--   	    when instrument_type_id = 'O' then 'REG'
+  	    when cl.cross_order_id is not null or cl.multileg_reporting_type = '2' then 'REG'
+  		when cl.time_in_force_id = 'M' then 'ALL'
+  		when cl.time_in_force_id in ('1','2','C','7') then 'REG'
+  		when cl.time_in_force_id = '6' then 'REGPOST'
+        when to_char(coalesce(cl.process_time, cl.create_time), 'HH24:MI:SS:MS') < '09:30:00:000' then
+            case
+                when cl.time_in_force_id in ('3', '4') then 'PRE'
+                when cl.time_in_force_id in ('0', '5') and :l_algo_end_time <= '09:30:00:000' then 'PRE'
+                when cl.time_in_force_id = '0' and coalesce(:l_algo_start_time, '09:00:00:000') < '09:30:00:000' and
+                     :l_algo_end_time > '16:00:00:000' then 'ALL'
+                when cl.time_in_force_id = '5' and coalesce(:l_algo_start_time, '09:00:00:000') < '09:30:00:000' and
+                     coalesce(:l_algo_end_time, '20:00:00:000') > '16:00:00:000' then 'ALL'
+                --
+                when cl.time_in_force_id = '5'
+                         and coalesce(:l_algo_start_time, '09:00:00:000') < '09:30:00:000'
+                         and :l_algo_end_time > '09:30:00:000'
+                         and :l_algo_end_time <= '16:00:00:000' then 'PREREG'
+                when cl.time_in_force_id = '0'
+                         and coalesce(:l_algo_start_time, '09:00:00:000') < '09:30:00:000'
+                         and coalesce(:l_algo_end_time, '16:00:00:000') > '09:30:00:000'
+                         and coalesce(:l_algo_end_time, '16:00:00:000') <= '16:00:00:000'
+                         and coalesce(dts.target_strategy_group_id, 0) not in (2, 101) then 'PREREG'
+
+                when cl.time_in_force_id = '0' and coalesce(:l_algo_start_time, '09:00:00:000') < '09:30:00:000'
+                    and coalesce(:l_algo_end_time, '16:00:00:000') > '09:30:00:000' and
+                     coalesce(:l_algo_end_time, '16:00:00:000') <= '16:00:00:000'
+                    and coalesce(dts.target_strategy_group_id, 0) in (2, 101) then 'REG'
+                --
+                when cl.time_in_force_id = '5' and :l_algo_start_time >= '09:30:00:000' and
+                     :l_algo_start_time <= '16:00:00:000' and :l_algo_end_time <= '16:00:00:000' then 'REG'
+                when cl.time_in_force_id = '0' and :l_algo_start_time >= '09:30:00:000' and
+                     :l_algo_start_time <= '16:00:00:000' and
+                     coalesce(:l_algo_end_time, '16:00:00:000') <= '16:00:00:000' then 'REG'
+                --
+                when cl.time_in_force_id = '5' and :l_algo_start_time >= '09:30:00:000' and
+                     :l_algo_start_time <= '16:00:00:000' and
+                     coalesce(:l_algo_end_time, '20:00:00:000') > '16:00:00:000' then 'REGPOST'
+                when cl.time_in_force_id = '0' and :l_algo_start_time >= '09:30:00:000' and
+                     :l_algo_start_time <= '16:00:00:000' and :l_algo_end_time > '16:00:00:000' then 'REGPOST'
+                --
+                else 'REG'
+  			end
+  		when to_char(coalesce(cl.process_time,cl.create_time),'HH24:MI:SS:MS') >= '09:30:00:000' and  to_char(coalesce(cl.process_time,cl.create_time),'HH24:MI:SS:MS') < '16:00:00:000' then
+  			case
+  			 when cl.time_in_force_id  in ('3','4') then 'REG'
+  			 when cl.time_in_force_id = '5' and :l_algo_end_time <= '16:00:00:000' then 'REG'
+  			 when cl.time_in_force_id = '0' and coalesce(:l_algo_end_time,'16:00:00:000') <= '16:00:00:000' then 'REG'
+  			 when cl.time_in_force_id = '5' and coalesce(:l_algo_end_time,'20:00:00:000') > '16:00:00:000' then 'REGPOST'
+  			 when cl.time_in_force_id = '0' and :l_algo_end_time > '16:00:00:000' then 'REGPOST'
+  			 else 'REG'
+  			end
+  		when to_char(coalesce(cl.process_time,cl.create_time),'HH24:MI:SS:MS') >= '16:00:00:000' and cl.time_in_force_id in ('0','3','4','5') then 'POST'
+    end
+  from client_order cl
+  left join d_target_strategy dts  on (dts.target_strategy_name = cl.sub_strategy_desc)
+where cl.create_date_id = 20250218
+  and cl.order_id in (19158555678, 19158555679, 19158555680)
