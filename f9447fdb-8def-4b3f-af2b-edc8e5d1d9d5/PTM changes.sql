@@ -234,3 +234,26 @@ GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
 end;
 $function$
 ;
+select *
+from trash.ptm_process_trades(in_date_id := 20250731, in_user_id := -1, in_change_vector := '{
+  "2347432612": [
+    {
+      "last_qty": 6,
+      "trade_record_reason": "S"
+    },
+    {
+      "last_qty": 4,
+      "trade_record_reason": "S"
+    }
+  ],
+  "2347432613": [
+    {
+      "last_qty": 6,
+      "trade_record_reason": "S"
+    },
+    {
+      "last_qty": 4,
+      "trade_record_reason": "S"
+    }
+  ]
+}')
