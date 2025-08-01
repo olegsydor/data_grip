@@ -91,7 +91,7 @@ from (select null::genesis2.trade_record         as rw,
 -------------------
 
 -- DROP FUNCTION dash360.ptm_process_trades(int4, int4, jsonb);
-alter FUNCTION dash360.ptm_process_trades rename to ptm_process_trades_bkp;
+alter FUNCTION dash360.ptm_process_trades rename to ptm_process_trades_old;
 
 CREATE or replace FUNCTION trash.ptm_process_trades(in_date_id integer, in_user_id integer, in_change_vector jsonb)
  RETURNS bigint[]
