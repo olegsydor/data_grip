@@ -682,6 +682,46 @@ set OPT_CUSTOMER_OR_FIRM = '0'
 where OPT_CUSTOMER_OR_FIRM <> '8';
 
 
+SELECT GENESIS2_QA_20100601.get_commission_rate(
+               'SQHT', -- in_exchange_id
+               'VB1', -- in_symbol
+               'O', -- in_instrument_type
+               263201, -- in_account_id
+               1, --in_price
+               'G', -- in_trading_session_type
+               null, -- in_symbol_suffix
+               'COML' -- in_rate_type_id
+       ) AS commission_rate
+FROM dual
+
+
+    SELECT C.TOUCH_TYPE_ID
+
+    FROM GENESIS2_QA_20100601.EXCHANGE E
+             JOIN GENESIS2_QA_20100601.EX_DESTINATION D ON D.EXCHANGE_ID = E.EXCHANGE_ID
+             JOIN GENESIS2_QA_20100601.EX_DESTINATION_CODE C ON C.EX_DESTINATION_CODE = D.EX_DESTINATION_CODE
+             JOIN GENESIS2_QA_20100601.RISK_MGMT_TOUCH_TYPE T ON C.TOUCH_TYPE_ID = T.TOUCH_TYPE_ID
+    WHERE E.IS_DELETED = 'N'
+      AND E.IS_ACTIVE = 'Y'
+      AND D.IS_DELETED = 'N'
+      AND C.IS_DELETED = 'N'
+      AND E.EXCHANGE_ID = 'SQHT'
+      AND ROWNUM = 1;
+
+
+ SELECT rate, optr.RATE_TYPE_ID
+        FROM (SELECT optr.rate, optr.RATE_TYPE_ID
+              FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                       JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
+              WHERE optr.account_id = 263201
+                AND optr.touch_type_id = 'H'
+                AND optr.trading_session_type = 'G'
+                and optr.RATE_TYPE_ID = 'OML'
+                and prt.min_price < 100
+              ORDER BY prt.min_price DESC)
+        WHERE ROWNUM = 1;
+
+
 drop FUNCTION GENESIS2_QA_20100601.get_commission_rate;
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_commission_rate(
     in_exchange_id VARCHAR2,
@@ -700,8 +740,7 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_commission_rate(
     -- GET symbol_list_id
     TYPE t_symbol_list_ids IS TABLE OF GENESIS2_QA_20100601.acct_comm_opt_rate.symbol_list_id%TYPE
         INDEX BY PLS_INTEGER;
---     l_symbol_list_id_arr t_symbol_list_ids;
---     l_is_list_found      BOOLEAN := FALSE;
+
     l_symbol_list_id_cnt number;
 BEGIN
     -- 1. GET TOUCH_TYPE_ID
@@ -730,7 +769,7 @@ BEGIN
              JOIN GENESIS2_QA_20100601.account ac ON ac.trading_firm_id = tf.trading_firm_id
     WHERE sl.is_deleted = 'N'
       AND asl.symbol = in_symbol
-      and case when asl.SYMBOL_SUFFIX is null then 'no_symbol' else asl.SYMBOL_SUFFIX end = in_symbol_suffix
+      and case when in_symbol_suffix is null then asl.SYMBOL_SUFFIX else in_symbol_suffix end = asl.SYMBOL_SUFFIX
       AND sl.instrument_type_id = in_instrument_type
       AND ac.account_id = in_account_id;
 
@@ -745,6 +784,7 @@ BEGIN
               WHERE optr.account_id = in_account_id
                 AND optr.touch_type_id = l_touch_type_id
                 AND optr.trading_session_type = in_trading_session_type
+                and case when in_rate_type_id is null then optr.RATE_TYPE_ID else in_rate_type_id end = optr.RATE_TYPE_ID
                 AND case
                         when l_symbol_list_id_cnt > 0 and optr.symbol_list_id IN (SELECT optr.symbol_list_id
                                                                                   FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
@@ -760,11 +800,7 @@ BEGIN
                                                                                                 ON ac.trading_firm_id = tf.trading_firm_id
                                                                                   WHERE sl.is_deleted = 'N'
                                                                                     AND asl.symbol = in_symbol
-                                                                                    and case
-                                                                                            when in_symbol_suffix is null
-                                                                                                then 'no_symbol'
-                                                                                            else asl.SYMBOL_SUFFIX end =
-                                                                                        in_symbol_suffix
+                                                                                    and case when in_symbol_suffix is null then asl.SYMBOL_SUFFIX else in_symbol_suffix end = asl.SYMBOL_SUFFIX
                                                                                     AND sl.instrument_type_id = in_instrument_type
                                                                                     AND ac.account_id = in_account_id)
                             then 1
@@ -792,3 +828,61 @@ EXCEPTION
     WHEN OTHERS THEN
         RAISE;
 END;
+
+
+SELECT GENESIS2_QA_20100601.get_commission_rate(
+               'SQHT', -- in_exchange_id
+               'VB1', -- in_symbol
+               'O', -- in_instrument_type
+               263201, -- in_account_id
+               'G',
+               1, -- in_trading_session_type
+               null, -- in_symbol_suffix
+               'COML' -- in_rate_type_id
+       ) AS commission_rate
+FROM dual;
+SELECT GENESIS2_QA_20100601.get_commission_rate(
+               'SQHT', -- in_exchange_id
+               'VB1', -- in_symbol
+               'O', -- in_instrument_type
+               263201, -- in_account_id
+               'G',
+               1
+       ) AS commission_rate
+FROM dual;
+
+
+SELECT optr.rate
+              FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                       JOIN GENESIS2_QA_20100601.acct_comm_opt_premium_tier prt ON prt.tier_id = optr.tier_id
+              WHERE optr.account_id = 263201
+                AND optr.touch_type_id = 'H'
+                AND optr.trading_session_type = 'G'
+                and case when :in_rate_type_id is null then optr.RATE_TYPE_ID else :in_rate_type_id end = optr.RATE_TYPE_ID
+                AND case
+                        when l_symbol_list_id_cnt > 0 and optr.symbol_list_id IN (SELECT optr.symbol_list_id
+                                                                                  FROM GENESIS2_QA_20100601.acct_comm_opt_rate optr
+                                                                                           JOIN GENESIS2_QA_20100601.acct_comm_symbol_list sl
+                                                                                                ON optr.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.symbol2acct_comm_symbol_list asl
+                                                                                                ON asl.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.tf2acct_comm_symbol_list tfsl
+                                                                                                ON tfsl.symbol_list_id = sl.symbol_list_id
+                                                                                           JOIN GENESIS2_QA_20100601.trading_firm tf
+                                                                                                ON tf.trading_firm_id = tfsl.trading_firm_id
+                                                                                           JOIN GENESIS2_QA_20100601.account ac
+                                                                                                ON ac.trading_firm_id = tf.trading_firm_id
+                                                                                  WHERE sl.is_deleted = 'N'
+                                                                                    AND asl.symbol = in_symbol
+                                                                                    and case
+                                                                                            when in_symbol_suffix is null
+                                                                                                then 'no_symbol'
+                                                                                            else asl.SYMBOL_SUFFIX end =
+                                                                                        in_symbol_suffix
+                                                                                    AND sl.instrument_type_id = in_instrument_type
+                                                                                    AND ac.account_id = in_account_id)
+                            then 1
+                        when l_symbol_list_id_cnt = 0 and optr.rate_scope = 'G' then 1
+                        else 0 end = 1
+                and prt.min_price < in_price
+              ORDER BY prt.min_price DESC
