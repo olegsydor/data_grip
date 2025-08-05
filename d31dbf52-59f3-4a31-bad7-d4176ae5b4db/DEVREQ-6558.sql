@@ -1,52 +1,133 @@
 -- DROP FUNCTION dash360.dash360_report_client_commission_summary(_int8, text, int4, int4);
 
-CREATE OR REPLACE FUNCTION dash360.dash360_report_client_commission_summary(in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                            in_mode text DEFAULT 'account_id'::text,
-                                                                            in_date_id integer DEFAULT NULL::integer,
-                                                                            in_date_id_end integer DEFAULT NULL::integer)
-    RETURNS TABLE
+create or replace function dash360.report_fintech_eod_strategas_allocation(
+    in_start_date_id integer,
+    in_end_date_id integer)
+    returns table
             (
-                "Account name / Alias name" character varying,
-                "Opt Volume"                numeric,
-                "Eqt Volume"                numeric,
-                "Commission"                numeric
+                ret_row text
             )
-    LANGUAGE plpgsql
-    COST 1
-AS
-$function$
+    language plpgsql
+as
+$fx$
 declare
-    l_sql varchar;
+    l_load_id     int;
+    l_row_cnt     int;
+    l_step_id     int;
+    l_account_ids int4[];
+    l_min_date_id int4;
 begin
+    l_step_id := 0;
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_eod_strategas_allocation for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED ===', 0, 'O')
+    into l_step_id;
 
-    if in_mode not in ('account_id', 'blaze_account_alias')
-    then
-        raise 'Incorrect in_mode parameter. It should be ''account_name'' or ''blaze_account_alias''';
-    end if;
-    --   coalesce(sum(summary.client_commission), 0.00000000::numeric)
-    l_sql := 'sum(summary.traded_opt_volume), sum(summary.traded_eqt_volume), coalesce(sum(summary.client_commission), 0.00000000::numeric)
-from (
-select coalesce(aggr_field,''Not specified'') as aggr_field,client_commission,traded_eqt_volume,traded_opt_volume from dash360.widget_get_client_commission_summary($1, $2, $3, $4)
-) summary ';
+    select array_agg(account_id)
+    into l_account_ids
+    from dwh.d_account
+    where trading_firm_id = 'strategas';
 
-    if in_mode = 'account_id'
-    then
-        l_sql := 'select coalesce(da.account_name, ''Total'') as account, ' || l_sql ||
-                 'join dwh.d_account da on summary.aggr_field::integer = da.account_id group by rollup(da.account_name) having count(*)>0 order by grouping(da.account_name)';
-    elsif in_mode = 'blaze_account_alias'
-    then
-        l_sql := 'select coalesce(summary.aggr_field, ''Total'') as alias, ' || l_sql ||
-                 'group by rollup(summary.aggr_field) having count(*)>0 order by grouping(summary.aggr_field)';
-    end if;
+--     l_account_ids := '{69406,62961,69406}';
 
-    raise notice 'sql: %', l_sql;
+    select coalesce(min(create_date_id), in_start_date_id)
+    into l_min_date_id
+    from dwh.gtc_order_status
+    where close_date_id is null
+      and account_id = any (l_account_ids);
+
+
+    drop table if exists t_report;
+    create temp table t_report as
+    select tr.date_id,
+           sum(tr.last_qty)                                            as sum_last_qty,
+           sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0) as avg_px,
+           tr.open_close,
+           tr.instrument_id,
+           tr.account_id,
+           tr.side,
+           tr.cmta,
+           at.alloc_qty                                                as alloc_qty,
+           sum(tr.tcce_maker_taker_fee_amount)                         as tcce_maker_taker_fee_amount,
+           sum(tr.tcce_account_dash_commission_amount)                 as tcce_account_dash_commission_amount,
+           sum(tr.tcce_transaction_fee_amount)                         as tcce_transaction_fee_amount,
+           sum(tr.tcce_trade_processing_fee_amount)                    as tcce_trade_processing_fee_amount,
+           sum(tr.tcce_royalty_fee_amount)                             as tcce_royalty_fee_amount,
+           trader_id
+    from dwh.flat_trade_record tr
+             join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
+             left join lateral (select alloc_qty
+                                from dwh.allocation2trade_record atr
+                                where atr.trade_record_id = tr.trade_record_id
+                                  and atr.date_id = tr.date_id
+                                  and atr.is_active
+                                limit 1) at on true
+             left join lateral (select jsn.fix_message ->> '10445' as trader_id
+                                from fix_capture.fix_message_json jsn
+                                where jsn.date_id >= public.get_dateid(tr.order_process_time::date)
+                                  and jsn.fix_message_id = tr.order_fix_message_id
+                                  and jsn.date_id >= l_min_date_id
+                                limit 1) jsn on true
+    where tr.date_id between in_start_date_id and in_end_date_id
+      and is_busted = 'N'
+      and tr.order_id > 0
+      and acc.account_id = any (l_account_ids)
+    group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
+             tr.account_nickname, tr.street_account_name, at.alloc_qty, trader_id;
+
     return query
-        execute l_sql using in_account_ids, in_mode, in_date_id, in_date_id_end;
+        select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission,Maker/Taker,Transaction,Trade Processing,Royalty';
 
+    return query
+        select array_to_string(ARRAY [
+                                   to_char(ftr.date_id::text::date, 'mm/dd/yyyy') , -- as "Date",
+                                   tf.trading_firm_name , -- as "TradingFirm",
+                                   ac.account_name , -- as "AccountName",
+                                   ftr.trader_id , -- as "Alias",
+                                   case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
+                                   ftr.sum_last_qty::text , -- as "Total Quantity",
+                                   i.display_instrument_id , -- as "Symbol",
+                                   to_char(ftr.avg_px, 'FM9999990.0099') , -- as "Average Price",
+                                   i.instrument_type_id , -- as "InstrumentType",
+                                   coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text , -- as "Allocated Quantity",
+                                   ftr.cmta,
+                                   to_char(round(ftr.tcce_account_dash_commission_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999'), -- as "Commission",
+                                   to_char(round(ftr.tcce_maker_taker_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') , -- as "Maker/Taker",
+                                   to_char(round(ftr.tcce_transaction_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') , -- as "Transaction",
+                                   to_char(round(ftr.tcce_trade_processing_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999'), -- as "Trade Processing",
+                                   to_char(round(ftr.tcce_royalty_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') -- as "Royalty"
+                                   ], ',', '')
+        from t_report ftr
+                 join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
+                 join dwh.d_account ac on ac.account_id = ftr.account_id
+                 join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                 left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_eod_strategas_allocation for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' COMPLETED ===', l_row_cnt, 'O')
+    into l_step_id;
 
 end;
-$function$
+$fx$
 ;
+
+select * from dash360.report_fintech_eod_strategas_allocation(20250805, 20250805);
+
 select array_agg(account_id) from dwh.d_account
 where trading_firm_id = 'strategas'
 select dash360.widget_get_client_commission_summary('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}', 'account_id', 20250804, 20250804)
@@ -64,6 +145,7 @@ where case when $1 = '{}' then true else ft.account_id = any ($1) end
 --and blaze_account_alias is not null
   and date_id between $2 and $3
 group by ft.account_id;
+
 
 
 select * from dash360.dash360_report_client_commission_summary(in_account_ids := '{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}',
@@ -86,10 +168,10 @@ order by grouping(da.account_name);
 
 
 
-select min(create_date_id), to
+select min(create_date_id)
 from dwh.gtc_order_status
 where close_date_id is null
-and account_id = 63687
+and account_id = 69406
 
 
 
@@ -173,4 +255,59 @@ create temp table t_report as
 select * from fix_capture.fix_message_json jsn
 where date_id >= 20250501
 and jsn.fix_message ->> '10445' is not null
-limit 100
+limit 100;
+
+
+select * from dwh.flat_trade_record ftr
+where date_id = 20250501
+and order_fix_message_id in (100000042367098727,
+100000042367370428,
+100000042368177465,
+100000042368245372,
+100000042368245728,
+100000042368262625,
+100000042368262855,
+100000042368263122,
+100000042368263959,
+100000042368264267
+)
+;
+
+      select 
+                                   to_char(ftr.date_id::text::date, 'mm/dd/yyyy')  as "Date",
+                                   tf.trading_firm_name  as "TradingFirm",
+                                   ac.account_name  as "AccountName",
+                                   ftr.trader_id  as "Alias",
+                                   case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end  as "Side",
+                                   ftr.sum_last_qty::text  as "Total Quantity",
+                                   i.display_instrument_id  as "Symbol",
+                                   to_char(ftr.avg_px, 'FM9999990.0099')  as "Average Price",
+                                   i.instrument_type_id  as "InstrumentType",
+                                   coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text  as "Allocated Quantity",
+                                   ftr.cmta,
+                                   to_char(round(ftr.tcce_account_dash_commission_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') as "Commission",
+                                   to_char(round(ftr.tcce_maker_taker_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999')  as "Maker/Taker",
+                                   to_char(round(ftr.tcce_transaction_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999')  as "Transaction",
+                                   to_char(round(ftr.tcce_trade_processing_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') as "Trade Processing",
+                                   to_char(round(ftr.tcce_royalty_fee_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999') -- as "Royalty"
+
+        from t_report ftr
+                 join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
+                 join dwh.d_account ac on ac.account_id = ftr.account_id
+                 join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                 left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
+
+
+select * from dwh.flat_trade_record
+where account_id = any('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
+and date_id > 20250101
