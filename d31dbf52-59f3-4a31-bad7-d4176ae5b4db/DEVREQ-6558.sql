@@ -86,6 +86,11 @@ order by grouping(da.account_name);
 
 
 
+select min(create_date_id), to
+from dwh.gtc_order_status
+where close_date_id is null
+and account_id = 63687
+
 
 
 create temp table t_report as
@@ -93,7 +98,6 @@ create temp table t_report as
                    sum(tr.last_qty)                                            as sum_last_qty,
                    sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0) as avg_px,
                    tr.open_close,
---                   tr.order_id,
                    tr.instrument_id,
                    tr.account_id,
                    tr.side,
@@ -117,6 +121,7 @@ create temp table t_report as
                                     from fix_capture.fix_message_json jsn
                                     where jsn.date_id >= public.get_dateid(tr.order_process_time::date)
                                       and jsn.fix_message_id = tr.order_fix_message_id
+--                                     and jsn.date_id >= 20250804
                                     limit 1) jsn on true
             where tr.date_id between :in_date_begin and :in_date_end
               and is_busted = 'N'
@@ -162,3 +167,10 @@ create temp table t_report as
                  join dwh.d_account ac on ac.account_id = ftr.account_id
                  join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
                  left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
+
+
+
+select * from fix_capture.fix_message_json jsn
+where date_id >= 20250501
+and jsn.fix_message ->> '10445' is not null
+limit 100
