@@ -107,6 +107,7 @@ begin
 end;
 $fx$
 ;
+ ['datagrip', 'duplicate key', 'pgadmin 4','terminating connection','connection to client lost', 'a.attlen, a.atttypmod, a.attnotnull, c.relhasrules, c.relkind, c.oid,', 'dbeaver', 'canceling autovacuum task', 'terminating', 'questsoftware.toadsecurity', 'canceling statement due to user request','current transaction is aborted',  'chk_durability', 'relation "dual"']
 
 select replace(:account_name, '_DASH', '')
 
