@@ -29,7 +29,7 @@ begin
     into l_account_ids
     from dwh.d_account
     where trading_firm_id = 'strategas'
-    and account_name not ilike '%_DESK';
+      and account_name not ilike '%_DESK';
 
 --     l_account_ids := '{69406,62961,69406}';
 
@@ -67,12 +67,12 @@ begin
       and tr.order_id > 0
       and acc.account_id = any (l_account_ids)
     group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, --tr.cmta,
-             tr.account_nickname, tr.street_account_name, --at.alloc_qty,
+             tr.account_nickname, tr.street_account_name,                         --at.alloc_qty,
              tr.blaze_account_alias;
 
     return query
 --         select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission';
-         select 'Date,Alias,Side,Total Quantity,Symbol,Average Price,Open/Close,Commission';
+        select 'Date,Alias,Side,Total Quantity,Symbol,Average Price,Open/Close,Commission';
 
     return query
         select array_to_string(ARRAY [
@@ -83,11 +83,11 @@ begin
                                    case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
                                    ftr.sum_last_qty::text , -- as "Total Quantity",
                                    i.display_instrument_id , -- as "Symbol",
-                                   to_char(ftr.avg_px, 'FM9999990.0000') , -- as "Average Price",
-                                   ftr.open_close , -- as "Open/Close",
+                                   to_char(ftr.avg_px, 'FM$9999990.0000') , -- as "Average Price",
+                                   case when ftr.open_close = 'O' then 'Open' when ftr.open_close = 'C' then 'Close' end, -- as "Open/Close",
 --                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text , -- as "Allocated Quantity",
 --                                    ftr.cmta,
-                                   to_char(round(client_commission, 2), 'FM9999990.00') -- as "Commission"
+                                   to_char(round(client_commission, 2), 'FM$9999990.00') -- as "Commission"
                                    ], ',', '')
         from t_report ftr
                  join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
@@ -322,10 +322,10 @@ and date_id > 20250101
 ---
 
 select
-           sum(tr.last_qty)                                            as sum_last_qty,
+           tr.last_qty                                            as sum_last_qty,
            tr.account_id,
-           sum(tr.client_commission_rate * tr.last_qty)                as client_commission
-
+           tr.client_commission_rate * tr.last_qty                as client_commission,
+tr.open_close
     from dwh.flat_trade_record tr
              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
              left join lateral (select alloc_qty
@@ -334,12 +334,6 @@ select
                                   and atr.date_id = tr.date_id
                                   and atr.is_active
                                 limit 1) at on true
-             left join lateral (select jsn.fix_message ->> '10445' as trader_id
-                                from fix_capture.fix_message_json jsn
-                                where jsn.date_id >= public.get_dateid(tr.order_process_time::date)
-                                  and jsn.fix_message_id = tr.order_fix_message_id
-                                  and jsn.date_id >= :l_min_date_id
-                                limit 1) jsn on true
     where tr.date_id between :in_start_date_id and :in_end_date_id
       and is_busted = 'N'
       and tr.order_id > 0
@@ -349,8 +343,12 @@ select
         tr.date_id, tr.open_close, tr.instrument_id, tr.side, tr.cmta,
              tr.account_nickname, tr.street_account_name, at.alloc_qty, trader_id;
 
+select order_id, * from dwh.flat_trade_record
+where date_id = 20250806
+and open_close is null
 
-
+select * from dwh.client_order
+where order_id = 100000021908356405
 
 select ft.account_id::varchar                                                          as aggr_field,
        sum(ft.client_commission_rate * ft.last_qty)                                    as client_commission,
