@@ -51,7 +51,7 @@ begin
            tr.cmta,
            at.alloc_qty                                                as alloc_qty,
            sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
-           trader_id
+           tr.blaze_account_alias
     from dwh.flat_trade_record tr
              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
              left join lateral (select alloc_qty
@@ -60,18 +60,13 @@ begin
                                   and atr.date_id = tr.date_id
                                   and atr.is_active
                                 limit 1) at on true
-             left join lateral (select jsn.fix_message ->> '10445' as trader_id
-                                from fix_capture.fix_message_json jsn
-                                where jsn.date_id >= public.get_dateid(tr.order_process_time::date)
-                                  and jsn.fix_message_id = tr.order_fix_message_id
-                                  and jsn.date_id >= l_min_date_id
-                                limit 1) jsn on true
+
     where tr.date_id between in_start_date_id and in_end_date_id
       and is_busted = 'N'
       and tr.order_id > 0
       and acc.account_id = any (l_account_ids)
     group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
-             tr.account_nickname, tr.street_account_name, at.alloc_qty, trader_id;
+             tr.account_nickname, tr.street_account_name, at.alloc_qty, tr.blaze_account_alias;
 
     return query
         select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission';
@@ -81,7 +76,7 @@ begin
                                    to_char(ftr.date_id::text::date, 'mm/dd/yyyy') , -- as "Date",
                                    tf.trading_firm_name , -- as "TradingFirm",
                                    replace(ac.account_name, '_DESK', ''),  -- as "AccountName",
-                                   ftr.trader_id , -- as "Alias",
+                                   ftr.blaze_account_alias , -- as "Alias",
                                    case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
                                    ftr.sum_last_qty::text , -- as "Total Quantity",
                                    i.display_instrument_id , -- as "Symbol",
@@ -107,7 +102,6 @@ begin
 end;
 $fx$
 ;
- ['datagrip', 'duplicate key', 'pgadmin 4','terminating connection','connection to client lost', 'a.attlen, a.atttypmod, a.attnotnull, c.relhasrules, c.relkind, c.oid,', 'dbeaver', 'canceling autovacuum task', 'terminating', 'questsoftware.toadsecurity', 'canceling statement due to user request','current transaction is aborted',  'chk_durability', 'relation "dual"']
 
 select replace(:account_name, '_DASH', '')
 
@@ -369,3 +363,21 @@ group by ft.account_id;
 select * from dwh.d_account ac
          join dwh.d_trading_firm tf using (trading_firm_id)
 where ac.account_id = 74177--any ('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
+
+
+with upd_busted as (update genesis2.trade_record tr
+    set is_busted = case tr.is_busted when 'Y' then tr.is_busted else trml.is_busted end ,
+        load_batch_id = trml.load_batch_id::int,
+        blaze_account_alias = coalesce(trml.blaze_account_alias, tr.blaze_account_alias)
+    from staging.trade_record_blaze7 trml
+    where tr.trade_record_id = trml.trade_record_id
+        and tr.date_id = trml.date_id
+        and tr.date_id between in_start_date and in_end_date
+        --				and tr.is_busted = 'N'
+        --				and (trml.is_busted = 'Y' or trml.blaze_account_alias is not null)
+        and ((tr.is_busted = 'N' and trml.is_busted is not null)
+            or (trml.blaze_account_alias is not null and tr.blaze_account_alias is null and tr.is_busted = 'N')
+              )
+        and trml.load_batch_id = in_load_batch_id
+        and mapping_logic <> 99
+    returning tr.trade_record_id as trade_record_id, tr.date_id as date_id, tr.is_busted as is_busted,tr.blaze_account_alias as blaze_account_alias)
