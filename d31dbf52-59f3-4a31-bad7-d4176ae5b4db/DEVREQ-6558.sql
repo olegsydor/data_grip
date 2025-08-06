@@ -365,19 +365,3 @@ select * from dwh.d_account ac
 where ac.account_id = 74177--any ('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
 
 
-with upd_busted as (update genesis2.trade_record tr
-    set is_busted = case tr.is_busted when 'Y' then tr.is_busted else trml.is_busted end ,
-        load_batch_id = trml.load_batch_id::int,
-        blaze_account_alias = coalesce(trml.blaze_account_alias, tr.blaze_account_alias)
-    from staging.trade_record_blaze7 trml
-    where tr.trade_record_id = trml.trade_record_id
-        and tr.date_id = trml.date_id
-        and tr.date_id between in_start_date and in_end_date
-        --				and tr.is_busted = 'N'
-        --				and (trml.is_busted = 'Y' or trml.blaze_account_alias is not null)
-        and ((tr.is_busted = 'N' and trml.is_busted is not null)
-            or (trml.blaze_account_alias is not null and tr.blaze_account_alias is null and tr.is_busted = 'N')
-              )
-        and trml.load_batch_id = in_load_batch_id
-        and mapping_logic <> 99
-    returning tr.trade_record_id as trade_record_id, tr.date_id as date_id, tr.is_busted as is_busted,tr.blaze_account_alias as blaze_account_alias)
