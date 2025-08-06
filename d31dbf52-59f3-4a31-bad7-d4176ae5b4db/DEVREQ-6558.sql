@@ -50,11 +50,7 @@ begin
            tr.side,
            tr.cmta,
            at.alloc_qty                                                as alloc_qty,
-           sum(tr.tcce_maker_taker_fee_amount)                         as tcce_maker_taker_fee_amount,
-           sum(tr.tcce_account_dash_commission_amount)                 as tcce_account_dash_commission_amount,
-           sum(tr.tcce_transaction_fee_amount)                         as tcce_transaction_fee_amount,
-           sum(tr.tcce_trade_processing_fee_amount)                    as tcce_trade_processing_fee_amount,
-           sum(tr.tcce_royalty_fee_amount)                             as tcce_royalty_fee_amount,
+           sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
            trader_id
     from dwh.flat_trade_record tr
              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
@@ -78,13 +74,13 @@ begin
              tr.account_nickname, tr.street_account_name, at.alloc_qty, trader_id;
 
     return query
-        select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission,Maker/Taker,Transaction,Trade Processing,Royalty';
+        select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission';
 
     return query
         select array_to_string(ARRAY [
                                    to_char(ftr.date_id::text::date, 'mm/dd/yyyy') , -- as "Date",
                                    tf.trading_firm_name , -- as "TradingFirm",
-                                   ac.account_name , -- as "AccountName",
+                                   replace(ac.account_name, '_DESK', ''),  -- as "AccountName",
                                    ftr.trader_id , -- as "Alias",
                                    case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
                                    ftr.sum_last_qty::text , -- as "Total Quantity",
@@ -93,21 +89,7 @@ begin
                                    i.instrument_type_id , -- as "InstrumentType",
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text , -- as "Allocated Quantity",
                                    ftr.cmta,
-                                   to_char(round(ftr.tcce_account_dash_commission_amount / ftr.sum_last_qty *
-                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
-                                           'FM9999990.009999'), -- as "Commission",
-                                   to_char(round(ftr.tcce_maker_taker_fee_amount / ftr.sum_last_qty *
-                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
-                                           'FM9999990.009999') , -- as "Maker/Taker",
-                                   to_char(round(ftr.tcce_transaction_fee_amount / ftr.sum_last_qty *
-                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
-                                           'FM9999990.009999') , -- as "Transaction",
-                                   to_char(round(ftr.tcce_trade_processing_fee_amount / ftr.sum_last_qty *
-                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
-                                           'FM9999990.009999'), -- as "Trade Processing",
-                                   to_char(round(ftr.tcce_royalty_fee_amount / ftr.sum_last_qty *
-                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
-                                           'FM9999990.009999') -- as "Royalty"
+                                   to_char(round(client_commission, 6), 'FM9999990.009999') -- as "Commission"
                                    ], ',', '')
         from t_report ftr
                  join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
@@ -126,8 +108,11 @@ end;
 $fx$
 ;
 
-select * from dash360.report_fintech_eod_strategas_allocation(20250805, 20250805);
+select replace(:account_name, '_DASH', '')
 
+select *
+from dash360.report_fintech_eod_strategas_allocation(20250805, 20250805);
+select 1876+938
 select array_agg(account_id) from dwh.d_account
 where trading_firm_id = 'strategas'
 select dash360.widget_get_client_commission_summary('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}', 'account_id', 20250804, 20250804)
@@ -139,11 +124,11 @@ select ft.account_id::varchar                                                   
        sum(case when ft.instrument_type_id = 'E' then ft.last_qty else 0 end)::numeric as traded_eqt_volume,
        sum(case when ft.instrument_type_id = 'O' then ft.last_qty else 0 end)::numeric as traded_opt_volume
 from dwh.flat_trade_record ft
-         inner join data_marts.d_account acc on ft.account_id = acc.account_id
-where case when $1 = '{}' then true else ft.account_id = any ($1) end
+--          inner join data_marts.d_account acc on ft.account_id = acc.account_id
+where ft.account_id = any ('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
   and ft.is_busted = 'N'
 --and blaze_account_alias is not null
-  and date_id between $2 and $3
+  and date_id between 20250805 and 20250805
 group by ft.account_id;
 
 
@@ -185,11 +170,7 @@ create temp table t_report as
                    tr.side,
                    tr.cmta,
                    at.alloc_qty                                                as alloc_qty,
-                   sum(tr.tcce_maker_taker_fee_amount)                         as tcce_maker_taker_fee_amount,
-                   sum(tr.tcce_account_dash_commission_amount)                 as tcce_account_dash_commission_amount,
-                   sum(tr.tcce_transaction_fee_amount)                         as tcce_transaction_fee_amount,
-                   sum(tr.tcce_trade_processing_fee_amount)                    as tcce_trade_processing_fee_amount,
-                   sum(tr.tcce_royalty_fee_amount)                             as tcce_royalty_fee_amount,
+                   sum(tr.client_commission_rate)                              as client_commission_rate_amount,
                    trader_id
             from dwh.flat_trade_record tr
                      join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
@@ -273,6 +254,32 @@ and order_fix_message_id in (100000042367098727,
 )
 ;
 
+       select
+                                   to_char(ftr.date_id::text::date, 'mm/dd/yyyy') , -- as "Date",
+                                   tf.trading_firm_name , -- as "TradingFirm",
+                                   ac.account_name , -- as "AccountName",
+                                   ftr.trader_id , -- as "Alias",
+                                   case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
+                                   ftr.sum_last_qty::text , -- as "Total Quantity",
+                                   i.display_instrument_id , -- as "Symbol",
+                                   to_char(ftr.avg_px, 'FM9999990.0099') , -- as "Average Price",
+                                   i.instrument_type_id , -- as "InstrumentType",
+                                   coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text , -- as "Allocated Quantity",
+                                   ftr.cmta,
+                                   to_char(round(ftr.client_commission_rate_amount / ftr.sum_last_qty *
+                                                 coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6),
+                                           'FM9999990.009999'),
+                                   ftr.client_commission_rate_amount * ftr.sum_last_qty -- as "Commission"
+select ftr.client_commission_rate_amount * ftr.sum_last_qty, *
+
+        from t_report ftr
+                 join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
+                 join dwh.d_account ac on ac.account_id = ftr.account_id
+                 join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                 left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
+
+
+
       select 
                                    to_char(ftr.date_id::text::date, 'mm/dd/yyyy')  as "Date",
                                    tf.trading_firm_name  as "TradingFirm",
@@ -311,3 +318,53 @@ and order_fix_message_id in (100000042367098727,
 select * from dwh.flat_trade_record
 where account_id = any('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
 and date_id > 20250101
+
+---
+
+select
+           sum(tr.last_qty)                                            as sum_last_qty,
+           tr.account_id,
+           sum(tr.client_commission_rate * tr.last_qty)                as client_commission
+
+    from dwh.flat_trade_record tr
+             join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
+             left join lateral (select alloc_qty
+                                from dwh.allocation2trade_record atr
+                                where atr.trade_record_id = tr.trade_record_id
+                                  and atr.date_id = tr.date_id
+                                  and atr.is_active
+                                limit 1) at on true
+             left join lateral (select jsn.fix_message ->> '10445' as trader_id
+                                from fix_capture.fix_message_json jsn
+                                where jsn.date_id >= public.get_dateid(tr.order_process_time::date)
+                                  and jsn.fix_message_id = tr.order_fix_message_id
+                                  and jsn.date_id >= :l_min_date_id
+                                limit 1) jsn on true
+    where tr.date_id between :in_start_date_id and :in_end_date_id
+      and is_busted = 'N'
+      and tr.order_id > 0
+      and acc.account_id = any (:l_account_ids)
+--     AND ACC.ACCOUNT_ID = 74177
+    group by tr.account_id,
+        tr.date_id, tr.open_close, tr.instrument_id, tr.side, tr.cmta,
+             tr.account_nickname, tr.street_account_name, at.alloc_qty, trader_id;
+
+
+
+
+select ft.account_id::varchar                                                          as aggr_field,
+       sum(ft.client_commission_rate * ft.last_qty)                                    as client_commission,
+       sum(case when ft.instrument_type_id = 'E' then ft.last_qty else 0 end)::numeric as traded_eqt_volume,
+       sum(case when ft.instrument_type_id = 'O' then ft.last_qty else 0 end)::numeric as traded_opt_volume
+from dwh.flat_trade_record ft
+--          inner join data_marts.d_account acc on ft.account_id = acc.account_id
+-- where ft.account_id = any ('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
+    WHERE ACCOUNT_ID = 74177
+  and ft.is_busted = 'N'
+--and blaze_account_alias is not null
+  and date_id between 20250805 and 20250805
+group by ft.account_id;
+
+select * from dwh.d_account ac
+         join dwh.d_trading_firm tf using (trading_firm_id)
+where ac.account_id = 74177--any ('{73994,74109,74108,74139,74170,74172,74174,74177,74188,74198,74199,74285,74396,74397,74398,74399,74130,74863,74999,75091,75112,75113,75114,74176,74998,75287,74169,75298,75255,75370,75371,75372,75381,75382}')
