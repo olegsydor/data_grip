@@ -1,8 +1,14 @@
 select * from dwh.d_account
 where account_name ilike '%socgen%'
 select * from dwh.d_trading_firm
-    where trading_firm_id ilike '%socgen%';
+    where trading_firm_id ilike '%socgen%'
+and trading_firm_unq_id != all('{4119, 4120,368281}')
 
+    SELECT *
+    FROM dwh.d_fix_connection AS fc
+WHERE fix_comp_id ilike '%blaze%'
+and is_active
+    and acceptor_id = 'BLAZELB';
 
 /*
  We need to create a custom OBO file for Soc Gen.
@@ -15,12 +21,9 @@ We should create it in UAT first, then in prod.
 UAT and PROD DASHOMS compIDs listed in comments.
 
  */
-select * from dwh.d_account
-where account_name ilike '%socgen%'
-select * from dwh.d_trading_firm
-    where trading_firm_id ilike '%socgen%'
+select * from dash360.report_obo_compliance_sg(20250806, 20250806);
 
-DROP FUNCTION if exists dash360.report_obo_compliance_sg(int4, int4, bpchar, _int4, _int8, _varchar);
+DROP FUNCTION if exists dash360.report_obo_compliance_sg;
 
 CREATE FUNCTION dash360.report_obo_compliance_sg(in_date_begin_id integer, in_date_end_id integer)
     RETURNS TABLE
@@ -88,7 +91,8 @@ CREATE FUNCTION dash360.report_obo_compliance_sg(in_date_begin_id integer, in_da
                 "CAT Reporting Firm IMID"   character varying
             )
     LANGUAGE plpgsql
-AS $function$
+AS
+$function$
     -- 2025-0807 https://dashfinancial.atlassian.net/browse/DEVREQ-6585
 declare
     l_load_id           int;
@@ -97,6 +101,7 @@ declare
     l_date_begin_id     int4;
     l_date_end_id       int4;
     l_account_ids       int4[];
+    l_fix_connection_id int2[];
     l_retention_date_id int4;
     l_row_count         int4;
 begin
@@ -114,11 +119,18 @@ begin
 
 
     select array_agg(account_id)
-        into l_account_ids
+    into l_account_ids
     from dwh.d_account
     where true
       and trading_firm_id in ('socgenps', 'socgeneqd')
-    and is_active;
+      and is_active;
+
+    SELECT array_agg(fc.fix_connection_id)
+    into l_fix_connection_id
+    FROM dwh.d_fix_connection AS fc
+    WHERE fix_comp_id ilike '%blaze%'
+      and is_active
+      and acceptor_id = 'BLAZELB';
 
 
     select min(cl.create_date_id)
@@ -224,21 +236,23 @@ begin
                when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
                when (cl.exec_instruction like '5%' or tag_9291 = 'Y') then 'H'
                end                                                     as is_held,
-            tag_9281,
-            tag_22017
+           tag_9281,
+           tag_22017
+    , fmj.tag_21
+    , cl.fix_connection_id
     from dwh.client_order cl
-             left join lateral (select * from dwh.client_order orig
-                       where orig.order_id = cl.orig_order_id and
-                          orig.create_date_id <= cl.create_date_id
-                           and orig.create_date_id >= l_retention_date_id limit 1) orig on true
-             left join dwh.client_order mleg
-                       on (mleg.order_id = cl.multileg_order_id
---                         and mleg.create_date_id >= cl.create_date_id
-                           and mleg.create_date_id >= l_retention_date_id)
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-
+             left join lateral (select *
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and orig.create_date_id <= cl.create_date_id
+                                  and orig.create_date_id >= :l_retention_date_id
+                                limit 1) orig on true
+             left join dwh.client_order mleg
+                       on (mleg.order_id = cl.multileg_order_id
+                           and mleg.create_date_id >= :l_retention_date_id)
              left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
              left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
              left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
@@ -247,33 +261,31 @@ begin
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
              left join dwh.d_fix_connection fc
                        on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
-             left join lateral (select fmj.fix_message ->> '5050'         as tag_5050,
-                                       fmj.fix_message ->> '50'           as tag_50,
-                                       fmj.fix_message ->> '109'          as tag_109,
-                                       fmj.fix_message ->> '9000'         as tag_9000,
-                                       fmj.fix_message ->> '58'           as tag_58,
-                                       fmj.fix_message ->> '17'           as tag_17,
-                                       fmj.fix_message ->> '52'           as tag_52,
-                                       fmj.fix_message ->> '9291'         as tag_9291,
-                                       fmj.fix_message ->> '9281'         as tag_9281,
-                                       fmj.fix_message ->> '22017'        as tag_22017
+             left join lateral (select fmj.fix_message ->> '5050'  as tag_5050,
+                                       fmj.fix_message ->> '50'    as tag_50,
+                                       fmj.fix_message ->> '109'   as tag_109,
+                                       fmj.fix_message ->> '9000'  as tag_9000,
+                                       fmj.fix_message ->> '58'    as tag_58,
+                                       fmj.fix_message ->> '17'    as tag_17,
+                                       fmj.fix_message ->> '52'    as tag_52,
+                                       fmj.fix_message ->> '9291'  as tag_9291,
+                                       fmj.fix_message ->> '9281'  as tag_9281,
+                                       fmj.fix_message ->> '22017' as tag_22017,
+                                       fmj.fix_message ->> '21'    as tag_21
                                 from fix_capture.fix_message_json fmj
                                 where cl.fix_message_id = fmj.fix_message_id
                                   and fmj.date_id >= cl.create_date_id
                                 limit 1) fmj on true
     where cl.parent_order_id is null
-      and cl.create_date_id between l_date_begin_id and l_date_end_id
-      and case
-              when coalesce(l_account_ids, '{}') = '{}' then true
-              else cl.account_id = any (l_account_ids) end
-      and case
-              when coalesce(in_parent_order_ids, '{}') = '{}' then true
-              else cl.order_id = any (in_parent_order_ids) end
-      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and cl.trans_type <> 'F';
+      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
+--       and fmj.tag_21 = '1'
+      and cl.account_id = any (:l_account_ids)
+      and cl.trans_type <> 'F'
+      and coalesce(cl.fix_connection_id, '-1') != all (l_fix_connection_id);
+
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
-                           'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text || ' - ' ||
+                           'dash360.report_obo_compliance_sg for ' || l_date_begin_id::text || ' - ' ||
                            l_date_end_id::text ||
                            ' base calculated', l_row_count, 'O')
     into l_step_id;
@@ -302,7 +314,7 @@ begin
                else
                    to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'
                end                                                                                 as event_ts,
-           b.client_order_id::text                                                                       as street_client_order_id,
+           b.client_order_id::text                                                                 as street_client_order_id,
            b.order_qty                                                                             as event_qty,
            b.price                                                                                 as event_price,
 --        null::numeric                                                                           as net_price,
@@ -335,9 +347,9 @@ begin
            ex.exec_time                                                                            as order_creation_ts,
            b.open_close,
            case
-			when fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A' then 'ALL'
-			when fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B' then 'REGPOST'
-			else 'REG'                                                                             end as trading_session,
+               when fmj.tag_9281 in ('A', 'D', 'G') or fmj.tag_22017 = 'A' then 'ALL'
+               when fmj.tag_9281 in ('F', 'C') or fmj.tag_22017 = 'B' then 'REGPOST'
+               else 'REG' end                                                                      as trading_session,
            b.is_held                                                                               as is_held,
            case
                when b.cross_order_id is not null then 'Y'
@@ -374,13 +386,9 @@ begin
              left join lateral (select fmj.fix_message ->> '10061'          as tag_10061,
                                        coalesce(fmj.fix_message ->> '5050',
                                                 fmj.fix_message ->> '5051') as tag_5050,
---                                                         fmj.fix_message ->> '52'             as tag_52,
                                        fmj.fix_message ->> '50'             as tag_50,
                                        fmj.fix_message ->> '109'            as tag_109,
---                                       fmj.fix_message ->> '9000'           as tag_9000,
                                        fmj.fix_message ->> '17'             as tag_17,
---                                       fmj.fix_message ->> '14'             as tag_14,
---                                       fmj.fix_message ->> '9291'           as tag_9291,
                                        fmj.fix_message ->> '9281'           as tag_9281,
                                        fmj.fix_message ->> '22017'          as tag_22017
                                 from fix_capture.fix_message_json fmj
@@ -391,8 +399,9 @@ begin
              join dwh.d_exec_type et on et.exec_type = ex.exec_type
              left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
     get diagnostics l_row_cnt = row_count;
+
     select public.load_log(l_load_id, l_step_id,
-                           'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text || ' - ' ||
+                           'dash360.report_obo_compliance_sg for ' || l_date_begin_id::text || ' - ' ||
                            l_date_end_id::text ||
                            ' executions calculated', l_row_count, 'O')
     into l_step_id;
@@ -404,47 +413,35 @@ begin
                                    ('G', 'Order Modify', 1),
                                    ('G', 'Order Modify Route', 2))
                                as t(trans_type, order_type_value, rn))
-    select b.first_order_id                                                    as first_order_id,
-           b.order_id                                                          as parent_order_id,
+    select b.first_order_id                                       as first_order_id,
+           b.order_id                                             as parent_order_id,
            b.orig_client_order_id,
            ot.rn,
-           b.client_order_id                                                   as client_order_id,
-           b.exec_id                                                           as exec_id,
---        case
---            when ot.order_type_value = 'New Order'
---                then b.trading_firm_name end                                as trading_firm_name,
-           b.trading_firm_name                                                 as trading_firm_name,
---        case
---            when ot.order_type_value = 'New Order'
---                then b.tf_cat_imid end                                      as tf_cat_imid,
-           b.tf_cat_imid                                                       as tf_cat_imid,
---        case
---            when ot.order_type_value = 'New Order'
---                then b.tf_cat_crd end                                       as tf_cat_crd,
-           b.tf_cat_crd                                                        as tf_cat_crd,
-           ot.order_type_value                                                 as event_type,
+           b.client_order_id                                      as client_order_id,
+           b.exec_id                                              as exec_id,
+           b.trading_firm_name                                    as trading_firm_name,
+           b.tf_cat_imid                                          as tf_cat_imid,
+           b.tf_cat_crd                                           as tf_cat_crd,
+           ot.order_type_value                                    as event_type,
            case
                when ot.order_type_value = 'Cancelled' then b.create_time
-               else coalesce(b.par_tag_5050, b.par_tag_10061) end              as event_ts,
-       case
-           when ot.trans_type = 'G' and rn = 1 then null
-           else b.client_order_id end                                      as street_client_order_id,
+               else coalesce(b.par_tag_5050, b.par_tag_10061) end as event_ts,
+           case
+               when ot.trans_type = 'G' and rn = 1 then null
+               else b.client_order_id end                         as street_client_order_id,
 --            b.street_clorderid::text                                            as street_client_order_id,
-           b.order_qty                                                         as event_qty,
-           b.price                                                             as event_price,
-           b.net_price                                                         as net_price,
-           b.multileg_reporting_type                                           as multileg_indicator,
+           b.order_qty                                            as event_qty,
+           b.price                                                as event_price,
+           b.net_price                                            as net_price,
+           b.multileg_reporting_type                              as multileg_indicator,
            b.no_legs::int4,
 --                            b.multileg_order_id,
-           b.leg_cl_ord_id                                                     as multileg_order_id,
+           b.leg_cl_ord_id                                        as multileg_order_id,
            case
                when ot.rn = 1 then 'true'
-               else 'false' end                                                as manual_flag,
---        case
---            when ot.order_type_value != 'New Order'
---                then b.exec_text end                                        as exec_text,
-           b.exec_text                                                         as exec_text,
-           os.order_status_description,-- et.exec_type_description, ex.order_status,
+               else 'false' end                                   as manual_flag,
+           b.exec_text                                            as exec_text,
+           os.order_status_description,
            b.opra_symbol,
            b.root_symbol,
            b.symbol,
@@ -454,41 +451,37 @@ begin
                                                      from t_base
                                                      where t_base.multileg_order_id = b.order_id
                                                      limit 1)
-               else b.underlying_symbol end                                    as underlying_symbol,
+               else b.underlying_symbol end                       as underlying_symbol,
            b.pcv,
---                             case
---                                 when ot.order_type_value != 'New Order'
---                                     then b.last_trade_date end                                  as expiration_ts,
-           b.last_trade_date                                                   as expiration_ts,
+
+           b.last_trade_date                                      as expiration_ts,
            b.side,
            b.tif,
-           b.expire_time                                                       as good_till_ts,
---        case
---            when ot.order_type_value != 'New Order'
---                then ex.cum_qty::text end                                   as cum_qty,
-           ex.cum_qty                                                          as cum_qty,
+           b.expire_time                                          as good_till_ts,
+
+           ex.cum_qty                                             as cum_qty,
            b.order_type_name,
-           b.process_time                                                        as order_creation_ts,
+           b.process_time                                         as order_creation_ts,
            b.open_close,
            case
-			when b.tag_9281 in ('A','D','G') or b.tag_22017 = 'A' then 'ALL'
-			when b.tag_9281 in ('F','C') or b.tag_22017 = 'B' then 'REGPOST'
-			else 'REG'                                                                             end as trading_session,
+               when b.tag_9281 in ('A', 'D', 'G') or b.tag_22017 = 'A' then 'ALL'
+               when b.tag_9281 in ('F', 'C') or b.tag_22017 = 'B' then 'REGPOST'
+               else 'REG' end                                     as trading_session,
 
-           b.is_held                                                           as is_held,
+           b.is_held                                              as is_held,
            case
                when b.cross_order_id is not null then 'Y'
-               else 'N' end                                                    as is_cross,
+               else 'N' end                                       as is_cross,
            b.fee_sensitivity,
            b.stop_price,
            b.max_floor,
            b.customer_or_firm_name,
 
-           b.ex_destination                                                    as ex_destination,
+           b.ex_destination                                       as ex_destination,
            b.ratio_qty,
-           coalesce(b.par_tag_50, b.par_tag_109, b.account_name)               as user_,
-           b.account_name                                                      as account_name,
-           b.account_id                                                        as account_id,
+           coalesce(b.par_tag_50, b.par_tag_109, b.account_name)  as user_,
+           b.account_name                                         as account_name,
+           b.account_id                                           as account_id,
            b.account_holder_type,
            b.ac_fdid,
            b.ac_imid,
@@ -497,19 +490,19 @@ begin
 
            -- Execution Details
 
-           ex.last_mkt                                                         as last_mkt,
+           ex.last_mkt                                            as last_mkt,
 
-           exc.mic_code                                                        as mic_code,
+           exc.mic_code                                           as mic_code,
 
-           ex.trade_liquidity_indicator                                        as trade_liquidity_indicator,
-           null::timestamp                                                     as trade_exec_time,
+           ex.trade_liquidity_indicator                           as trade_liquidity_indicator,
+           null::timestamp                                        as trade_exec_time,
            et.exec_type,
            case
                when ot.order_type_value = 'New Order'
-                   then b.cat_imid end                                         as cat_imid,
+                   then b.cat_imid end                            as cat_imid,
            case
                when ot.order_type_value = 'New Order'
-                   then b.crd_number end                                       as cat_crd
+                   then b.crd_number end                          as cat_crd
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -533,14 +526,12 @@ begin
              left join dwh.d_exec_type et on et.exec_type = ex.exec_type
              left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
     get diagnostics l_row_cnt = row_count;
+
     select public.load_log(l_load_id, l_step_id,
                            'dash360.report_obo_compliance_sg for ' || l_date_begin_id::text || ' - ' ||
                            l_date_end_id::text ||
                            ' parents calculated', l_row_count, 'O')
     into l_step_id;
-
-    -- return query
--- select 'OrderID|exec_id|Trading Firm Name|Event Type|Event Date|Event Time|Orig clOrderID|Street clOrderID|Event Qty|Event Price|Executed Timestamp|Multi Leg Indicator|Number of legs|Leg Order ID|Free Text|Order Status|OSI Symbol|Base symbol|Symbol|Security Type|Underlying Symbol|P/C/V|Expiration Date|Side|TIF|Good Till Date|Good Till Time|Order Qty|Filled Qty|Order Type Code|Order Price|Order Creation Date|Order Creation Time|Open/Close|Trading Session|Is Held|Is Cross|Stop Price|Max Floor|Capacity|ExDestination|Leg ratio|User|Account Name|Account ID|Last Mkt|MIC Code|Liquidity Indicator';
 
     return query
         select parent_order_id                                               as "OrderID",
@@ -605,7 +596,7 @@ begin
                is_cross                                                      as "Is Cross",
                fee_sensitivity                                               as "Fee Sensitivity",
                stop_price                                                    as "Stop Price",
-               max_floor                                               as "Max Floor",
+               max_floor                                                     as "Max Floor",
                customer_or_firm_name                                         as "Capacity",
                ex_destination                                                as "ExDestination",
                ratio_qty                                                     as "Leg ratio",
@@ -616,7 +607,7 @@ begin
                account_id                                                    as "Account ID",
                account_holder_type                                           as "Account Holder Type",
                ac_fdid                                                       as "Account FDID",
-               ac_imid::text                                                       as "Account IMID",
+               ac_imid::text                                                 as "Account IMID",
                ac_number                                                     as "Account CRD",
                sender_sub_id                                                 as "Sender Type",
 
@@ -627,7 +618,6 @@ begin
                exec_id                                                       as "ExecutionID",
                ac_imid                                                       as "CAT Reporting Firm IMID"
         from (select *
--- into trash.so_obo
               from t_exs
               where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
               order by 1, 2 nulls first, 3, rn, event_ts) x;
