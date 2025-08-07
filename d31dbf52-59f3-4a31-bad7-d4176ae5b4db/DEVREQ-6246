@@ -78,3 +78,45 @@ begin
 end;
 $function$
 ;
+
+
+before 2025-07-14
+case
+   when rep.exec_instruction like '1%' then 'NH' --client_order.exec_instruction
+   when rep.exec_instruction like '5%' then 'H'
+end                                                                 -- as "Is Held",
+
+after 2025-07-14
+case
+   when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
+   when cl.exec_instruction like '5%' then 'H'
+   else 'NH'
+   end as is_held
+
+
+
+trading session
+since 2025-05-01
+ompliance.get_eq_sor_trading_session(in_order_id := rep.order_id,
+                                                     in_date_id := rep.create_date_id), -- as "Trading Session",
+
+since 2025-06-06
+    case
+        when di.instrument_type_id = 'E' then compliance.get_eq_sor_trading_session(in_order_id := cl.order_id,
+                                                     in_date_id := cl.create_date_id)
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A') then 'ALL'
+			when di.instrument_type_id = 'O' and (fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B') then 'REGPOST'
+			else 'REG'
+end as trading_session
+
+
+since 2025-07-14
+compliance.get_eq_sor_trading_session(b.order_id, b.create_date_id)                     as trading_session,
+
+
+since 2025-08-01
+case
+			when fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A' then 'ALL'
+			when fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B' then 'REGPOST'
+			else 'REG'
+end as trading_session,
