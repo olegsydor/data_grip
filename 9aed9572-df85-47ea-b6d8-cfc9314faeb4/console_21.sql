@@ -27,4 +27,6 @@ from (with chained_orders as (select distinct chain_order_id, cl_ord_id
                           on orp.order_id = co.order_id and orp.chain_id = co.chain_id and
                              orp.multileg_reporting_type in ('1', '2')
                left join blaze7.blaze7.market_data_report mdr on mdr.exec_id = orp.exec_id) s
-order by record_type, order_id
+order by record_type, order_id;
+
+
