@@ -248,11 +248,11 @@ begin
                                 from dwh.client_order orig
                                 where orig.order_id = cl.orig_order_id
                                   and orig.create_date_id <= cl.create_date_id
-                                  and orig.create_date_id >= :l_retention_date_id
+                                  and orig.create_date_id >= l_retention_date_id
                                 limit 1) orig on true
              left join dwh.client_order mleg
                        on (mleg.order_id = cl.multileg_order_id
-                           and mleg.create_date_id >= :l_retention_date_id)
+                           and mleg.create_date_id >= l_retention_date_id)
              left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
              left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
              left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
@@ -277,9 +277,9 @@ begin
                                   and fmj.date_id >= cl.create_date_id
                                 limit 1) fmj on true
     where cl.parent_order_id is null
-      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
---       and fmj.tag_21 = '1'
-      and cl.account_id = any (:l_account_ids)
+      and cl.create_date_id between l_date_begin_id and l_date_end_id
+      and coalesce(fmj.tag_21, '1') != '3'
+      and cl.account_id = any (l_account_ids)
       and cl.trans_type <> 'F'
       and coalesce(cl.fix_connection_id, '-1') != all (l_fix_connection_id);
 
