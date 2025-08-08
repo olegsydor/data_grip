@@ -1,6 +1,13 @@
-select GENESIS2_QA_20100601.get_sg_account(257078, 'O', '902', 'EMLD')
+select GENESIS2_QA_20100601.get_sg_account(256639, 'O', '733', 'EMLD')
 from dual;
 
+   select coalesce(ch.SG_SUB_ACCOUNT, pa.SG_SUB_ACCOUNT, 'null'),
+           coalesce(ch.SG_MINT_ACCOUNT, pa.SG_SUB_ACCOUNT, 'null'),
+           coalesce(ch.SG_SALES_TRADER_ID, pa.SG_SUB_ACCOUNT, 'null')
+--     into l_sg_sub_account, l_sg_mint_account, l_sg_sales_trader_id
+    from GENESIS2_QA_20100601.SG_ACCOUNT ch
+             left join GENESIS2_QA_20100601.SG_ACCOUNT pa on pa.ACCOUNT_ID = ch.SG_PARENT_ACCOUNT_ID
+    where ch.ACCOUNT_ID = 256639;
 
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_sg_account(
     in_account_id NUMBER,
@@ -26,7 +33,7 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_sg_account(
     l_opt_clearing_firm      varchar2(20);
     l_client_cust_or_firm    varchar2(20);
     l_opt_exec_broker        varchar2(20);
-    l_return                 varchar2(1500);
+    l_return                 varchar2(1500) := 'XYZ';
 
 BEGIN
     SELECT
@@ -71,7 +78,7 @@ BEGIN
     end if;
 
 -- II. CustomerOrFirm(204)
-    IF coalesce(l_opt_is_fix_clfirm_pr, 'Y') != 'N' THEN
+    IF coalesce(l_opt_is_fix_clfirm_pr, '-1') != 'N' THEN
         l_opt_is_fix_custfirm_pr := 'null';
     end if;
 
@@ -112,7 +119,11 @@ BEGIN
               and abc.IS_DEFAULT = 'Y'
               and tv.TAG_NUMBER = 439;
         end if;
+        if SQL%ROWCOUNT = 0 then
+            l_clearing_firm := 'null';
+        end if;
     end if;
+
 
     --     IV. ActionableID(10440) -- Return acc.opt_occ_id
 
@@ -126,27 +137,27 @@ BEGIN
              left join GENESIS2_QA_20100601.SG_ACCOUNT pa on pa.ACCOUNT_ID = ch.SG_PARENT_ACCOUNT_ID
     where ch.ACCOUNT_ID = in_account_id;
 
-    select '{' ||
-           '"OPT_IS_FIX_CLFIRM_PROCESSED": "' || l_opt_is_fix_clfirm_pr || '",' ||
-           '"OPT_CLEARING_FIRM": "' || l_opt_clearing_firm || '",' ||
-           '"OPT_IS_FIX_CUSTFIRM_PROCESSED": "' || l_opt_is_fix_custfirm_pr || '",' ||
-           '"OPT_CUST_OR_FIRM": "' || l_opt_customer_or_firm || '",' ||
-           '"CLIENT_CUST_OR_FIRM": "' || l_client_cust_or_firm || '",' ||
-           '"OPT_IS_FIX_EXECBROK_PROCESSED": "' || l_opt_is_fix_execbrok_pr || '",' ||
-           '"OPT_EXEC_BROKER": "' || l_opt_exec_broker || '",' ||
-           '"OPT_OCC_ID": "' || l_opt_occ_id || '",' ||
-           '"SG_SUB_ACCOUNT": "' || l_sg_sub_account || '",' ||
-           '"SG_MINT_ACCOUNT": "' || l_sg_mint_account || '",' ||
-           '"SG_SALES_TRADER_ID": "' || l_sg_sales_trader_id || '"}'
+--     select '{' ||
+--            '"OPT_IS_FIX_CLFIRM_PROCESSED": "' || l_opt_is_fix_clfirm_pr || '",' ||
+--            '"OPT_CLEARING_FIRM": "' || l_clearing_firm || '",' ||
+--            '"OPT_IS_FIX_CUSTFIRM_PROCESSED": "' || l_opt_is_fix_custfirm_pr || '",' ||
+--            '"OPT_CUST_OR_FIRM": "' || l_opt_customer_or_firm || '",' ||
+--            '"CLIENT_CUST_OR_FIRM": "' || l_client_cust_or_firm || '",' ||
+--            '"OPT_IS_FIX_EXECBROK_PROCESSED": "' || l_opt_is_fix_execbrok_pr || '",' ||
+--            '"OPT_EXEC_BROKER": "' || l_opt_exec_broker || '",' ||
+--            '"OPT_OCC_ID": "' || l_opt_occ_id || '",' ||
+--            '"SG_SUB_ACCOUNT": "' || l_sg_sub_account || '",' ||
+--            '"SG_MINT_ACCOUNT": "' || l_sg_mint_account || '",' ||
+--            '"SG_SALES_TRADER_ID": "' || l_sg_sales_trader_id || '"}'
+    select 'XYZ'
     into l_return
     from dual;
-
+DBMS_OUTPUT.PUT_LINE('About to return: ' || l_return);
     return l_return;
 
--- EXCEPTION
---     WHEN NO_DATA_FOUND THEN
---         RETURN NULL;
---     WHEN OTHERS THEN
---         RAISE;
+--  EXCEPTION
+--      WHEN NO_DATA_FOUND THEN
+--          RETURN NULL;
+--      WHEN OTHERS THEN
+--          RAISE;
 END;
-
