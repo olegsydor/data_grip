@@ -1,11 +1,11 @@
-select GENESIS2_QA_20100601.get_sg_account(263201, 'O', '733', 'CDOE')
+select GENESIS2_QA_20100601.get_sg_account(257078, 'O', '902', 'EMLD')
 from dual;
 
 
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_sg_account(
     in_account_id NUMBER,
     in_instrument_type CHAR,
-    in_giveup VARCHAR2,
+    in_opt_exec_broker VARCHAR2,
     in_exchange_id VARCHAR2
 ) RETURN varchar2
     is
@@ -76,11 +76,42 @@ BEGIN
     end if;
 
 -- III. ClearingFirm(439)
-    IF in_instrument_type = 'E' or l_opt_is_fix_clfirm_pr != 'N' then
+    IF (in_instrument_type = 'E' or l_opt_is_fix_clfirm_pr != 'N' or in_opt_exec_broker is null) then
         l_clearing_firm := 'null';
     else
         if l_new_model = 'Y' then
---         l_clearing_firm := 'find exact value';
+            select tv.TAG_VALUE--, abc.ACCOUNT_ID, ocp.EXCHANGE_ID,  obc.OPT_EXEC_BROKER
+            into l_clearing_firm
+            from GENESIS2_QA_20100601.OPT_EXEC_BROKER_CONFIG obc
+                     join GENESIS2_QA_20100601.ACCOUNT2OPT_EXEC_BROKER_CONFIG abc
+                          on abc.OPT_EXEC_BROKER_CONFIG_ID = obc.OPT_EXEC_BROKER_CONFIG_ID
+                     join GENESIS2_QA_20100601.EXEC_BROKER_CONFIG2EXCH_PARAM ocp
+                          on ocp.OPT_EXEC_BROKER_CONFIG_ID = obc.OPT_EXEC_BROKER_CONFIG_ID
+                     join GENESIS2_QA_20100601.SPECIFIC_TAG_VALUE tv
+                          on tv.SPECIFIC_TAG_SET_ID = ocp.SPECIFIC_TAG_SET_ID
+            where 1=1
+              and abc.ACCOUNT_ID = in_account_id
+              and obc.OPT_EXEC_BROKER = l_opt_exec_broker
+              and ocp.EXCHANGE_ID = in_exchange_id
+              and abc.IS_DEFAULT = 'Y'
+              and tv.TAG_NUMBER = 439;
+        else
+            select tv.TAG_VALUE--, abc.ACCOUNT_ID, cp.EXCHANGE_ID,  obc.OPT_EXEC_BROKER
+            into l_clearing_firm
+            from GENESIS2_QA_20100601.ACCOUNT2OPT_EXEC_BROKER_CONFIG abc
+                     join GENESIS2_QA_20100601.OPT_EXEC_BROKER_CONFIG obc
+                          on obc.OPT_EXEC_BROKER_CONFIG_ID = abc.OPT_EXEC_BROKER_CONFIG_ID
+                     join GENESIS2_QA_20100601.EXEC_BROKER_CONFIG2EXCH_PARAM cp
+                          on cp.OPT_EXEC_BROKER_CONFIG_ID = abc.OPT_EXEC_BROKER_CONFIG_ID
+                     join GENESIS2_QA_20100601.SPECIFIC_TAG_VALUE tv
+                          on tv.SPECIFIC_TAG_SET_ID = cp.SPECIFIC_TAG_SET_ID
+            where 1=1
+              and abc.ACCOUNT_ID = in_account_id
+              and obc.OPT_EXEC_BROKER = l_opt_exec_broker
+              and cp.EXCHANGE_ID = in_exchange_id
+              and abc.IS_DEFAULT = 'Y'
+              and tv.TAG_NUMBER = 439;
+        end if;
     end if;
 
     --     IV. ActionableID(10440) -- Return acc.opt_occ_id
@@ -112,10 +143,10 @@ BEGIN
 
     return l_return;
 
-EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-        RETURN NULL;
-    WHEN OTHERS THEN
-        RAISE;
+-- EXCEPTION
+--     WHEN NO_DATA_FOUND THEN
+--         RETURN NULL;
+--     WHEN OTHERS THEN
+--         RAISE;
 END;
 
