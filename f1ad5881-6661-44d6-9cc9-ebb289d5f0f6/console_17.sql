@@ -22,7 +22,7 @@ UAT and PROD DASHOMS compIDs listed in comments.
 
  */
 select * from dash360.report_obo_compliance_sg(20250806, 20250806);
-
+select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "N","OPT_CUST_OR_FIRM": "0","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "792","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": ""}'::jsonb
 DROP FUNCTION if exists dash360.report_obo_compliance_sg;
 
 CREATE FUNCTION dash360.report_obo_compliance_sg(in_date_begin_id integer, in_date_end_id integer)
