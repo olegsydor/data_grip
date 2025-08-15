@@ -175,3 +175,5 @@ select max(case when DB_FIELD_NAME = 'SG_SUB_ACCOUNT' then 'Y' end),
 into is_parent_sub_account, is_parent_mint_account, is_parent_sales_trader_id
 from SG_NULL_ACCOUNT_PARAMETER
 where acoount_id = in_account_id;
+
+
