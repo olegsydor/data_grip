@@ -408,11 +408,46 @@ $function$
 
 
 
-select '{"2347039623":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":12,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040157":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":10,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040125":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":6,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347039341":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":4,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}],"2347040158":[{"cmta":"103","clearing_account_number":"103","street_account_name":"sab2","account_nickname":"hotbutton_new","last_qty":1,"allocation_avg_price":83.9909090909091,"trade_record_reason":"L"}]}'::jsonb
+select '{"2347499695": [{"cmta": "123", "last_qty": 21, "account_id": 257078, "open_close": "O", "trade_text": "qty21v2", "exec_broker": "019", "opt_customer_firm": "0", "street_exec_broker": "EBS1", "trade_record_reason": "P", "trade_liquidity_indicator": "R"}]}'::jsonb
 select * from genesis2.trade_record
     where trade_record_id = 2347499420
 
 
 select * from trash.so_log_ptm
 
-insert into trash.so_log_ptm (vector) values ('test')
+
+do
+$$
+    declare
+        in_change_vector text := '{"2347499695": [{"cmta": "123", "last_qty": 21, "account_id": 257078, "open_close": "O", "trade_text": "qty21v2", "exec_broker": "019", "opt_customer_firm": "0", "street_exec_broker": "EBS1", "trade_record_reason": "P", "trade_liquidity_indicator": "R"}]}';
+        l_busted_trades  text;
+        in_date_id int4 := 20250815;
+    begin
+        drop table if exists t_base;
+        create temp table t_base as
+        select key::bigint as id, jsonb_array_elements(value) as val
+        from jsonb_each(in_change_vector::jsonb);
+
+
+        select string_agg(distinct tr.trade_record_id::text, ', ')
+         into l_busted_trades
+        from genesis2.trade_record tr
+                 join t_base on t_base.id = tr.trade_record_id
+        where tr.date_id = in_date_id
+          and tr.is_busted = 'Y';
+
+        if l_busted_trades is not null then
+            raise exception 'trade_records % was\were busted before', l_busted_trades using ERRCODE = 'PTMNC';
+        end if;
+        raise notice 'AXAXA - %', l_busted_trades;
+    end;
+$$;
+
+select * from t_base
+
+select * from genesis2.trade_record
+where orig_trade_record_id =2347499695
+
+
+select * from dash360.clearing_complete_instruction;
+    select '{ "2347499420": [ { "account_id": 257077, "open_close": "O", "last_qty": 21, "exec_broker": "019", "street_exec_broker": "EBS1", "opt_customer_firm": "1", "cmta": "123", "trade_liquidity_indicator": "R", "trade_text": "qty21", "trade_record_reason": "P" } ] }'::jsonb
