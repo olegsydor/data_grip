@@ -156,11 +156,22 @@ EXCEPTION
 END;
 
 
-aCCOUNT
-OPT_EXEC_BROKER_CONFIG
-ACCOUNT2OPT_EXEC_BROKER_CONFIG
-EXEC_BROKER_CONFIG2EXCH_PARAM --
-SPECIFIC_TAG_VALUE
-OPT_EXEC_BROKER_OLD --
-OPT_EXEC_BROKER2EXCH_PARAM_OLD
-SG_ACCOUNT
+
+    select MAX(coalesce(ch.SG_SUB_ACCOUNT, case when :is_parent_sub_account = 'Y' then pa.SG_SUB_ACCOUNT end)),
+           MAX(coalesce(ch.SG_MINT_ACCOUNT, case when :is_parent_mint_account = 'Y' then pa.SG_MINT_ACCOUNT end)),
+           MAX(coalesce(ch.SG_SALES_TRADER_ID, case when :is_parent_sales_trader_id = 'Y' then pa.SG_SALES_TRADER_ID end))
+    from GENESIS2_QA_20100601.SG_ACCOUNT ch
+    left join GENESIS2_QA_20100601.SG_ACCOUNT pa  on pa.ACCOUNT_ID = ch.SG_PARENT_ACCOUNT_ID
+    where ch.ACCOUNT_ID = 263209;
+
+
+select *
+    from GENESIS2_QA_20100601.SG_ACCOUNT ch
+where ch.ACCOUNT_ID = 263209;
+
+select max(case when DB_FIELD_NAME = 'SG_SUB_ACCOUNT' then 'Y' end),
+       max(case when DB_FIELD_NAME = 'SG_MINT_ACCOUNT' then 'Y' end),
+       max(case when DB_FIELD_NAME = 'SG_SALES_TRADER_ID' then 'Y' end)
+into is_parent_sub_account, is_parent_mint_account, is_parent_sales_trader_id
+from SG_NULL_ACCOUNT_PARAMETER
+where acoount_id = in_account_id;
