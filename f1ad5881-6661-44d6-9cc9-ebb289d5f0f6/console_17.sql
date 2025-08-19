@@ -25,74 +25,10 @@ select * from dash360.report_obo_compliance_sg(20250806, 20250806);
 select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "N","OPT_CUST_OR_FIRM": "0","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "792","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": ""}'::jsonb
 DROP FUNCTION if exists dash360.report_obo_compliance_sg;
 
-CREATE FUNCTION dash360.report_obo_compliance_sg(in_date_begin_id integer, in_date_end_id integer)
-    RETURNS TABLE
-            (
-                "OrderID"                   bigint,
-                "Trading Firm Name"         character varying,
-                "Trading Firm IMID"         character varying,
-                "Trading Firm CRD"          character varying,
-                "Event Type"                character varying,
-                "Event Date"                text,
-                "Event Time"                text,
-                "Client clOrderID"          character varying,
-                "Street clOrderID"          text,
-                "Event Qty"                 integer,
-                "Event Price"               numeric,
-                "Net Price"                 numeric,
-                "Multi Leg Indicator"       text,
-                "Number of legs"            integer,
-                "Leg Order ID"              character varying,
-                "Manual Flag"               text,
-                "Free Text"                 character varying,
-                "Order Status"              character varying,
-                "Original Client clOrderID" character varying,
-                "Original Street clOrderID" character varying,
-                "OSI Symbol"                character varying,
-                "Base symbol"               character varying,
-                "Symbol"                    character varying,
-                "Security Type"             character,
-                "Underlying Symbol"         character varying,
-                "P/C/S"                     text,
-                "Expiration Date"           text,
-                "Expiration Time"           text,
-                "Side"                      text,
-                "TIF"                       character varying,
-                "Good Till Date"            text,
-                "Good Till Time"            text,
-                "Order Qty"                 integer,
-                "Filled Qty"                bigint,
-                "Order Type Code"           character varying,
-                "Order Price"               numeric,
-                "Order Creation Date"       text,
-                "Order Creation Time"       text,
-                "Open/Close"                character,
-                "Trading Session"           character varying,
-                "Is Held"                   text,
-                "Is Cross"                  text,
-                "Fee Sensitivity"           smallint,
-                "Stop Price"                numeric,
-                "Max Floor"                 bigint,
-                "Capacity"                  character varying,
-                "ExDestination"             character varying,
-                "Leg ratio"                 bigint,
-                "User"                      text,
-                "Account Name"              character varying,
-                "Account ID"                integer,
-                "Account Holder Type"       character varying,
-                "Account FDID"              character varying,
-                "Account IMID"              text,
-                "Account CRD"               character varying,
-                "Sender type"               character varying,
-                "Last Mkt"                  character varying,
-                "MIC Code"                  character varying,
-                "Liquidity Indicator"       character varying,
-                "ExecutionID"               text,
-                "CAT Reporting Firm IMID"   character varying
-            )
-    LANGUAGE plpgsql
-AS
-$function$
+CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_sg(in_date_begin_id integer, in_date_end_id integer)
+ RETURNS TABLE("OrderID" bigint, "Trading Firm Name" character varying, "Trading Firm IMID" character varying, "Trading Firm CRD" character varying, "Event Type" character varying, "Event Date" text, "Event Time" text, "Client clOrderID" character varying, "Street clOrderID" text, "Event Qty" integer, "Event Price" numeric, "Net Price" numeric, "Multi Leg Indicator" text, "Number of legs" integer, "Leg Order ID" character varying, "Manual Flag" text, "Free Text" character varying, "Order Status" character varying, "Original Client clOrderID" character varying, "Original Street clOrderID" character varying, "OSI Symbol" character varying, "Base symbol" character varying, "Symbol" character varying, "Security Type" character, "Underlying Symbol" character varying, "P/C/S" text, "Expiration Date" text, "Expiration Time" text, "Side" text, "TIF" character varying, "Good Till Date" text, "Good Till Time" text, "Order Qty" integer, "Filled Qty" bigint, "Order Type Code" character varying, "Order Price" numeric, "Order Creation Date" text, "Order Creation Time" text, "Open/Close" character, "Trading Session" character varying, "Is Held" text, "Is Cross" text, "Fee Sensitivity" smallint, "Stop Price" numeric, "Max Floor" bigint, "Capacity" character varying, "ExDestination" character varying, "Leg ratio" bigint, "User" text, "Account Name" character varying, "Account ID" integer, "Account Holder Type" character varying, "Account FDID" character varying, "Account IMID" text, "Account CRD" character varying, "Sender type" character varying, "Last Mkt" character varying, "MIC Code" character varying, "Liquidity Indicator" character varying, "ExecutionID" text, "CAT Reporting Firm IMID" character varying, "Is Affiliated" text, "Solicitation Flag" text)
+ LANGUAGE plpgsql
+AS $function$
     -- 2025-0807 https://dashfinancial.atlassian.net/browse/DEVREQ-6585
 declare
     l_load_id           int;
@@ -225,9 +161,11 @@ begin
            fmj.tag_58                                                  as exec_text,
            fmj.tag_17                                                  as exec_id,
            fmj.tag_52                                                  as par_tag_52,
+           ac.crd_number as crd_number_original,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
                    then tf.cat_imid end                                as cat_imid,
+
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
                    then ac.crd_number end                              as crd_number,
@@ -239,7 +177,9 @@ begin
            tag_9281,
            tag_22017
     , fmj.tag_21
-    , cl.fix_connection_id
+    , cl.fix_connection_id,
+    null::text as is_affiliated -- will be replaced by the value from account (SO)
+
     from dwh.client_order cl
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -376,7 +316,9 @@ begin
            case when ex.exec_type = 'F' then ex.exec_time end                                      as trade_exec_time,
            ex.exec_type,
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then tf.cat_imid end   as cat_imid,
-           case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number
+           case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
+           is_affiliated,
+           'false' as solicitation_flag
     from t_base b
              left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -502,7 +444,9 @@ begin
                    then b.cat_imid end                            as cat_imid,
            case
                when ot.order_type_value = 'New Order'
-                   then b.crd_number end                          as cat_crd
+                   then b.crd_number end                          as cat_crd,
+           is_affiliated,
+           'false' as solicitation_flag
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -616,7 +560,9 @@ begin
                mic_code                                                      as "MIC Code",
                trade_liquidity_indicator                                     as "Liquidity Indicator",
                exec_id                                                       as "ExecutionID",
-               ac_imid                                                       as "CAT Reporting Firm IMID"
+               ac_imid                                                       as "CAT Reporting Firm IMID",
+               is_affiliated                                                 as "Is Affiliated",
+               solicitation_flag                                             as "Solicitation Flag"
         from (select *
               from t_exs
               where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
@@ -631,4 +577,6 @@ end;
 $function$
 ;
 
+
+select * from dash360.report_obo_compliance_sg(20250806, 20250806);
 select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "Y","OPT_CUST_OR_FIRM": "","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": "lee.cashin"}'::jsonb
