@@ -581,5 +581,5 @@ $function$
 
 
 
-select * from dash360.report_obo_compliance_sg(20250806, 20250806);
+select * from dash360.report_obo_compliance_sg(20250821, 20250821);
 select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "Y","OPT_CUST_OR_FIRM": "","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": "lee.cashin"}'::jsonb
