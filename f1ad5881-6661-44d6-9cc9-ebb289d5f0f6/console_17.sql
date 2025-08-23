@@ -151,10 +151,12 @@ begin
            ac.account_name,
            ac.account_id,
            ac.account_holder_type,
-           ac.cat_fdid                                                 as ac_fdid,
+           ac.cat_fdid                                                 as ac_fdid_,
+           case when ac.customer_is_broker_dealer is not null then ac.customer_broker_dealer_mpid end as ac_imid,
+           case when ac.customer_is_broker_dealer is null then ac.cat_fdid end                        as ac_fdid,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then tf.cat_imid end                                as ac_imid,
+                   then tf.cat_imid end                                as ac_imid_,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
                    then ac.crd_number end                              as ac_number,
