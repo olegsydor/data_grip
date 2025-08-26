@@ -37,3 +37,32 @@ where order_id in (813044874646388736, 813045540504731648)
 blaze7.client_order_leg find a leg that has payload.StitchedSingleOrderId = order_id of the order in p.1, if found, then:
 go to blaze7.client_order -> payload -> AccountAlias (or OriginatorOrder.AccountAlias) for the order found on step 2
 */
+
+create view blaze7.v_stitched_alias as
+select co.cl_ord_id, account_alias
+from blaze7.client_order co
+         join lateral (select leg.order_id, leg.chain_id
+                       from blaze7.client_order cl
+                                join blaze7.client_order_leg leg
+                                     on leg.order_id = cl.order_id and leg.chain_id = cl.chain_id
+                       where true
+                         and leg.payload ->> 'StitchedSingleOrderId' = co.order_id::text
+                         and cl.db_create_time >= co.db_create_time
+                         and cl.db_create_time >= current_date - '7 days'::interval
+                       limit 1) leg on true
+         join lateral (select CASE
+                                  WHEN cl.crossing_side IS NULL THEN cl.payload ->> 'AccountAlias'::text
+                                  WHEN cl.crossing_side = 'O'::bpchar
+                                      THEN cl.payload #>> '{OriginatorOrder,AccountAlias}'::text[]
+                                  WHEN cl.crossing_side = 'C'::bpchar
+                                      THEN cl.payload #>> '{ContraOrder,AccountAlias}'::text[]
+                                  ELSE NULL::text
+                                  END AS account_alias
+                       from blaze7.client_order cl
+                       where cl.order_id = leg.order_id
+                         and cl.chain_id = leg.chain_id
+                       limit 1) cl on true
+where co.payload ->> 'OrderClass' = 'F'
+  and co.payload ->> 'HasStitchedOrders' = 'Y'
+  and co.db_create_time >= current_date - '7 days'::interval
+  and co.db_create_time < current_date + '1 days'::interval
