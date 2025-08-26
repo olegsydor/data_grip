@@ -39,7 +39,7 @@ go to blaze7.client_order -> payload -> AccountAlias (or OriginatorOrder.Account
 */
 
 create view blaze7.v_stitched_alias as
-select co.cl_ord_id, account_alias
+select co.order_id, co.cl_ord_id, account_alias
 from blaze7.client_order co
          join lateral (select leg.order_id, leg.chain_id
                        from blaze7.client_order cl
@@ -66,3 +66,6 @@ where co.payload ->> 'OrderClass' = 'F'
   and co.payload ->> 'HasStitchedOrders' = 'Y'
   and co.db_create_time >= current_date - '7 days'::interval
   and co.db_create_time < current_date + '1 days'::interval
+;
+
+select * from blaze7.v_stitched_alias
