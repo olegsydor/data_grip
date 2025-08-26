@@ -39,7 +39,7 @@ go to blaze7.client_order -> payload -> AccountAlias (or OriginatorOrder.Account
 */
 
 create or replace view blaze7.v_stitched_alias as
-select co.order_id, co.chain_id, co.cl_ord_id, account_alias
+select co.order_id, co.chain_id, co.cl_ord_id, account_alias, payload ->> 'OwnerEntityId'
 from blaze7.client_order co
          join lateral (select leg.order_id, leg.chain_id
                        from blaze7.client_order cl
@@ -48,7 +48,7 @@ from blaze7.client_order co
                        where true
                          and leg.payload ->> 'StitchedSingleOrderId' = co.order_id::text
                          and cl.db_create_time >= co.db_create_time
-                         and cl.db_create_time >= current_date - '1 days'::interval
+                         and cl.db_create_time >= current_date - '20 days'::interval
                        limit 1) leg on true
          join lateral (select CASE
                                   WHEN cl.crossing_side IS NULL THEN cl.payload ->> 'AccountAlias'::text
@@ -64,9 +64,9 @@ from blaze7.client_order co
                        limit 1) cl on true
 where co.payload ->> 'OrderClass' = 'F'
   and co.payload ->> 'HasStitchedOrders' = 'Y'
-  and co.db_create_time >= current_date - '1 days'::interval
-  and co.db_create_time < current_date + '1 days'::interval
-;
+  and co.payload ->> 'OwnerEntityId' = '3681'
+  and co.db_create_time >= current_date - '20 days'::interval
+  and co.db_create_time < current_date + '1 days'::interval;
 
 select * from blaze7.v_stitched_alias;
 
@@ -74,7 +74,7 @@ select * from blaze7.v_stitched_alias;
 
 -- blaze7.v_away_trade source
 
-CREATE OR REPLACE VIEW blaze7.v_away_trade1
+CREATE OR REPLACE VIEW blaze7.v_away_trade
 AS SELECT rep.payload ->> 'ManualExecutionTime'::text AS manualexecutiontime,
     rep.payload ->> 'TransactTime'::text AS transactiondatetime,
         CASE
@@ -358,9 +358,10 @@ AS SELECT rep.payload ->> 'ManualExecutionTime'::text AS manualexecutiontime,
    left join lateral(select account_alias from blaze7.v_stitched_alias stc where stc.order_id = co.order_id and stc.chain_id = co.chain_id limit 1) stc on true
   WHERE rep.multileg_reporting_type <> '3'::bpchar AND (co.record_type = ANY (ARRAY['0'::bpchar, '2'::bpchar])) AND (rep.exec_type::text <> ALL (ARRAY['f'::text, 'w'::text, 'W'::text, 'g'::text, 'G'::text, 'I'::text, 'i'::text]));
 
+create temp table t_01 as
+select * from blaze7.v_away_trade
+where reportid between 'mjf2he0s0000' and 'mjgg442o0000'
+except;
 create temp table t_02 as
 select * from blaze7.v_away_trade1
-where reportid between 'mjaotj5g0000' and 'mjn3jfdo0000'
-except
-select * from blaze7.v_away_trade1
-where reportid between 'mjmotj5g0000' and 'mjn3jfdo0000'
+where reportid between 'mjf2he0s0000' and 'mjgg442o0000'
