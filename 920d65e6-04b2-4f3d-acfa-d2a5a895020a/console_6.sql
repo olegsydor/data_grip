@@ -37,8 +37,8 @@ where order_id in (813044874646388736, 813045540504731648)
 blaze7.client_order_leg find a leg that has payload.StitchedSingleOrderId = order_id of the order in p.1, if found, then:
 go to blaze7.client_order -> payload -> AccountAlias (or OriginatorOrder.AccountAlias) for the order found on step 2
 */
-
-create or replace view blaze7.v_stitched_alias as
+drop view blaze7.v_away_trade1
+create or replace drop view blaze7.v_stitched_alias as
 select co.order_id, co.chain_id, co.cl_ord_id, account_alias, payload ->> 'OwnerEntityId'
 from blaze7.client_order co
          join lateral (select leg.order_id, leg.chain_id
@@ -367,4 +367,17 @@ select * from blaze7.v_away_trade1
 where reportid between 'mjf2he0s0000' and 'mjgg442o0000'
 
 
-  
+select CASE
+           WHEN co.crossing_side IS NULL THEN co.payload ->> 'AccountAlias'::text
+           WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,AccountAlias}'::text[]
+           WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,AccountAlias}'::text[]
+           ELSE NULL::text
+           END as accountalias,
+       cl_ord_id,
+       order_id,
+       user_id,
+       db_create_time,
+       *
+from blaze7.client_order co
+where db_create_time::date = '2025-08-21'::date
+and cl_ord_id in ('1_a3250821', 'f_0_3q250821')
