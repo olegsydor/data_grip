@@ -366,18 +366,19 @@ create temp table t_02 as
 select * from blaze7.v_away_trade1
 where reportid between 'mjf2he0s0000' and 'mjgg442o0000'
 
-
-select CASE
-           WHEN co.crossing_side IS NULL THEN co.payload ->> 'AccountAlias'::text
-           WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,AccountAlias}'::text[]
-           WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,AccountAlias}'::text[]
-           ELSE NULL::text
-           END as accountalias,
+create view blaze7.v_real_account_alias as
+select case
+           when co.crossing_side is null then co.payload ->> 'AccountAlias'::text
+           when co.crossing_side = 'o'::bpchar then co.payload #>> '{OriginatorOrder,AccountAlias}'::text[]
+           when co.crossing_side = 'c'::bpchar then co.payload #>> '{ContraOrder,AccountAlias}'::text[]
+           else null::text
+           end as accountalias,
        cl_ord_id,
        order_id,
        user_id,
        db_create_time,
-       *
+       instrument_type,
+       route_type
 from blaze7.client_order co
-where db_create_time::date = '2025-08-21'::date
+where db_create_time::date >= current_date - '7 days'::interval;
 and cl_ord_id in ('1_a3250821', 'f_0_3q250821')
