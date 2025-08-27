@@ -194,11 +194,11 @@ begin
 
 
 case
-	when ac.cat_fdid like '%:%' then split_part(ac.cat_fdid, ':', 1)
+	when ac.cat_fdid like '%:%' then split_part(ac.cat_fdid, ':', 2)
 	when ac.customer_is_broker_dealer is distinct from 'N'
 	    then ac.customer_broker_dealer_mpid end                                                             as ac_imid,
 case
-	when ac.cat_fdid like '%:%' then split_part(ac.cat_fdid, ':', 2)
+-- 	when ac.cat_fdid like '%:%' then split_part(ac.cat_fdid, ':', 1)
 	when ac.customer_is_broker_dealer is not distinct from 'N' then ac.cat_fdid end                        as ac_fdid,
 
            case
