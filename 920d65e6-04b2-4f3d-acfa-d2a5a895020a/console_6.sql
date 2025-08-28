@@ -382,3 +382,5 @@ select case
 from blaze7.client_order co
 where db_create_time::date >= current_date - '7 days'::interval;
 and cl_ord_id in ('1_a3250821', 'f_0_3q250821')
+
+
