@@ -1,3 +1,4 @@
+create temp table t_05 as
 select tr.trade_record_id::int8,
        tr.trade_record_time,
        tr.exec_id::int8 as                                                                         exec_id,
@@ -92,33 +93,30 @@ from dwh.flat_trade_record tr
                             where tr.trade_liquidity_indicator = li.trade_liquidity_indicator
                               and re.real_exchange_id = li.exchange_id
                               and li.is_active) liq_ind on 1 = 1
-         inner join (select tri.order_id,
-                            max(tri.trade_record_time)                                                     trade_record_time,
-                            case when count(distinct (ci.status)) = 1 then max(ci.status) else null end as pta_status
-                     from dwh.flat_trade_record tri
-                              inner join dwh.d_instrument i on i.instrument_id = tri.instrument_id
-                              left join (select max(clearing_instr_id)                            clearing_instr_id,
-                                                coalesce(new_trade_record_id, trade_record_id) as trade_record_id
-                                         FROM clearing_instruction_entry
-                                         GROUP BY coalesce(new_trade_record_id, trade_record_id)) cin
-                                        on tri.trade_record_id = cin.trade_record_id
-                              left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
-                              left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
-                     where tri.is_busted = 'N'
-                       and tri.order_id = tr.order_id
-                       and tri.date_id >= 20250814
-                       and tri.date_id <= 20250814
---                      group by tri.order_id
---                      order by trade_record_time desc
-             limit 1
-                     ) orders on true
-         left join (select max(clearing_instr_id)                            clearing_instr_id,
-                           coalesce(new_trade_record_id, trade_record_id) as trade_record_id
+--          inner join (select tr.order_id,
+--                             max(tr.trade_record_time)                                                      trade_record_time,
+--                             case when count(distinct (ci.status)) = 1 then max(ci.status) else null end as pta_status
+--                      from dwh.flat_trade_record tr
+--                               inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
+--                               left join (select max(clearing_instr_id)                            clearing_instr_id,
+--                                                 coalesce(new_trade_record_id, trade_record_id) as trade_record_id
+--                                          FROM clearing_instruction_entry
+--                                          GROUP BY coalesce(new_trade_record_id, trade_record_id)) cin
+--                                         on tr.trade_record_id = cin.trade_record_id
+--                               left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
+--                               left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
+--                      where tr.is_busted = 'N'
+--                        and tr.date_id >= 20250814
+--                        and tr.date_id <= 20250814
+--                      group by tr.order_id
+--                      order by trade_record_time desc) orders on orders.order_id = tr.order_id
+         left join lateral (select max(clearing_instr_id)                            clearing_instr_id
                     FROM dwh.clearing_instruction_entry
                     where date_id >= 20250814
                       and date_id <= 20250814
-                    GROUP BY coalesce(new_trade_record_id, trade_record_id)) cin
-                   on tr.trade_record_id = cin.trade_record_id
+                                       and tr.trade_record_id = coalesce(new_trade_record_id, trade_record_id)
+                    GROUP BY coalesce(new_trade_record_id, trade_record_id)
+             limit 1) cin on true
          left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
          left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
 where tr.is_busted = 'N'
