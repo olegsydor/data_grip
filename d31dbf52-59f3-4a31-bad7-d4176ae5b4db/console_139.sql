@@ -9,24 +9,26 @@ $$
     sub_where          text := '';
     part_where         text;
         having_sub_request_params  text  :=  '';
-        user_filter text := ' and CLIENT_ORDER_ID = 'HAVING' and ci.STATUS = 'C''";
+        user_filter text := $x$  and ci.STATUS in ('C','D')$x$;
 begin
 	loop
 		select trim(from split_part(coalesce(user_filter, ''), 'and', n)) into part_where;  -- the first entry is allways '' if user filter starts from 'and'
 		exit when part_where = '';
+		raise notice 'part_where - %', part_where;
 		n := n + 1;
 		case
 			when  substring(part_where  from  '\s*(.+)\.')  =  'CI'  then
 				having_sub_request_params  :=    'HAVING  (case  when  count(distinct(coalesce(ci.status,  '''')))  =  1  then  max(ci.status)  else  null  end)  in  ('''  ||  substring(part_where  from  '\''(.+)\''')||''')';
-				raise  info  'having  %',  having_sub_request_params;
+				raise  notice  'having  %',  having_sub_request_params;
 			else
 				main_where := main_where || ' and ' || part_where;
-				raise  info  'main  where  %',  main_where;
+				raise  notice  'main  where  %',  main_where;
 		end case;
 	end loop;
+	end;
 $$
-
-create temp table t_05 as
+;
+create temp table t_01 as
 select tr.trade_record_id::int8,
        tr.trade_record_time,
        tr.exec_id::int8 as                                                                         exec_id,
@@ -121,34 +123,39 @@ from dwh.flat_trade_record tr
                             where tr.trade_liquidity_indicator = li.trade_liquidity_indicator
                               and re.real_exchange_id = li.exchange_id
                               and li.is_active) liq_ind on 1 = 1
---          inner join (select tr.order_id,
---                             max(tr.trade_record_time)                                                      trade_record_time,
---                             case when count(distinct (ci.status)) = 1 then max(ci.status) else null end as pta_status
---                      from dwh.flat_trade_record tr
---                               inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
---                               left join (select max(clearing_instr_id)                            clearing_instr_id,
---                                                 coalesce(new_trade_record_id, trade_record_id) as trade_record_id
---                                          FROM clearing_instruction_entry
---                                          GROUP BY coalesce(new_trade_record_id, trade_record_id)) cin
---                                         on tr.trade_record_id = cin.trade_record_id
---                               left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
---                               left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
---                      where tr.is_busted = 'N'
---                        and tr.date_id >= 20250814
---                        and tr.date_id <= 20250814
---                      group by tr.order_id
---                      order by trade_record_time desc) orders on orders.order_id = tr.order_id
+/*
+         inner join (select tr.order_id,
+                            max(tr.trade_record_time)                                                      trade_record_time,
+                            case when count(distinct (ci.status)) = 1 then max(ci.status) else null end as pta_status
+                     from dwh.flat_trade_record tr
+                              inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
+                              left join (select max(clearing_instr_id)                            clearing_instr_id,
+                                                coalesce(new_trade_record_id, trade_record_id) as trade_record_id
+                                         FROM clearing_instruction_entry
+                                         GROUP BY coalesce(new_trade_record_id, trade_record_id)) cin
+                                        on tr.trade_record_id = cin.trade_record_id
+                              left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
+                              left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
+                     where tr.is_busted = 'N'
+                       and tr.date_id >= 20250828
+                       and tr.date_id <= 20250828
+                     group by tr.order_id
+                     order by trade_record_time desc) orders on orders.order_id = tr.order_id --100000022092026351
+
+ */
          left join lateral (select max(clearing_instr_id)                            clearing_instr_id
+--                            , coalesce(new_trade_record_id, trade_record_id) as trade_record_id
                     FROM dwh.clearing_instruction_entry
-                    where date_id >= 20250814
-                      and date_id <= 20250814
-                                       and tr.trade_record_id = coalesce(new_trade_record_id, trade_record_id)
+                    where date_id >= 20250828
+                      and date_id <= 20250828
+                    and coalesce(new_trade_record_id, trade_record_id) = tr.trade_record_id
                     GROUP BY coalesce(new_trade_record_id, trade_record_id)
-             limit 1) cin on true
+                    limit 1) cin on true
          left join dwh.clearing_instruction ci on ci.clearing_instr_id = cin.clearing_instr_id
          left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id
 where tr.is_busted = 'N'
-  and tr.date_id >= 20250814
-  and tr.date_id <= 20250814
+  and tr.date_id >= 20250828
+  and tr.date_id <= 20250828
   and ci.STATUS in ('C', 'D')
-order by trade_record_time desc
+order by trade_record_time desc  ;
+
