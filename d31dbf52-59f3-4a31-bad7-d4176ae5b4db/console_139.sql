@@ -1,3 +1,31 @@
+do
+$$
+    declare
+    select_stmt        text;
+    sql_params         text;
+    sub_request_params text;
+    n                  int  := 2;
+    main_where         text := '';
+    sub_where          text := '';
+    part_where         text;
+        having_sub_request_params  text  :=  '';
+        user_filter text := ' and CLIENT_ORDER_ID = 'HAVING' and ci.STATUS = 'C''";
+begin
+	loop
+		select trim(from split_part(coalesce(user_filter, ''), 'and', n)) into part_where;  -- the first entry is allways '' if user filter starts from 'and'
+		exit when part_where = '';
+		n := n + 1;
+		case
+			when  substring(part_where  from  '\s*(.+)\.')  =  'CI'  then
+				having_sub_request_params  :=    'HAVING  (case  when  count(distinct(coalesce(ci.status,  '''')))  =  1  then  max(ci.status)  else  null  end)  in  ('''  ||  substring(part_where  from  '\''(.+)\''')||''')';
+				raise  info  'having  %',  having_sub_request_params;
+			else
+				main_where := main_where || ' and ' || part_where;
+				raise  info  'main  where  %',  main_where;
+		end case;
+	end loop;
+$$
+
 create temp table t_05 as
 select tr.trade_record_id::int8,
        tr.trade_record_time,
