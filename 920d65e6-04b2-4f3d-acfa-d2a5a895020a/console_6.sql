@@ -360,7 +360,7 @@ AS SELECT rep.payload ->> 'ManualExecutionTime'::text AS manualexecutiontime,
 
 create temp table t_01 as
 select * from blaze7.v_away_trade
-where reportid between 'mjf2he0s0000' and 'mjgg442o0000'
+where reportid in ('1_a3250821', 'f_0_3q250821')
 except;
 create temp table t_02 as
 select * from blaze7.v_away_trade1
