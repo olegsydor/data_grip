@@ -451,3 +451,6 @@ where orig_trade_record_id =2347499695
 
 select * from dash360.clearing_complete_instruction;
     select '{ "2347499420": [ { "account_id": 257077, "open_close": "O", "last_qty": 21, "exec_broker": "019", "street_exec_broker": "EBS1", "opt_customer_firm": "1", "cmta": "123", "trade_liquidity_indicator": "R", "trade_text": "qty21", "trade_record_reason": "P" } ] }'::jsonb
+
+
+    
