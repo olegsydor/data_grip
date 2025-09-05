@@ -627,3 +627,5 @@ $function$
 
 select * from dwh.d_liquidity_indicator
 where exchange_id = 'SPHRF'
+
+
