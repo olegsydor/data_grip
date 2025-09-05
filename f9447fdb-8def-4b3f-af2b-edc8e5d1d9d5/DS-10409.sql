@@ -1,3 +1,5 @@
+select dash360.bofa_allocation_report_safe(20250905, 20250905, null);
+
 
 CREATE FUNCTION dash360.bofa_allocation_report_safe(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
  RETURNS TABLE(ret_row text)
@@ -48,9 +50,41 @@ begin
                            coalesce(array_length(l_alloc_instr_id_reported, 1), 0), 'O')
     into l_step_id;
 
+
+    drop table if exists t_bofa_allocation_report;
+    create temp table t_bofa_allocation_report
+    (
+        alloc_instr_id                integer,
+        side                          char,
+        avg_px                        numeric(14, 6),
+        date_id                       integer,
+        open_close                    char,
+        alloc_qty                     integer,
+        opt_is_fix_clfirm_processed   char,
+        ftr_cmta                      varchar(3),
+        ca_cmta                       varchar(3),
+        opt_is_fix_custfirm_processed char,
+        opt_customer_firm             char,
+        opt_customer_or_firm          char,
+        occ_actionable_id             varchar(10),
+        dataset                       integer,
+        to_report                     bpchar,
+        db_create_time                timestamp default clock_timestamp() not null,
+        instrument_id                 bigint,
+        opt_penny_commission          numeric(12, 4),
+        opt_nickel_commission         numeric(12, 4),
+        root_symbol                   varchar(10),
+        min_tick_increment            numeric(12, 4),
+        put_call                      char,
+        maturity_year                 smallint,
+        maturity_month                smallint,
+        maturity_day                  smallint,
+        strike_price                  numeric(12, 4)
+    );
+
 -- insert into the table
     with base_ins as (
-        insert into dash_reporting.bofa_allocation_report
+        insert into t_bofa_allocation_report
             (alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
              occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
@@ -108,9 +142,6 @@ begin
                           on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                               and ca.clearing_account_type = '1' and ca.market_type = 'O')
                      join genesis2.account acc ON (acc.account_id = ca.account_id
---                                                       and acc.is_deleted <> 'Y'
---                 and acc.opt_report_to_mpid = 'MLCB'
---                 and acc.trading_firm_id <> 'cantor'
                 and case when in_is_eod then true else acc.account_id != all (in_removed_account_ids) end
                 )
                      join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
@@ -138,19 +169,18 @@ begin
                            coalesce(l_row_cnt, 0), 'O')
     into l_step_id;
 
-    -- Subscription (for ONLY THESE trade_record_id with  R in alloc_instr_id)
-    perform genesis2.etl_subscribe(in_load_batch_id => l_load_id,
-                                   in_row_cnt=>coalesce(l_row_cnt, 0),
-                                   in_subscription_name => 'trade_record',
-                                   in_source_table_name => 'bofa_allocation_report',
-                                   in_date_id => in_start_date_id);
-
-    select public.load_log(l_load_id, l_step_id, l_msg_text || ' subscriptions sent', coalesce(l_row_cnt, 0), 'O')
-    into l_step_id;
-
     --  PART 2. Printing the report for intraday
 
-    insert into staging.bofa_allocation_report_history(report_row, dataset, report_part)
+    drop table if exists t_bofa_allocation_report_history;
+    create temp table t_bofa_allocation_report_history
+    (
+        report_row     text,
+        dataset        integer,
+        report_part    bpchar,
+        db_create_time timestamp default clock_timestamp()
+    );
+
+    insert into t_bofa_allocation_report_history(report_row, dataset, report_part)
         select array_to_string(ARRAY [
                                    'DAS' , ----Branch
                                    CASE
@@ -207,13 +237,13 @@ begin
                                    null
                                    ], ',', ''),
                    l_load_id, 'A'
-        from dash_reporting.bofa_allocation_report gen
+        from t_bofa_allocation_report gen
         where dataset = l_load_id
           and to_report = 'R';
     get diagnostics l_start_row = row_count;
     return query
         select report_row as ret_row
-        from staging.bofa_allocation_report_history
+        from t_bofa_allocation_report_history
         where dataset = l_load_id
           and report_part = 'A';
 
@@ -223,7 +253,7 @@ begin
 
 
     -- PART 3. Printing the report for EOD
-    if in_is_eod then
+    if in_is_eod and 1=2 then -- DO NOT UNCOMMENT 1=2 until this part is reade to be SAFE (O Sydor
         -- list of reported alloc_instr_id
         l_alloc_instr_id_reported := '{}'::int4[];
         select array_agg(ba.alloc_instr_id)
@@ -326,14 +356,6 @@ begin
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
           and tex.trade_record_id is null;
---           and acc.is_deleted <> 'Y'
---           AND acc.opt_report_to_mpid = 'MLCB'
---           AND acc.trading_firm_id <> 'cantor'
-
-        --           and not exists (select null
---                           from t_trade_record_to_exclude rp
---                           where rp.trade_record_id = any
---                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
 
         get diagnostics l_row_cnt = row_count;
         select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD temp table t_trade_record_to_report created',
