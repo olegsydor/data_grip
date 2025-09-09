@@ -336,3 +336,26 @@ where not exists (select null from T_STAY so
                   and li.LIQ_IND_TYPE_ID = so.LIQUIDITY_INDICATOR_TYPE_ID
                   and li.is_grey = so.is_grey);
 
+
+
+select *--distinct so.exchange_id, so.TRADE_LIQUIDITY_INDICATOR
+from staging.SO_LIQ_IND so
+         left join "GENESIS2_QA_20100601".exchange ex
+              on so.exchange_id = ex.exchange_id
+where ex.EXCHANGE_ID is null;
+
+update
+    staging.SO_LIQ_IND so
+set exchange_id = 'NYSE'
+where EXCHANGE_ID = 'XNYS';
+
+
+select so.*
+from staging.SO_LIQ_IND so
+         where not exists (select null from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
+              where so.exchange_id = li.exchange_id)
+
+
+
+select * from   "GENESIS2_QA_20100601".exchange ex
+where ex.EXCHANGE_ID = 'XNYS'
