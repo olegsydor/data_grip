@@ -262,9 +262,36 @@ from staging.SO_LIQ_IND so
 
 select * from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
 where exists (select null from staging.SO_LIQ_IND so
-                          join 
+                          join
                           where so.exchange_id = li.exchange_id
                   and so.trade_liquidity_indicator = li.trade_liquidity_indicator
                   and so.description = li.description
 
                   and li.is_grey = so.is_grey)
+
+
+select * from STAGING.SO_LIQ_IND so
+    where LIQ_IND_TYPE_ID is null;
+
+
+join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT on upper(lt.liquidity_indicator_type) = upper(trim(so.dash_liq_ind_type))
+select * from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE";
+
+update STAGING.SO_LIQ_IND so
+set LIQ_IND_TYPE_ID = (select liquidity_indicator_type_id from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT where upper(lt.liquidity_indicator_type) = upper(trim(so.dash_liq_ind_type)))
+
+
+update STAGING.SO_LIQ_IND so
+set LIQ_IND_TYPE_ID = 1
+where LIQ_IND_TYPE_ID is null;
+
+
+with stay as (select li.*
+              from staging.SO_LIQ_IND so
+                       join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
+                            on so.exchange_id = li.exchange_id
+                                and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                                and so.description = li.description
+                                and li.liquidity_indicator_type_id = so.LIQ_IND_TYPE_ID
+                                and li.is_grey = so.is_grey)
+select * from stay
