@@ -285,13 +285,54 @@ update STAGING.SO_LIQ_IND so
 set LIQ_IND_TYPE_ID = 1
 where LIQ_IND_TYPE_ID is null;
 
+-- The new table was created from the CSV file
+select * from staging.SO_LIQ_IND;
 
-with stay as (select li.*
-              from staging.SO_LIQ_IND so
-                       join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
-                            on so.exchange_id = li.exchange_id
-                                and so.trade_liquidity_indicator = li.trade_liquidity_indicator
-                                and so.description = li.description
-                                and li.liquidity_indicator_type_id = so.LIQ_IND_TYPE_ID
-                                and li.is_grey = so.is_grey)
-select * from stay
+-- For existing rows that match with rows from CSV file
+create global temporary table T_STAY
+(
+    EXCHANGE_ID                 VARCHAR2(6)                 not null,
+    TRADE_LIQUIDITY_INDICATOR   VARCHAR2(256)               not null,
+    DESCRIPTION                 VARCHAR2(256)               not null,
+    "COMMENT"                   VARCHAR2(256),
+    LIQUIDITY_INDICATOR_TYPE_ID NUMBER(2),
+    IS_GREY                     CHAR,
+    CREATE_TIME                 TIMESTAMP(3) WITH TIME ZONE not null
+)
+    on commit delete rows;
+
+-- Existing rows
+insert into t_stay
+select li.*
+from staging.SO_LIQ_IND so
+         join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
+              on so.exchange_id = li.exchange_id
+                  and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                  and so.description = li.description
+                  and li.liquidity_indicator_type_id = so.LIQ_IND_TYPE_ID
+                  and li.is_grey = so.is_grey;
+
+
+-- Delete ALL records from liquidity_indicator related to these exchange_ids not matching
+select *
+-- delete
+from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
+where exchange_id in (select EXCHANGE_ID from staging.SO_LIQ_IND)
+and not exists (select null from T_STAY so
+                            where so.exchange_id = li.exchange_id
+                  and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                  and so.description = li.description
+                  and li.liquidity_indicator_type_id = so.LIQUIDITY_INDICATOR_TYPE_ID
+                  and li.is_grey = so.is_grey);
+
+
+-- insert into "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY, CREATE_TIME)
+select exchange_id, trade_liquidity_indicator, description, LIQ_IND_TYPE_ID, is_grey, sysdate
+from staging.SO_LIQ_IND li
+where not exists (select null from T_STAY so
+                            where so.exchange_id = li.exchange_id
+                  and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                  and so.description = li.description
+                  and li.LIQ_IND_TYPE_ID = so.LIQUIDITY_INDICATOR_TYPE_ID
+                  and li.is_grey = so.is_grey);
+
