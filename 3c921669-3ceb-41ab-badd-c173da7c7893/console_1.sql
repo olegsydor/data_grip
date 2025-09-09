@@ -191,11 +191,14 @@ VALUES ('SPHRF', 'T', 'Taker', NULL, 2, 'N');
 
 
 --------------------------------------------------------
-select * from staging.SO_LIQ_IND so
-where 1=1
---     and exchange_id = 'XNYS'
--- and trade_liquidity_indicator = 'ALGO'
-and dash_liq_ind_type = 'Add/Remove';
+ select * from
+  update
+    staging.SO_LIQ_IND
+  set dash_liq_ind_type = 'Auction'
+where 1 = 1
+     and exchange_id = 'XPSX'
+ and trade_liquidity_indicator in ('K')
+  and dash_liq_ind_type = 'Add/Remove';
 
 with stay as (select li.*
               from staging.SO_LIQ_IND so
@@ -255,4 +258,13 @@ from staging.SO_LIQ_IND so
                   and so.trade_liquidity_indicator = li.trade_liquidity_indicator
                   and so.description = li.description
                   and li.liquidity_indicator_type_id = lt.liquidity_indicator_type_id
-                  and li.is_grey = so.is_grey
+                  and li.is_grey = so.is_grey;
+
+select * from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
+where exists (select null from staging.SO_LIQ_IND so
+                          join 
+                          where so.exchange_id = li.exchange_id
+                  and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                  and so.description = li.description
+
+                  and li.is_grey = so.is_grey)
