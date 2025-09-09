@@ -288,8 +288,9 @@ where LIQ_IND_TYPE_ID is null;
 -- The new table was created from the CSV file
 select * from staging.SO_LIQ_IND;
 
+
 -- For existing rows that match with rows from CSV file
-create global temporary table T_STAY
+create table T_STAY
 (
     EXCHANGE_ID                 VARCHAR2(6)                 not null,
     TRADE_LIQUIDITY_INDICATOR   VARCHAR2(256)               not null,
@@ -298,8 +299,7 @@ create global temporary table T_STAY
     LIQUIDITY_INDICATOR_TYPE_ID NUMBER(2),
     IS_GREY                     CHAR,
     CREATE_TIME                 TIMESTAMP(3) WITH TIME ZONE not null
-)
-    on commit delete rows;
+);
 
 -- Existing rows
 insert into t_stay
