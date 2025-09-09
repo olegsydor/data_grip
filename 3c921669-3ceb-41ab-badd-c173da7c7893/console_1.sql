@@ -188,6 +188,15 @@ INSERT INTO LIQUIDITY_INDICATOR (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIP
                                  LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY)
 VALUES ('SPHRF', 'T', 'Taker', NULL, 2, 'N');
 
+
+
+--------------------------------------------------------
+select * from staging.SO_LIQ_IND so
+where 1=1
+--     and exchange_id = 'XNYS'
+-- and trade_liquidity_indicator = 'ALGO'
+and dash_liq_ind_type = 'Add/Remove';
+
 with stay as (select li.*
               from staging.SO_LIQ_IND so
                        join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT
@@ -198,14 +207,16 @@ with stay as (select li.*
                                 and so.description = li.description
                                 and li.liquidity_indicator_type_id = lt.liquidity_indicator_type_id
                                 and li.is_grey = so.is_grey)
-   , to_del as (select li.*
+--    , to_del as (
+   select li.*
                 from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
                          left join stay on stay.EXCHANGE_ID = li.EXCHANGE_ID
                     and stay.TRADE_LIQUIDITY_INDICATOR = li.TRADE_LIQUIDITY_INDICATOR
                     and stay.IS_GREY = li.IS_GREY
                     and stay.liquidity_indicator_type_id = li.liquidity_indicator_type_id
                 where stay.EXCHANGE_ID is null
-                  and 1 = 2)
+--                   and 1 = 2
+    )
    , to_ins as (select so.exchange_id,
                        so.trade_liquidity_indicator,
                        so.description,
