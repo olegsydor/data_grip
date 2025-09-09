@@ -188,4 +188,60 @@ INSERT INTO LIQUIDITY_INDICATOR (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIP
                                  LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY)
 VALUES ('SPHRF', 'T', 'Taker', NULL, 2, 'N');
 
+with stay as (select li.*
+              from staging.SO_LIQ_IND so
+                       join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT
+                            on upper(lt.liquidity_indicator_type) = upper(trim(so.dash_liq_ind_type))
+                       join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
+                            on so.exchange_id = li.exchange_id
+                                and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                                and so.description = li.description
+                                and li.liquidity_indicator_type_id = lt.liquidity_indicator_type_id
+                                and li.is_grey = so.is_grey)
+   , to_del as (select li.*
+                from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
+                         left join stay on stay.EXCHANGE_ID = li.EXCHANGE_ID
+                    and stay.TRADE_LIQUIDITY_INDICATOR = li.TRADE_LIQUIDITY_INDICATOR
+                    and stay.IS_GREY = li.IS_GREY
+                    and stay.liquidity_indicator_type_id = li.liquidity_indicator_type_id
+                where stay.EXCHANGE_ID is null
+                  and 1 = 2)
+   , to_ins as (select so.exchange_id,
+                       so.trade_liquidity_indicator,
+                       so.description,
+                       null,
+                       lt.LIQUIDITY_INDICATOR_TYPE_ID,
+                       so.is_grey,
+                       SYSTIMESTAMP
+                from staging.SO_LIQ_IND so
+                         join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT
+                              on upper(lt.liquidity_indicator_type) = upper(trim(so.dash_liq_ind_type))
+                         left join stay on stay.EXCHANGE_ID = so.EXCHANGE_ID
+                    and stay.TRADE_LIQUIDITY_INDICATOR = so.TRADE_LIQUIDITY_INDICATOR
+                    and stay.IS_GREY = so.IS_GREY
+                    and stay.liquidity_indicator_type_id = lt.liquidity_indicator_type_id
+                where stay.EXCHANGE_ID is null)
+select *
+from to_del
+union all
+select *
+from to_ins
 
+;
+with base as (select listagg(so.EXCHANGE_ID, ', ') within group (order by so.exchange_id)
+              from (select distinct exchange_id from staging.SO_LIQ_IND) so
+                       )
+select * from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
+         join base on  li.EXCHANGE_ID = base.EXCHANGE_ID
+
+
+select li.EXCHANGE_ID, li.TRADE_LIQUIDITY_INDICATOR as ind, li.DESCRIPTION as descr, li.LIQUIDITY_INDICATOR_TYPE_ID as type_id, lt.LIQUIDITY_INDICATOR_TYPE as type, li.IS_GREY
+from staging.SO_LIQ_IND so
+         join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR_TYPE" LT
+              on upper(lt.liquidity_indicator_type) = upper(trim(so.dash_liq_ind_type))
+         join "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" LI
+              on so.exchange_id = li.exchange_id
+                  and so.trade_liquidity_indicator = li.trade_liquidity_indicator
+                  and so.description = li.description
+                  and li.liquidity_indicator_type_id = lt.liquidity_indicator_type_id
+                  and li.is_grey = so.is_grey
