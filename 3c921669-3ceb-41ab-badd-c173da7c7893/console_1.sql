@@ -287,8 +287,8 @@ where LIQ_IND_TYPE_ID is null;
 
 -- The new table was created from the CSV file
 select * from staging.SO_LIQ_IND;
-
-
+select * from T_STAY
+select * from liquidity_indicator_bkp;
 -- For existing rows that match with rows from CSV file
 create table T_STAY
 (
@@ -300,6 +300,10 @@ create table T_STAY
     IS_GREY                     CHAR,
     CREATE_TIME                 TIMESTAMP(3) WITH TIME ZONE not null
 );
+-- backup "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR"
+    create table liquidity_indicator_bkp
+    as
+        select * from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR";
 
 -- Existing rows
 insert into t_stay
@@ -358,4 +362,4 @@ from staging.SO_LIQ_IND so
 
 
 select * from   "GENESIS2_QA_20100601".exchange ex
-where ex.EXCHANGE_ID = 'XNYS'
+where ex.EXCHANGE_ID = 'XNYS';
