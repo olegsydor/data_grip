@@ -287,7 +287,7 @@ where LIQ_IND_TYPE_ID is null;
 
 -- The new table was created from the CSV file
 select * from staging.SO_LIQ_IND;
-select * from T_STAY
+select * from T_STAY;
 select * from liquidity_indicator_bkp;
 -- For existing rows that match with rows from CSV file
 create table T_STAY
@@ -318,8 +318,8 @@ from staging.SO_LIQ_IND so
 
 
 -- Delete ALL records from liquidity_indicator related to these exchange_ids not matching
-select *
--- delete
+-- select *
+delete
 from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" li
 where exchange_id in (select EXCHANGE_ID from staging.SO_LIQ_IND)
 and not exists (select null from T_STAY so
@@ -330,7 +330,7 @@ and not exists (select null from T_STAY so
                   and li.is_grey = so.is_grey);
 
 
--- insert into "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY, CREATE_TIME)
+insert into "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR" (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY, CREATE_TIME)
 select exchange_id, trade_liquidity_indicator, description, LIQ_IND_TYPE_ID, is_grey, sysdate
 from staging.SO_LIQ_IND li
 where not exists (select null from T_STAY so
