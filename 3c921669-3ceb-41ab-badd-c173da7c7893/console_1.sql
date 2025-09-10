@@ -363,3 +363,10 @@ from staging.SO_LIQ_IND so
 
 select * from   "GENESIS2_QA_20100601".exchange ex
 where ex.EXCHANGE_ID = 'XNYS';
+
+
+select exchange_id, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY from liquidity_indicator_bkp
+minus
+select exchange_id, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY from "GENESIS2_QA_20100601"."LIQUIDITY_INDICATOR"
+intersect
+select exchange_id, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID, IS_GREY from liquidity_indicator_bkp
