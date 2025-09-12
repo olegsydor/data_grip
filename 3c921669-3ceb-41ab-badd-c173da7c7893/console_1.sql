@@ -374,3 +374,30 @@ select exchange_id, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_
 
 ;
 select * from staging.SO_LIQ_IND
+where EXCHANGE_ID = '24EQ';
+rollback;
+INSERT INTO SO_LIQ_IND (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQ_IND_TYPE_ID, DASH_LIQ_IND_TYPE, IS_GREY)
+VALUES ('24EQ', '1', 'AddDisplayedLiquidity', 1, 'Add', 'N');
+INSERT INTO SO_LIQ_IND (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQ_IND_TYPE_ID, DASH_LIQ_IND_TYPE, IS_GREY)
+VALUES ('24EQ','1','AddDisplayedLiquidity','1','Add','N');
+24EQ,1,AddDisplayedLiquidity,1,Add,N
+24EQ,2,RemovedLiquidity,2,Remove,N
+24EQ,3,LiquidityRoutedOut,3,Route Away,N
+24EQ,51,AddHidden,1,Add,Y
+24EQ,52,AddMidpoint,1,Add,Y
+24EQ,53,AddNbboImprove,1,Add,N
+24EQ,54,AddNbboJoin,1,Add,N
+24EQ,61,ImmediateMidpointRemoveOnEntry,2,Remove,N
+24EQ,62,AddDisplayedPriceImprovement,1,Add,N
+24EQ,63,AddHiddenPriceImprovement,1,Add,Y
+24EQ,101,RetailAddDisplayedLiquidity,1,Add,N
+24EQ,102,RetailRemovedLiquidity,2,Remove,N
+24EQ,103,RetailLiquidityRoutedOut,3,Route Away,N
+24EQ,151,RetailAddHidden,1,Add,Y
+24EQ,152,RetailAddMidpoint,1,Add,Y
+24EQ,153,RetailAddNbboImprove,1,Add,N
+24EQ,154,RetailAddNbboJoin,1,Add,N
+24EQ,159,RetailRemovedOnEntry,2,Remove,N
+24EQ,160,RetailImmediateMidpointRemoveOnEntry,2,Remove,N
+24EQ,161,RetailAddDisplayedPriceImprovement,1,Add,N
+24EQ,163,RetailAddHiddenPriceImprovement,1,Add,Y
