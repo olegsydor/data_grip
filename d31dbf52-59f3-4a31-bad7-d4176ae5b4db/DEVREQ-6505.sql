@@ -2,10 +2,10 @@
 -- DROP FUNCTION dash360.report_obo_compliance_xls_2(int4, int4, bpchar, _int4, _int8, _varchar);
 
 CREATE or replace FUNCTION dash360.report_obo_compliance_xls_2(in_date_begin_id integer, in_date_end_id integer,
-                                                             in_instrument_type character DEFAULT NULL::bpchar,
-                                                             in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                             in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
-                                                             in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+                                                               in_instrument_type character DEFAULT NULL::bpchar,
+                                                               in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                               in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
+                                                               in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
                 "OrderID"                   bigint,
@@ -69,10 +69,12 @@ CREATE or replace FUNCTION dash360.report_obo_compliance_xls_2(in_date_begin_id 
                 "Liquidity Indicator"       character varying,
                 "ExecutionID"               text,
                 "CAT Reporting Firm IMID"   character varying,
+                "Request Date"              text,
                 "Request Time"              text
             )
     LANGUAGE plpgsql
-AS $function$
+AS
+$function$
     -- 2025-07-04
 -- SY: 20250820 https://dashfinancial.atlassian.net/browse/DS-10355 l_retention_date_id field calculation moved from client_order table to gtc_order_status.
 declare
@@ -116,7 +118,7 @@ begin
     select public.load_log(l_load_id, l_step_id, 'l_account_id size is ', cardinality(l_account_ids), 'O')
     into l_step_id;
 
---    select min(cl.create_date_id)
+    --    select min(cl.create_date_id)
 --    into l_retention_date_id
 --    from dwh.client_order cl
 --             join dwh.gtc_order_status gtc on gtc.order_id = cl.order_id and gtc.create_date_id = cl.create_date_id
@@ -130,7 +132,7 @@ begin
 
     select coalesce(min(gtc.create_date_id), l_date_begin_id)
     into l_retention_date_id
-    from  dwh.gtc_order_status gtc
+    from dwh.gtc_order_status gtc
     where true
       and (gtc.close_date_id is null
         or gtc.close_date_id >= l_date_end_id)
@@ -147,17 +149,17 @@ begin
     into l_step_id;
     drop table if exists t_base;
     create temp table t_base as
-    select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
-           orig.client_order_id                                        as orig_client_order_id,
+    select coalesce(staging.last_orig_order(cl.order_id), cl.order_id)                          as first_order_id,
+           orig.client_order_id                                                                 as orig_client_order_id,
            cl.client_order_id,
-           cl.co_client_leg_ref_id                                     as leg_cl_ord_id,
+           cl.co_client_leg_ref_id                                                              as leg_cl_ord_id,
            cl.trans_type,
            cl.order_id,
            cl.fix_message_id,
            cl.create_date_id,
            cl.order_qty,
            cl.price,
-           orig.price                                                  as net_price,
+           orig.price                                                                           as net_price,
            cl.multileg_reporting_type,
            cl.instrument_id,
            cl.time_in_force_id,
@@ -167,7 +169,7 @@ begin
                when cl.multileg_reporting_type = '3' then (select count(*)
                                                            from dwh.client_order cli
                                                            where cli.multileg_order_id = cl.order_id)
-               else mleg.no_legs end                                   as no_legs,
+               else mleg.no_legs end                                                            as no_legs,
            cl.multileg_order_id,
            cl.side,
            cl.order_type_id,
@@ -187,59 +189,63 @@ begin
                when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
                when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
                else ''
-               end                                                     as pcv,
+               end                                                                              as pcv,
            di.instrument_type_id,
-           coalesce(di.last_trade_date, cl.expire_time)                as last_trade_date,
+           coalesce(di.last_trade_date, cl.expire_time)                                         as last_trade_date,
            tf.trading_firm_name,
-           tf.cat_imid                                                 as tf_cat_imid,
-           tf.cat_crd                                                  as tf_cat_crd,
+           tf.cat_imid                                                                          as tf_cat_imid,
+           tf.cat_crd                                                                           as tf_cat_crd,
            dos.root_symbol,
-           ui.symbol                                                   as underlying_symbol,
-           dtif.tif_short_name                                         as tif,
+           ui.symbol                                                                            as underlying_symbol,
+           dtif.tif_short_name                                                                  as tif,
            dot.order_type_name,
            cof.customer_or_firm_name,
-           fmj.tag_9000                                                as par_tag_9000,
-           fmj.tag_50                                                  as par_tag_50,
-           fmj.tag_109                                                 as par_tag_109,
+           fmj.tag_9000                                                                         as par_tag_9000,
+           fmj.tag_50                                                                           as par_tag_50,
+           fmj.tag_109                                                                          as par_tag_109,
            to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-           'UTC'                                                       as par_tag_5050,
+           'UTC'                                                                                as par_tag_5050,
            staging.last_orig_order_process_time(in_order_id := cl.order_id)::timestamp
-               at time zone 'UTC'                                      as par_tag_10061,
+               at time zone 'UTC'                                                               as par_tag_10061,
            cl.process_time,
            ac.account_name,
            ac.account_id,
            ac.account_holder_type,
-           ac.cat_fdid                                                 as ac_fdid,
+           ac.cat_fdid                                                                          as ac_fdid,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then tf.cat_imid end                                as ac_imid,
+                   then tf.cat_imid end                                                         as ac_imid,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then ac.crd_number end                              as ac_number,
+                   then ac.crd_number end                                                       as ac_number,
 --         ac.broker_dealer_mpid,
            fc.sender_sub_id,
-           fmj.tag_58                                                  as exec_text,
-           fmj.tag_17                                                  as exec_id,
-           fmj.tag_52                                                  as par_tag_52,
+           fmj.tag_58                                                                           as exec_text,
+           fmj.tag_17                                                                           as exec_id,
+           fmj.tag_52                                                                           as par_tag_52,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then tf.cat_imid end                                as cat_imid,
+                   then tf.cat_imid end                                                         as cat_imid,
            case
                when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then ac.crd_number end                              as crd_number,
+                   then ac.crd_number end                                                       as crd_number,
            tf.trading_firm_unq_id,
            case
                when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
                when (cl.exec_instruction like '5%' or tag_9291 = 'Y') then 'H'
-               end                                                     as is_held,
-            tag_9281,
-            tag_22017,
-            tag_60                                                     as order_request_time
+               end                                                                              as is_held,
+           fmj.tag_9281,
+           fmj.tag_22017,
+           to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
+           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
+
     from dwh.client_order cl
-             left join lateral (select * from dwh.client_order orig
-                       where orig.order_id = cl.orig_order_id and
-                          orig.create_date_id <= cl.create_date_id
-                           and orig.create_date_id >= l_retention_date_id limit 1) orig on true
+             left join lateral (select *
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and orig.create_date_id <= cl.create_date_id
+                                  and orig.create_date_id >= l_retention_date_id
+                                limit 1) orig on true
              left join dwh.client_order mleg
                        on (mleg.order_id = cl.multileg_order_id
 --                         and mleg.create_date_id >= cl.create_date_id
@@ -257,22 +263,30 @@ begin
              left join dwh.d_fix_connection fc
                        on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
              left join lateral (select --coalesce(fmj.fix_message ->> '10061',
-                                         --       fmj.fix_message ->> '60') as tag_10061,
-                                       fmj.fix_message ->> '5050'         as tag_5050,
-                                       fmj.fix_message ->> '50'           as tag_50,
-                                       fmj.fix_message ->> '109'          as tag_109,
-                                       fmj.fix_message ->> '9000'         as tag_9000,
-                                       fmj.fix_message ->> '58'           as tag_58,
-                                       fmj.fix_message ->> '17'           as tag_17,
-                                       fmj.fix_message ->> '52'           as tag_52,
-                                       fmj.fix_message ->> '9291'         as tag_9291,
-                                       fmj.fix_message ->> '9281'         as tag_9281,
-                                       fmj.fix_message ->> '22017'        as tag_22017,
-                                       fmj.fix_message ->> '60'           as tag_60
+                                       --       fmj.fix_message ->> '60') as tag_10061,
+                                       fmj.fix_message ->> '5050'  as tag_5050,
+                                       fmj.fix_message ->> '50'    as tag_50,
+                                       fmj.fix_message ->> '109'   as tag_109,
+                                       fmj.fix_message ->> '9000'  as tag_9000,
+                                       fmj.fix_message ->> '58'    as tag_58,
+                                       fmj.fix_message ->> '17'    as tag_17,
+                                       fmj.fix_message ->> '52'    as tag_52,
+                                       fmj.fix_message ->> '9291'  as tag_9291,
+                                       fmj.fix_message ->> '9281'  as tag_9281,
+                                       fmj.fix_message ->> '22017' as tag_22017,
+                                       fmj.fix_message ->> '60'    as tag_60
                                 from fix_capture.fix_message_json fmj
                                 where cl.fix_message_id = fmj.fix_message_id
                                   and fmj.date_id >= cl.create_date_id
                                 limit 1) fmj on true
+             left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
+                                from dwh.client_order nxt
+                                         join fix_capture.fix_message_json fmj
+                                              on fmj.fix_message_id = nxt.fix_message_id and
+                                                 fmj.date_id = nxt.create_date_id
+                                where nxt.create_date_id >= cl.create_date_id
+                                  and nxt.orig_order_id = cl.order_id
+                                limit 1) nxt on true
     where cl.parent_order_id is null
       and cl.create_date_id between l_date_begin_id and l_date_end_id
       and case
@@ -318,7 +332,7 @@ begin
                else
                    to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'
                end                                                                                 as event_ts,
-           b.client_order_id::text                                                                       as street_client_order_id,
+           b.client_order_id::text                                                                 as street_client_order_id,
            b.order_qty                                                                             as event_qty,
            b.price                                                                                 as event_price,
 --        null::numeric                                                                           as net_price,
@@ -354,9 +368,9 @@ begin
            b.open_close,
 --           compliance.get_sor_trading_session(b.order_id, b.instrument_type_id, b.create_date_id)    as trading_session,
            case
-			when fmj.tag_9281 in ('A','D','G') or fmj.tag_22017 = 'A' then 'ALL'
-			when fmj.tag_9281 in ('F','C') or fmj.tag_22017 = 'B' then 'REGPOST'
-			else 'REG'                                                                             end as trading_session,
+               when fmj.tag_9281 in ('A', 'D', 'G') or fmj.tag_22017 = 'A' then 'ALL'
+               when fmj.tag_9281 in ('F', 'C') or fmj.tag_22017 = 'B' then 'REGPOST'
+               else 'REG' end                                                                      as trading_session,
            b.is_held                                                                               as is_held,
            case
                when b.cross_order_id is not null then 'Y'
@@ -388,7 +402,8 @@ begin
            ex.exec_type,
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then tf.cat_imid end   as cat_imid,
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
-           fmj.tag_60 as order_request_time
+           order_request_time,
+           cancel_request_time
     from t_base b
              left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -398,16 +413,13 @@ begin
              left join lateral (select fmj.fix_message ->> '10061'          as tag_10061,
                                        coalesce(fmj.fix_message ->> '5050',
                                                 fmj.fix_message ->> '5051') as tag_5050,
---                                                         fmj.fix_message ->> '52'             as tag_52,
+
                                        fmj.fix_message ->> '50'             as tag_50,
                                        fmj.fix_message ->> '109'            as tag_109,
---                                       fmj.fix_message ->> '9000'           as tag_9000,
                                        fmj.fix_message ->> '17'             as tag_17,
---                                       fmj.fix_message ->> '14'             as tag_14,
---                                       fmj.fix_message ->> '9291'           as tag_9291,
+
                                        fmj.fix_message ->> '9281'           as tag_9281,
-                                       fmj.fix_message ->> '22017'          as tag_22017,
-                                       fmj.fix_message ->> '60'          as tag_60
+                                       fmj.fix_message ->> '22017'          as tag_22017
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = ex.fix_message_id
                                   and fmj.date_id >= ex.exec_date_id
@@ -429,46 +441,46 @@ begin
                                    ('G', 'Order Modify', 1),
                                    ('G', 'Order Modify Route', 2))
                                as t(trans_type, order_type_value, rn))
-    select b.first_order_id                                                    as first_order_id,
-           b.order_id                                                          as parent_order_id,
+    select b.first_order_id                                       as first_order_id,
+           b.order_id                                             as parent_order_id,
            b.orig_client_order_id,
            ot.rn,
-           b.client_order_id                                                   as client_order_id,
-           b.exec_id                                                           as exec_id,
+           b.client_order_id                                      as client_order_id,
+           b.exec_id                                              as exec_id,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.trading_firm_name end                                as trading_firm_name,
-           b.trading_firm_name                                                 as trading_firm_name,
+           b.trading_firm_name                                    as trading_firm_name,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.tf_cat_imid end                                      as tf_cat_imid,
-           b.tf_cat_imid                                                       as tf_cat_imid,
+           b.tf_cat_imid                                          as tf_cat_imid,
 --        case
 --            when ot.order_type_value = 'New Order'
 --                then b.tf_cat_crd end                                       as tf_cat_crd,
-           b.tf_cat_crd                                                        as tf_cat_crd,
-           ot.order_type_value                                                 as event_type,
+           b.tf_cat_crd                                           as tf_cat_crd,
+           ot.order_type_value                                    as event_type,
            case
                when ot.order_type_value = 'Cancelled' then b.create_time
-               else coalesce(b.par_tag_5050, b.par_tag_10061) end              as event_ts,
-       case
-           when ot.trans_type = 'G' and rn = 1 then null
-           else b.client_order_id end                                      as street_client_order_id,
+               else coalesce(b.par_tag_5050, b.par_tag_10061) end as event_ts,
+           case
+               when ot.trans_type = 'G' and rn = 1 then null
+               else b.client_order_id end                         as street_client_order_id,
 --            b.street_clorderid::text                                            as street_client_order_id,
-           b.order_qty                                                         as event_qty,
-           b.price                                                             as event_price,
-           b.net_price                                                         as net_price,
-           b.multileg_reporting_type                                           as multileg_indicator,
+           b.order_qty                                            as event_qty,
+           b.price                                                as event_price,
+           b.net_price                                            as net_price,
+           b.multileg_reporting_type                              as multileg_indicator,
            b.no_legs::int4,
 --                            b.multileg_order_id,
-           b.leg_cl_ord_id                                                     as multileg_order_id,
+           b.leg_cl_ord_id                                        as multileg_order_id,
            case
                when ot.rn = 1 then 'true'
-               else 'false' end                                                as manual_flag,
+               else 'false' end                                   as manual_flag,
 --        case
 --            when ot.order_type_value != 'New Order'
 --                then b.exec_text end                                        as exec_text,
-           b.exec_text                                                         as exec_text,
+           b.exec_text                                            as exec_text,
            os.order_status_description,-- et.exec_type_description, ex.order_status,
            b.opra_symbol,
            b.root_symbol,
@@ -479,43 +491,43 @@ begin
                                                      from t_base
                                                      where t_base.multileg_order_id = b.order_id
                                                      limit 1)
-               else b.underlying_symbol end                                    as underlying_symbol,
+               else b.underlying_symbol end                       as underlying_symbol,
            b.pcv,
 --                             case
 --                                 when ot.order_type_value != 'New Order'
 --                                     then b.last_trade_date end                                  as expiration_ts,
-           b.last_trade_date                                                   as expiration_ts,
+           b.last_trade_date                                      as expiration_ts,
            b.side,
            b.tif,
-           b.expire_time                                                       as good_till_ts,
+           b.expire_time                                          as good_till_ts,
 --        case
 --            when ot.order_type_value != 'New Order'
 --                then ex.cum_qty::text end                                   as cum_qty,
-           ex.cum_qty                                                          as cum_qty,
+           ex.cum_qty                                             as cum_qty,
            b.order_type_name,
-           b.process_time                                                        as order_creation_ts,
+           b.process_time                                         as order_creation_ts,
 --        coalesce(b.par_tag_5050, b.par_tag_10061)                           as order_creation_ts,
            b.open_close,
 --           compliance.get_sor_trading_session(b.order_id, b.instrument_type_id, b.create_date_id)    as trading_session,
            case
-			when b.tag_9281 in ('A','D','G') or b.tag_22017 = 'A' then 'ALL'
-			when b.tag_9281 in ('F','C') or b.tag_22017 = 'B' then 'REGPOST'
-			else 'REG'                                                                             end as trading_session,
+               when b.tag_9281 in ('A', 'D', 'G') or b.tag_22017 = 'A' then 'ALL'
+               when b.tag_9281 in ('F', 'C') or b.tag_22017 = 'B' then 'REGPOST'
+               else 'REG' end                                     as trading_session,
 
-           b.is_held                                                           as is_held,
+           b.is_held                                              as is_held,
            case
                when b.cross_order_id is not null then 'Y'
-               else 'N' end                                                    as is_cross,
+               else 'N' end                                       as is_cross,
            b.fee_sensitivity,
            b.stop_price,
            b.max_floor,
            b.customer_or_firm_name,
 
-           b.ex_destination                                                    as ex_destination,
+           b.ex_destination                                       as ex_destination,
            b.ratio_qty,
-           coalesce(b.par_tag_50, b.par_tag_109, b.account_name)               as user_,
-           b.account_name                                                      as account_name,
-           b.account_id                                                        as account_id,
+           coalesce(b.par_tag_50, b.par_tag_109, b.account_name)  as user_,
+           b.account_name                                         as account_name,
+           b.account_id                                           as account_id,
            b.account_holder_type,
            b.ac_fdid,
            b.ac_imid,
@@ -524,20 +536,21 @@ begin
 
            -- Execution Details
 
-           ex.last_mkt                                                         as last_mkt,
+           ex.last_mkt                                            as last_mkt,
 
-           exc.mic_code                                                        as mic_code,
+           exc.mic_code                                           as mic_code,
 
-           ex.trade_liquidity_indicator                                        as trade_liquidity_indicator,
-           null::timestamp                                                     as trade_exec_time,
+           ex.trade_liquidity_indicator                           as trade_liquidity_indicator,
+           null::timestamp                                        as trade_exec_time,
            et.exec_type,
            case
                when ot.order_type_value = 'New Order'
-                   then b.cat_imid end                                         as cat_imid,
+                   then b.cat_imid end                            as cat_imid,
            case
                when ot.order_type_value = 'New Order'
-                   then b.crd_number end                                       as cat_crd,
-        b.order_request_time
+                   then b.crd_number end                          as cat_crd,
+           b.order_request_time,
+           b.cancel_request_time
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -633,7 +646,7 @@ begin
                is_cross                                                      as "Is Cross",
                fee_sensitivity                                               as "Fee Sensitivity",
                stop_price                                                    as "Stop Price",
-               max_floor                                               as "Max Floor",
+               max_floor                                                     as "Max Floor",
                customer_or_firm_name                                         as "Capacity",
                ex_destination                                                as "ExDestination",
                ratio_qty                                                     as "Leg ratio",
@@ -644,7 +657,7 @@ begin
                account_id                                                    as "Account ID",
                account_holder_type                                           as "Account Holder Type",
                ac_fdid                                                       as "Account FDID",
-               ac_imid::text                                                       as "Account IMID",
+               ac_imid::text                                                 as "Account IMID",
                ac_number                                                     as "Account CRD",
                sender_sub_id                                                 as "Sender Type",
 
@@ -654,10 +667,14 @@ begin
                trade_liquidity_indicator                                     as "Liquidity Indicator",
                exec_id                                                       as "ExecutionID",
                ac_imid                                                       as "CAT Reporting Firm IMID",
-               case
-                   when event_type = 'Cancelled' then order_request_time
-                   when event_type ilike '%modify%' then order_request_time
-                    end                        as "Request Time"
+               to_char(case
+                           when event_type = 'Cancelled' then cancel_request_time
+                           when event_type ilike '%modify%' then order_request_time
+                           end, 'DD.MM.YYYY')                                as "Request Date",
+               to_char(case
+                           when event_type = 'Cancelled' then cancel_request_time
+                           when event_type ilike '%modify%' then order_request_time
+                           end, 'HH24:MI:SS.US')                             as "Request Time"
         from (select *
 -- into trash.so_obo
               from t_exs
