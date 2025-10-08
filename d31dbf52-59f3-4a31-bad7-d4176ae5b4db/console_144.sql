@@ -210,12 +210,15 @@ WHERE cl_o.create_date_id = :in_date_id
 
 select  orig_exec_id, contra_exec_id from t_os
 ;
+create temp drop table t_new as
 select * from (select orig_exec_id,
                       contra_exec_id,
                       row_number() over (partition by orig_exec_id order by orig_exec_id desc)     as orig_rn,
                       row_number() over (partition by contra_exec_id order by contra_exec_id desc) as contra_rn
-               from t_os) x
-where x.orig_rn = 1 and x.contra_rn = 1;
+               from t_os
+               ) x
+--          where orig_exec_id = 100000076165891196
+where x.orig_rn = 1 or x.contra_rn = 1;
 ------------
 create temp table t_orig as
     select CL.CROSS_ORDER_ID,
@@ -259,25 +262,59 @@ create temp table t_orig as
 --       and cl.create_date_id = :in_date_id
       and ex.exec_date_id = :in_date_id;
 
-select  orig_exec_id--, contra_exec_id
+select --orig_exec_id,
+       contra_exec_id
 from trash.matched_cross_trades_pg
 except
-select *--exec_id--, contra_exec_id
-from t_cross
+select --orig_exec_id,
+       contra_exec_id
+from t_os
 except
 select  orig_exec_id, contra_exec_id
 from trash.matched_cross_trades_pg
 where contra_exec_id = 100000076192461578
 
-    select * from t_cross
-    where EXEC_ID = 100000076192461582
+select * from t_new
+where orig_exec_id = 100000076165891196;;
 
-    select ex.exec_id, *
-                                 from dwh.execution ex
-                                          inner join dwh.client_order cl on ex.order_id = cl.order_id
-                                 where cl.cross_order_Id = 100000000272630924--orig_trade.cross_order_id
-                                   and cl.instrument_id = 147210358--orig_trade.instrument_id
-                                   and cl.is_originator = 'C'
-                                   and ex.last_qty = 1
-                                   and ex.last_px = 0.72
-                                   and ex.exec_type = 'F'
+INSERT INTO dash_reporting.matched_cross_trades_pg (orig_exec_id, contra_exec_id)
+SELECT DISTINCT
+       ex_o.exec_id AS orig_exec_id,
+       ex_c.exec_id AS contra_exec_id
+FROM dwh.client_order cl_o
+         INNER JOIN dwh.d_instrument i ON i.instrument_id = cl_o.instrument_id
+         INNER JOIN dwh.d_fix_connection fc ON fc.fix_connection_id = cl_o.fix_connection_id
+         INNER JOIN dwh.execution ex_o
+                    ON ex_o.order_id = cl_o.order_id
+                        AND ex_o.exec_date_id >= :in_date_id
+         INNER JOIN dwh.cross_order cro ON cro.cross_order_id = cl_o.cross_order_id
+         INNER JOIN dwh.d_account ac ON ac.account_id = cl_o.account_id
+         INNER JOIN dwh.d_trading_firm tf ON tf.trading_firm_id = ac.trading_firm_id
+         -- З’єднання з контр-трейдами (is_originator = 'C')
+         INNER JOIN dwh.client_order cl_c
+                    ON cl_c.cross_order_id = cl_o.cross_order_id
+                        AND cl_c.instrument_id = cl_o.instrument_id
+                        AND cl_c.is_originator = 'C'
+         INNER JOIN dwh.execution ex_c
+                    ON ex_c.order_id = cl_c.order_id
+                        AND ex_c.exec_type = 'F'
+                        AND ex_c.last_qty = ex_o.last_qty
+                        AND ex_c.last_px = ex_o.last_px
+                        AND ex_c.exec_date_id >= :in_date_id
+WHERE cl_o.create_date_id = :in_date_id
+  AND cl_o.multileg_reporting_type IN ('1', '2')
+  AND cl_o.parent_order_id IS NOT NULL
+  AND ex_o.is_busted = 'N'
+  AND ex_o.exec_type = 'F'
+  AND cl_o.trans_type <> 'F'
+  AND tf.is_eligible4consolidator = 'Y'
+  AND cl_o.internal_component_type = 'A'
+  AND fc.fix_comp_id <> 'IMCCONS'
+  AND cl_o.is_originator = 'O'
+  -- уникаємо дублікатів, які вже є в цільовій таблиці
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dash_reporting.matched_cross_trades_pg mct
+      WHERE mct.orig_exec_id = ex_o.exec_id
+         OR mct.contra_exec_id = ex_c.exec_id
+  );
