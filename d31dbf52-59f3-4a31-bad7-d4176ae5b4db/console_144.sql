@@ -83,13 +83,13 @@ declare
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, '>>>>>>> match_cross_trades_pg for ' || in_date_id::text || ' STARTED===',
+    select public.load_log(l_load_id, l_step_id, '>>>>>>> trash match_cross_trades_pg for ' || in_date_id::text || ' STARTED===',
                            0, 'O')
     into l_step_id;
 
     -- Matching orders
 
-    truncate table select * from trash.matched_cross_trades_pg;
+    truncate table trash.matched_cross_trades_pg;
 
     for orig_trade in (select CL.CROSS_ORDER_ID,
                               CL.ORDER_ID,
@@ -131,9 +131,10 @@ begin
                                    and cl.is_originator = 'C'
                                    and orig_trade.last_qty = ex.last_qty
                                    and orig_trade.last_px = ex.last_px
-                                   and ex.exec_type = 'F')
+                                   and ex.exec_type = 'F'
+                                 and ex.exec_date_id = in_date_id)
                 loop
-                    merge into dash_reporting.matched_cross_trades_pg as mct
+                    merge into trash.matched_cross_trades_pg as mct
                     using (select v_orig_exec_id as orig_exec_id, contra_trade.exec_id as contra_exec_id) mt
                     on (mct.orig_exec_id = mt.orig_exec_id or mct.contra_exec_id = mt.contra_exec_id)
                     when not matched then
@@ -142,11 +143,17 @@ begin
                 end loop;
         end loop;
       select count(*) into l_row_cnt
-	  from dash_reporting.matched_cross_trades_pg;
+	  from trash.matched_cross_trades_pg;
 
-    select public.load_log(l_load_id, l_step_id, '>>>>>>> match_cross_trades_pg for ' || in_date_id::text || ' COMPLETED===',
+    select public.load_log(l_load_id, l_step_id, '>>>>>>> trash match_cross_trades_pg for ' || in_date_id::text || ' COMPLETED===',
                            l_row_cnt, 'O')
     into l_step_id;
 end;
 $procedure$
 ;
+
+call trash.so_match_cross_trades_pg(in_date_id := 20251007)
+
+
+select *
+	  from trash.matched_cross_trades_pg;
