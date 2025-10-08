@@ -42,7 +42,7 @@ select ex.exec_id
                                    and orig_trade.last_qty = ex.last_qty
                                    and orig_trade.last_px = ex.last_px
                                    and ex.exec_type = 'F'
-                                     and ex.exec_date_id >= :in_date_id2
+                                     and ex.exec_date_id >= 20240523
 
         loop
 
@@ -132,7 +132,7 @@ begin
                                    and orig_trade.last_qty = ex.last_qty
                                    and orig_trade.last_px = ex.last_px
                                    and ex.exec_type = 'F'
-                                 and ex.exec_date_id = in_date_id)
+                                 and ex.exec_date_id >= 20240523)
                 loop
                     merge into trash.matched_cross_trades_pg as mct
                     using (select v_orig_exec_id as orig_exec_id, contra_trade.exec_id as contra_exec_id) mt
@@ -163,10 +163,16 @@ select *
 
 
 
-INSERT INTO dash_reporting.matched_cross_trades_pg (orig_exec_id, contra_exec_id)
-SELECT DISTINCT
-       ex_o.exec_id AS orig_exec_id,
-       ex_c.exec_id AS contra_exec_id
+create temp table t_os as
+SELECT ex_o.exec_id AS orig_exec_id,
+null::int8 AS contra_exec_id
+, cl_o.order_id
+,cl_o.create_date_id
+ ,cro.cross_order_id
+,cro.date_id
+
+--                 ,
+--                 exi.exec_id  AS contra_exec_id
 FROM dwh.client_order cl_o
          INNER JOIN dwh.d_instrument i ON i.instrument_id = cl_o.instrument_id
          INNER JOIN dwh.d_fix_connection fc ON fc.fix_connection_id = cl_o.fix_connection_id
@@ -176,16 +182,19 @@ FROM dwh.client_order cl_o
          INNER JOIN dwh.cross_order cro ON cro.cross_order_id = cl_o.cross_order_id
          INNER JOIN dwh.d_account ac ON ac.account_id = cl_o.account_id
          INNER JOIN dwh.d_trading_firm tf ON tf.trading_firm_id = ac.trading_firm_id
-         INNER JOIN dwh.client_order cl_c
-                    ON cl_c.cross_order_id = cl_o.cross_order_id
-                        AND cl_c.instrument_id = cl_o.instrument_id
-                        AND cl_c.is_originator = 'C'
-         INNER JOIN dwh.execution ex_c
-                    ON ex_c.order_id = cl_c.order_id
-                        AND ex_c.exec_type = 'F'
-                        AND ex_c.last_qty = ex_o.last_qty
-                        AND ex_c.last_px = ex_o.last_px
-and ex_c.exec_date_id >= :in_date_id
+
+--          inner join lateral (select exi.exec_id
+--                              from dwh.client_order cli
+--                                       join dwh.execution exi on exi.order_id = cli.order_id
+--                              where cli.cross_order_id = cl_o.cross_order_id
+--                                AND cli.instrument_id = cl_o.instrument_id
+--                                AND cli.is_originator = 'C'
+--                                and exi.exec_type = 'F'
+--                                AND exi.last_qty = ex_o.last_qty
+--                                AND exi.last_px = ex_o.last_px
+--                              order by exi.exec_id desc
+--                              limit 1
+--     ) exi on true
 WHERE cl_o.create_date_id = :in_date_id
   AND cl_o.multileg_reporting_type IN ('1', '2')
   AND cl_o.parent_order_id IS NOT NULL
@@ -196,3 +205,5 @@ WHERE cl_o.create_date_id = :in_date_id
   AND cl_o.internal_component_type = 'A'
   AND fc.fix_comp_id <> 'IMCCONS'
   AND cl_o.is_originator = 'O';
+
+select * from t_os
