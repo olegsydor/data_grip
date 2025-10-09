@@ -790,15 +790,15 @@ select *
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-             left join lateral (select *
-                                from dwh.client_order orig
-                                where orig.order_id = cl.orig_order_id
-                                  and orig.create_date_id <= cl.create_date_id
-                                  and orig.create_date_id >= :l_retention_date_id
-                                limit 1) orig on true
-             left join dwh.client_order mleg
-                       on (mleg.order_id = cl.multileg_order_id
-                           and mleg.create_date_id >= :l_retention_date_id)
+--              left join lateral (select *
+--                                 from dwh.client_order orig
+--                                 where orig.order_id = cl.orig_order_id
+--                                   and orig.create_date_id <= cl.create_date_id
+--                                   and orig.create_date_id >= :l_retention_date_id
+--                                 limit 1) orig on true
+--              left join dwh.client_order mleg
+--                        on (mleg.order_id = cl.multileg_order_id
+--                            and mleg.create_date_id >= :l_retention_date_id)
              left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
              left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
              left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
