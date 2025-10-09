@@ -439,4 +439,147 @@ select ac.account_name, *
 
 
 select * from dwh.d_account
-where account_id = 74176
+where account_id = 74176;
+
+
+    select array_agg(account_id)
+
+    from dwh.d_account
+    where trading_firm_id = 'strategas'
+      and account_name not ilike '%_DESK';
+
+ select tr.date_id,
+           sum(tr.last_qty)                                            as sum_last_qty,
+           sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0) as avg_px,
+           tr.open_close,
+           tr.instrument_id,
+           tr.account_id,
+           tr.side,
+--            tr.cmta,
+--            at.alloc_qty                                                as alloc_qty,
+           sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
+           tr.blaze_account_alias,
+           tr.cmta
+    from dwh.flat_trade_record tr
+             join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
+             left join lateral (select alloc_qty
+                                from dwh.allocation2trade_record atr
+                                where atr.trade_record_id = tr.trade_record_id
+                                  and atr.date_id = tr.date_id
+                                  and atr.is_active
+                                limit 1) at on true
+
+    where tr.date_id between :in_start_date_id and :in_end_date_id
+      and is_busted = 'N'
+      and tr.order_id > 0
+      and acc.account_id = any (:l_account_ids)
+    group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, --tr.cmta,
+             tr.account_nickname, tr.street_account_name,                         --at.alloc_qty,
+             tr.blaze_account_alias,tr.cmta;
+
+
+
+-- DROP FUNCTION dash360.report_fintech_eod_strategas_allocation(int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.report_fintech_eod_strategas_allocation_2(in_start_date_id integer, in_end_date_id integer)
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
+declare
+    l_load_id     int;
+    l_row_cnt     int;
+    l_step_id     int;
+    l_account_ids int4[];
+    l_min_date_id int4;
+begin
+    l_step_id := 0;
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_eod_strategas_allocation 2 for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED ===', 0, 'O')
+    into l_step_id;
+
+    select array_agg(account_id)
+    into l_account_ids
+    from dwh.d_account
+    where trading_firm_id = 'strategas'
+      and account_name not ilike '%_DESK';
+
+--     l_account_ids := '{69406,62961,69406}';
+
+    select coalesce(min(create_date_id), in_start_date_id)
+    into l_min_date_id
+    from dwh.gtc_order_status
+    where close_date_id is null
+      and account_id = any (l_account_ids);
+
+
+    drop table if exists t_report;
+    create temp table t_report as
+    select tr.date_id,
+           sum(tr.last_qty)                                            as sum_last_qty,
+           sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0) as avg_px,
+           tr.open_close,
+           tr.instrument_id,
+           tr.account_id,
+           tr.side,
+           tr.cmta,
+--            at.alloc_qty                                                as alloc_qty,
+           sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
+           tr.blaze_account_alias
+    from dwh.flat_trade_record tr
+             join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
+             left join lateral (select alloc_qty
+                                from dwh.allocation2trade_record atr
+                                where atr.trade_record_id = tr.trade_record_id
+                                  and atr.date_id = tr.date_id
+                                  and atr.is_active
+                                limit 1) at on true
+
+    where tr.date_id between in_start_date_id and in_end_date_id
+      and is_busted = 'N'
+      and tr.order_id > 0
+      and acc.account_id = any (l_account_ids)
+    group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
+             tr.account_nickname, tr.street_account_name,                         --at.alloc_qty,
+             tr.blaze_account_alias;
+
+    return query
+--         select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission';
+        select 'Date,Alias,Side,Total Quantity,Symbol,Average Price,Open/Close,Commission,CMTA';
+
+    return query
+        select array_to_string(ARRAY [
+                                   to_char(ftr.date_id::text::date, 'mm/dd/yyyy') , -- as "Date",
+--                                    tf.trading_firm_name , -- as "TradingFirm",
+--                                    ac.account_name,  -- as "AccountName",
+                                   ftr.blaze_account_alias , -- as "Alias",
+                                   case ftr.side when '1' then 'B' when '2' then 'S' else 'T' end , -- as "Side",
+                                   ftr.sum_last_qty::text , -- as "Total Quantity",
+                                   i.display_instrument_id , -- as "Symbol",
+                                   to_char(ftr.avg_px, 'FM$9999990.0000') , -- as "Average Price",
+                                   case when ftr.open_close = 'O' then 'Open' when ftr.open_close = 'C' then 'Close' end, -- as "Open/Close",
+--                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty)::text , -- as "Allocated Quantity",
+--                                    ftr.cmta,
+                                   to_char(round(client_commission, 2), 'FM$9999990.00'), -- as "Commission",
+                                   cmta
+                                   ], ',', '')
+        from t_report ftr
+                 join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
+                 join dwh.d_account ac on ac.account_id = ftr.account_id
+                 join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                 left join dwh.d_option_contract oc on oc.instrument_id = ftr.instrument_id;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_eod_strategas_allocation 2 for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' COMPLETED ===', l_row_cnt, 'O')
+    into l_step_id;
+
+end;
+$function$
+;
+
+select * from dash360.report_fintech_eod_strategas_allocation_2(20251008, 20251008)
