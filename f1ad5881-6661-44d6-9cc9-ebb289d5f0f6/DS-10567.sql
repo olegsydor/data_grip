@@ -1,3 +1,20 @@
+create temp table t_base as
+    select cl.parent_order_id,
+           min(exec_id)                      as min_exec_id,
+           max(exec_id)                      as max_exec_id,
+           min(cl.parent_order_process_time) as parent_order_process_time,
+           min(ex.order_create_date_id)      as order_create_date_id,
+           (array_agg(order_status order by exec_id desc))[1]
+    from dwh.execution ex
+             join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+    where exec_date_id = :l_date_id
+      and cl.parent_order_id = any ('{375542036167840248, 375542573039807246}')
+      and not is_parent_level
+--      and ex.is_busted <> 'Y'
+      and ex.exec_type in ('F', '0', 'W')
+      and cl.parent_order_id is not null
+    group by cl.parent_order_id;
+
 -- DROP FUNCTION data_marts.load_parent_order_inc(_int8, int4, _int8);
 select * from data_marts.f_parent_order
 where status_date_id = 20251009;
@@ -12,6 +29,7 @@ AS $function$
     -- SO: 20240424 removed leaves_qty
     -- SO: 20240513 replaced get_dateid with get_gth_date_id_by_instrument_type
 	-- SO: 20240604 added checksum to avoid unnecessary record updates
+    -- SO: 20251009 https://dashfinancial.atlassian.net/browse/DS-10567 added order_statys
 declare
     l_row_cnt int4;
     l_load_id int8;
@@ -33,7 +51,8 @@ begin
            min(exec_id)                      as min_exec_id,
            max(exec_id)                      as max_exec_id,
            min(cl.parent_order_process_time) as parent_order_process_time,
-           min(ex.order_create_date_id)      as order_create_date_id
+           min(ex.order_create_date_id)      as order_create_date_id,
+           (array_agg(order_status order by exec_id desc))[1] as last_order_status
     from dwh.execution ex
              join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
     where exec_date_id = l_date_id
@@ -70,9 +89,10 @@ begin
            par.instrument_type_id  as instrument_type_id,
            par.trading_firm_unq_id as trading_firm_unq_id,
            par.order_qty           as parent_order_qty,
-           par.side                as side
+           par.side                as side,
     --           ex.leaves_qty           as leaves_qty /* SY: we do not track cancels rejects etc. So we are not able to track leaves_qty correctly. Let's skip that field */
 --            0                       as leaves_qty /* SO: aggree and confirmed with O.Semenchenko */
+           base.last_order_status  as last_order_status
     from t_base base
              join lateral (select par.parent_order_id,
                                   par.create_date_id,
@@ -138,7 +158,8 @@ begin
                                            pg_db_create_time,
                                            order_qty,
                                            time_in_force_id, account_id, trading_firm_unq_id, instrument_id,
-                                           instrument_type_id, side, check_sum)
+                                           instrument_type_id, side, check_sum,
+                                           order_status)
     select tp.parent_order_id,
            tp.max_exec_id,
            tp.create_date_id,
@@ -157,7 +178,8 @@ begin
            tp.instrument_id,
            tp.instrument_type_id,
            tp.side,
-           md5(row (l_date_id, tp.max_exec_id, tp.street_count, tp.create_date_id, tp.trade_count, tp.last_qty, tp.amount, tp.street_order_qty, tp.parent_order_qty, tp.instrument_id)::text) as check_sum
+           md5(row (l_date_id, tp.max_exec_id, tp.street_count, tp.create_date_id, tp.trade_count, tp.last_qty, tp.amount, tp.street_order_qty, tp.parent_order_qty, tp.instrument_id)::text) as check_sum,
+           tp.last_order_status
     from t_parent_orders tp
              left join data_marts.f_parent_order fp
                        on fp.parent_order_id = tp.parent_order_id and fp.status_date_id = l_date_id
@@ -171,7 +193,8 @@ begin
             street_order_qty  = excluded.street_order_qty,
             pg_db_update_time = clock_timestamp(),
             instrument_id     = excluded.instrument_id,
-            check_sum         = excluded.check_sum
+            check_sum         = excluded.check_sum,
+            order_status      = excluded.order_status
         where data_marts.f_parent_order.check_sum is distinct from excluded.check_sum;
     get diagnostics l_row_cnt = row_count;
 --     raise notice 't_parent_orders insert - %', l_row_cnt;

@@ -649,3 +649,191 @@ case
 end;
 $function$
 ;
+
+
+
+select array_agg(account_id)
+--     into l_account_ids
+    from dwh.d_account
+    where true
+      and trading_firm_id in ('socgenps', 'socgeneqd')
+      and is_active;
+
+    SELECT array_agg(fc.fix_connection_id)
+--     into l_fix_connection_id -- {233,285,833,950,250,287,379,380,592,748,750,751,752,1506,593,924,251,1866,2171,1876,1918,69,94,591,67,93,40,68,231,42,44}
+    FROM dwh.d_fix_connection AS fc
+    WHERE fix_comp_id ilike '%blaze%'
+      and is_active
+      and acceptor_id = 'BLAZELB';
+
+
+    select coalesce(min(gtc.create_date_id), :l_date_begin_id)
+--     into l_retention_date_id
+    from dwh.gtc_order_status gtc
+    join dwh.client_order cl using (order_id, create_date_id)
+    where true
+      and (gtc.close_date_id is null
+        or gtc.close_date_id >= :l_date_end_id)
+      and cl.account_id = any (:l_account_ids);
+
+
+
+
+    drop table if exists t_base;
+    create temp table t_base as
+    select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
+           orig.client_order_id                                        as orig_client_order_id,
+           cl.client_order_id,
+           cl.co_client_leg_ref_id                                     as leg_cl_ord_id,
+           cl.trans_type,
+           cl.order_id,
+           cl.fix_message_id,
+           cl.create_date_id,
+           cl.order_qty,
+           cl.price,
+           orig.price                                                  as net_price,
+           cl.multileg_reporting_type,
+           cl.instrument_id,
+           cl.time_in_force_id,
+           cl.expire_time,
+           cl.create_time,
+           case
+               when cl.multileg_reporting_type = '3' then (select count(*)
+                                                           from dwh.client_order cli
+                                                           where cli.multileg_order_id = cl.order_id)
+               else mleg.no_legs end                                   as no_legs,
+           cl.multileg_order_id,
+           cl.side,
+           cl.order_type_id,
+           cl.open_close,
+           cl.exec_instruction,
+           cl.cross_order_id,
+           cl.fee_sensitivity,
+           cl.stop_price,
+           cl.max_floor,
+           cl.ex_destination,
+           cl.ratio_qty,
+           cl.customer_or_firm_id,
+           oc.opra_symbol,
+           di.symbol,
+           case
+               when di.instrument_type_id = 'E' then 'Stock'
+               when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
+               when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
+               else ''
+               end                                                     as pcv,
+           di.instrument_type_id,
+           coalesce(di.last_trade_date, cl.expire_time)                as last_trade_date,
+           tf.trading_firm_name,
+           tf.cat_imid                                                 as tf_cat_imid,
+           tf.cat_crd                                                  as tf_cat_crd,
+           dos.root_symbol,
+           ui.symbol                                                   as underlying_symbol,
+           dtif.tif_short_name                                         as tif,
+           dot.order_type_name,
+           cof.customer_or_firm_name,
+           fmj.tag_9000                                                as par_tag_9000,
+           fmj.tag_50                                                  as par_tag_50,
+           fmj.tag_109                                                 as par_tag_109,
+           to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+           'UTC'                                                       as par_tag_5050,
+           staging.last_orig_order_process_time(in_order_id := cl.order_id)::timestamp
+               at time zone 'UTC'                                      as par_tag_10061,
+           cl.process_time,
+           ac.account_name,
+           ac.account_id,
+           ac.account_holder_type,
+--           ac.cat_fdid                                                 as ac_fdid,
+--           case
+--               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
+--                   then tf.cat_imid end                                as ac_imid_old,
+
+
+case
+	when ac.cat_fdid like ':' then split_part(ac.cat_fdid, ':', 2)
+	when ac.customer_is_broker_dealer is distinct from 'N'
+	    then ac.customer_broker_dealer_mpid end                                                             as ac_imid,
+case
+-- 	when ac.cat_fdid like '%:%' then split_part(ac.cat_fdid, ':', 1)
+	when ac.customer_is_broker_dealer is not distinct from 'N' then ac.cat_fdid end                        as ac_fdid,
+
+           case
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
+                   then ac.crd_number end                              as ac_number,
+--         ac.broker_dealer_mpid,
+           fc.sender_sub_id,
+           fmj.tag_58                                                  as exec_text,
+           fmj.tag_17                                                  as exec_id,
+           fmj.tag_52                                                  as par_tag_52,
+           ac.crd_number as crd_number_original,
+           case
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
+                   then tf.cat_imid end                                as cat_imid,
+
+           case
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
+                   then ac.crd_number end                              as crd_number,
+           tf.trading_firm_unq_id,
+           case
+               when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
+               when (cl.exec_instruction like '5%' or tag_9291 = 'Y') then 'H'
+               end                                                     as is_held,
+           tag_9281,
+           tag_22017
+    , fmj.tag_21
+    , cl.fix_connection_id,
+    ac.is_affiliate as is_affiliated,
+    to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
+           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
+select *
+    from dwh.client_order cl
+             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             left join lateral (select *
+                                from dwh.client_order orig
+                                where orig.order_id = cl.orig_order_id
+                                  and orig.create_date_id <= cl.create_date_id
+                                  and orig.create_date_id >= :l_retention_date_id
+                                limit 1) orig on true
+             left join dwh.client_order mleg
+                       on (mleg.order_id = cl.multileg_order_id
+                           and mleg.create_date_id >= :l_retention_date_id)
+             left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
+             left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
+             left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
+             left join dwh.d_time_in_force dtif on dtif.tif_id = cl.time_in_force_id
+             left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
+             left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
+             left join dwh.d_fix_connection fc
+                       on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
+             left join lateral (select fmj.fix_message ->> '5050'  as tag_5050,
+                                       fmj.fix_message ->> '50'    as tag_50,
+                                       fmj.fix_message ->> '109'   as tag_109,
+                                       fmj.fix_message ->> '9000'  as tag_9000,
+                                       fmj.fix_message ->> '58'    as tag_58,
+                                       fmj.fix_message ->> '17'    as tag_17,
+                                       fmj.fix_message ->> '52'    as tag_52,
+                                       fmj.fix_message ->> '9291'  as tag_9291,
+                                       fmj.fix_message ->> '9281'  as tag_9281,
+                                       fmj.fix_message ->> '22017' as tag_22017,
+                                       fmj.fix_message ->> '21'    as tag_21,
+                                       fmj.fix_message ->> '60'    as tag_60
+                                from fix_capture.fix_message_json fmj
+                                where cl.fix_message_id = fmj.fix_message_id
+                                  and fmj.date_id >= cl.create_date_id
+                                limit 1) fmj on true
+                 left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
+                                from dwh.client_order nxt
+                                         join fix_capture.fix_message_json fmj
+                                              on fmj.fix_message_id = nxt.fix_message_id and
+                                                 fmj.date_id = nxt.create_date_id
+                                where nxt.create_date_id >= cl.create_date_id
+                                  and nxt.orig_order_id = cl.order_id
+                                limit 1) nxt on true
+    where cl.parent_order_id is null
+      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
+      and coalesce(fmj.tag_21, '1') != '3'
+      and cl.account_id = any (:l_account_ids)
+      and cl.trans_type <> 'F'
+      and coalesce(cl.fix_connection_id, '-1') != all (:l_fix_connection_id);
