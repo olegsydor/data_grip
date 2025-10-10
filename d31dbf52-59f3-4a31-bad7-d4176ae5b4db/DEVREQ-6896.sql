@@ -1,11 +1,10 @@
---https://dashfinancial.atlassian.net/browse/DEVREQ-6505
--- DROP FUNCTION dash360.report_obo_compliance_xls_2(int4, int4, bpchar, _int4, _int8, _varchar);
+DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar);
 
-CREATE or replace FUNCTION dash360.report_obo_compliance_xls_2(in_date_begin_id integer, in_date_end_id integer,
-                                                               in_instrument_type character DEFAULT NULL::bpchar,
-                                                               in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                               in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
-                                                               in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+CREATE FUNCTION dash360.report_obo_compliance_xls_sumit(in_date_begin_id integer, in_date_end_id integer,
+                                                        in_instrument_type character DEFAULT NULL::bpchar,
+                                                        in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                        in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
+                                                        in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
                 "OrderID"                   bigint,
@@ -73,8 +72,7 @@ CREATE or replace FUNCTION dash360.report_obo_compliance_xls_2(in_date_begin_id 
                 "Request Time"              text
             )
     LANGUAGE plpgsql
-AS
-$function$
+AS $function$
     -- 2025-07-04
 -- SY: 20250820 https://dashfinancial.atlassian.net/browse/DS-10355 l_retention_date_id field calculation moved from client_order table to gtc_order_status.
 declare
@@ -238,6 +236,8 @@ begin
            fmj.tag_22017,
            to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
            to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
+,
+        oc.strike_price
 
     from dwh.client_order cl
              left join lateral (select *
@@ -403,7 +403,8 @@ begin
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then tf.cat_imid end   as cat_imid,
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
            order_request_time,
-           cancel_request_time
+           cancel_request_time,
+           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
     from t_base b
              left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -550,7 +551,8 @@ begin
                when ot.order_type_value = 'New Order'
                    then b.crd_number end                          as cat_crd,
            b.order_request_time,
-           b.cancel_request_time
+           b.cancel_request_time,
+           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -683,31 +685,3 @@ begin
 end;
 $function$
 ;
-
-
-
----
-select cl.account_id
-from dwh.client_order cl
-             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
-             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-
-    where cl.parent_order_id is null
-      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
-      and di.instrument_type_id = 'O'
-      and cl.trans_type <> 'F'
-and not exists (select null from dwh.gtc_order_status gos where gos.account_id = cl.account_id and gos.close_date_id is null);
-
-
-select *
-from dash360.report_obo_compliance_xls_2(20250218, 20250221, null,
-                                         '{58549,64894,68334,71776,71797,71827,71852,71871,72082,72991,73089}',
-                                         '{19158555678,19159621489,19158555679,19159621495,19158555680,19159621501,19161719278,19161719279,19161719282,19163253234,19163264539,19168490738,19176656452,19176967344,19176978122,19176979238,19179142317,19179142678,19179143605,19179143648,19179143792,19191747171,19197256857,19191747172,19197256860,19191747174,19197256862,19197561973,19218836009,19218836011,19218836014,19222801424,19238029924,19245808594}');
-
-
-
--- drop function if exists dash360.report_obo_compliance_xls;
--- alter function dash360.report_obo_compliance_xls_2 rename to report_obo_compliance_xls;
-
-
