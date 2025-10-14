@@ -1,180 +1,15 @@
-select cl.account_id, count(*)
-from dwh.client_order cl
-             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
-             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-
-    where cl.parent_order_id is null
-      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
-      and di.instrument_type_id = 'O'
-      and cl.trans_type <> 'F'
-and not exists (select null from dwh.gtc_order_status gos where gos.close_date_id is null and gos.account_id = cl.account_id)
-group by cl.account_id;
+-- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar);
+select distinct ex_destination
+from dwh.client_order
+where create_date_id = 20251010;
 
 
-
-    create temp table t_base as
-    select coalesce(staging.last_orig_order(cl.order_id), cl.order_id)                          as first_order_id,
-           orig.client_order_id                                                                 as orig_client_order_id,
-           cl.client_order_id,
-           cl.co_client_leg_ref_id                                                              as leg_cl_ord_id,
-           cl.trans_type,
-           cl.order_id,
-           cl.fix_message_id,
-           cl.create_date_id,
-           cl.order_qty,
-           cl.price,
-           orig.price                                                                           as net_price,
-           cl.multileg_reporting_type,
-           cl.instrument_id,
-           cl.time_in_force_id,
-           cl.expire_time,
-           cl.create_time,
-           case
-               when cl.multileg_reporting_type = '3' then (select count(*)
-                                                           from dwh.client_order cli
-                                                           where cli.multileg_order_id = cl.order_id)
-               else mleg.no_legs end                                                            as no_legs,
-           cl.multileg_order_id,
-           cl.side,
-           cl.order_type_id,
-           cl.open_close,
-           cl.exec_instruction,
-           cl.cross_order_id,
-           cl.fee_sensitivity,
-           cl.stop_price,
-           cl.max_floor,
-           cl.ex_destination,
-           cl.ratio_qty,
-           cl.customer_or_firm_id,
-           oc.opra_symbol,
-           di.symbol,
-           case
-               when di.instrument_type_id = 'E' then 'Stock'
-               when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
-               when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
-               else ''
-               end                                                                              as pcv,
-           di.instrument_type_id,
-           coalesce(di.last_trade_date, cl.expire_time)                                         as last_trade_date,
-           tf.trading_firm_name,
-           tf.cat_imid                                                                          as tf_cat_imid,
-           tf.cat_crd                                                                           as tf_cat_crd,
-           dos.root_symbol,
-           ui.symbol                                                                            as underlying_symbol,
-           dtif.tif_short_name                                                                  as tif,
-           dot.order_type_name,
-           cof.customer_or_firm_name,
-           fmj.tag_9000                                                                         as par_tag_9000,
-           fmj.tag_50                                                                           as par_tag_50,
-           fmj.tag_109                                                                          as par_tag_109,
-           to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-           'UTC'                                                                                as par_tag_5050,
-           staging.last_orig_order_process_time(in_order_id := cl.order_id)::timestamp
-               at time zone 'UTC'                                                               as par_tag_10061,
-           cl.process_time,
-           ac.account_name,
-           ac.account_id,
-           ac.account_holder_type,
-           ac.cat_fdid                                                                          as ac_fdid,
-           case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then tf.cat_imid end                                                         as ac_imid,
-           case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then ac.crd_number end                                                       as ac_number,
---         ac.broker_dealer_mpid,
-           fc.sender_sub_id,
-           fmj.tag_58                                                                           as exec_text,
-           fmj.tag_17                                                                           as exec_id,
-           fmj.tag_52                                                                           as par_tag_52,
-           case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then tf.cat_imid end                                                         as cat_imid,
-           case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
-                   then ac.crd_number end                                                       as crd_number,
-           tf.trading_firm_unq_id,
-           case
-               when (cl.exec_instruction like '1%' or tag_9291 = 'N') then 'NH'
-               when (cl.exec_instruction like '5%' or tag_9291 = 'Y') then 'H'
-               end                                                                              as is_held,
-           fmj.tag_9281,
-           fmj.tag_22017,
-           to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
-           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
-,
-        oc.strike_price
-select *
-    from dwh.client_order cl
-             left join lateral (select *
-                                from dwh.client_order orig
-                                where orig.order_id = cl.orig_order_id
-                                  and orig.create_date_id <= cl.create_date_id
-                                  and orig.create_date_id >= :l_retention_date_id
-                                limit 1) orig on true
-             left join dwh.client_order mleg
-                       on (mleg.order_id = cl.multileg_order_id
---                         and mleg.create_date_id >= cl.create_date_id
-                           and mleg.create_date_id >= :l_retention_date_id)
-             join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
-             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-
-             left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
-             left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
-             left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
-             left join dwh.d_time_in_force dtif on dtif.tif_id = cl.time_in_force_id
-             left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
-             left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
-             left join dwh.d_fix_connection fc
-                       on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
-             left join lateral (select --coalesce(fmj.fix_message ->> '10061',
-                                       --       fmj.fix_message ->> '60') as tag_10061,
-                                       fmj.fix_message ->> '5050'  as tag_5050,
-                                       fmj.fix_message ->> '50'    as tag_50,
-                                       fmj.fix_message ->> '109'   as tag_109,
-                                       fmj.fix_message ->> '9000'  as tag_9000,
-                                       fmj.fix_message ->> '58'    as tag_58,
-                                       fmj.fix_message ->> '17'    as tag_17,
-                                       fmj.fix_message ->> '52'    as tag_52,
-                                       fmj.fix_message ->> '9291'  as tag_9291,
-                                       fmj.fix_message ->> '9281'  as tag_9281,
-                                       fmj.fix_message ->> '22017' as tag_22017,
-                                       fmj.fix_message ->> '60'    as tag_60
-                                from fix_capture.fix_message_json fmj
-                                where cl.fix_message_id = fmj.fix_message_id
-                                  and fmj.date_id >= cl.create_date_id
-                                limit 1) fmj on true
-             left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
-                                from dwh.client_order nxt
-                                         join fix_capture.fix_message_json fmj
-                                              on fmj.fix_message_id = nxt.fix_message_id and
-                                                 fmj.date_id = nxt.create_date_id
-                                where nxt.create_date_id >= cl.create_date_id
-                                  and nxt.orig_order_id = cl.order_id
-                                and nxt.create_date_id >= :l_date_begin_id
-                                limit 1) nxt on true
-    where cl.parent_order_id is null
-      and cl.create_date_id between :l_date_begin_id and :l_date_end_id
-      and case
-              when coalesce(:l_account_ids, '{}') = '{}' then true
-              else cl.account_id = any (:l_account_ids) end
-
-      and case when :in_instrument_type is null then true else di.instrument_type_id = :in_instrument_type end
-      and cl.trans_type <> 'F';
-
-
-select * from dash360.report_obo_compliance_xls_summit(20251010, 20251013, 'O', '{6331}')
-
-
-DROP FUNCTION dash360.report_obo_compliance_xls_summit(int4, int4, bpchar, _int4, _int8, _varchar);
-
-CREATE or replace FUNCTION dash360.report_obo_compliance_xls_summit(in_date_begin_id integer, in_date_end_id integer,
-                                                        in_instrument_type character DEFAULT NULL::bpchar,
-                                                        in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                        in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
-                                                        in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar);
+CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
+                                                             in_instrument_type character DEFAULT NULL::bpchar,
+                                                             in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                             in_parent_order_ids bigint[] DEFAULT '{}'::bigint[],
+                                                             in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
                 "OrderID"                   bigint,
@@ -240,11 +75,12 @@ CREATE or replace FUNCTION dash360.report_obo_compliance_xls_summit(in_date_begi
                 "CAT Reporting Firm IMID"   character varying,
                 "Request Date"              text,
                 "Request Time"              text,
-                "Strike Price"              numeric,
-                "Remaining Qty"             bigint
+                "Affiliated Flag"           character,
+                "Solicitation Flag"         text
             )
     LANGUAGE plpgsql
-AS $function$
+AS
+$function$
     -- 2025-07-04
 -- SY: 20250820 https://dashfinancial.atlassian.net/browse/DS-10355 l_retention_date_id field calculation moved from client_order table to gtc_order_status.
 declare
@@ -383,10 +219,10 @@ begin
            ac.account_holder_type,
            ac.cat_fdid                                                                          as ac_fdid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then tf.cat_imid end                                                         as ac_imid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then ac.crd_number end                                                       as ac_number,
 --         ac.broker_dealer_mpid,
            fc.sender_sub_id,
@@ -394,10 +230,10 @@ begin
            fmj.tag_17                                                                           as exec_id,
            fmj.tag_52                                                                           as par_tag_52,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then tf.cat_imid end                                                         as cat_imid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then ac.crd_number end                                                       as crd_number,
            tf.trading_firm_unq_id,
            case
@@ -407,9 +243,9 @@ begin
            fmj.tag_9281,
            fmj.tag_22017,
            to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
-           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
-,
-        oc.strike_price
+           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time,
+           ac.is_affiliate,
+           case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                           as solicitation-- if 'Y' - Y otherwise N
 
     from dwh.client_order cl
              left join lateral (select *
@@ -458,7 +294,8 @@ begin
                                                  fmj.date_id = nxt.create_date_id
                                 where nxt.create_date_id >= cl.create_date_id
                                   and nxt.orig_order_id = cl.order_id
-                                and nxt.create_date_id >= l_date_begin_id
+                                  and nxt.create_date_id >= l_date_begin_id
+                                  and nxt.create_date_id <= l_date_end_id
                                 limit 1) nxt on true
     where cl.parent_order_id is null
       and cl.create_date_id between l_date_begin_id and l_date_end_id
@@ -577,8 +414,8 @@ begin
            case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
            order_request_time,
            cancel_request_time,
-           strike_price,
-           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
+           b.is_affiliate,
+           null                                                                                    as solicitation
     from t_base b
              left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -726,8 +563,10 @@ begin
                    then b.crd_number end                          as cat_crd,
            b.order_request_time,
            b.cancel_request_time,
-           b.strike_price,
-           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
+           b.is_affiliate,
+           case
+               when ot.order_type_value = 'New Order'
+                   then b.solicitation end                        as solicitation
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -852,8 +691,8 @@ begin
                            when event_type = 'Cancelled' then cancel_request_time
                            when event_type ilike '%modify%' then order_request_time
                            end, 'HH24:MI:SS.US')                             as "Request Time",
-            strike_price as "Strike Price",
-            remaining_qty as "Remaining Qty"
+               is_affiliate                                                  as "Affiliated Flag",
+               solicitation                                                  as "Solicitation Flag"
         from (select *
 -- into trash.so_obo
               from t_exs
@@ -865,6 +704,7 @@ $function$
 
 
 
--- compare 2 DEV
--- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar);
-
+select *
+from dash360.report_obo_compliance_xls(20250218, 20250221, null,
+                                         '{58549,64894,68334,71776,71797,71827,71852,71871,72082,72991,73089}',
+                                         '{19158555678,19159621489,19158555679,19159621495,19158555680,19159621501,19161719278,19161719279,19161719282,19163253234,19163264539,19168490738,19176656452,19176967344,19176978122,19176979238,19179142317,19179142678,19179143605,19179143648,19179143792,19191747171,19197256857,19191747172,19197256860,19191747174,19197256862,19197561973,19218836009,19218836011,19218836014,19222801424,19238029924,19245808594}');
