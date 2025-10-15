@@ -56,17 +56,24 @@ CREATE TABLE genesis2.allocation_instruction (
 	deleted_by_user_id int4 NULL,
 	dataset_id int4 NULL,
 	status bpchar NULL,
-	CONSTRAINT pk_allocation_instruction PRIMARY KEY (alloc_instr_id),
-	CONSTRAINT fk_all_instr_account FOREIGN KEY (account_id) REFERENCES genesis2.account(account_id) DEFERRABLE INITIALLY DEFERRED,
-	CONSTRAINT fk_all_instr_deluser FOREIGN KEY (deleted_by_user_id) REFERENCES genesis2.user_identifier(user_id) DEFERRABLE INITIALLY DEFERRED,
-	CONSTRAINT fk_all_instr_subsystem FOREIGN KEY (created_by_subsystem_id) REFERENCES genesis2.sub_system(sub_system_id) DEFERRABLE INITIALLY DEFERRED,
-	CONSTRAINT fk_all_instr_user FOREIGN KEY (created_by_user_id) REFERENCES genesis2.user_identifier(user_id) DEFERRABLE INITIALLY DEFERRED
+	CONSTRAINT pk_allocation_instruction PRIMARY KEY (alloc_instr_id)
 );
 CREATE INDEX all_instr_date_id_idx ON genesis2.allocation_instruction USING btree (date_id);
 CREATE INDEX all_instr_etl_upd_idx ON genesis2.allocation_instruction USING btree (is_deleted, delete_time);
 CREATE INDEX allocation_instruction_account_id_idx ON genesis2.allocation_instruction USING btree (account_id, is_deleted);
 CREATE INDEX allocation_instruction_dataset_idx ON genesis2.allocation_instruction USING btree (dataset_id);
 COMMENT ON TABLE genesis2.allocation_instruction IS 'AllocationInstruction: It is always full yallocated;';
+
+
+
+alter table genesis2.allocation_instruction
+    add CONSTRAINT fk_all_instr_account FOREIGN KEY (account_id) REFERENCES genesis2.account (account_id) DEFERRABLE INITIALLY DEFERRED;
+alter table genesis2.allocation_instruction
+    add CONSTRAINT fk_all_instr_deluser FOREIGN KEY (deleted_by_user_id) REFERENCES genesis2.user_identifier (user_id) DEFERRABLE INITIALLY DEFERRED;
+alter table genesis2.allocation_instruction
+    add CONSTRAINT fk_all_instr_subsystem FOREIGN KEY (created_by_subsystem_id) REFERENCES genesis2.sub_system(sub_system_id) DEFERRABLE INITIALLY DEFERRED;
+alter table genesis2.allocation_instruction
+    add CONSTRAINT fk_all_instr_user FOREIGN KEY (created_by_user_id) REFERENCES genesis2.user_identifier(user_id) DEFERRABLE INITIALLY DEFERRED;
 
 -- Column comments
 
@@ -129,6 +136,60 @@ CREATE SEQUENCE genesis2.clearing_instruction_clearing_instr_entry_id_seq
 	START 1
 	CACHE 1
 	NO CYCLE;
+
+
+
+CREATE TABLE genesis2.clearing_instruction (
+	clearing_instr_id serial4 NOT NULL,
+	date_id int4 NOT NULL,
+	status bpchar(1) NOT NULL, -- 'P' - Pending, 'C' - Claimed, 'J' - Rejected, 'D' - Done, 'R' - Recalled
+	remarks varchar(256) NULL,
+	create_time timestamp DEFAULT now() NULL,
+	created_by_user_id int4 NULL,
+	claim_time timestamp NULL,
+	claimed_by_user_id int4 NULL,
+	is_deleted bpchar(1) DEFAULT 'N'::bpchar NULL,
+	delete_time timestamp NULL,
+	deleted_by_user_id int4 NULL,
+	process_time timestamp NULL,
+	processed_by_user_id int4 NULL,
+	modification_type bpchar NULL, -- 'M' - Modify, 'R' - Reduce, 'B' - Bust
+	CONSTRAINT clearing_instruction_pkey PRIMARY KEY (clearing_instr_id),
+	CONSTRAINT clearing_instruction_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES genesis2.user_identifier(user_id),
+	CONSTRAINT clearing_instruction_deleted_by_user_id_fkey FOREIGN KEY (deleted_by_user_id) REFERENCES genesis2.user_identifier(user_id)
+);
+CREATE INDEX clearing_instruction_date_id_idx ON genesis2.clearing_instruction USING btree (date_id);
+
+-- Column comments
+
+COMMENT ON COLUMN genesis2.clearing_instruction.status IS '''P'' - Pending, ''C'' - Claimed, ''J'' - Rejected, ''D'' - Done, ''R'' - Recalled';
+COMMENT ON COLUMN genesis2.clearing_instruction.modification_type IS '''M'' - Modify, ''R'' - Reduce, ''B'' - Bust';
+
+
+-- Table Triggers
+CREATE OR REPLACE FUNCTION genesis2.f_trg_clearing_instruction_upd_status()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare
+begin
+    insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
+	Select 'PTA_STATUS_UPDATE', 'GENESIS2.CLEARING_INSTRUCTION', new.clearing_instr_id, new.date_id
+     on conflict (subscription_name,source_table_name,load_batch_id,date_id)
+    do update
+    set is_processed =false,
+        subscribe_time = clock_timestamp() ,
+        process_time = null;
+
+    RETURN NEW;
+END;
+$function$
+;
+
+create trigger trg_clearing_instruction_upd_status before
+update
+    of status on
+    genesis2.clearing_instruction for each row execute function f_trg_clearing_instruction_upd_status();
 
 
 
@@ -199,68 +260,8 @@ update
     genesis2.clearing_instruction_entry for each row execute function f_trg_clearing_instruction_entry_upd_e_r_status();
 
 
- DROP TABLE genesis2.clearing_instruction;
 
-CREATE TABLE genesis2.clearing_instruction (
-	clearing_instr_id serial4 NOT NULL,
-	date_id int4 NOT NULL,
-	status bpchar(1) NOT NULL, -- 'P' - Pending, 'C' - Claimed, 'J' - Rejected, 'D' - Done, 'R' - Recalled
-	remarks varchar(256) NULL,
-	create_time timestamp DEFAULT now() NULL,
-	created_by_user_id int4 NULL,
-	claim_time timestamp NULL,
-	claimed_by_user_id int4 NULL,
-	is_deleted bpchar(1) DEFAULT 'N'::bpchar NULL,
-	delete_time timestamp NULL,
-	deleted_by_user_id int4 NULL,
-	process_time timestamp NULL,
-	processed_by_user_id int4 NULL,
-	modification_type bpchar NULL, -- 'M' - Modify, 'R' - Reduce, 'B' - Bust
-	CONSTRAINT clearing_instruction_pkey PRIMARY KEY (clearing_instr_id),
-	CONSTRAINT clearing_instruction_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES genesis2.user_identifier(user_id),
-	CONSTRAINT clearing_instruction_deleted_by_user_id_fkey FOREIGN KEY (deleted_by_user_id) REFERENCES genesis2.user_identifier(user_id)
-);
-CREATE INDEX clearing_instruction_date_id_idx ON genesis2.clearing_instruction USING btree (date_id);
-
--- Column comments
-
-COMMENT ON COLUMN genesis2.clearing_instruction.status IS '''P'' - Pending, ''C'' - Claimed, ''J'' - Rejected, ''D'' - Done, ''R'' - Recalled';
-COMMENT ON COLUMN genesis2.clearing_instruction.modification_type IS '''M'' - Modify, ''R'' - Reduce, ''B'' - Bust';
-
--- SHOULD HAVE BEEN CREATED AUTOMATICALLY but check it
-CREATE SEQUENCE genesis2.allocation_instruction_alloc_instr_id_seq
-	NO MINVALUE
-	MAXVALUE 9223372036854775807
-	CACHE 1
-	NO CYCLE;
-------------------------------------------------------------
--- Table Triggers
-CREATE OR REPLACE FUNCTION genesis2.f_trg_clearing_instruction_upd_status()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-declare
-begin
-    insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
-	Select 'PTA_STATUS_UPDATE', 'GENESIS2.CLEARING_INSTRUCTION', new.clearing_instr_id, new.date_id
-     on conflict (subscription_name,source_table_name,load_batch_id,date_id)
-    do update
-    set is_processed =false,
-        subscribe_time = clock_timestamp() ,
-        process_time = null;
-
-    RETURN NEW;
-END;
-$function$
-;
-
-create trigger trg_clearing_instruction_upd_status before
-update
-    of status on
-    genesis2.clearing_instruction for each row execute function f_trg_clearing_instruction_upd_status();
--- DROP FUNCTION genesis2.auto_allocate_unallocated_trade(bpchar, int4, int4, _int4);
-
-CREATE OR REPLACE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
+CREATE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
  RETURNS integer
  LANGUAGE plpgsql
  SET application_name TO 'ETL:  AutoAllocation'
@@ -320,6 +321,12 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
  select public.load_log(l_load_id, l_step_id, 'l_max_trade_id='||l_max_trade_id, 1 , 'S')
 	into l_step_id;
 
+  drop table if exists t_account;
+  create temp table t_account as
+select * from genesis2.account;
+create index on t_account (account_id);
+create index on t_account (IS_SPECIFIC_ALLOCATED);
+
   drop table if exists t_tr;
   create temp table t_tr on commit drop
   as
@@ -336,7 +343,8 @@ execute 'select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted=''N'' an
          TR.LAST_QTY,
          tr.trade_record_id
   from genesis2.trade_record tr
-           inner join genesis2.account acc on (acc.account_id = tr.account_id)
+--            inner join genesis2.account acc on (acc.account_id = tr.account_id)
+           inner join t_account acc on (acc.account_id = tr.account_id)
            inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
   where TR.DATE_ID = l_date_id
     and TR.IS_BUSTED = 'N'
@@ -501,32 +509,6 @@ create index on t_clearing_account_aa (account_id);
   into l_step_id;
 
 -- 2. insert into allocation_instruction_entry
-  /*
-  drop table if exists t_aie;
-  create temp table t_aie on commit drop as
-  with base as (select ai.alloc_instr_id,
-                       max(clearing_account_id)                              as clearing_account_id,
-                       ai.total_qty                                          as qty,
-                       ca.occ_actionable_id
-                from genesis2.allocation_instruction ai
-                         inner join genesis2.clearing_account ca
-                                    on (ca.account_id = ai.account_id and ca.is_deleted = 'N' and
-                                        ca.market_type = in_instrument_type_id and ca.is_default = 'Y')
-                where ai.date_id = l_date_id
-                  and ai.dataset_id = l_load_batch_id
-                  and ai.is_deleted = 'N'
-                group by ai.alloc_instr_id, ai.total_qty, ca.occ_actionable_id
-                )
-  select alloc_instr_id,
-         clearing_account_id,
-         qty as alloc_qty,
-         occ_actionable_id,
-         nextval('genesis2.allocation_instruction_entry_allocation_instruction_entry_i_seq') as allocation_instruction_entry_id,
-         ta.trade_ids
-  from base
-  join lateral (select trade_ids from trade_for_allocations ta where ta.alloc_instr_id = base.alloc_instr_id limit 1) ta on true;
-  */
-
   drop table if exists t_aie;
   drop table if exists t_base_aie;
 
@@ -646,7 +628,8 @@ where alloc_qty > 0;
                               man_clear.clearing_account_id,
                               l_load_batch_id                                                                 as load_batch_id
                        from genesis2.TRADE_RECORD TR
-                                inner join genesis2.ACCOUNT ACC on (ACC.ACCOUNT_ID = TR.ACCOUNT_ID)
+--                                 inner join genesis2.ACCOUNT ACC on (ACC.ACCOUNT_ID = TR.ACCOUNT_ID)
+                                    inner join t_account ACC on (ACC.ACCOUNT_ID = TR.ACCOUNT_ID)
                            /* SY: Just to be sure clearing account already configured */
                                 inner join genesis2.CLEARING_ACCOUNT CA
                                            on (CA.ACCOUNT_ID = ACC.ACCOUNT_ID and CA.IS_DELETED = 'N' and
