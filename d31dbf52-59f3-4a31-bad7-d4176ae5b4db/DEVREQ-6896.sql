@@ -164,8 +164,18 @@ select *
       and case when :in_instrument_type is null then true else di.instrument_type_id = :in_instrument_type end
       and cl.trans_type <> 'F';
 
+select * from dwh.d_trading_firm
+    where d_trading_firm.trading_firm_id = 'sumuat'
 
-select * from dash360.report_obo_compliance_xls_summit(20251010, 20251013, 'O', '{6331}')
+    Firm Prod: Summit Securities Group LLC (summit)
+Firm UAT: Summit Securities UAT (sumuat)
+
+
+select * from dash360.report_obo_compliance_xls_summit(20251010, 20251013), 'O', '{6331}')
+
+select *
+from dash360.report_obo_compliance_xls_summit(in_date_begin_id := 20251010, in_date_end_id := 20251015);
+
 
 
 DROP FUNCTION dash360.report_obo_compliance_xls_summit(int4, int4, bpchar, _int4, _int8, _varchar);
@@ -241,7 +251,9 @@ CREATE or replace FUNCTION dash360.report_obo_compliance_xls_summit(in_date_begi
                 "Request Date"              text,
                 "Request Time"              text,
                 "Strike Price"              numeric,
-                "Remaining Qty"             bigint
+                "Remaining Qty"             bigint,
+                "Affiliated Flag"           character,
+                "Solicitation Flag"         text
             )
     LANGUAGE plpgsql
 AS $function$
@@ -270,7 +282,10 @@ begin
     into l_step_id;
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
-        l_account_ids := '{}';
+        select array_agg(account_id)
+        into l_account_ids
+        from dwh.d_account da
+        where trading_firm_id = any('{"summit","sumuat"}');
     else
         select array_agg(account_id)
         into l_account_ids
@@ -287,18 +302,6 @@ begin
 
     select public.load_log(l_load_id, l_step_id, 'l_account_id size is ', cardinality(l_account_ids), 'O')
     into l_step_id;
-
-    --    select min(cl.create_date_id)
---    into l_retention_date_id
---    from dwh.client_order cl
---             join dwh.gtc_order_status gtc on gtc.order_id = cl.order_id and gtc.create_date_id = cl.create_date_id
---    where true
---      and (gtc.close_date_id is null
---        or gtc.close_date_id >= l_date_end_id)
---      and case
---              when coalesce(l_account_ids, '{}') = '{}' then true
---              else cl.account_id = any (l_account_ids) end;
-
 
     select coalesce(min(gtc.create_date_id), l_date_begin_id)
     into l_retention_date_id
@@ -373,7 +376,7 @@ begin
            fmj.tag_9000                                                                         as par_tag_9000,
            fmj.tag_50                                                                           as par_tag_50,
            fmj.tag_109                                                                          as par_tag_109,
-           to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+           to_timestamp(left(fmj.tag_5050,24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
            'UTC'                                                                                as par_tag_5050,
            staging.last_orig_order_process_time(in_order_id := cl.order_id)::timestamp
                at time zone 'UTC'                                                               as par_tag_10061,
@@ -383,10 +386,10 @@ begin
            ac.account_holder_type,
            ac.cat_fdid                                                                          as ac_fdid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then tf.cat_imid end                                                         as ac_imid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then ac.crd_number end                                                       as ac_number,
 --         ac.broker_dealer_mpid,
            fc.sender_sub_id,
@@ -394,10 +397,10 @@ begin
            fmj.tag_17                                                                           as exec_id,
            fmj.tag_52                                                                           as par_tag_52,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then tf.cat_imid end                                                         as cat_imid,
            case
-               when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid
+               when ac.cat_fdid like ac.crd_number || ':' || tf.cat_imid
                    then ac.crd_number end                                                       as crd_number,
            tf.trading_firm_unq_id,
            case
@@ -406,10 +409,11 @@ begin
                end                                                                              as is_held,
            fmj.tag_9281,
            fmj.tag_22017,
-           to_timestamp(fmj.tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
-           to_timestamp(nxt.nxt_tag_60, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time
-,
-        oc.strike_price
+           to_timestamp(left(fmj.tag_60,24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'     as order_request_time,
+           to_timestamp(left(nxt.nxt_tag_60,24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC' as cancel_request_time,
+        oc.strike_price,
+           ac.is_affiliate,
+           case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                           as solicitation-- if 'Y' - Y otherwise N
 
     from dwh.client_order cl
              left join lateral (select *
@@ -459,6 +463,7 @@ begin
                                 where nxt.create_date_id >= cl.create_date_id
                                   and nxt.orig_order_id = cl.order_id
                                 and nxt.create_date_id >= l_date_begin_id
+                                and nxt.create_date_id <= l_date_end_id
                                 limit 1) nxt on true
     where cl.parent_order_id is null
       and cl.create_date_id between l_date_begin_id and l_date_end_id
@@ -503,7 +508,7 @@ begin
                when ex.exec_type = '4' then
                    ex.exec_time::timestamp
                else
-                   to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'
+                   to_timestamp(left(fmj.tag_5050,24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'
                end                                                                                 as event_ts,
            b.client_order_id::text                                                                 as street_client_order_id,
            b.order_qty                                                                             as event_qty,
@@ -578,7 +583,9 @@ begin
            order_request_time,
            cancel_request_time,
            strike_price,
-           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
+           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty,
+           b.is_affiliate,
+           null                                                                                    as solicitation
     from t_base b
              left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
              left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -612,9 +619,10 @@ begin
     insert into t_exs
     with ord_type as (select *
                       from (values ('D', 'New Order', 1),
-                                   ('D', 'Order Route', 2),
-                                   ('G', 'Order Modify', 1),
-                                   ('G', 'Order Modify Route', 2))
+--                                    ('D', 'Order Route', 2),
+                                   ('G', 'Order Modify', 1)
+--                                    ('G', 'Order Modify Route', 2)
+                            )
                                as t(trans_type, order_type_value, rn))
     select b.first_order_id                                       as first_order_id,
            b.order_id                                             as parent_order_id,
@@ -727,7 +735,11 @@ begin
            b.order_request_time,
            b.cancel_request_time,
            b.strike_price,
-           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty
+           b.order_qty - coalesce(ex.cum_qty, 0) as remaining_qty,
+           b.is_affiliate,
+           case
+               when ot.order_type_value = 'New Order'
+                   then b.solicitation end
     from t_base b
              join ord_type ot using (trans_type)
              left join lateral
@@ -853,7 +865,10 @@ begin
                            when event_type ilike '%modify%' then order_request_time
                            end, 'HH24:MI:SS.US')                             as "Request Time",
             strike_price as "Strike Price",
-            remaining_qty as "Remaining Qty"
+            remaining_qty as "Remaining Qty",
+            is_affiliate                                                  as "Affiliated Flag",
+               solicitation                                                  as "Solicitation Flag"
+
         from (select *
 -- into trash.so_obo
               from t_exs
