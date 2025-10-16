@@ -686,10 +686,12 @@ where alloc_qty > 0;
                               (in_instrument_type_id = 'E' and coalesce(ACC.EQ_REPORT_TO_MPID, 'NONE') <> 'NONE'))
                          and AA.ALLOC_INSTR_ID is null
                          and TR.TRADE_RECORD_ID <= l_max_trade_id
-                         and (in_allocation_type = 0
-                           or (in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N')
-                           or (in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y')
-                           OR (in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T'))
+                             and case
+            when in_allocation_type = 0 then true
+            when in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N' then true
+            when in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y' then true
+            when in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T' then true
+            else false end
                          and case -- added DS-10061
                                  when coalesce(in_account_ids, '{}') = '{}' then true
                                  else acc.account_id = any (in_account_ids) end

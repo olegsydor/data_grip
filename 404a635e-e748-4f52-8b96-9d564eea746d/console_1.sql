@@ -37,7 +37,12 @@ select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id =
     and TR.TRADE_RECORD_ID <= :l_max_trade_id
     and TR.TRADE_RECORD_ID <= :l_max_trade_id
     and tr.order_id > 0 /* excluding Blaze originated Away trades */
-
+    and case
+            when :in_allocation_type = 0 then true
+            when :in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N' then true
+            when :in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y' then true
+            when :in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T' then true
+            else false end
     and case  -- added DS-10061
             when :in_account_ids = '{}' then true
             when :in_account_ids is null then false
