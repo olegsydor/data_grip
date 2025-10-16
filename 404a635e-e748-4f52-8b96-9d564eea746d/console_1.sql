@@ -1,9 +1,13 @@
-create temp table t_account as
-select * from genesis2.account
-create index on t_account (account_id)
-create index on t_account (IS_SPECIFIC_ALLOCATED)
-drop table t_tr;
-create temp table t_tr
+  drop table if exists t_account;
+  create temp table t_account as
+select * from genesis2.account;
+create index on t_account (account_id);
+create index on t_account (IS_SPECIFIC_ALLOCATED);
+
+select max(TRADE_RECORD_ID)  from TRADE_RECORD where is_busted='N' and date_id = 20251015
+
+  drop table if exists t_tr;
+  create temp table t_tr on commit drop
   as
   select TR.ACCOUNT_ID,
          TR.INSTRUMENT_ID,
@@ -18,6 +22,7 @@ create temp table t_tr
          TR.LAST_QTY,
          tr.trade_record_id
   from genesis2.trade_record tr
+--            inner join genesis2.account acc on (acc.account_id = tr.account_id)
            inner join t_account acc on (acc.account_id = tr.account_id)
            inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
   where TR.DATE_ID = :l_date_id
@@ -32,15 +37,8 @@ create temp table t_tr
     and TR.TRADE_RECORD_ID <= :l_max_trade_id
     and TR.TRADE_RECORD_ID <= :l_max_trade_id
     and tr.order_id > 0 /* excluding Blaze originated Away trades */
-    and (:in_allocation_type = 0
-      or (:in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N')
-      or (:in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y')
-      OR (:in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T')
-    )
+
     and case  -- added DS-10061
             when :in_account_ids = '{}' then true
             when :in_account_ids is null then false
             else acc.account_id = any (:in_account_ids) end;
-
-
-select * from t_tr

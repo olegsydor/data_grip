@@ -261,7 +261,7 @@ update
 
 
 
-CREATE FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
+CREATE or replace FUNCTION genesis2.auto_allocate_unallocated_trade(in_instrument_type_id character, in_allocation_type integer, in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_account_ids integer[] DEFAULT '{}'::integer[])
  RETURNS integer
  LANGUAGE plpgsql
  SET application_name TO 'ETL:  AutoAllocation'
@@ -358,10 +358,12 @@ create index on t_account (IS_SPECIFIC_ALLOCATED);
     and TR.TRADE_RECORD_ID <= l_max_trade_id
     and TR.TRADE_RECORD_ID <= l_max_trade_id
     and tr.order_id > 0 /* excluding Blaze originated Away trades */
-    and (in_allocation_type = 0
-      or (in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N')
-      or (in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y')
-      OR (in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T'))
+    and case
+            when in_allocation_type = 0 then true
+            when in_allocation_type = 1 AND ACC.IS_SPECIFIC_ALLOCATED = 'N' then true
+            when in_allocation_type = 2 AND ACC.IS_SPECIFIC_ALLOCATED = 'Y' then true
+            when in_allocation_type = 3 AND ACC.IS_SPECIFIC_ALLOCATED = 'T' then true
+            else false end
     and case  -- added DS-10061
             when in_account_ids = '{}' then true
             when in_account_ids is null then false
