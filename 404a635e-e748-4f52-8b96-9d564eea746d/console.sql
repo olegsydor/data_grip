@@ -801,3 +801,9 @@ select public.load_log(l_load_id, l_step_id, 'AUTOALLOCATION COMPLETED >>>', 0, 
 end
 $function$
 ;
+
+
+
+SELECT genesis2.auto_allocate_unallocated_trade('E',3, 20251015);
+SELECT genesis2.auto_allocate_unallocated_trade('E',1, 20251015);
+SELECT genesis2.auto_allocate_unallocated_trade('E',2, 20251015);
