@@ -1,6 +1,20 @@
 -- DROP FUNCTION dash360.report_fintech_eod_strategas_allocation(int4, int4);
 -- dash360.report_fintech_eod_spdradv01_allocation(in_start_date_id, in_end_date_id, in_trading_firm_ids, in_account_ids)
-CREATE OR REPLACE FUNCTION dash360.report_fintech_eod_spdradv01_allocation(in_start_date_id integer,
+select * from dwh.d_account
+where account_name = 'SPDRC_CHAS_EOS';
+
+
+select * from dwh.gtc_order_status
+where create_date_id > 2025001
+and account_id = 75781
+
+select *
+from dash360.report_fintech_eod_spdradv01_allocation(in_start_date_id := 20251010, in_end_date_id := 20251015,
+                                                     in_account_ids := '{75781}');
+
+
+
+CREATE or replace FUNCTION dash360.report_fintech_eod_spdradv01_allocation(in_start_date_id integer,
                                                                            in_end_date_id integer,
                                                                            in_account_ids integer[] DEFAULT NULL::integer[],
                                                                            in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
@@ -16,7 +30,6 @@ declare
     l_row_cnt         int;
     l_step_id         int;
     l_account_ids     int4[];
-    l_min_date_id     int4;
     l_is_current_date bool := false;
 begin
     l_step_id := 0;
@@ -43,69 +56,72 @@ begin
                   else true end;
     end if;
 
-    select coalesce(min(create_date_id), in_start_date_id)
-    into l_min_date_id
-    from dwh.gtc_order_status
-    where close_date_id is null
-      and account_id = any (l_account_ids);
-
     if in_start_date_id = in_end_date_id and in_start_date_id = to_char(current_date, 'YYYYMMDD')::int4 then
         l_is_current_date = true;
     end if;
 --
     return query
         select 'Master,Underlying Symbol,Expiration,Strike,Type,Contracts,Action,Price,Broker,Comm,T/D,S/D';
---         select 'ORDER_DATE,ROUTED_ORDER_REF,TYPE,BUY_SELL,CALL_PUT,OPEN_CLOSE,CONTRACTS,LEAVES_QTY,SYMBOL,EXPIRY,STRIKE,PRICE_TYPE,LIMIT_PRICE,STOP_PRICE,EXPIRY_TYPE,BROKER_ORDER_ID,SENDER_SUB_ID,EXPIREDATE';
+
+    drop table if exists t_report;
+    create temp table t_report as
+    select trade_record_id,
+           order_id,
+           '08423881'                                  as "Master",
+           ui.symbol                                   as "Underlying Symbol",
+           to_char(i.last_trade_date, 'MM/DD/YYYY')    as "Expiration",
+           oc.strike_price                                "Strike",
+           case
+               when oc.put_call = '0' then 'PUT'
+               when oc.put_call = '1' then 'CALL'
+               end                                     as "Type",
+           tr.last_qty                                 as "Contracts",
+           case
+               when tr.side = '2' and tr.open_close = 'C' then 'SCO'--'Sell to Close'
+               when tr.side = '2' and tr.open_close = 'O' then 'SOO'--'Sell to Open'
+               when tr.side = '1' and tr.open_close = 'C' then 'BCO'--'Buy to Close'
+               when tr.side = '1' and tr.open_close = 'O' then 'BOO'--'Buy to Open'
+               end                                     as "Action",
+           tr.last_px                                  as "Price",
+           tr.exchange_id                                 "Broker",
+           round(tr.last_qty * 0.25, 4)                as "Comm",
+           to_char(tr.trade_record_time, 'MM/DD/YYYY') as "T/D",
+           to_char(public.get_settle_date_by_instrument_type(tr.trade_record_time::date, tr.instrument_type_id),
+                   'MM/DD/YYYY')                       as "S/D"
+    from dwh.flat_trade_record tr
+             join dwh.d_account ac
+                  on tr.account_id = ac.account_id
+             left join dwh.d_trading_firm tf
+                       on ac.trading_firm_unq_id = tf.trading_firm_unq_id
+             left join dwh.d_instrument i
+                       on tr.instrument_id = i.instrument_id
+             left join dwh.d_option_contract oc
+                       on i.instrument_id = oc.instrument_id
+             left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
+             left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
+    where true
+      and tr.date_id between in_start_date_id and in_end_date_id -- 20210315 and 20210315
+      and tr.instrument_type_id = 'O'
+      and tr.is_busted = 'N'
+      and ac.account_id = any (l_account_ids);
 
     return query
-        select array_to_string(ARRAY [
-                                   '08423881', -- Master
-                                   ui.symbol, -- Underlying Symbol,
-                                   to_char(coalesce(di.last_trade_date, co.expire_time), 'DD-Mon-YY'), -- Expiration
-                                   oc.strike_price::text, -- Strike
-                                   case
-                                       when oc.put_call = '0' then 'PUT'
-                                       when oc.put_call = '1' then 'CALL'
-                                       end, -- Type
-                                   order_qty::text, -- Contracts
-                                   case
-                                       when side = '2' and open_close = 'C' then 'SCO'--'Sell to Close'
-                                       when side = '2' and open_close = 'O' then 'SOO'--'Sell to Open'
-                                       when side = '1' and open_close = 'C' then 'BCO'--'Buy to Close'
-                                       when side = '1' and open_close = 'O' then 'BOO'--'Buy to Open'
-                                       end, --  as "Action"
-                                   co.price::text, -- Price
-                                   exchange_id, -- Broker
-                                   to_char(round(ex.last_qty * 0.25, 4), 'FM99999990D0099'),-- Comm
-                                   to_char(ex.trade_date, 'MM/DD/YYYY'), -- T/D
-                                   to_char(public.get_settle_date_by_instrument_type(ex.trade_date,
-                                                                                     di.instrument_type_id),
-                                           'MM/DD/YYYY')::varchar --S/D
-                                   ], ',', '')
-        from dwh.gtc_order_status gtc
-                 join dwh.client_order co on gtc.order_id = co.order_id and gtc.create_date_id = co.create_date_id
-                 join dwh.d_instrument di on co.instrument_id = di.instrument_id
-                 left join dwh.d_option_contract oc on di.instrument_id = oc.instrument_id
-                 left join dwh.d_option_series dos on oc.option_series_id = dos.option_series_id
-                 left join dwh.d_instrument ui on ui.instrument_id = dos.underlying_instrument_id
-                 left join lateral (select ex.last_qty, exec_time::date as trade_date
-                                    from dwh.execution ex
-                                    where gtc.order_id = ex.order_id
-                                      and ex.order_status <> '3'
-                                      and ex.exec_date_id >= gtc.create_date_id
-                                    order by ex.exec_id desc
-                                    limit 1) ex on true
-
-        where true
-          and gtc.create_date_id <= in_start_date_id
-          and co.parent_order_id is null
-          and gtc.account_id = any (l_account_ids)
-          and di.instrument_type_id = 'O'
-          and (gtc.close_date_id is null
-            or (case
-                    when l_is_current_date then false
-                    else gtc.close_date_id is not null and close_date_id >= in_end_date_id end));
-
+        select "Master",
+               "Underlying Symbol",
+               "Expiration",
+               staging.trailing_dot("Strike")                                                    as "Strike",
+               "Type",
+               sum("Contracts")::text                                                            as "Contracts",
+               "Action",
+               to_char(round(sum("Contracts" * "Price") / sum("Contracts"), 4), 'FM999990D0099') as "Price",
+               "Broker",
+               to_char(sum("Comm"), 'FM999990D0099')                                             as "Comm",
+               "T/D",
+               "S/D"
+        from t_report
+        group by order_id, "Master", "Underlying Symbol", "Expiration", "Strike", "Type", "Action", "Price", "Broker",
+                 "T/D",
+                 "S/D";
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
