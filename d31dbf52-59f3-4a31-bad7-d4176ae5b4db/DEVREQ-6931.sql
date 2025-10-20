@@ -59,9 +59,6 @@ begin
     if in_start_date_id = in_end_date_id and in_start_date_id = to_char(current_date, 'YYYYMMDD')::int4 then
         l_is_current_date = true;
     end if;
---
-    return query
-        select 'Master,Underlying Symbol,Expiration,Strike,Type,Contracts,Action,Price,Broker,Comm,T/D,S/D';
 
     drop table if exists t_report;
     create temp table t_report as
@@ -106,18 +103,23 @@ begin
       and ac.account_id = any (l_account_ids);
 
     return query
-        select "Master",
-               "Underlying Symbol",
-               "Expiration",
-               staging.trailing_dot("Strike")                                                    as "Strike",
-               "Type",
-               sum("Contracts")::text                                                            as "Contracts",
-               "Action",
-               to_char(round(sum("Contracts" * "Price") / sum("Contracts"), 4), 'FM999990D0099') as "Price",
-               "Broker",
-               to_char(sum("Comm"), 'FM999990D0099')                                             as "Comm",
-               "T/D",
-               "S/D"
+        select 'Master,Underlying Symbol,Expiration,Strike,Type,Contracts,Action,Price,Broker,Comm,T/D,S/D';
+
+    return query
+        select array_to_string(ARRAY ["Master",
+                                   "Underlying Symbol",
+                                   "Expiration",
+                                   staging.trailing_dot("Strike"), -- as "Strike",
+                                   "Type",
+                                   sum("Contracts")::text, -- as "Contracts",
+                                   "Action",
+                                   to_char(round(sum("Contracts" * "Price") / sum("Contracts"), 4),
+                                           'FM999990D0099'), -- as "Price",
+                                   "Broker",
+                                   to_char(sum("Comm"), 'FM999990D0099'), --as "Comm",
+                                   "T/D",
+                                   "S/D"
+                                   ], ',', '')
         from t_report
         group by order_id, "Master", "Underlying Symbol", "Expiration", "Strike", "Type", "Action", "Price", "Broker",
                  "T/D",
