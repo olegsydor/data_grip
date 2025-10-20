@@ -698,6 +698,7 @@ begin
 -- into trash.so_obo
               from t_exs
               where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
+              and case when in_include_acks = 'Y' then true else exec_type not in ('A', '0', '5') end
               order by 1, 2 nulls first, 3, rn, event_ts) x;
     get diagnostics l_row_count = row_count ;
 
@@ -710,11 +711,16 @@ begin
 $function$
 ;
 
+
+select * from dwh.d_exec_type
+
 select *
 from dash360.report_obo_compliance_xls_n(in_date_begin_id := 20251016, in_date_end_id := 20251016,
                                          in_account_ids := '{263310}',
-                                         in_include_routes := 'Y'
-     )
+                                         in_include_routes := 'Y',
+                                         in_include_acks := 'N'
+     );
+
 
 
 select
