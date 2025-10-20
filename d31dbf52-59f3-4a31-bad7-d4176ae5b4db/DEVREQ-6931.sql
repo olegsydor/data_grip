@@ -123,7 +123,8 @@ begin
         from t_report
         group by order_id, "Master", "Underlying Symbol", "Expiration", "Strike", "Type", "Action", "Price", "Broker",
                  "T/D",
-                 "S/D";
+                 "S/D"
+    order by order_id, "T/D";
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
