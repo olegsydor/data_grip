@@ -746,3 +746,11 @@ select
       and cl.create_date_id between :l_date_begin_id and :l_date_end_id
       and cl.trans_type <> 'F'
 group by ac.account_id
+
+
+select cl.sub_system_unq_id, dss.*
+from dwh.client_order cl
+join dwh.d_sub_system dss on dss.sub_system_unq_id = cl.sub_system_unq_id
+where true
+and cl.create_date_id between :l_date_begin_id and :l_date_end_id
+and dss.sub_system_id  ilike '%eos%'
