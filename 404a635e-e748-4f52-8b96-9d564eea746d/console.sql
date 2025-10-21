@@ -808,6 +808,11 @@ $function$
 
 
 
-SELECT genesis2.auto_allocate_unallocated_trade('E',3, 20251016);
-SELECT genesis2.auto_allocate_unallocated_trade('E',1, 20251016);
-SELECT genesis2.auto_allocate_unallocated_trade('E',2, 20251016);
+SELECT genesis2.auto_allocate_unallocated_trade('E',3, 20251020);
+SELECT genesis2.auto_allocate_unallocated_trade('E',1, 20251020);
+SELECT genesis2.auto_allocate_unallocated_trade('E',2, 20251020);
+
+select * from genesis2.allocation_instruction_entry;
+select * from genesis2.allocation_instruction;
+select * from genesis2.alloc_instr2trade_record;
+
