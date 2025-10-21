@@ -883,3 +883,4 @@ begin
 end;
 $function$
 ;
+select 1/0
