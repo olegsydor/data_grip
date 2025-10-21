@@ -900,22 +900,23 @@ FROM dwh.gtc_order_status gos
 --    LEFT JOIN dwh.gtc_order_status orig ON orig.order_id = cl.orig_order_id AND orig.close_date_id IS NULL -- for better execution plan
 --    LEFT JOIN dwh.client_order_leg leg ON leg.order_id = cl.order_id -- for better execution plan
     JOIN dwh.d_account ac ON ac.account_id = cl.account_id
-    LEFT JOIN dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
-    LEFT JOIN dwh.d_option_series os ON os.option_series_id = oc.option_series_id
-    JOIN LATERAL
+    JOIN dwh.d_sub_system ss ON ss.sub_system_unq_id = cl.sub_system_unq_id
+          JOIN LATERAL
         (
             SELECT hods."OrderStatus"
             FROM dwh.historic_order_details_storage hods
+
             WHERE hods."OrderID" = gos.order_id
-                AND hods."Status_Date_id" >= gos.create_date_id
+                AND hods."Status_Date_id" >= cl.create_date_id
                 AND hods."OrderStatus" <> '3'
             ORDER BY hods."Status_Date_id" DESC
             LIMIT 1
         ) hods ON TRUE
-    JOIN dwh.d_order_status ors ON ors.order_status = hods."OrderStatus"
+ left    JOIN dwh.d_order_status ors ON ors.order_status = hods."OrderStatus"
+       LEFT JOIN dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
+    LEFT JOIN dwh.d_option_series os ON os.option_series_id = oc.option_series_id
     LEFT JOIN dwh.d_ex_destination_code edc ON edc.ex_destination_code = cl.ex_destination AND edc.is_active
     LEFT JOIN dwh.d_fix_connection fc ON fc.fix_connection_id = cl.fix_connection_id
-    JOIN dwh.d_sub_system ss ON ss.sub_system_unq_id = cl.sub_system_unq_id
 WHERE gos.close_date_id IS NULL
     AND cl.parent_order_id IS NULL
     AND (gos.is_parent OR gos.is_parent IS NULL)
