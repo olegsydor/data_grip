@@ -298,7 +298,7 @@ begin
               when coalesce(in_parent_order_ids, '{}') = '{}' then true
               else cl.order_id = any (in_parent_order_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case when in_exclude_eos = 'Y' then cl.su
+      and case when in_exclude_eos = 'Y' then 
       and cl.trans_type <> 'F';
     get diagnostics l_row_count = row_count;
     select public.load_log(l_load_id, l_step_id,
