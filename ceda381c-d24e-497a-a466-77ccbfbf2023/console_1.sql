@@ -1,14 +1,15 @@
 with base as (select monitoring.clean_text(error_text) as jsn, *
-from monitoring.error_tracking
-where true
+              from monitoring.error_tracking
+              where true
 --     and regexp_replace(error_text, '\\', '') ilike '%bigdatatail2%'
 --          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
-and db_host = 'pgbigdata1.dashops.net'
-and db_create_time::date = '2025-10-21'
-and error_id = 3063872)
-select jsn->>'ERROR', jsn->>'DETAIL', count(*), array_agg(error_id)
+                and db_host = 'pgbigdata1.dashops.net'
+                and db_create_time::date = '2025-10-21'
+              and error_text ilike '%37003769%'
+)
+select jsn ->> 'ERROR' as error, jsn ->> 'DETAIL' as detail, jsn ->> 'CONTEXT' as context, jsn ->> 'STATEMENT' as statement, jsn ->> 'FATAL' as fatal--, count(*), array_agg(error_id)
 from base
-group by jsn->>'ERROR', jsn->>'DETAIL'
+group by jsn ->> 'ERROR', jsn ->> 'DETAIL'
 
 
 WITH src AS (
@@ -110,7 +111,7 @@ select '{"2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(502
 select :in_text
 
 
-SELECT regexp_replace(:in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as error,
+SELECT regexp_replace(:in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG|FATAL).*', '\1') as error,
        regexp_replace(:in_text, '.*DETAIL: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as detail,
        regexp_replace(:in_text, '.*STATEMENT: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as statement,
        regexp_replace(:in_text, '.*LOG: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as log;
@@ -125,25 +126,28 @@ create or replace function monitoring.clean_text(in_text text)
 as
 $fx$
 declare
-    f_text      text;
+    f_fatal     text;
     f_error     text;
     f_detail    text;
     f_context   text;
     f_statement text;
-    f_pattern1 text := '(ERROR:|DETAIL:|STATEMENT:|LOG:|CONTEXT:).*'; -- symbols to match
-    f_pattern2 text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}'; -- symbols to delete
+    f_pattern1  text := '[ERROR|DETAIL|STATEMENT|LOG|CONTEXT|FATAL].*'; -- symbols to match
+--     f_pattern1  text := '\\[\\d+\\-\\d+\\]'; -- symbols to match
+    f_pattern2  text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}'; -- symbols to delete
 begin
-    SELECT regexp_replace(in_text, '.*ERROR: (.*?)'||f_pattern1, '\1')     as error,
-           regexp_replace(in_text, '.*DETAIL: (.*?)'||f_pattern1, '\1')    as detail,
-           regexp_replace(in_text, '.*STATEMENT: (.*?)'||f_pattern1, '\1') as statement,
-           regexp_replace(in_text, '.*CONTEXT: (.*?)'||f_pattern1, '\1')   as context
-    into f_error, f_detail, f_statement, f_context;
+    SELECT regexp_match(in_text, '.*ERROR: (.*?)' || f_pattern1)     as error,
+           regexp_match(in_text, '.*DETAIL: (.*?)' || f_pattern1)    as detail,
+           regexp_match(in_text, '.*STATEMENT: (.*?)' || f_pattern1) as statement,
+           regexp_match(in_text, '.*CONTEXT: (.*?)' || f_pattern1)   as context,
+           regexp_match(in_text, '.*FATAL: (.*?)')                   as fatal
+    into f_error, f_detail, f_statement, f_context, f_fatal;
 
     select regexp_replace(f_error, f_pattern2, '', 'g'),
            regexp_replace(f_detail, f_pattern2, '', 'g'),
            regexp_replace(f_statement, f_pattern2, '', 'g'),
-           regexp_replace(f_context, f_pattern2, '', 'g')
-    into f_error, f_detail, f_statement, f_context;
+           regexp_replace(f_context, f_pattern2, '', 'g'),
+           regexp_replace(f_fatal, f_pattern2, '', 'g')
+    into f_error, f_detail, f_statement, f_context, f_fatal;
 
     select regexp_replace(regexp_replace(regexp_replace(f_error, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
                           '. ', 'g'),
@@ -152,11 +156,13 @@ begin
            regexp_replace(regexp_replace(regexp_replace(f_statement, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'),
                           '\s*\.\s+', '. ', 'g'),
            regexp_replace(regexp_replace(regexp_replace(f_context, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
+                          '. ', 'g'),
+           regexp_replace(regexp_replace(regexp_replace(f_fatal, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
                           '. ', 'g')
-    into f_error, f_detail, f_statement, f_context;
+    into f_error, f_detail, f_statement, f_context, f_fatal;
 
     return jsonb_build_object('ERROR', trim(f_error), 'DETAIL', trim(f_detail), 'STATEMENT', trim(f_statement),
-                              'CONTEXT', trim(f_context));
+                              'CONTEXT', trim(f_context), 'FATAL', trim(f_fatal));
 end;
 $fx$;
 
@@ -165,15 +171,9 @@ select monitoring.clean_text('{"2025-10-21 08:22:16.742 EDT big_data dwh DataGri
 
 SELECT regexp_match(:in_text, '.*STATEMENT(.*?)(ERROR|DETAIL|STATEMENT|LOG).*')
 
-    regexp_replace(
-  :in_text,
-  '.*DETAIL(.*?)(ERROR|DETAIL|STATEMENT|LOG).*',
-  '\1'
-);
 
 
-SELECT regexp_replace(
-  'abc ПОЧАТОК потрібний текст FINISH xyz',
-  '.*BEGIN(.*?)(КІНЕЦЬ|END|FINISH).*',
-  '\1'
-);
+SELECT (regexp_match(
+    '{"2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [82-1]ERROR:  division by zero","2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [83-1]STATEMENT:  select 1/0","2025-10-21 08:22:16.891 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [84-1]',
+    'ERROR: (.*?)\\[\\d+-\\d+\\]'
+))[1] AS error_text;
