@@ -1,12 +1,14 @@
-select *
+with base as (select monitoring.clean_text(error_text) as jsn, *
 from monitoring.error_tracking
 where true
 --     and regexp_replace(error_text, '\\', '') ilike '%bigdatatail2%'
 --          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
 and db_host = 'pgbigdata1.dashops.net'
 and db_create_time::date = '2025-10-21'
--- and db_process_time is null
-order by error_tracking_id desc;
+and error_id = 3063872)
+select jsn->>'ERROR', jsn->>'DETAIL', count(*), array_agg(error_id)
+from base
+group by jsn->>'ERROR', jsn->>'DETAIL'
 
 
 WITH src AS (
@@ -116,8 +118,9 @@ SELECT regexp_replace(:in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', 
 select regexp_replace(:in_mod_text, '"|\\|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g');
 select regexp_replace(:in_mod_text, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g');
 
+drop function monitoring.clean_text;
 create or replace function monitoring.clean_text(in_text text)
-    returns text
+    returns jsonb
     language plpgsql
 as
 $fx$
@@ -125,23 +128,52 @@ declare
     f_text      text;
     f_error     text;
     f_detail    text;
+    f_context   text;
     f_statement text;
+    f_pattern1 text := '(ERROR:|DETAIL:|STATEMENT:|LOG:|CONTEXT:).*'; -- symbols to match
+    f_pattern2 text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}'; -- symbols to delete
 begin
-    SELECT regexp_replace(in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1')     as error,
-           regexp_replace(in_text, '.*DETAIL: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1')    as detail,
-           regexp_replace(in_text, '.*STATEMENT: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as statement
-    into f_error, f_detail, f_statement;
+    SELECT regexp_replace(in_text, '.*ERROR: (.*?)'||f_pattern1, '\1')     as error,
+           regexp_replace(in_text, '.*DETAIL: (.*?)'||f_pattern1, '\1')    as detail,
+           regexp_replace(in_text, '.*STATEMENT: (.*?)'||f_pattern1, '\1') as statement,
+           regexp_replace(in_text, '.*CONTEXT: (.*?)'||f_pattern1, '\1')   as context
+    into f_error, f_detail, f_statement, f_context;
 
-    select 'ERROR: ' ||
-           regexp_replace(f_error, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g') ||
-           '. DETAIL:' ||
-           regexp_replace(f_detail, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g') ||
-           '. STATEMENT:' ||
-           regexp_replace(f_statement, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g')
-    into f_text;
-    return regexp_replace(regexp_replace(regexp_replace(f_text, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+', '. ', 'g');
+    select regexp_replace(f_error, f_pattern2, '', 'g'),
+           regexp_replace(f_detail, f_pattern2, '', 'g'),
+           regexp_replace(f_statement, f_pattern2, '', 'g'),
+           regexp_replace(f_context, f_pattern2, '', 'g')
+    into f_error, f_detail, f_statement, f_context;
 
+    select regexp_replace(regexp_replace(regexp_replace(f_error, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
+                          '. ', 'g'),
+           regexp_replace(regexp_replace(regexp_replace(f_detail, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
+                          '. ', 'g'),
+           regexp_replace(regexp_replace(regexp_replace(f_statement, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'),
+                          '\s*\.\s+', '. ', 'g'),
+           regexp_replace(regexp_replace(regexp_replace(f_context, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
+                          '. ', 'g')
+    into f_error, f_detail, f_statement, f_context;
+
+    return jsonb_build_object('ERROR', trim(f_error), 'DETAIL', trim(f_detail), 'STATEMENT', trim(f_statement),
+                              'CONTEXT', trim(f_context));
 end;
 $fx$;
 
-select monitoring.clean_text('{"2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [121-1]ERROR:  could , not connect to server \"bigdatatail2\"","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [122-1]DETAIL:  connection to server at \"pgbigdata2.dashops.net\" (172.20.65.161), port 5432 failed: Connection timed out","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [123-1]CONTEXT:  SQL statement \"WITH RECURSIVE Pre_PositionHierarchy AS materialized ","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [124-1]STATEMENT:  FETCH 10000 FROM c2","2025-10-21 07:25:22.701 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [125-1]LOG:  duration: 0.061 ms","2025-10-21 07:25:22.713 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [126-1]LOG:  duration: 0.168 ms","2025-10-21 07:25:22.715 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [127-1]LOG:  durat'::text)
+select monitoring.clean_text('{"2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [82-1]ERROR:  division by zero","2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [83-1]STATEMENT:  select 1/0","2025-10-21 08:22:16.891 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [84-1]LOG:  duration: 0.011 ms","2025-10-21 08:22:16.891 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [85-1]LOG:  duration: 0.003 ms","2025-10-21 08:22:16.891 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [86-1]LOG:  duration: 0.010 ms"}'::text)
+
+
+SELECT regexp_match(:in_text, '.*STATEMENT(.*?)(ERROR|DETAIL|STATEMENT|LOG).*')
+
+    regexp_replace(
+  :in_text,
+  '.*DETAIL(.*?)(ERROR|DETAIL|STATEMENT|LOG).*',
+  '\1'
+);
+
+
+SELECT regexp_replace(
+  'abc ПОЧАТОК потрібний текст FINISH xyz',
+  '.*BEGIN(.*?)(КІНЕЦЬ|END|FINISH).*',
+  '\1'
+);
