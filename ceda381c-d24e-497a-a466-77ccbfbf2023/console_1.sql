@@ -7,6 +7,16 @@ with base as (select monitoring.clean_text(error_text) as jsn, *
                 and db_create_time::date = '2025-10-21'
 --                 and error_text ilike '%37003769%'
               )
+select jsn ->> 'ERROR'     as error,
+       jsn ->> 'QUERY'     as query,
+       jsn ->> 'DETAIL'    as detail,
+       jsn ->> 'CONTEXT'   as context,
+       jsn ->> 'STATEMENT' as statement,
+       jsn ->> 'FATAL'     as fatal,
+       count(*)
+from base
+group by 1, 2, 3, 4, 5, 6;
+
 select error_text,
        jsn ->> 'ERROR'     as error,
        jsn ->> 'QUERY'     as query,
