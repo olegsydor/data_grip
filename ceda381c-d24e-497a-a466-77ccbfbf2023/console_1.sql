@@ -7,14 +7,16 @@ with base as (select monitoring.clean_text(error_text) as jsn, *
                 and db_create_time::date = '2025-10-21'
 --                 and error_text ilike '%37003769%'
               )
-select jsn ->> 'ERROR'     as error,
+select error_text,
+       jsn ->> 'ERROR'     as error,
        jsn ->> 'QUERY'     as query,
        jsn ->> 'DETAIL'    as detail,
        jsn ->> 'CONTEXT'   as context,
        jsn ->> 'STATEMENT' as statement,
-       jsn ->> 'FATAL'     as fatal--, count(*), array_agg(error_id)
+       jsn ->> 'FATAL'     as fatal
+       --, count(*), array_agg(error_id)
 from base
-group by jsn ->> 'ERROR', jsn ->> 'DETAIL'
+
 
 
 WITH src AS (
@@ -139,11 +141,11 @@ declare
     f_query     text;
     f_pattern2  text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}'; -- symbols to delete
 begin
-    SELECT substring(in_text, '(?:ERROR: )(.*?)(?:\(\d+\))')     as error,
-           substring(in_text, '(?:QUERY: )(.*?)(?:\(\d+\))')     as query,
-           substring(in_text, '(?:DETAIL: )(.*?)(?:\(\d+\))')    as detail,
-           substring(in_text, '(?:STATEMENT: )(.*?)(?:\(\d+\))') as statement,
-           substring(in_text, '(?:CONTEXT: )(.*?)(?:\(\d+\))')   as context,
+    SELECT substring(in_text, '(?:ERROR: )(.*?)(?:\[\d+\-\d+\])')   as error,
+           substring(in_text, '(?:QUERY: )(.*?)(?:\[\d+\-\d+\])')     as query,
+           substring(in_text, '(?:DETAIL: )(.*?)(?:\[\d+\-\d+\])')   as detail,
+           substring(in_text, '(?:STATEMENT: )(.*?)(?:\[\d+\-\d+\])') as statement,
+           substring(in_text, '(?:CONTEXT: )(.*?)(?:\[\d+\-\d+\])')  as context,
            substring(in_text, '(?:FATAL: )(.*?)$')                as fatal
     into f_error, f_query, f_detail, f_statement, f_context, f_fatal;
 
@@ -192,9 +194,9 @@ SELECT substring(:in_text, '(?:ERROR: )(.*?)(?:ERROR|DETAIL|STATEMENT|LOG|CONTEX
 SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\(\d+\))') as error
 
 
-SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\(\d+\))')     as error,
-       substring(:in_text, '(?:QUERY: )(.*?)(?:\(\d+\))')    as query,
-       substring(:in_text, '(?:DETAIL: )(.*?)(?:\(\d+\))')    as detail,
-           substring(:in_text, '(?:STATEMENT: )(.*?)(?:\(\d+\))') as statement,
-           substring(:in_text, '(?:CONTEXT: )(.*?)(?:\(\d+\))')   as context,
+SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\[\d+\-\d+\])')     as error,
+       substring(:in_text, '(?:QUERY: )(.*?)(?:\[\d+\-\d+\])')    as query,
+       substring(:in_text, '(?:DETAIL: )(.*?)(?:\[\d+\-\d+\])')    as detail,
+           substring(:in_text, '(?:STATEMENT: )(.*?)(?:\[\d+\-\d+\])') as statement,
+           substring(:in_text, '(?:CONTEXT: )(.*?)(?:\[\d+\-\d+\])')   as context,
            substring(:in_text, '(?:FATAL: )(.*?)$')                as fatal
