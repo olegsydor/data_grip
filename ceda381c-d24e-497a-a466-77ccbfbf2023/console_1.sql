@@ -113,3 +113,35 @@ SELECT regexp_replace(:in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', 
        regexp_replace(:in_text, '.*STATEMENT: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as statement,
        regexp_replace(:in_text, '.*LOG: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as log;
 
+select regexp_replace(:in_mod_text, '"|\\|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g');
+select regexp_replace(:in_mod_text, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g');
+
+create or replace function monitoring.clean_text(in_text text)
+    returns text
+    language plpgsql
+as
+$fx$
+declare
+    f_text      text;
+    f_error     text;
+    f_detail    text;
+    f_statement text;
+begin
+    SELECT regexp_replace(in_text, '.*ERROR: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1')     as error,
+           regexp_replace(in_text, '.*DETAIL: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1')    as detail,
+           regexp_replace(in_text, '.*STATEMENT: (.*?)(ERROR|DETAIL|STATEMENT|LOG).*', '\1') as statement
+    into f_error, f_detail, f_statement;
+
+    select 'ERROR: ' ||
+           regexp_replace(f_error, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g') ||
+           '. DETAIL:' ||
+           regexp_replace(f_detail, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g') ||
+           '. STATEMENT:' ||
+           regexp_replace(f_statement, '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:', '', 'g')
+    into f_text;
+    return regexp_replace(regexp_replace(regexp_replace(f_text, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+', '. ', 'g');
+
+end;
+$fx$;
+
+select monitoring.clean_text('{"2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [121-1]ERROR:  could , not connect to server \"bigdatatail2\"","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [122-1]DETAIL:  connection to server at \"pgbigdata2.dashops.net\" (172.20.65.161), port 5432 failed: Connection timed out","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [123-1]CONTEXT:  SQL statement \"WITH RECURSIVE Pre_PositionHierarchy AS materialized ","2025-10-21 07:25:22.690 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [124-1]STATEMENT:  FETCH 10000 FROM c2","2025-10-21 07:25:22.701 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [125-1]LOG:  duration: 0.061 ms","2025-10-21 07:25:22.713 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [126-1]LOG:  duration: 0.168 ms","2025-10-21 07:25:22.715 EDT big_data dwh postgres_fdw 000.00.00.00(50254) [2849509]: [127-1]LOG:  durat'::text)
