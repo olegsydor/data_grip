@@ -5,9 +5,14 @@ with base as (select monitoring.clean_text(error_text) as jsn, *
 --          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
                 and db_host = 'pgbigdata1.dashops.net'
                 and db_create_time::date = '2025-10-21'
-              and error_text ilike '%37003769%'
-)
-select jsn ->> 'ERROR' as error, jsn ->> 'DETAIL' as detail, jsn ->> 'CONTEXT' as context, jsn ->> 'STATEMENT' as statement, jsn ->> 'FATAL' as fatal--, count(*), array_agg(error_id)
+--                 and error_text ilike '%37003769%'
+              )
+select jsn ->> 'ERROR'     as error,
+       jsn ->> 'QUERY'     as query,
+       jsn ->> 'DETAIL'    as detail,
+       jsn ->> 'CONTEXT'   as context,
+       jsn ->> 'STATEMENT' as statement,
+       jsn ->> 'FATAL'     as fatal--, count(*), array_agg(error_id)
 from base
 group by jsn ->> 'ERROR', jsn ->> 'DETAIL'
 
@@ -131,25 +136,28 @@ declare
     f_detail    text;
     f_context   text;
     f_statement text;
-    f_pattern1  text := '[ERROR|DETAIL|STATEMENT|LOG|CONTEXT|FATAL].*'; -- symbols to match
---     f_pattern1  text := '\\[\\d+\\-\\d+\\]'; -- symbols to match
+    f_query     text;
     f_pattern2  text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}'; -- symbols to delete
 begin
-    SELECT regexp_match(in_text, '.*ERROR: (.*?)' || f_pattern1)     as error,
-           regexp_match(in_text, '.*DETAIL: (.*?)' || f_pattern1)    as detail,
-           regexp_match(in_text, '.*STATEMENT: (.*?)' || f_pattern1) as statement,
-           regexp_match(in_text, '.*CONTEXT: (.*?)' || f_pattern1)   as context,
-           regexp_match(in_text, '.*FATAL: (.*?)')                   as fatal
-    into f_error, f_detail, f_statement, f_context, f_fatal;
+    SELECT substring(in_text, '(?:ERROR: )(.*?)(?:\(\d+\))')     as error,
+           substring(in_text, '(?:QUERY: )(.*?)(?:\(\d+\))')     as query,
+           substring(in_text, '(?:DETAIL: )(.*?)(?:\(\d+\))')    as detail,
+           substring(in_text, '(?:STATEMENT: )(.*?)(?:\(\d+\))') as statement,
+           substring(in_text, '(?:CONTEXT: )(.*?)(?:\(\d+\))')   as context,
+           substring(in_text, '(?:FATAL: )(.*?)$')                as fatal
+    into f_error, f_query, f_detail, f_statement, f_context, f_fatal;
 
     select regexp_replace(f_error, f_pattern2, '', 'g'),
+           regexp_replace(f_query, f_pattern2, '', 'g'),
            regexp_replace(f_detail, f_pattern2, '', 'g'),
            regexp_replace(f_statement, f_pattern2, '', 'g'),
            regexp_replace(f_context, f_pattern2, '', 'g'),
            regexp_replace(f_fatal, f_pattern2, '', 'g')
-    into f_error, f_detail, f_statement, f_context, f_fatal;
+    into f_error, f_query, f_detail, f_statement, f_context, f_fatal;
 
     select regexp_replace(regexp_replace(regexp_replace(f_error, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
+                          '. ', 'g'),
+           regexp_replace(regexp_replace(regexp_replace(f_query, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
                           '. ', 'g'),
            regexp_replace(regexp_replace(regexp_replace(f_detail, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
                           '. ', 'g'),
@@ -159,9 +167,10 @@ begin
                           '. ', 'g'),
            regexp_replace(regexp_replace(regexp_replace(f_fatal, '\s+', ' ', 'g'), '\s*\,\s+', ', ', 'g'), '\s*\.\s+',
                           '. ', 'g')
-    into f_error, f_detail, f_statement, f_context, f_fatal;
+    into f_error, f_query, f_detail, f_statement, f_context, f_fatal;
 
-    return jsonb_build_object('ERROR', trim(f_error), 'DETAIL', trim(f_detail), 'STATEMENT', trim(f_statement),
+    return jsonb_build_object('ERROR', trim(f_error), 'QUERY', trim(f_query), 'DETAIL', trim(f_detail), 'STATEMENT',
+                              trim(f_statement),
                               'CONTEXT', trim(f_context), 'FATAL', trim(f_fatal));
 end;
 $fx$;
@@ -177,3 +186,15 @@ SELECT (regexp_match(
     '{"2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [82-1]ERROR:  division by zero","2025-10-21 08:22:16.742 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [83-1]STATEMENT:  select 1/0","2025-10-21 08:22:16.891 EDT big_data dwh DataGrip 2024.1.2 10.249.10.38(62409) [3063872]: [84-1]',
     'ERROR: (.*?)\\[\\d+-\\d+\\]'
 ))[1] AS error_text;
+
+
+SELECT substring(:in_text, '(?:ERROR: )(.*?)(?:ERROR|DETAIL|STATEMENT|LOG|CONTEXT|FATAL)') as error
+SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\(\d+\))') as error
+
+
+SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\(\d+\))')     as error,
+       substring(:in_text, '(?:QUERY: )(.*?)(?:\(\d+\))')    as query,
+       substring(:in_text, '(?:DETAIL: )(.*?)(?:\(\d+\))')    as detail,
+           substring(:in_text, '(?:STATEMENT: )(.*?)(?:\(\d+\))') as statement,
+           substring(:in_text, '(?:CONTEXT: )(.*?)(?:\(\d+\))')   as context,
+           substring(:in_text, '(?:FATAL: )(.*?)$')                as fatal
