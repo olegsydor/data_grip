@@ -527,7 +527,8 @@ begin
            tr.cmta,
 --            at.alloc_qty                                                as alloc_qty,
            sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
-           tr.blaze_account_alias
+           tr.blaze_account_alias,
+
     from dwh.flat_trade_record tr
              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
              left join lateral (select alloc_qty
@@ -633,8 +634,9 @@ begin
            sum(tr.client_commission_rate * tr.last_qty)                as client_commission,
 --            tr.blaze_account_alias,
            acc.account_name                                            as account_name,
-           to_char(doc.maturity_month, 'FM00') || '/' || to_char(doc.maturity_day, 'FM00') || '/' ||
-           doc.maturity_year                                           as expiration_date
+--            to_char(doc.maturity_month, 'FM00') || '/' || to_char(doc.maturity_day, 'FM00') || '/' ||
+--            doc.maturity_year                                           as expiration_date,
+           di.display_instrument_id2 as symbol
     from dwh.flat_trade_record tr
              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
              inner join dwh.d_instrument di on (tr.instrument_id = di.instrument_id and di.is_active)
@@ -652,11 +654,11 @@ begin
       and acc.account_id = any (l_account_ids)
     group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
              tr.account_nickname, tr.street_account_name, --at.alloc_qty,
-             acc.account_name, expiration_date;
+             acc.account_name, di.display_instrument_id2;
 
     return query
 --         select 'Date,TradingFirm,AccountName,Alias,Side,Total Quantity,Symbol,Average Price,InstrumentType,Allocated Quantity,CMTA,Commission';
-        select 'Date,AccountName,Side,Total Quantity,Symbol,Average Price,Open/Close,Commission,CMTA,ExpirationDate';
+        select 'Date,AccountName,Side,Total Quantity,Symbol,Average Price,Open/Close,Commission,CMTA,Symbol';
 
     return query
         select array_to_string(ARRAY [
@@ -675,7 +677,7 @@ begin
 --                                    ftr.cmta,
                                    to_char(round(client_commission, 2), 'FM$9999990.00'), -- as "Commission",
                                    cmta, -- CMTA
-                                   ftr.expiration_date -- ExpirationDate
+                                   ftr.symbol -- Symbol
                                    ], ',', '')
         from t_report ftr
                  join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
