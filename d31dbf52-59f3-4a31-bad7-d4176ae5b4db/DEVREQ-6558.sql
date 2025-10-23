@@ -687,7 +687,10 @@ end;
 $function$
 ;
 
-select * from dash360.report_fintech_eod_strategas_allocation(20251008, 20251008)
+select * from dash360.report_fintech_eod_strategas_allocation(20251008, 20251008);
+
+
+
 
 
 
@@ -792,3 +795,16 @@ begin
 end;
 $function$
 ;
+
+select lag
+           (aw.accountalias, 1)
+       over (partition by CASE
+                              WHEN aw.OrderReportSpecialType = 'M'
+                                  THEN 'Manual Report'
+                              ELSE aw.ExchangeTransactionID END order by case
+                                                                             when aw.generation::int = 1 and aw.ParentOrderID is null
+                                                                                 then 0
+                                                                             else aw.generation::int
+           end desc) as blaze_account_alias_strategas,
+       1
+from d
