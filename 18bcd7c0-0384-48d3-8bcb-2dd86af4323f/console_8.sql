@@ -1,32 +1,18 @@
-select * from partitions.hft_fix_message_event_20250407
-    where load_batch_id = -1;
+with base_inc as (
+select split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) -1 ), '.', 1) as fn, sum(processed_rows) as loaded_row, array_agg(load_batch_id) as batchs
+from inc_hft.hft_incremental_files
+where date_id = :p_date_id
+and is_active= 'Y'
+group by split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) -1 ), '.', 1)
+)
+, base_eod as (
+SELECT split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ), '.', 1) as fn, sum(x.loaded_row) as  loaded_row, array_agg(load_batch_id) as batchs
+FROM public.load_hft_log x
+WHERE date_id = :p_date_id
+group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ), '.', 1)
+)
+select base_eod.fn, base_inc.fn, base_inc.loaded_row as sum_inc, base_inc.batchs, base_eod.loaded_row as sum_eod, base_eod.loaded_row - base_inc.loaded_row as diff, base_eod.batchs
+from base_inc
+left join base_eod using(fn)
+where base_inc.loaded_row != base_eod.loaded_row;
 
-INSERT INTO partitions.hft_fix_message_event_20250407 (date_id, fix_date, msg_type, sub_system_id, sender_comp_id,
-                                                       target_comp_id, account_name, cl_ord_id, parent_cl_ord_id,
-                                                       secondary_ord_id, exch_exec_id, sec_exch_exec_id, exch_ord_id,
-                                                       session_id, orig_cl_ord_id, security_type, leg_cfi_code,
-                                                       fix_msg_json, load_batch_id, exec_type, leg_ref_id,
-                                                       alternative_cl_ord_id)
-SELECT date_id,
-       fix_date,
-       msg_type,
-       sub_system_id,
-       sender_comp_id,
-       target_comp_id,
-       account_name,
-       cl_ord_id,
-       parent_cl_ord_id,
-       secondary_ord_id,
-       exch_exec_id,
-       sec_exch_exec_id,
-       exch_ord_id,
-       session_id,
-       orig_cl_ord_id,
-       security_type,
-       leg_cfi_code,
-       fix_msg_json,
-       -1,
-       exec_type,
-       leg_ref_id,
-       alternative_cl_ord_id
-FROM trash.diff_20250407;
