@@ -35,28 +35,30 @@ alter table genesis2.clearing_account add column if not exists sg_sub_account_na
 comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used for populating tag in 35=J. Copy from SG_ACCOUNT value';
 
 
-select ai.date_id                                                                       as "75",
-       ai.create_time                                                                   as "60",
-       di.symbol                                                                        as "55",
-       case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end                   as "167",
-       case when di.instrument_type_id = 'O' then oc.put_call end                       as "201",
-       case when di.instrument_type_id = 'O' then oc.strike_price end                   as "202",
-       case when di.instrument_type_id = 'O' then to_char(oc.maturity_day, 'FM00') end  as "205",
-       case
-           when di.instrument_type_id = 'O' then to_char(oc.maturity_year, 'FM0000') ||
-                                                 to_char(oc.maturity_month, 'FM00') end as "200",
-       ai.total_qty                                                                     as "53",
-       ai.avg_px                                                                        as "6",
-       "124",
-       "NO_EXECS",
-       "78",
-       "NO_ALLOCS"
-
+select jsonb_build_object('75', ai.date_id,
+                          '60', ai.create_time,
+                          '55', di.symbol,
+                          '167', case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
+                          '201', case when di.instrument_type_id = 'O' then oc.put_call end,
+                          '202', case when di.instrument_type_id = 'O' then oc.strike_price end,
+                          '205', case when di.instrument_type_id = 'O' then to_char(oc.maturity_day, 'FM00') end,
+                          '200', case
+                                     when di.instrument_type_id = 'O' then to_char(oc.maturity_year, 'FM0000') ||
+                                                                           to_char(oc.maturity_month, 'FM00') end,
+                          '53', ai.total_qty,
+                          '6', ai.avg_px,
+                          '124', aitr."124",
+                          'NO_EXECS', aitr."NO_EXECS",
+                          '78', aie."78",
+                          'NO_ALLOCS', aie."NO_ALLOCS"
+       )
 -- select ai.alloc_instr_id, *
 from genesis2.allocation_instruction ai
          join lateral (select count(*)                                                                            as "78",
-                              jsonb_agg(jsonb_build_object('79', ac.opt_occ_id, '80', aie.alloc_qty, '439',
-                                                           ca.clearing_account_number, '10440', aie.occ_actionable_id,
+                              jsonb_agg(jsonb_build_object('79', ac.opt_occ_id,
+                                                           '80', aie.alloc_qty,
+                                                           '439', ca.clearing_account_number,
+                                                           '10440', aie.occ_actionable_id,
                                                            '11888', ca.sg_brid, '10701',
                                                            ca.sg_sub_account_name))                               as "NO_ALLOCS"
                        from genesis2.allocation_instruction_entry aie
@@ -68,8 +70,9 @@ from genesis2.allocation_instruction ai
                          and aie.date_id = ai.date_id
                        limit 1) aie on true
          join lateral (select count(*) as "124",
-                              jsonb_agg(jsonb_build_object('17', tr.exec_id, 'secondary_exch_exec_id',
-                                                           tr.secondary_exch_exec_id, 'last_qty', tr.last_qty,
+                              jsonb_agg(jsonb_build_object('17', tr.exec_id,
+                                                           'secondary_exch_exec_id', tr.secondary_exch_exec_id,
+                                                           'last_qty', tr.last_qty,
                                                            'leg_ref_id', tr.leg_ref_id)
                               )        as "NO_EXECS"
                        from genesis2.alloc_instr2trade_record aitr
