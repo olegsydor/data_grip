@@ -34,59 +34,88 @@ comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used
 alter table genesis2.clearing_account add column if not exists sg_sub_account_name varchar;
 comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used for populating tag in 35=J. Copy from SG_ACCOUNT value';
 
+create or replace function dash360.get_data_for_allocations(in_alloc_instr_id int8, in_date_id int4 default null)
+    returns jsonb
+    language plpgsql
+as
+$fx$
+    -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
+declare
+    l_return_jsonb jsonb;
+begin
+    select into l_return_jsonb jsonb_build_object('tradeDate', ai.date_id,
+                                                  'processTime', ai.create_time,
+                                                  'symbol', di.symbol,
+                                                  'secType',
+                                                  case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
+                                                  'putOrCall',
+                                                  case when di.instrument_type_id = 'O' then oc.put_call end,
+                                                  'strikePx',
+                                                  case when di.instrument_type_id = 'O' then oc.strike_price end,
+                                                  'maturityDay',
+                                                  case
+                                                      when di.instrument_type_id = 'O'
+                                                          then to_char(oc.maturity_day, 'FM00') end,
+                                                  'maturityMonthYear', case
+                                                                           when di.instrument_type_id = 'O' then
+                                                                               to_char(oc.maturity_year, 'FM0000') ||
+                                                                               to_char(oc.maturity_month, 'FM00') end,
+                                                  'totalQty', ai.total_qty,
+                                                  'avgPx', ai.avg_px,
+                                                  'noExecs', aitr.trade_cnt,
+                                                  'trades', aitr.trades,
+                                                  'noAllocs', aie.alloc_cnt,
+                                                  'allocationEntries', aie.entries
+                               )
+    from genesis2.allocation_instruction ai
+             join lateral (select count(*)                                              as alloc_cnt,
+                                  jsonb_agg(jsonb_build_object('79', ac.opt_occ_id,
+                                                               '80', aie.alloc_qty,
+                                                               '439', ca.clearing_account_number,
+                                                               '10440', aie.occ_actionable_id,
+                                                               '11888', ca.sg_brid, '10701',
+                                                               ca.sg_sub_account_name)) as entries
+                           from genesis2.allocation_instruction_entry aie
+                                    join genesis2.clearing_account ca
+                                         on (ca.clearing_account_id = aie.clearing_account_id and
+                                             ca.clearing_account_type = '1' and ca.market_type = 'O')
+                                    join genesis2.account ac on ac.account_id = ai.account_id
+                           where aie.alloc_instr_id = ai.alloc_instr_id
+                             and aie.date_id = ai.date_id
+                           limit 1) aie on true
+             join lateral (select count(*) as trade_cnt,
+                                  jsonb_agg(jsonb_build_object('dashExecId', tr.exch_exec_id,
+                                                               'secondaryExchExecId', tr.secondary_exch_exec_id,
+                                                               'lastQty', tr.last_qty,
+                                                               'legRefId', tr.leg_ref_id,
+                                                               'chainExecId', fmj.chain_exec_id)
+                                  )        as trades
+                           from genesis2.alloc_instr2trade_record aitr
+                                    join genesis2.trade_record tr
+                                         on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+                                    join lateral (select fix_message ->> '10710' as chain_exec_id
+                                                  from staging.fix_message_json fmj
+                                                  where fmj.date_id = aitr.date_id
+                                                    and fmj.fix_message_id = tr.trade_fix_message_id
+                                                  limit 1) fmj on true
+                           where aitr.alloc_instr_id = ai.alloc_instr_id
+                             and aitr.date_id = ai.date_id
+                             and is_busted = 'N'
+                           limit 1) aitr on true
+             join genesis2.instrument di on di.instrument_id = ai.instrument_id
+             left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
+             left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+    where true
+      and ai.alloc_instr_id = in_alloc_instr_id
+      and case when in_date_id is null then true else ai.date_id = in_date_id end;
+    return l_return_jsonb;
+end;
+$fx$;
 
-select jsonb_build_object('75', ai.date_id,
-                          '60', ai.create_time,
-                          '55', di.symbol,
-                          '167', case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
-                          '201', case when di.instrument_type_id = 'O' then oc.put_call end,
-                          '202', case when di.instrument_type_id = 'O' then oc.strike_price end,
-                          '205', case when di.instrument_type_id = 'O' then to_char(oc.maturity_day, 'FM00') end,
-                          '200', case
-                                     when di.instrument_type_id = 'O' then to_char(oc.maturity_year, 'FM0000') ||
-                                                                           to_char(oc.maturity_month, 'FM00') end,
-                          '53', ai.total_qty,
-                          '6', ai.avg_px,
-                          '124', aitr."124",
-                          'NO_EXECS', aitr."NO_EXECS",
-                          '78', aie."78",
-                          'NO_ALLOCS', aie."NO_ALLOCS"
-       )
--- select ai.alloc_instr_id, *
+select alloc_instr_id, dash360.get_data_for_allocations(ai.alloc_instr_id, ai.date_id)
 from genesis2.allocation_instruction ai
-         join lateral (select count(*)                                                                            as "78",
-                              jsonb_agg(jsonb_build_object('79', ac.opt_occ_id,
-                                                           '80', aie.alloc_qty,
-                                                           '439', ca.clearing_account_number,
-                                                           '10440', aie.occ_actionable_id,
-                                                           '11888', ca.sg_brid, '10701',
-                                                           ca.sg_sub_account_name))                               as "NO_ALLOCS"
-                       from genesis2.allocation_instruction_entry aie
-                                join genesis2.clearing_account ca
-                                     on (ca.clearing_account_id = aie.clearing_account_id and
-                                         ca.clearing_account_type = '1' and ca.market_type = 'O')
-                                join genesis2.account ac on ac.account_id = ai.account_id
-                       where aie.alloc_instr_id = ai.alloc_instr_id
-                         and aie.date_id = ai.date_id
-                       limit 1) aie on true
-         join lateral (select count(*) as "124",
-                              jsonb_agg(jsonb_build_object('17', tr.exec_id,
-                                                           'secondary_exch_exec_id', tr.secondary_exch_exec_id,
-                                                           'last_qty', tr.last_qty,
-                                                           'leg_ref_id', tr.leg_ref_id)
-                              )        as "NO_EXECS"
-                       from genesis2.alloc_instr2trade_record aitr
-                                join genesis2.trade_record tr
-                                     on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
-                       where aitr.alloc_instr_id = ai.alloc_instr_id
-                         and aitr.date_id = ai.date_id
---                          and aitr.allocation_instruction_entry_id = aie.allocation_instruction_entry_id
-                       limit 1) aitr on true
-         join genesis2.instrument di on di.instrument_id = ai.instrument_id
-         left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
-         left join genesis2.option_series os on oc.option_series_id = os.option_series_id
-where ai.date_id = 20251024
-  and ai.alloc_instr_id = -99689
--- group by 1 aie.allocation_instruction_entry_id) > 1
---                 having count(distinct
+where date_id = 20251023;
 
+
+select dash360.get_data_for_allocations(-99683, 20251023);
+select dash360.get_data_for_allocations(-99683);
