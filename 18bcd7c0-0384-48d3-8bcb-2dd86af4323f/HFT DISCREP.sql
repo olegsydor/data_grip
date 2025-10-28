@@ -56,4 +56,8 @@ from partitions.hft_fix_message_event_20251027_eod eod
                       df.msg_type not in ('9', 'F')
                   else true end;
 
-select distinct account_name from trash.diff_20251027
+select account_name, count(*) from trash.diff_20251027
+group by account_name;
+
+select * from trash.diff_20251027
+
