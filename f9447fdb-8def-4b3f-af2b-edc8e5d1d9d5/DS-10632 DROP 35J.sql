@@ -45,6 +45,7 @@ declare
 begin
     select into l_return_jsonb jsonb_build_object('tradeDate', ai.date_id,
                                                   'processTime', ai.create_time,
+                                                  'side', ai.side,
                                                   'symbol', di.symbol,
                                                   'secType',
                                                   case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,

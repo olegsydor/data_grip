@@ -59,5 +59,9 @@ from partitions.hft_fix_message_event_20251027_eod eod
 select account_name, count(*) from trash.diff_20251027
 group by account_name;
 
-select * from trash.diff_20251027
-
+select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::time at time zone 'UTC' at time zone
+                        'US/Eastern')::time, * from trash.diff_20251027
+where true
+--     and cl_ord_id = 'HFAHNS8649'
+order by fix_date
+select 29748-5008
