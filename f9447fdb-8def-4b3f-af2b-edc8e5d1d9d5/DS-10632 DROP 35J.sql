@@ -126,8 +126,12 @@ SELECT * FROM   dash360.get_data_for_allocations(-99683, 20251023);
 select *
 from genesis2.allocation_instruction_entry aie
                                     join genesis2.clearing_account ca
-                                         on (ca.clearing_account_id = aie.clearing_account_id and
-                                             ca.clearing_account_type = '1' and ca.market_type = 'O')
+                                         on (ca.clearing_account_id = aie.clearing_account_id
+--                                                  and ca.clearing_account_type = '1' and ca.market_type = 'O'
+                                             )
 
                            where aie.alloc_instr_id = -99683
                              and aie.date_id = 20251023
+
+
+CREATE USER MAPPING FOR osemenchenko SERVER postgresbig_data_uat OPTIONS (user 'genesis2', password 'GENESIS2');
