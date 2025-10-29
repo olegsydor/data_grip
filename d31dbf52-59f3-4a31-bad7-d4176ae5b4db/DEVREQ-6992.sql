@@ -1,6 +1,6 @@
-DROP FUNCTION trash.dash360_report_trades_v3(_varchar, _int8, varchar, int4, int4, timestamp, timestamp, bpchar,
-                                             _varchar, _varchar, _varchar);
-select * from trash.dash360_report_trades_v3(20251028, 20251028, 'E', '{63384}')
+DROP FUNCTION trash.dash360_report_trades_v3;
+select *
+from trash.dash360_report_trades_v3(20251028, 20251028, 'E', '{63384}')
 CREATE FUNCTION trash.dash360_report_trades_v3(in_date_begin_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                in_date_end_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                in_instrument_type character DEFAULT NULL::bpchar,
@@ -8,71 +8,71 @@ CREATE FUNCTION trash.dash360_report_trades_v3(in_date_begin_id integer DEFAULT 
                                                in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
-                "Trading Firm"          varchar,
+                "Trading Firm"          varchar, -- 1
                 "Account"               varchar(30),
                 "Street Cl Ord ID"      varchar(256),
                 "Cl Ord ID"             varchar(256),
-                "Date"                  text,
+                "Date"                  text, -- 5
                 "Time"                  text,
                 "Sec Type"              text,
                 "Ex Dest"               varchar,
                 "Sub Strategy"          varchar(128),
-                "Fee Sensitivity"       int2,
+                "Fee Sensitivity"       int2, -- 10
                 "Status"                varchar,
                 "Side"                  text,
                 "O/C"                   text,
                 "Symbol"                varchar(100),
-                "Last Qty"              int4,
+                "Last Qty"              int4, -- 15
                 "Leaves Qty"            int4,
                 "Last Px"               numeric(16, 8),
                 "Last Mkt"              varchar(5),
                 "Exchange Name"         varchar(256),
-                "MIC Code"              varchar(4),
+                "MIC Code"              varchar(4), -- 20
                 "Bid Qty"               text,
                 "Bid Px"                text,
                 "Ask Px"                text,
                 "Ask Qty"               int4,
-                "Exec Bid Qty"          int4,
+                "Exec Bid Qty"          int4, -- 25
                 "Exec Bid Px"           text,
                 "Exec Ask Px"           text,
                 "Exec Ask Qty"          int4,
                 "Liquidity Ind"         varchar(256),
-                "Liq Ind Description"   varchar(256),
+                "Liq Ind Description"   varchar(256), -- 30
                 "Cust/Firm"             varchar(255),
                 "Exec Broker"           varchar(32),
                 "CMTA"                  varchar(3),
                 "Client ID"             varchar(255),
-                "Expiration"            text,
+                "Expiration"            text, -- 35
                 "Root Symbol"           varchar(10),
                 "Put/Call"              text,
                 "Strike"                numeric(12, 4),
                 "OSI Symbol"            varchar(30),
-                "DB Exec ID"            int8,
+                "DB Exec ID"            int8, -- 40
                 "Dash Exec ID"          varchar,
                 "Exch Exec ID"          varchar(128),
                 "Is Mleg"               text,
                 "Is Cross"              bpchar(1),
-                "Sending Firm"          varchar(30),
+                "Sending Firm"          varchar(30),  -- 45
                 "Sub System"            varchar(20),
                 "Free Text"             varchar(512),
                 "Principal Amount"      numeric(16, 4),
                 "Commission"            numeric(20, 8),
-                "Exchange Fees"         numeric(20, 8),
+                "Exchange Fees"         text, -- 50
                 "Exchange Fees/Unit"    text,
                 "Execution Cost"        numeric(20, 8),
                 "Execution Cost/Unit"   text,
                 "Maker/Taker Fee"       numeric(20, 8),
-                "Maker/Taker Fee/Unit"  text,
+                "Maker/Taker Fee/Unit"  text, -- 55
                 "Transaction Fee"       text,
                 "Trade Processing Fee"  text,
                 "Royalty Fee"           text,
                 "Option Regulatory Fee" text,
-                "OCC Fee"               text,
+                "OCC Fee"               text, -- 60
                 "SEC Fee"               text,
                 "CAT Fee"               text,
                 "Equity Clearing Fee"   text,
                 "Contra Broker"         varchar(256),
-                "Client Commission"     numeric,
+                "Client Commission"     numeric, -- 65
                 "Dash Liq Ind Type"     varchar(256),
                 "OCC AID"               varchar
             )
@@ -170,8 +170,15 @@ begin
                lst_ex.exec_text                                                         as "Free Text",
                tr.principal_amount                                                      as "Principal Amount",
                tr.tcce_account_dash_commission_amount                                   as "Commission",
-               tr.tcce_transaction_fee_amount                                           as "Exchange Fees",
-               to_char(round(tr.tcce_transaction_fee_amount / nullif(tr.last_qty, 0), 4),
+               to_char(round(coalesce(tr.tcce_transaction_fee_amount, 0) + coalesce(tr.tcce_maker_taker_fee_amount, 0) +
+                             coalesce(tr.spread_transaction_fee_amount, 0) + coalesce(tr.tcce_royalty_fee_amount, 0) +
+                             coalesce(tr.tcce_trade_processing_fee_amount, 0) + coalesce(tr.qcc_rebate_amount, 0), 4),
+                       'FM999990.0000')                                                 as "Exchange Fees",
+               to_char(round((coalesce(tr.tcce_transaction_fee_amount, 0) +
+                              coalesce(tr.tcce_maker_taker_fee_amount, 0) +
+                              coalesce(tr.spread_transaction_fee_amount, 0) + coalesce(tr.tcce_royalty_fee_amount, 0) +
+                              coalesce(tr.tcce_trade_processing_fee_amount, 0) + coalesce(tr.qcc_rebate_amount, 0)) /
+                             nullif(tr.last_qty, 0), 4),
                        'FM999990.0000')                                                 as "Exchange Fees/Unit",
                tr.tcce_account_execution_cost                                           as "Execution Cost",
                to_char(round(tr.tcce_account_execution_cost / nullif(tr.last_qty, 0), 4),
@@ -183,10 +190,15 @@ begin
                to_char(round(tr.tcce_trade_Processing_Fee_Amount, 4), 'FM999990.0000')  as "Trade Processing Fee",
                to_char(round(tr.tcce_royalty_fee_amount, 4), 'FM999990.0000')           as "Royalty Fee",
                to_char(round(tr.tcce_option_regulatory_fee_amount, 4), 'FM999990.0000') as "Option Regulatory Fee",
-               to_char(round(tr.tcce_occ_fee_amount, 4), 'FM999990.0000')               as "OCC Fee",
+
+               case
+                   when tr.instrument_type_id = 'O'
+                       then to_char(round(tr.tcce_occ_fee_amount, 4), 'FM999990.0000') end as "OCC Fee",
                to_char(round(tr.tcce_sec_fee_amount, 4), 'FM999990.0000')               as "SEC Fee",
                to_char(round(tr.cat_fee_amount, 4), 'FM999990.0000')                    as "CAT Fee",
-               to_char(round(tr.clearing_fee_amout, 4), 'FM999990.0000')                as "Equity Clearing Fee",
+               case
+                   when tr.instrument_type_id = 'E'
+                       then to_char(round(tr.clearing_fee_amout, 4), 'FM999990.0000') end as "Equity Clearing Fee",
                tr.contra_broker                                                         as "Contra Broker",
                tr.client_commission_rate * tr.last_qty                                  as "Client Commission",
                dlit.liquidity_indicator_type                                            as "Dash Liq Ind Type",
@@ -239,5 +251,9 @@ begin
 end;
 $function$
 ;
-select * from dwh.d_account
-where account_name = 'MIRARET'
+
+
+
+select
+from dash_reporting.imc_base_ext_md
+
