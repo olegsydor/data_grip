@@ -69,17 +69,22 @@ begin
                                                   'allocationEntries', aie.entries
                                )
     from genesis2.allocation_instruction ai
+             join genesis2.instrument di on di.instrument_id = ai.instrument_id
              join lateral (select count(*)                                              as alloc_cnt,
                                   jsonb_agg(jsonb_build_object('79', ac.opt_occ_id,
                                                                '80', aie.alloc_qty,
                                                                '439', ca.clearing_account_number,
                                                                '10440', aie.occ_actionable_id,
-                                                               '11888', ca.sg_brid, '10701',
-                                                               ca.sg_sub_account_name)) as entries
+                                                               '11712', ca.sg_brid,
+                                                               '10701', ca.sg_sub_account_name,
+                                                               'individualAllocID', aie.allocation_instruction_entry_id))
+                                      as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.clearing_account ca
-                                         on (ca.clearing_account_id = aie.clearing_account_id and
-                                             ca.clearing_account_type = '1' and ca.market_type = 'O')
+                                         on (ca.clearing_account_id = aie.clearing_account_id
+--                                                  and ca.clearing_account_type = '1'
+--                                                  and ca.market_type = di.instrument_type_id
+                                             )
                                     join genesis2.account ac on ac.account_id = ai.account_id
                            where aie.alloc_instr_id = ai.alloc_instr_id
                              and aie.date_id = ai.date_id
@@ -103,7 +108,7 @@ begin
                              and aitr.date_id = ai.date_id
                              and is_busted = 'N'
                            limit 1) aitr on true
-             join genesis2.instrument di on di.instrument_id = ai.instrument_id
+
              left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
              left join genesis2.option_series os on oc.option_series_id = os.option_series_id
     where true
@@ -121,7 +126,6 @@ where date_id = 20251023;
 select dash360.get_data_for_allocations(-99683, 20251023);
 select dash360.get_data_for_allocations(-99683);
 
-SELECT * FROM   dash360.get_data_for_allocations(-99683, 20251023);
 
 select *
 from genesis2.allocation_instruction_entry aie
