@@ -71,12 +71,12 @@ begin
     from genesis2.allocation_instruction ai
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
              join lateral (select count(*)                                              as alloc_cnt,
-                                  jsonb_agg(jsonb_build_object('79', ac.opt_occ_id,
-                                                               '80', aie.alloc_qty,
-                                                               '439', ca.clearing_account_number,
-                                                               '10440', aie.occ_actionable_id,
-                                                               '11712', ca.sg_brid,
-                                                               '10701', ca.sg_sub_account_name,
+                                  jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
+                                                               'allocQty', aie.alloc_qty,
+                                                               'clrFirm', ca.clearing_account_number,
+                                                               'actionableId', aie.occ_actionable_id,
+                                                               'brid', ca.sg_brid,
+                                                               'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id))
                                       as entries
                            from genesis2.allocation_instruction_entry aie
