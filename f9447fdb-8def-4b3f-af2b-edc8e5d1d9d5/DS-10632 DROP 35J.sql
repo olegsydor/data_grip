@@ -139,3 +139,6 @@ from genesis2.allocation_instruction_entry aie
 
 
 CREATE USER MAPPING FOR osemenchenko SERVER postgresbig_data_uat OPTIONS (user 'genesis2', password 'GENESIS2');
+
+
+comment on column genesis2.clearing_account.clearing_account_type is '0: DVP,1: CMTA,2: Domicile,3: Non-allocated';
