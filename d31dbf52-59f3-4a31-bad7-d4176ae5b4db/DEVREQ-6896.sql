@@ -895,11 +895,11 @@ select * from (
 	and query not ilike '%pg_stat_activity%'
 --	and query not ilike '%vacuum%'
 	and query not ilike '%replicat%'
---	and query ilike '%report_rps_ofp0016_gtc%'
+	and query ilike '%report_equity_tca_quick%'
 	union all
 	select null, null, null as application_name, null, null, null as query_start, null as age, null, null, null) x
 	order by case when coalesce(application_name, 'Sydor') ilike '%Sydor%' then 0 else 1 end,  query_start nulls last;
 
 
 
-select pg_terminate_backend(306358);
+select pg_terminate_backend(550735);
