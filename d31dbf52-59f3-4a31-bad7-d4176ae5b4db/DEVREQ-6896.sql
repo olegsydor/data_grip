@@ -902,4 +902,4 @@ select * from (
 
 
 
-select pg_terminate_backend(550735);
+select pg_terminate_backend(1289440);
