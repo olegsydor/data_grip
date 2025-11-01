@@ -448,3 +448,6 @@ where yc.status_date_id between 20250701 and 20250930
   and yc.instrument_type_id = 'E'
   and yc.multileg_reporting_type = '1'
   and yc.exchange_id is not null;
+
+
+select * from trash.pre_fetch_equity_tca_venue
