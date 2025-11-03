@@ -283,32 +283,44 @@ create index if not exists alloc_drop_message_status_alloc_instr_id_drop_message
 
 
 create function dash360.alloc_drop_message_status_init(in_alloc_instr_id int8,
-                                                      in_drop_message_type bpchar default null)
+                                                       in_drop_message_type bpchar)
     returns int4
     language plpgsql
 as
 $fx$
 declare
-    l_alloc_drop_message_status_id int4;
+    l_drop_message_status_id int4;
 begin
-        insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
-        values (in_alloc_instr_id)
-        returning alloc_drop_message_status_id into l_alloc_drop_message_status_id;
-
-
-    else
-        update genesis2.alloc_drop_message_status adms
-        set drop_message_type          = in_drop_message_type,
-            drop_message_status        = in_drop_message_status,
-            drop_message_reject_reason = in_drop_message_reject_reason
-        where adms.alloc_instr_id = in_alloc_instr_id
-        returning alloc_drop_message_status_id into l_alloc_drop_message_status_id;
-
-    end if;
-    return l_alloc_drop_message_status_id;
+    insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
+    values (in_alloc_instr_id, in_drop_message_type)
+    returning drop_message_status_id into l_drop_message_status_id;
+    return l_drop_message_status_id;
 end;
 $fx$;
-comment on function dash360.alloc_drop_message_status_set is '';
+comment on function dash360.alloc_drop_message_status_init is '';
+
+
+create function dash360.alloc_drop_message_status_update(in_drop_message_status_id int4,
+                                                         in_drop_message_status bpchar,
+                                                         in_drop_message_reject_reason text
+)
+    returns int4
+    language plpgsql
+as
+$fx$
+declare
+    l_drop_message_status_id int4;
+begin
+    update genesis2.alloc_drop_message_status adms
+    set drop_message_status        = in_drop_message_status,
+        drop_message_reject_reason = in_drop_message_reject_reason
+    where adms.drop_message_status_id = in_drop_message_status_id
+    returning drop_message_status_id into l_drop_message_status_id;
+
+    return l_drop_message_status_id;
+end;
+$fx$;
+
 
 drop function if exists dash360.allocations_clearing_accounts_by_account_id;
 create or replace function dash360.allocations_clearing_accounts_by_account_id(in_account_id bigint, in_market_type character)
