@@ -282,8 +282,8 @@ comment on column genesis2.alloc_drop_message_status.db_create_time is 'Created 
 create index if not exists alloc_drop_message_status_alloc_instr_id_drop_message_type_idx on genesis2.alloc_drop_message_status (alloc_instr_id, drop_message_type);
 
 
-create function dash360.alloc_drop_message_status_init(in_alloc_instr_id int8,
-                                                       in_drop_message_type bpchar)
+create or replace function dash360.alloc_drop_message_status_init(in_alloc_instr_id int8,
+                                                                  in_drop_message_type bpchar)
     returns int4
     language plpgsql
 as
@@ -291,13 +291,20 @@ $fx$
 declare
     l_drop_message_status_id int4;
 begin
-    insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
-    values (in_alloc_instr_id, in_drop_message_type)
-    returning drop_message_status_id into l_drop_message_status_id;
+    if in_drop_message_type = 'N' and not exists (select null
+                                                  from genesis2.alloc_drop_message_status
+                                                  where alloc_instr_id = in_alloc_instr_id
+                                                    and drop_message_type = 'N') then
+        insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
+        values (in_alloc_instr_id, in_drop_message_type)
+        returning drop_message_status_id into l_drop_message_status_id;
+    else
+        l_drop_message_status_id := -1;
+    end if;
     return l_drop_message_status_id;
 end;
 $fx$;
-comment on function dash360.alloc_drop_message_status_init is '';
+comment on function dash360.alloc_drop_message_status_init is 'Insert data into alloc_drop_message_status';
 
 
 create function dash360.alloc_drop_message_status_update(in_drop_message_status_id int4,
@@ -426,3 +433,4 @@ begin
 end;
 $function$
 ;
+

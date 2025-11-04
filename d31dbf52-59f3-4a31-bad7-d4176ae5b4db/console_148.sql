@@ -451,3 +451,5 @@ where yc.status_date_id between 20250701 and 20250930
 
 
 select * from trash.pre_fetch_equity_tca_venue
+
+
