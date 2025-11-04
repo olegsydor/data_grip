@@ -453,3 +453,48 @@ where yc.status_date_id between 20250701 and 20250930
 select * from trash.pre_fetch_equity_tca_venue
 
 
+
+select tr."Trading Firm",       tr."Account",       tr."Street Cl Ord ID",       tr."Cl Ord ID",       tr."Date",       tr."Time",       tr."Sec Type",       tr."Ex Dest",       tr."Sub Strategy",       tr."Fee Sensitivity",
+       tr."Status",       tr."Side",       tr."O/C",       tr."Symbol",       tr."Last Qty",       tr."Last Px",       tr."Leaves Qty",       tr."Last Mkt",       tr."Exchange Name",       tr."MIC Code",
+       tr."Bid Qty",
+       tr."Bid Px",
+       tr."Ask Px",
+       tr."Ask Qty",
+       tr."Exec Bid Qty",
+       tr."Exec Bid Px",
+       tr."Exec Ask Px",
+       tr."Exec Ask Qty",
+       tr."Liquidity Ind",
+       tr."Liq Ind Description",
+       tr."Cust/Firm",
+       tr."Exec Broker",
+       tr."CMTA",
+       tr."Client ID",
+       tr."Expiration",
+       tr."Root Symbol",
+       tr."Dash Exec ID",
+       tr."Exch Exec ID",
+       tr."Secondary Exch Exec ID",
+       tr."Is Mleg",
+       tr."Is Cross",
+       tr."Sending Firm",
+       tr."Principal Amount",
+       tr."Maker/Taker Fee",
+       tr."Maker/Taker Fee/Unit",
+       tr."Transaction Fee",
+       tr."Trade Processing Fee",
+       tr."Royalty Fee",
+       tr."Option Regulatory Fee",
+       tr."OCC Fee",
+       tr."SEC Fee",
+       tr."Commission",
+       tr."Execution Cost",
+       tr."Execution Cost/Unit"
+from trash.dash360_report_trades_v3(
+             in_start_date_id := $each_date,
+             in_end_date_id := $each_date,
+             in_trading_firm_ids := '{LPTF355,xfaamex,xfachi,xfachi440,xfasf}'
+     ) as tr;
+
+
+select
