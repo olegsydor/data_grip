@@ -45,7 +45,7 @@ begin
 
     drop table if exists tmp_fyc;
     create temp table if not exists tmp_fyc
-       on commit drop
+--        on commit drop
     as
     select yc.order_id,
            yc.client_order_id,
@@ -92,7 +92,7 @@ begin
              join dwh.d_account a on a.account_id = yc.account_id and a.is_active
              left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
     where yc.parent_order_id is null
-      and yc.status_date_id between in_date_begin and in_date_end
+      and yc.status_date_id between :in_date_begin and :in_date_end
       and yc.instrument_type_id = 'E'
       and yc.multileg_reporting_type = '1'
       and case when coalesce(in_account_ids, '{}') <> '{}' then yc.account_id = any (in_account_ids) else true end
@@ -198,6 +198,7 @@ begin
                                           eligible_ix_volume, avg_spread_over_life, day_high_price, day_low_price,
                                           open_px, close_px, prev_close_px, next_close_px, routing_time_mid_price,
                                           routing_time_spread, aggression_level, activ_symbol, day_order_qty, order_qty)
+    explain (analyze, buffers, verbose, settings, wal)
     select yc.order_id,
            yc.client_order_id,
            yc.date_id,
@@ -300,7 +301,7 @@ begin
              left join dwh.d_routing_table rt on rt.routing_table_id = yc.routing_table_id and rt.is_active
              left join eq_tca.algorithmic_order_analytic_v2 tca
                        on tca.order_id = yc.order_id and tca.date_id = yc.date_id
-             left join lateral (select *
+             left join lateral (select high, low, open_price, close_price
                                 from eq_tca.daily_analytic_v2 da
                                 where da.symbol = i.activ_symbol
                                   and da.date_id = yc.date_id
@@ -318,7 +319,7 @@ begin
                                   and da.date_id > yc.date_id
                                 order by date_id
                                 limit 1) nxt on true
-             join LATERAL (select *
+             join LATERAL (select order_cancel_time
                            from dwh.client_order co
                            where co.order_id = yc.order_id
                              and co.create_date_id = yc.date_id
@@ -326,8 +327,8 @@ begin
                            limit 1) co on true
              left join lateral (select fix_message
                                 from fix_capture.fix_message_json fmj
-                                where fmj.fix_message_id = co.fix_message_id
-                                  and fmj.date_id = co.create_date_id
+                                where fmj.fix_message_id = yc.order_fix_message_id--co.fix_message_id
+                                  and fmj.date_id = yc.date_id--co.create_date_id
                                   and fmj.date_id between in_date_begin and in_date_end
                                 limit 1) fmj on true;
 
