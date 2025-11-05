@@ -1,12 +1,64 @@
+select tr.date_id,
+                            tr.trade_record_time::date                                  as trade_record_time,
+                            tr.instrument_type_id,
+                            sum(tr.last_qty)                                            as sum_last_qty,
+                            sum(tr.last_qty * tr.last_px) / nullif(sum(tr.last_qty), 0) as avg_px,
+                            tr.open_close,
+                            --tr.order_id,
+                            tr.instrument_id,
+                            tr.account_id,
+                            tr.side,
+                            tr.cmta,
+                            at.alloc_qty                                                as alloc_qty,
+                            at.alloc_instr_id                                           as alloc_instr_id,
+                            at.clearing_account_id                                      as clearing_account_id,
+                            acc.opt_occ_id,
+                            sum(coalesce(tr.tcce_maker_taker_fee_amount, 0.0))          as tcce_maker_taker_fee_amount,
+                            sum(coalesce(tr.tcce_account_dash_commission_amount, 0.0))  as tcce_account_dash_commission_amount, --
+                            sum(coalesce(tr.tcce_transaction_fee_amount, 0.0))          as tcce_transaction_fee_amount,
+                            sum(coalesce(tr.tcce_trade_processing_fee_amount, 0.0))     as tcce_trade_processing_fee_amount,
+                            sum(coalesce(tr.tcce_royalty_fee_amount, 0.0))              as tcce_royalty_fee_amount,
+                            sum(tr.principal_amount)                                    as principal_amount,
+                            sum(coalesce(tr.tcce_account_execution_cost, 0.0))          as tcce_account_execution_cost,
+                            sum(coalesce(tr.client_commission_rate, 0.0) * tr.last_qty) as client_commission_rate_sum
+                     from dwh.flat_trade_record tr
+                              join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
+                              left join lateral (select atr.trade_record_id,
+                                                        atr.alloc_qty,
+                                                        atr.alloc_instr_id,
+                                                        atr.clearing_account_id
+                                                 from dwh.allocation2trade_record atr
+                                                 where atr.trade_record_id = tr.trade_record_id
+                                                   and atr.date_id = tr.date_id
+                                                   and atr.is_active
+                                                 limit 1) at on true
+                     where tr.date_id between :in_start_date_id and :in_end_date_id
+                       and is_busted = 'N'
+                       --and tr.order_id > 0
+                       and case
+                               when coalesce(:in_account_ids, '{}') = '{}' then true
+                               else acc.account_id = any (:in_account_ids) end
+                       and case
+                               when coalesce(:in_trading_firm_ids, '{}') = '{}' then true
+                               else acc.trading_firm_id = any (:in_trading_firm_ids) end
+                       and case
+                               when :in_instrument_type is null then true
+                               else tr.instrument_type_id = :in_instrument_type end
+                       and case when :in_include_all = 'N' then at.trade_record_id is not null else true end
+                     group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
+                              at.alloc_qty, tr.trade_record_time::date,
+                              tr.instrument_type_id, at.alloc_instr_id, at.clearing_account_id, acc.opt_occ_id;
+
+
 -- DROP FUNCTION dash360.report_fintech_adh_allocation_xls(int4, int4, _int4, bpchar, _varchar, _varchar);
 
-CREATE FUNCTION trash.so_report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                     in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                     in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                                     in_instrument_type character DEFAULT NULL::bpchar,
-                                                                     in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                     in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
-                                                                     in_include_all bpchar default 'N')
+CREATE or replace FUNCTION trash.so_report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                           in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                           in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                           in_instrument_type character DEFAULT NULL::bpchar,
+                                                           in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                           in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
+                                                           in_include_all bpchar default 'N')
     RETURNS TABLE
             (
                 "Trading Firm"         character varying,
@@ -102,61 +154,60 @@ begin
            , pre_base as (select ftr.alloc_instr_id, sum(client_commission_rate_sum) as client_commission_rate_sum
                           from ftr
                           group by ftr.alloc_instr_id)
-           , base as (select tf.trading_firm_name                         as "Trading Firm",
-                             ac.account_name                              as "Account",
-                             to_char(ftr.trade_record_time, 'MM/DD/YYYY') as "Date",
+           , base as (select tf.trading_firm_name                                as "Trading Firm",
+                             ac.account_name                                     as "Account",
+                             to_char(ftr.trade_record_time, 'MM/DD/YYYY')        as "Date",
                              to_char(public.get_settle_date_by_instrument_type(ftr.trade_record_time::date,
                                                                                ftr.instrument_type_id),
-                                     'MM/DD/YYYY')::varchar               as "Settlement Date",
-                             ftr.alloc_instr_id                           as "Alloc ID",
-                             ftr.clearing_account_id                      as "Clearing Account ID",
+                                     'MM/DD/YYYY')::varchar                      as "Settlement Date",
+                             ftr.alloc_instr_id                                  as "Alloc ID",
+                             ftr.clearing_account_id                             as "Clearing Account ID",
                              case
                                  when ftr.instrument_type_id = 'E' then 'Equity'
                                  when ftr.instrument_type_id = 'O' then 'Option'
-                                 end                                      as "Sec Type",
-                             hsd.display_instrument_id                    as "Symbol",
+                                 end                                             as "Sec Type",
+                             hsd.display_instrument_id                           as "Symbol",
                              case
                                  when ftr.side = '1' then 'Buy'
                                  when ftr.side = '2' then 'Sell'
                                  when ftr.side in ('5', '6') then 'Sell Short'
                                  else ''
-                                 end                                      as "Side",
+                                 end                                             as "Side",
                              case
                                  when ftr.open_close = 'O' then 'Open'
                                  when ftr.open_close = 'C' then 'Close'
-                                 else '' end                              as "O/C",
-                             ftr.sum_last_qty                             as "Exec Qty",
-                             round(ftr.avg_px, 4)                         as "Avg Px",
-                             coalesce(ftr.alloc_qty, ftr.sum_last_qty)    as "Alloc Qty",
-                             ftr.principal_amount                         as "Principal Amount",
-                             ftr.cmta                                     as "CMTA",
-                             coalesce(hsd.opra_symbol, hsd.symbol)        as "OSI Symbol",
-                             hsd.underlying_symbol                        as "Root Symbol",
-                             to_char(hsd.maturity_date, 'MM/DD/YYYY')     as "Expiration",
+                                 else '' end                                     as "O/C",
+                             ftr.sum_last_qty                                    as "Exec Qty",
+                             round(ftr.avg_px, 4)                                as "Avg Px",
+                             coalesce(ftr.alloc_qty, ftr.sum_last_qty)           as "Alloc Qty",
+                             ftr.principal_amount                                as "Principal Amount",
+                             ftr.cmta                                            as "CMTA",
+                             coalesce(hsd.opra_symbol, hsd.symbol)               as "OSI Symbol",
+                             hsd.underlying_symbol                               as "Root Symbol",
+                             to_char(hsd.maturity_date, 'MM/DD/YYYY')            as "Expiration",
                              case
                                  when hsd.put_call = '0' then 'Put'
                                  when hsd.put_call = '1' then 'Call'
                                  else ''
-                                 end                                      as "Put/Call",
-                             hsd.strike_px                                as "Strike",
+                                 end                                             as "Put/Call",
+                             hsd.strike_px                                       as "Strike",
                              round(ftr.tcce_account_dash_commission_amount / ftr.sum_last_qty *
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Commission",
+                                   6)                                            as "Commission",
                              round(ftr.tcce_account_execution_cost / ftr.sum_last_qty *
-                                   coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Execution Cost",
+                                   coalesce(ftr.alloc_qty, ftr.sum_last_qty), 6) as "Execution Cost",
                              round(ftr.tcce_maker_taker_fee_amount / ftr.sum_last_qty *
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Maker/Taker Fee",
+                                   6)                                            as "Maker/Taker Fee",
                              round(ftr.tcce_transaction_fee_amount / ftr.sum_last_qty *
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Transaction Fee",
+                                   6)                                            as "Transaction Fee",
                              round(ftr.tcce_trade_processing_fee_amount / ftr.sum_last_qty *
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Trade Processing Fee",
+                                   6)                                            as "Trade Processing Fee",
                              round(ftr.tcce_royalty_fee_amount / ftr.sum_last_qty *
                                    coalesce(ftr.alloc_qty, ftr.sum_last_qty),
-                                   6)                                     as "Royalty Fee",
+                                   6)                                            as "Royalty Fee",
                              --round(ftr.alloc_qty / ftr.sum_last_qty *
                              --      client_commission ,6 )	  			  as "Client Commission"
                              pre_base.client_commission_rate_sum
@@ -173,21 +224,21 @@ begin
         select base."Trading Firm",
                base."Account",
                base."Date",
-               aie.occ_actionable_id                                                       as "OCC AID",
-               coalesce(ca.clearing_account_number, base."CMTA")                           as "Clearing Account",
+               aie.occ_actionable_id                                                               as "OCC AID",
+               coalesce(ca.clearing_account_number, base."CMTA")                                   as "Clearing Account",
                base."Settlement Date",
                base."Alloc ID",
                case
                    when ai.created_by_subsystem_id = 'RPS' then 'auto'
                    else ui.user_name
-                   end                                                                     as "Allocated By",
-               to_char(ai.create_time, 'HH24:MI:SS.US')                                    as "Alloc Time",
+                   end                                                                             as "Allocated By",
+               to_char(ai.create_time, 'HH24:MI:SS.US')                                            as "Alloc Time",
                base."Sec Type",
                base."Symbol",
                base."Side",
                base."O/C",
                --base."Exec Qty",
-               ai.total_qty::bigint                                                        as "Exec Qty",
+               (case when in_include_all = 'Y' then base."Exec Qty" else ai.total_qty end)::bigint as "Exec Qty",
                base."Avg Px",
                base."Alloc Qty",
                base."Principal Amount",
@@ -204,7 +255,7 @@ begin
                base."Trade Processing Fee",
                base."Royalty Fee",
                --base."Client Commission" 
-               (aie.alloc_qty::float / ai.total_qty * client_commission_rate_sum)::numeric as "Client Commission"
+               (aie.alloc_qty * 1.0 / ai.total_qty * client_commission_rate_sum)::numeric          as "Client Commission"
         from base
                  left join lateral (select *
                                     from staging.allocation_instruction ai
@@ -226,4 +277,3 @@ begin
 end ;
 $function$
 ;
-DEVREQ-7052
