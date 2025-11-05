@@ -1,11 +1,13 @@
-select *
-from trash.tmp_fyc
+select symbol, date_id, count(*)
+from eq_tca.daily_analytic_v2
+group by symbol, date_id
+having count(*) > 1;
 
--- https://dashfinancial.atlassian.net/browse/DS-10678
 
--- DROP FUNCTION dash360.report_equity_tca_init_v2(int4, int4, _text, _text, _int8, _varchar, bool, _varchar);
 
-CREATE OR REPLACE FUNCTION dash360.report_equity_tca_init_v2(in_date_begin integer, in_date_end integer,
+select * from trash.so_report_equity_tca_init_v2(20251001, 20251231)
+
+CREATE OR REPLACE FUNCTION trash.so_report_equity_tca_init_v2(in_date_begin integer, in_date_end integer,
                                                              in_trading_firm_ids text[] DEFAULT '{}'::text[],
                                                              in_client_ids text[] DEFAULT '{}'::text[],
                                                              in_account_ids bigint[] DEFAULT '{}'::bigint[],
@@ -16,14 +18,15 @@ CREATE OR REPLACE FUNCTION dash360.report_equity_tca_init_v2(in_date_begin integ
     LANGUAGE plpgsql
 AS
 $function$
-    -- SO 20240523  https://dashfinancial.atlassian.net/browse/DEVREQ-4264  add  coalesce  to  account\trading  firm  input  parameters
+-- SO 20240523  https://dashfinancial.atlassian.net/browse/DEVREQ-4264  add  coalesce  to  account\trading  firm  input  parameters
 -- PD 20241031  https://dashfinancial.atlassian.net/browse/DS-8997  added  in_symbol
 -- SO 20251104 https://dashfinancial.atlassian.net/browse/DS-10678 performance improvement
 declare
-    l_step_id           int4;
-    l_load_id           int4;
-    l_row_cnt           int4;
-    l_instrument_id_arr int[];
+    l_step_id               int4;
+    l_load_id               int4;
+    l_row_cnt               int4;
+    l_instrument_id_arr     int[];
+    l_total_parent_exec_qty int8;
 begin
     --  Created  by  PD  on  2022/05/25  to  test
     select nextval('public.load_timing_seq') into l_load_id;
@@ -89,7 +92,7 @@ begin
              join dwh.d_account a on a.account_id = yc.account_id and a.is_active
              left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
     where yc.parent_order_id is null
-      and yc.status_date_id between :in_date_begin and :in_date_end
+      and yc.status_date_id between in_date_begin and in_date_end
       and yc.instrument_type_id = 'E'
       and yc.multileg_reporting_type = '1'
       and case when coalesce(in_account_ids, '{}') <> '{}' then yc.account_id = any (in_account_ids) else true end
@@ -104,7 +107,8 @@ begin
     get diagnostics l_row_cnt = row_count;
 
     analyze tmp_fyc;
-    select public.load_log(l_load_id, l_step_id, 'create  temp  table  if  not  exists  tmp_fyc', l_row_cnt, 'I')
+
+    select public.load_log(l_load_id, l_step_id, 'tmp_fyc created', l_row_cnt, 'I')
     into l_step_id;
 
     drop table if exists pre_pre_fetch_equity_tca;
@@ -293,7 +297,7 @@ begin
              join dwh.d_trading_firm tf on tf.trading_firm_unq_id = yc.trading_firm_unq_id
              join dwh.d_instrument i on i.instrument_id = yc.instrument_id and i.is_active
              left join dwh.d_target_strategy ts on ts.target_strategy_id = yc.sub_strategy_id and ts.is_active
-             left join dwh.d_routing_table rt on rt.routing_table_id = yc.routing_table_id and rt.is_active = true
+             left join dwh.d_routing_table rt on rt.routing_table_id = yc.routing_table_id and rt.is_active
              left join eq_tca.algorithmic_order_analytic_v2 tca
                        on tca.order_id = yc.order_id and tca.date_id = yc.date_id
              left join lateral (select *
@@ -301,7 +305,7 @@ begin
                                 where da.symbol = i.activ_symbol
                                   and da.date_id = yc.date_id
                                   and da.date_id between in_date_begin and in_date_end
-                                limit 100500) da on true
+                                limit 1) da on true
              left join lateral (select da.close_price as close_price
                                 from eq_tca.daily_analytic_v2 da
                                 where da.symbol = i.activ_symbol
@@ -319,7 +323,7 @@ begin
                            where co.order_id = yc.order_id
                              and co.create_date_id = yc.date_id
                              and co.create_date_id between in_date_begin and in_date_end
-                           limit 100500) co on true
+                           limit 1) co on true
              left join lateral (select fix_message
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = co.fix_message_id
@@ -328,11 +332,17 @@ begin
                                 limit 1) fmj on true;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'pre_pre_table  was  filled  out  ====', l_row_cnt, 'I')
+    select public.load_log(l_load_id, l_step_id, 'pre_pre_table filled  out', l_row_cnt, 'I')
     into l_step_id;
 
 
-    create temp table if not exists pre_fetch_equity_tca
+    select sum(parent_exec_qty)
+    into l_total_parent_exec_qty
+    from tmp_fyc;
+        select public.load_log(l_load_id, l_step_id, 'total_parent_exec_qty calculated', l_row_cnt, 'I')
+    into l_step_id;
+
+        create temp table if not exists pre_fetch_equity_tca
     (
         order_id                  int8,
         client_order_id           varchar(256),
@@ -354,7 +364,7 @@ begin
         side_multiplier           int4,
         parent_order_qty          int4,
         parent_exec_qty           int4,
---         total_parent_exec_qty     int8,
+        total_parent_exec_qty     int8,
         parent_avg_price          numeric,
         principal_amount          numeric,
         target_strategy_id        int4,
@@ -412,6 +422,7 @@ begin
     );
 
     truncate table pre_fetch_equity_tca;
+    analyze pre_fetch_equity_tca;
 
     insert into pre_fetch_equity_tca
     with ftr as
@@ -527,7 +538,7 @@ begin
            tp.side_multiplier,
            tp.parent_order_qty,
            tp.parent_exec_qty,
---            tp.total_parent_exec_qty,
+           l_total_parent_exec_qty,
            tp.parent_avg_price,
            tp.principal_amount,
            tp.target_strategy_id,
@@ -624,7 +635,7 @@ begin
         where ftr.order_id = tp.order_id
           and ftr.date_id = tp.date_id
         limit 1
-        ) tr on 1 = 1
+        ) tr on true
         --dea  join
              left join lateral
         (
@@ -642,17 +653,14 @@ begin
           and date_id = tp.date_id
           and dea.activ_symbol = tp.activ_symbol
         limit 1
-        ) dea on 1 = 1;
+        ) dea on true;
 
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'report_equity_tca  insertd  in  temp  table  ====', l_row_cnt, 'I')
+    select public.load_log(l_load_id, l_step_id, 'pre_fetch_equity_tca calculated', l_row_cnt, 'I')
     into l_step_id;
 
     --  VENUE
-    select public.load_log(l_load_id, l_step_id, 'report_equity_tca_venue  STARTED  ====', 0, 'O')
-    into l_step_id;
-
 
     create temp table if not exists pre_fetch_equity_tca_venue as
     select yc.order_id,
@@ -735,7 +743,7 @@ begin
 
     get diagnostics l_row_cnt = row_count;
 
-    select public.load_log(l_load_id, l_step_id, 'pre_fetch_equity_tca_venue  insertd  in  temp  table  ====',
+    select public.load_log(l_load_id, l_step_id, 'pre_fetch_equity_tca_venue calculated',
                            l_row_cnt, 'I')
     into l_step_id;
 
