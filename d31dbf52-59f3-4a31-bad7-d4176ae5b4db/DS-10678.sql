@@ -92,7 +92,7 @@ begin
              join dwh.d_account a on a.account_id = yc.account_id and a.is_active
              left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
     where yc.parent_order_id is null
-      and yc.status_date_id between :in_date_begin and :in_date_end
+      and yc.status_date_id between in_date_begin and in_date_end
       and yc.instrument_type_id = 'E'
       and yc.multileg_reporting_type = '1'
       and case when coalesce(in_account_ids, '{}') <> '{}' then yc.account_id = any (in_account_ids) else true end
@@ -198,7 +198,7 @@ begin
                                           eligible_ix_volume, avg_spread_over_life, day_high_price, day_low_price,
                                           open_px, close_px, prev_close_px, next_close_px, routing_time_mid_price,
                                           routing_time_spread, aggression_level, activ_symbol, day_order_qty, order_qty)
-    explain (analyze, buffers, verbose, settings, wal)
+--     explain (analyze, buffers, verbose, settings, wal)
     select yc.order_id,
            yc.client_order_id,
            yc.date_id,
@@ -225,7 +225,7 @@ begin
            ts.target_strategy_id,
            case
                when true
-                   then coalesce(fix_message ->> '9264', ts.target_strategy_desc)
+                   then coalesce(fmj.tag_9264, ts.target_strategy_desc)
                else ts.target_strategy_desc
                end                                                                as algorithm,
            yc.parent_nbbo_bid_price,
@@ -264,33 +264,29 @@ begin
            yc.routing_time_mid_price,
            yc.routing_time_spread,
            coalesce(case target_strategy_desc
-                        when 'POV' then public.get_message_tag_string(yc.order_fix_message_id, 9023,
-                                                                      yc.date_id) --target_pov
-                        when 'VOLUME  PARTICIPATION' then public.get_message_tag_string(yc.order_fix_message_id, 9023,
-                                                                                        yc.date_id) --target_pov
-                        when 'PHANTOM' then case public.get_message_tag_string(yc.order_fix_message_id, 9002,
-                                                                               yc.date_id) --urgency
+                        when 'POV' then fmj.tag_9023 --target_pov
+                        when 'VOLUME  PARTICIPATION' then fmj.tag_9023 --target_pov
+                        when 'PHANTOM' then case tag_9002 --urgency
                                                 when '1' then 'Low'
                                                 when '2' then 'Medium'
                                                 when '3' then 'High'
                             end
-                        when 'VWAP' then case public.get_message_tag_string(yc.order_fix_message_id, 9002, yc.date_id)
+                        when 'VWAP' then case fmj.tag_9002
                                              when '1' then 'Low'
                                              when '2' then 'Medium'
                                              when '3' then 'High'
                             end
-                        when 'TWAP' then case public.get_message_tag_string(yc.order_fix_message_id, 9002, yc.date_id)
+                        when 'TWAP' then case fmj.tag_9002
                                              when '1' then 'Low'
                                              when '2' then 'Medium'
                                              when '3' then 'High'
                             end
-                        when 'CLOSE' then public.get_message_tag_string(yc.order_fix_message_id, 9126,
-                                                                        yc.date_id) --close_aggression
+                        when 'CLOSE' then fmj.tag_9126 --close_aggression
                         when 'SENSOR  DARK' then 'Default  (PI  =  ' ||
-                                                 public.get_message_tag_string(yc.order_fix_message_id, 9191,
-                                                                               yc.date_id)::text || ')'
+                                                 fmj.tag_9191::text || ')'
                         else null
                         end, 'Default')                                           as aggression_level,
+
            i.activ_symbol,
            yc.day_order_qty,
            yc.order_qty
@@ -325,12 +321,18 @@ begin
                              and co.create_date_id = yc.date_id
                              and co.create_date_id between in_date_begin and in_date_end
                            limit 1) co on true
-             left join lateral (select fix_message
+             left join lateral (select fix_message ->> '9264' as tag_9264,
+                                       fix_message ->> '9023' as tag_9023,
+                                       fix_message ->> '9002' as tag_9002,
+                                       fix_message ->> '9126' as tag_9126,
+                                       fix_message ->> '9191' as tag_9191
                                 from fix_capture.fix_message_json fmj
                                 where fmj.fix_message_id = yc.order_fix_message_id--co.fix_message_id
                                   and fmj.date_id = yc.date_id--co.create_date_id
-                                  and fmj.date_id between in_date_begin and in_date_end
-                                limit 1) fmj on true;
+                                  and fmj.date_id >= in_date_begin
+                                  and fmj.date_id <= in_date_end
+                                limit 1) fmj on true
+    order by (select null);
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, 'pre_pre_table filled  out', l_row_cnt, 'I')
