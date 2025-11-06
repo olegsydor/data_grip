@@ -56,12 +56,12 @@ group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr
 -- DROP FUNCTION dash360.report_fintech_adh_allocation_xls(int4, int4, _int4, bpchar, _varchar, _varchar);
 
 CREATE or replace FUNCTION trash.so_report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                           in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                           in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                           in_instrument_type character DEFAULT NULL::bpchar,
-                                                           in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                           in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
-                                                           in_include_all bpchar default 'N')
+                                                                      in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                                      in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                                      in_instrument_type character DEFAULT NULL::bpchar,
+                                                                      in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                      in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
+                                                                      in_include_all bpchar default 'N')
     RETURNS TABLE
             (
                 "Trading Firm"         character varying,
@@ -126,7 +126,8 @@ begin
                             sum(coalesce(tr.tcce_royalty_fee_amount, 0.0))              as tcce_royalty_fee_amount,
                             sum(tr.principal_amount)                                    as principal_amount,
                             sum(coalesce(tr.tcce_account_execution_cost, 0.0))          as tcce_account_execution_cost,
-                            sum(coalesce(tr.client_commission_rate, 0.0) * tr.last_qty) as client_commission_rate_sum
+                            sum(coalesce(tr.client_commission_rate, 0.0) * tr.last_qty) as client_commission_rate_sum,
+                            tr.street_account_name
                      from dwh.flat_trade_record tr
                               join dwh.d_account acc on (acc.account_id = tr.account_id and acc.is_active)
                               left join lateral (select atr.trade_record_id,
@@ -153,7 +154,7 @@ begin
                        and case when in_include_all = 'N' then at.trade_record_id is not null else true end
                      group by tr.date_id, tr.open_close, tr.instrument_id, tr.account_id, tr.side, tr.cmta,
                               at.alloc_qty, tr.trade_record_time::date,
-                              tr.instrument_type_id, at.alloc_instr_id, at.clearing_account_id)
+                              tr.instrument_type_id, at.alloc_instr_id, at.clearing_account_id, tr.street_account_name)
            , pre_base as (select ftr.alloc_instr_id, sum(client_commission_rate_sum) as client_commission_rate_sum
                           from ftr
                           group by ftr.alloc_instr_id)
@@ -213,7 +214,8 @@ begin
                                    6)                                            as "Royalty Fee",
                              --round(ftr.alloc_qty / ftr.sum_last_qty *
                              --      client_commission ,6 )	  			  as "Client Commission"
-                             pre_base.client_commission_rate_sum
+                             pre_base.client_commission_rate_sum,
+                             ftr.street_account_name
                       from ftr
                                join dwh.d_instrument i on i.instrument_id = ftr.instrument_id
                                join dwh.d_account ac on ac.account_id = ftr.account_id
@@ -227,7 +229,7 @@ begin
         select base."Trading Firm",
                base."Account",
                base."Date",
-               aie.occ_actionable_id                                                               as "OCC AID",
+               coalesce(aie.occ_actionable_id, base.street_account_name)                           as "OCC AID",
                coalesce(ca.clearing_account_number, base."CMTA")                                   as "Clearing Account",
                base."Settlement Date",
                base."Alloc ID",
