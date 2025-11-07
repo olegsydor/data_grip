@@ -40,7 +40,7 @@ from base;
 create table trash.diff_20251106 as
 select eod.*
 from partitions.hft_fix_message_event_20251106_eod eod
-         join trash.so_20251027_diff df on (true
+         join trash.so_20251106_diff df on (true
     and eod.load_batch_id = any (df.load_batch_id_eod)
     and eod.cl_ord_id = df.cl_ord_id
     and coalesce(eod.parent_cl_ord_id, 'parent') = coalesce(df.parent_cl_ord_id, 'parent')
