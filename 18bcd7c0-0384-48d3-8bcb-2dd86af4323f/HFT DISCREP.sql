@@ -1,4 +1,4 @@
-select 499046330-499046322;
+select 478186347-478181131;
 
 with base_inc as (
 select split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) -1 ), '.', 1) as fn, sum(processed_rows) as loaded_row, array_agg(load_batch_id) as batchs
@@ -18,29 +18,29 @@ from base_inc
 left join base_eod using(fn)
 where base_inc.loaded_row != base_eod.loaded_row;
 
-create index on partitions.hft_fix_message_event_20251106_eod (load_batch_id);
+create index on partitions.hft_fix_message_event_20251107_eod (load_batch_id);
 
 with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
 --from partitions.hft_fix_message_event_reload
-from partitions.hft_fix_message_event_20251106_eod
+from partitions.hft_fix_message_event_20251107_eod
 where load_batch_id = any ('{668157}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
-from partitions.hft_fix_message_event_20251106
-where load_batch_id = any ('{667460,667495,667512,667525,667573,667556,667477,667583,667595,667610,667629,667643,667538,667655,667686,667703,667714,667728,667747,667763,667775,667808,667823,667669,667836,667853,667871,667885,667901,667918,667934,667947,667963,667981,667790,667995,668011,668027,668044,668057,668073,668092,668105,668120,668139}')
+from partitions.hft_fix_message_event_20251107
+where load_batch_id = any ('{668228,668244,668262,668277,668289,668322,668337,668349,668396,668407,668421,668438,668305,668456,668469,668483,668501,668517,668361,668531,668380,668549,668567,668581,668598,668616,668631,668647,668664,668679,668695,668712,668729,668742,668757,668775,668790,668805,668822,668839,668852,668865,668881,668899}')
 )
---insert into trash.so_20250717_full_diff
-select *, '{668157}'::int4[] as load_batch_id_eod
-into table trash.so_20251106_diff
+insert into trash.so_20251107_diff
+select *, '{668941,668943,668946,668940,668949,668939}'::int4[] as load_batch_id_eod
+-- into table trash.so_20251107_diff
 from base;
 
+select * from trash.so_20251107_diff
 
-
-create table trash.diff_20251106 as
+create table trash.diff_20251107 as
 select eod.*
-from partitions.hft_fix_message_event_20251106_eod eod
-         join trash.so_20251106_diff df on (true
+from partitions.hft_fix_message_event_20251107_eod eod
+         join trash.so_20251107_diff df on (true
     and eod.load_batch_id = any (df.load_batch_id_eod)
     and eod.cl_ord_id = df.cl_ord_id
     and coalesce(eod.parent_cl_ord_id, 'parent') = coalesce(df.parent_cl_ord_id, 'parent')
