@@ -24,7 +24,7 @@ with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
 --from partitions.hft_fix_message_event_reload
 from partitions.hft_fix_message_event_20251107_eod
-where load_batch_id = any ('{668157}')
+where load_batch_id = any ('{668941,668943,668946,668940,668949,668939}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
 from partitions.hft_fix_message_event_20251107
@@ -36,6 +36,12 @@ select *, '{668941,668943,668946,668940,668949,668939}'::int4[] as load_batch_id
 from base;
 
 select * from trash.so_20251107_diff
+where true
+	        and case
+                 when (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                       'US/Eastern')::time > '16:40'::time then
+                     msg_type not in ('9', 'F')
+                 else true end
 
 create table trash.diff_20251107 as
 select eod.*
@@ -48,7 +54,7 @@ from partitions.hft_fix_message_event_20251107_eod eod
     and eod.msg_type = df.msg_type
     and coalesce(eod.leg_ref_id, 'leg') = coalesce(df.leg_ref_id, 'leg')
     and eod.fix_date = df.fix_date
-    and load_batch_id = any ('{668157}')
+--     and load_batch_id = any ('{668941,668943,668946,668940,668949,668939,668970,668963,668959,668965}')
     )
     and case
                   when (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
@@ -56,7 +62,10 @@ from partitions.hft_fix_message_event_20251107_eod eod
                       df.msg_type not in ('9', 'F')
                   else true end;
 
-select account_name, count(*) from trash.diff_20251027
+select
+--     account_name, count(*)
+*
+from trash.diff_20251027
 group by account_name;
 
 select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::time at time zone 'UTC' at time zone
