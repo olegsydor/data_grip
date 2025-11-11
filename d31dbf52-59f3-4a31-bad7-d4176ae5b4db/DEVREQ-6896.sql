@@ -1623,3 +1623,11 @@ begin
 end;
 $function$
 ;
+select *
+from dash360.report_obo_compliance_xls(in_date_begin_id := 20251110, in_date_end_id := 20251110,
+                                       in_account_ids := '{1183,1472,2925}',
+                                       in_fix_comp_ids := '{FDSAINT,DASHOPTP}');
+
+select *
+from dash360.report_obo_compliance_xls(in_date_begin_id := 20251110, in_date_end_id := 20251110,
+                                       in_account_ids := '{1183,1472,2925}')
