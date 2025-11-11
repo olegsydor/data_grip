@@ -3,8 +3,8 @@ with base as (select monitoring.clean_text(error_text) as jsn, *
               where true
 --     and regexp_replace(error_text, '\\', '') ilike '%bigdatatail2%'
 --          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
-                and db_host = 'pgbigdata1.dashops.net'
-                and db_create_time::date = '2025-10-21'
+                and db_host = 'pgtest1.uat.dashops.net'
+                and db_create_time::date > '2025-11-01'
 --                 and error_text ilike '%37003769%'
               )
 select jsn ->> 'ERROR'     as error,

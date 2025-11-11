@@ -1,3 +1,4 @@
+
 -- DROP FUNCTION dash360.clearing_post_trade_history(int8);
 
 CREATE OR REPLACE FUNCTION dash360.clearing_post_trade_history(in_trade_record_id bigint)
