@@ -1,4 +1,4 @@
-select 478186347-478181131;
+select 358127158-358122790;
 
 with base_inc as (
 select split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) -1 ), '.', 1) as fn, sum(processed_rows) as loaded_row, array_agg(load_batch_id) as batchs
@@ -18,24 +18,26 @@ from base_inc
 left join base_eod using(fn)
 where base_inc.loaded_row != base_eod.loaded_row;
 
-create index on partitions.hft_fix_message_event_20251107_eod (load_batch_id);
+create index on partitions.hft_fix_message_event_20251111_eod (load_batch_id);
 
 with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
 --from partitions.hft_fix_message_event_reload
-from partitions.hft_fix_message_event_20251107_eod
-where load_batch_id = any ('{668941,668943,668946,668940,668949,668939}')
+from partitions.hft_fix_message_event_20251111_eod
+where load_batch_id = any ('{670526}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
-from partitions.hft_fix_message_event_20251107
-where load_batch_id = any ('{668228,668244,668262,668277,668289,668322,668337,668349,668396,668407,668421,668438,668305,668456,668469,668483,668501,668517,668361,668531,668380,668549,668567,668581,668598,668616,668631,668647,668664,668679,668695,668712,668729,668742,668757,668775,668790,668805,668822,668839,668852,668865,668881,668899}')
+from partitions.hft_fix_message_event_20251111
+where load_batch_id = any ('{670492,670177,669844,670195,670209,670227,669861,669879,670244,669778,669893,669907,670259,669925,670127,670277,669796,669941,669814,670145,669830,670295,669957,670159,670311,670328,669992,670006,670346,670025,670360,670377,670393,670043,670058,670409,670076,670426,669974,670093,670443,670460,670108,670474}')
 )
-insert into trash.so_20251107_diff
-select *, '{668941,668943,668946,668940,668949,668939}'::int4[] as load_batch_id_eod
--- into table trash.so_20251107_diff
+insert into trash.so_20251111_diff
+select *, '{670526}'::int4[] as load_batch_id_eod
+-- into table trash.so_20251111_diff
 from base;
 
-select * from trash.so_20251107_diff
+select *
+--     min(to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS.MS')), max(to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS.MS'))
+    from trash.so_20251111_diff
 where true
 	        and case
                  when (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
@@ -43,10 +45,10 @@ where true
                      msg_type not in ('9', 'F')
                  else true end
 
-create table trash.diff_20251107 as
+create table trash.diff_20251111 as
 select eod.*
-from partitions.hft_fix_message_event_20251107_eod eod
-         join trash.so_20251107_diff df on (true
+from partitions.hft_fix_message_event_20251111_eod eod
+         join trash.so_20251111_diff df on (true
     and eod.load_batch_id = any (df.load_batch_id_eod)
     and eod.cl_ord_id = df.cl_ord_id
     and coalesce(eod.parent_cl_ord_id, 'parent') = coalesce(df.parent_cl_ord_id, 'parent')
@@ -58,8 +60,8 @@ from partitions.hft_fix_message_event_20251107_eod eod
     )
     and case
                   when (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
-                        'US/Eastern')::time > '16:40'::time then
-                      df.msg_type not in ('9', 'F')
+                        'US/Eastern')::time > '16:40'::time then false
+--                       df.msg_type not in ('9', 'F')
                   else true end;
 
 select
