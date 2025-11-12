@@ -255,3 +255,44 @@ begin
 end;
 $fx$;
 
+
+
+create view monitoring.v_error_tracking
+as
+with base as (select *, monitoring.clean_text(in_text := error_text) as jsn
+              from monitoring.error_tracking
+              where case
+                        when db_process_time is null then true
+                        when db_process_time is not null and db_process_time > :check_time::timestamp then true
+                        else false end)
+   , grp as (select *,
+                    jsn ->> 'ERROR'     as l_error,
+                    jsn ->> 'QUERY'     as l_query,
+                    jsn ->> 'DETAIL'    as l_detail,
+                    jsn ->> 'STATEMENT' as l_statement,
+                    jsn ->> 'CONTEXT'   as l_context,
+                    jsn ->> 'FATAL'     as l_fatal
+             from base)
+--select distinct on (l_error, l_query, l_detail, l_statement, l_context, l_fatal, db_host) *
+select l_error,
+       l_query,
+       l_detail,
+       l_statement,
+       l_context,
+       l_fatal,
+       db_host,
+       array_agg(error_tracking_id) as error_tracking_ids,
+       max(error_text)              as error_text
+from grp nse
+where db_process_time is null
+  and not exists (select null
+                  from grp se
+                  where se.db_process_time is not null
+                    and se.l_error is not distinct from nse.l_error
+                    and se.l_query is not distinct from nse.l_query
+                    and se.l_detail is not distinct from nse.l_detail
+                    and se.l_statement is not distinct from nse.l_statement
+                    and se.l_context is not distinct from nse.l_context
+                    and se.l_fatal is not distinct from nse.l_fatal
+                    and se.db_host = nse.db_host)
+group by l_error, l_query, l_detail, l_statement, l_context, l_fatal, db_host
