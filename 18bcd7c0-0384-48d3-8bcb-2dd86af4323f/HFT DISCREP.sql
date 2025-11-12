@@ -81,3 +81,7 @@ order by fix_date
 select 29748-5008
 
 
+
+select * from
+staging.sync_test_calculated_metrics
+where date_id = :p_date_id
