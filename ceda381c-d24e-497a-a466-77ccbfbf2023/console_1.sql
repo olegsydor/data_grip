@@ -255,16 +255,22 @@ begin
 end;
 $fx$;
 
-
+create index on monitoring.error_tracking (db_process_time);
 
 create view monitoring.v_error_tracking
 as
 with base as (select *, monitoring.clean_text(in_text := error_text) as jsn
               from monitoring.error_tracking
-              where case
-                        when db_process_time is null then true
-                        when db_process_time is not null and db_process_time > :check_time::timestamp then true
-                        else false end)
+              where true
+                 and db_create_time >= current_date
+                and db_host = 'pgtest1.uat.dashops.net'
+                and db_type = 'PROD'
+--                 and case
+--                         when db_process_time is null then true
+--                         when db_process_time is not null and db_process_time > clock_timestamp() - '30 minutes'::interval
+--                             then true
+--                         else false end
+              )
    , grp as (select *,
                     jsn ->> 'ERROR'     as l_error,
                     jsn ->> 'QUERY'     as l_query,
@@ -295,4 +301,8 @@ where db_process_time is null
                     and se.l_context is not distinct from nse.l_context
                     and se.l_fatal is not distinct from nse.l_fatal
                     and se.db_host = nse.db_host)
-group by l_error, l_query, l_detail, l_statement, l_context, l_fatal, db_host
+group by l_error, l_query, l_detail, l_statement, l_context, l_fatal,
+         db_host;
+
+
+select regexp_replace(regexp_replace(error_text, '', 'g'), '\s+', ' ', 'g') from monitoring.v_error_tracking
