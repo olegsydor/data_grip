@@ -211,3 +211,10 @@ SELECT :in_text, substring(:in_text, '(?:ERROR: )(.*?)(?:\[\d+\-\d+\])')     as 
            substring(:in_text, '(?:STATEMENT: )(.*?)(?:\[\d+\-\d+\])') as statement,
            substring(:in_text, '(?:CONTEXT: )(.*?)(?:\[\d+\-\d+\])')   as context,
            substring(:in_text, '(?:FATAL: )(.*?)$')                as fatal
+
+
+
+select *
+from monitoring.error_tracking
+where true
+  and db_create_time::date = '2025-11-11'
