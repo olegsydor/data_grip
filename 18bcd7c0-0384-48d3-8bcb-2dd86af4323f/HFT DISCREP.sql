@@ -46,9 +46,11 @@ where true
                  else true end
 
 create table trash.diff_20251111 as
-select eod.*
-from partitions.hft_fix_message_event_20251111_eod eod
-         join trash.so_20251111_diff df on (true
+select
+--     (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone 'US/Eastern')::time,
+    eod.*
+from trash.so_20251111_diff df
+         join partitions.hft_fix_message_event_20251111_eod eod on (true
     and eod.load_batch_id = any (df.load_batch_id_eod)
     and eod.cl_ord_id = df.cl_ord_id
     and coalesce(eod.parent_cl_ord_id, 'parent') = coalesce(df.parent_cl_ord_id, 'parent')
@@ -58,20 +60,21 @@ from partitions.hft_fix_message_event_20251111_eod eod
     and eod.fix_date = df.fix_date
 --     and load_batch_id = any ('{668941,668943,668946,668940,668949,668939,668970,668963,668959,668965}')
     )
-    and case
-                  when (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
-                        'US/Eastern')::time > '16:40'::time then false
---                       df.msg_type not in ('9', 'F')
-                  else true end;
+    and (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone 'US/Eastern')::time <= '16:40'::time;
+--     and case
+--                   when (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+--                         'US/Eastern')::time > '16:40'::time then false
+-- --                       df.msg_type not in ('9', 'F')
+--                   else true end;
 
 select
 --     account_name, count(*)
 *
-from trash.diff_20251027
+from trash.diff_20251111
 group by account_name;
 
-select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::time at time zone 'UTC' at time zone
-                        'US/Eastern')::time, * from trash.diff_20251027
+select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                        'US/Eastern')::time, * from trash.diff_20251111
 where true
 --     and cl_ord_id = 'HFAHNS8649'
 order by fix_date
