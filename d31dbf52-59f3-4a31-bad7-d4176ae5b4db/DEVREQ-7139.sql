@@ -259,3 +259,53 @@ from t_yc as yc
     limit 1
     ) lst_ex on true
 where true
+
+        create function trash.so_print_report()
+            returns table
+                    (
+                        ret_row text
+                    )
+            language plpgsql
+        as
+        $$
+        declare
+
+        begin
+            return query
+                select 'Row Type,Create Date,Create Time,Routed Time,Event Date,Event Time,Parent Order ID,Order ID,Order Status,Sec Type,Side,Symbol,Order Qty,Price,Ex Qty,Avg Px,Lvs Qty,Exchange Name,NBBO Bid Px,NBBO Bid Qty,NBBO Ask Px,NBBO Ask Qty';
+            return query
+                select array_to_string(ARRAY [
+                                           "Row Type",
+                                           "Create Date",
+                                           "Create Time",
+                                           "Routed Time",
+                                           "Event Date",
+                                           "Event Time",
+                                           "Parent Order ID"::text,
+                                           "Order ID"::text,
+                                           "Order Status",
+                                           "Sec Type",
+                                           "Side",
+                                           "Symbol",
+                                           "Order Qty"::text,
+                                           "Price"::text,
+                                           "Ex Qty"::text,
+                                           "Avg Px"::text,
+                                           "Lvs Qty"::text,
+                                           "Exchange Name",
+                                           "NBBO Bid Px"::text,
+                                           "NBBO Bid Qty"::text,
+                                           "NBBO Ask Px"::text,
+                                           "NBBO Ask Qty"::text
+                                           ], ',', '')
+                from trash.so_equity_non_marketable
+                where "Symbol" not in
+                      ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
+                order by "Order ID";
+        end;
+        $$;
+
+select * from trash.so_print_report()
+
+
+
