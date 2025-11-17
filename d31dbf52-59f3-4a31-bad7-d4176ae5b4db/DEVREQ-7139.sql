@@ -271,6 +271,8 @@ from trash.so_to_delete as yc
     ) lst_ex on true
 where true;
 
+
+create index on trash.so_equity_non_marketable_oct ("Order ID")
 create or replace function trash.so_print_report()
     returns table
             (
