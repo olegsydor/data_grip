@@ -30,10 +30,10 @@ select
         where yc.status_date_id between :in_start_date_id and :in_end_date_id
           and yc.account_id = any ('{68698,63384,63109,63706}')
           and yc.multileg_reporting_type in ('1', '2')
-          and is_marketable = 'N'
-          and order_price >= 1
+          and yc.is_marketable = 'N'
+          and yc.order_price >= 1
           and yc.parent_order_id is null
-        and instrument_type_id = 'E';
+          and yc.instrument_type_id = 'E';
 
         insert into t_yc
         select str.*
@@ -189,7 +189,7 @@ order by "Order ID";
 select * from t_yc
     where status_date_id between :in_start_date_id and :in_end_date_id
 -- create temp table t_yc as
-insert into t_yc
+-- insert into t_yc
     select *
 from data_marts.f_yield_capture yc
 where yc.status_date_id between :in_start_date_id and :in_end_date_id
@@ -203,15 +203,21 @@ where yc.status_date_id between :in_start_date_id and :in_end_date_id
 insert into t_yc
 select str.*
 from t_yc as par
-         join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
+         join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id --and str.status_date_id = par.status_date_id
+             )
 where true
   and par.status_date_id between :in_start_date_id and :in_end_date_id
   and str.status_date_id between :in_start_date_id and :in_end_date_id
   and str.account_id = any ('{68698,63384,63109,63706}')
   and str.parent_order_id is not null;
 
+select *
+into trash.so_to_delete
+from t_yc;
+
 create index on t_yc (status_date_id);
 
+create table trash.so_equity_non_marketable_oct as
 select case when yc.parent_order_id is null then 'Parent' else 'Child' end as "Row Type",
        to_char(co.create_time, 'MM/DD/YYYY')                               as "Create Date",
        to_char(co.create_time, 'HH24:MI:SS.US')                            as "Create Time",
@@ -241,7 +247,7 @@ select case when yc.parent_order_id is null then 'Parent' else 'Child' end as "R
        yc.nbbo_bid_quantity                                                as "NBBO Bid Qty",
        yc.nbbo_ask_price                                                   as "NBBO Ask Px",
        yc.nbbo_ask_quantity                                                as "NBBO Ask Qty"
-from t_yc as yc
+from trash.so_to_delete as yc
 --          join dwh.d_account a on (a.account_id = yc.account_id)
          join dwh.client_order co
               on (co.create_date_id between :in_start_date_id and :in_end_date_id and
@@ -263,52 +269,52 @@ from t_yc as yc
     order by ex.exec_id desc
     limit 1
     ) lst_ex on true
-where true
+where true;
 
-        create function trash.so_print_report()
-            returns table
-                    (
-                        ret_row text
-                    )
-            language plpgsql
-        as
-        $$
-        declare
+create or replace function trash.so_print_report()
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$$
+declare
 
-        begin
-            return query
-                select 'Row Type,Create Date,Create Time,Routed Time,Event Date,Event Time,Parent Order ID,Order ID,Order Status,Sec Type,Side,Symbol,Order Qty,Price,Ex Qty,Avg Px,Lvs Qty,Exchange Name,NBBO Bid Px,NBBO Bid Qty,NBBO Ask Px,NBBO Ask Qty';
-            return query
-                select array_to_string(ARRAY [
-                                           "Row Type",
-                                           "Create Date",
-                                           "Create Time",
-                                           "Routed Time",
-                                           "Event Date",
-                                           "Event Time",
-                                           "Parent Order ID"::text,
-                                           "Order ID"::text,
-                                           "Order Status",
-                                           "Sec Type",
-                                           "Side",
-                                           "Symbol",
-                                           "Order Qty"::text,
-                                           "Price"::text,
-                                           "Ex Qty"::text,
-                                           "Avg Px"::text,
-                                           "Lvs Qty"::text,
-                                           "Exchange Name",
-                                           "NBBO Bid Px"::text,
-                                           "NBBO Bid Qty"::text,
-                                           "NBBO Ask Px"::text,
-                                           "NBBO Ask Qty"::text
-                                           ], ',', '')
-                from trash.so_equity_non_marketable
-                where "Symbol" not in
-                      ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
-                order by "Order ID";
-        end;
-        $$;
+begin
+    return query
+        select 'Row Type,Create Date,Create Time,Routed Time,Event Date,Event Time,Parent Order ID,Order ID,Order Status,Sec Type,Side,Symbol,Order Qty,Price,Ex Qty,Avg Px,Lvs Qty,Exchange Name,NBBO Bid Px,NBBO Bid Qty,NBBO Ask Px,NBBO Ask Qty';
+    return query
+        select array_to_string(ARRAY [
+                                   "Row Type",
+                                   "Create Date",
+                                   "Create Time",
+                                   "Routed Time",
+                                   "Event Date",
+                                   "Event Time",
+                                   "Parent Order ID"::text,
+                                   "Order ID"::text,
+                                   "Order Status",
+                                   "Sec Type",
+                                   "Side",
+                                   "Symbol",
+                                   "Order Qty"::text,
+                                   "Price"::text,
+                                   "Ex Qty"::text,
+                                   "Avg Px"::text,
+                                   "Lvs Qty"::text,
+                                   "Exchange Name",
+                                   "NBBO Bid Px"::text,
+                                   "NBBO Bid Qty"::text,
+                                   "NBBO Ask Px"::text,
+                                   "NBBO Ask Qty"::text
+                                   ], ',', '')
+        from trash.so_equity_non_marketable_oct
+        where "Symbol" not in
+              ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
+        order by "Order ID";
+end;
+$$;
 
 select * from trash.so_print_report()
 
