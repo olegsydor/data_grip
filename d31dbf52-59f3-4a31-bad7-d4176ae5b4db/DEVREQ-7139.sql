@@ -186,26 +186,31 @@ order by "Order ID";
 
 
 ----
-
-create temp table t_yc as
-select *
+select * from t_yc
+    where status_date_id between :in_start_date_id and :in_end_date_id
+-- create temp table t_yc as
+insert into t_yc
+    select *
 from data_marts.f_yield_capture yc
 where yc.status_date_id between :in_start_date_id and :in_end_date_id
   and yc.account_id = any ('{68698,63384,63109,63706}')
   and yc.multileg_reporting_type in ('1', '2')
-  and is_marketable = 'N'
-  and order_price >= 1
+  and yc.is_marketable = 'N'
+  and yc.order_price >= 1
   and yc.parent_order_id is null
-  and instrument_type_id = 'E';
+  and yc.instrument_type_id = 'E';
 
 insert into t_yc
 select str.*
 from t_yc as par
          join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
-where str.status_date_id between :in_start_date_id and :in_end_date_id
+where true
+  and par.status_date_id between :in_start_date_id and :in_end_date_id
+  and str.status_date_id between :in_start_date_id and :in_end_date_id
   and str.account_id = any ('{68698,63384,63109,63706}')
   and str.parent_order_id is not null;
 
+create index on t_yc (status_date_id);
 
 select case when yc.parent_order_id is null then 'Parent' else 'Child' end as "Row Type",
        to_char(co.create_time, 'MM/DD/YYYY')                               as "Create Date",
