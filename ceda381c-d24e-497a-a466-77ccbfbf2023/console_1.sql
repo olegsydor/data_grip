@@ -3,9 +3,9 @@ with base as (select error_text, monitoring.clean_text(error_text) as jsn, *
               where true
 --     and regexp_replace(error_text, '\\', '') ilike '%bigdatatail2%'
 --          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
---                 and db_host = 'pgtest1.uat.dashops.net'
-                and db_create_time::date = '2025-11-11'
---               and db_type = 'UAT'
+                and db_host = 'pgbigdata1.dashops.net'
+                and db_create_time::date = '2025-11-17'
+               and db_type = 'PROD'
 --                 and error_text ilike '%37003769%'
               )
 select jsn ->> 'ERROR'     as error,
@@ -219,7 +219,7 @@ from monitoring.error_tracking
 where true
   and db_create_time::date = '2025-11-11';
 
-
+drop function if exists monitoring.clean_text;
 create or replace function monitoring.clean_text(in_text text)
     returns jsonb
     language plpgsql
@@ -234,12 +234,14 @@ declare
     f_query     text;
     f_pattern   text := '"|\\|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EDT|\[\d+\]|\(\d+\)|\[\d+-\d+\]|:|{|}|\d+-\d+-\d+ \d+:\d+:\d+.\d+ EST'; -- symbols to delete
 begin
-    with base as (SELECT substring(in_text, '(?:ERROR: )(.*?)(?:\s*\[\d+-\d+\]|$)')     as l_error,
-                         substring(in_text, '(?:QUERY: )(.*?)(?:\s*\[\d+-\d+\]|$)')     as l_query,
-                         substring(in_text, '(?:DETAIL: )(.*?)(?:\s*\[\d+-\d+\]|$)')    as l_detail,
-                         substring(in_text, '(?:STATEMENT: )(.*?)(?:\s*\[\d+-\d+\]|$)') as l_statement,
-                         substring(in_text, '(?:CONTEXT: )(.*?)(?:\s*\[\d+-\d+\]|$)')   as l_context,
-                         substring(in_text, '(?:FATAL: )(.*?)(?:\s*\[\d+-\d+\]|$)')     as l_fatal)
+with base as (
+    SELECT substring(in_text, '(?:ERROR: )(.*?)(?:\s*\[\d+-\d+\]|$)')   as l_error,
+           substring(in_text, '(?:QUERY: )(.*?)(?:\s*\[\d+-\d+\]|$)')     as l_query,
+           substring(in_text, '(?:DETAIL: )(.*?)(?:\s*\[\d+-\d+\]|$)')   as l_detail,
+           substring(in_text, '(?:STATEMENT: )(.*?)(?:\s*\[\d+-\d+\]|$)') as l_statement,
+           substring(in_text, '(?:CONTEXT: )(.*?)(?:\s*\[\d+-\d+\]|$)')  as l_context,
+           substring(in_text, '(?:FATAL: )(.*?)(?:\s*\[\d+-\d+\]|$)')                as l_fatal
+)
     select regexp_replace(regexp_replace(l_error, f_pattern, '', 'g'), '\s+', ' ', 'g'),
            regexp_replace(regexp_replace(l_query, f_pattern, '', 'g'), '\s+', ' ', 'g'),
            regexp_replace(regexp_replace(l_detail, f_pattern, '', 'g'), '\s+', ' ', 'g'),
@@ -247,9 +249,9 @@ begin
            regexp_replace(regexp_replace(l_context, f_pattern, '', 'g'), '\s+', ' ', 'g'),
            regexp_replace(regexp_replace(l_fatal, f_pattern, '', 'g'), '\s+', ' ', 'g')
     into f_error, f_query, f_detail, f_statement, f_context, f_fatal
-    from base;
+from base;
 
-    return jsonb_build_object('ERROR', trim(f_error), 'QUERY', trim(f_query), 'DETAIL', trim(f_detail), 'STATEMENT',
+       return jsonb_build_object('ERROR', trim(f_error), 'QUERY', trim(f_query), 'DETAIL', trim(f_detail), 'STATEMENT',
                               trim(f_statement),
                               'CONTEXT', trim(f_context), 'FATAL', trim(f_fatal));
 end;
@@ -263,34 +265,37 @@ with base as (select *, monitoring.clean_text(in_text := error_text) as jsn
               from monitoring.error_tracking
               where true
                  and db_create_time >= current_date
-                and db_host = 'pgtest1.uat.dashops.net'
-                and db_type = 'PROD'
+--                 and db_host = 'pgtest1.uat.dashops.net'
+--                 and db_type = 'PROD'
 --                 and case
 --                         when db_process_time is null then true
 --                         when db_process_time is not null and db_process_time > clock_timestamp() - '30 minutes'::interval
 --                             then true
 --                         else false end
               )
-   , grp as (select *,
+   , grp as (
+   select *,
                     jsn ->> 'ERROR'     as l_error,
                     jsn ->> 'QUERY'     as l_query,
                     jsn ->> 'DETAIL'    as l_detail,
                     jsn ->> 'STATEMENT' as l_statement,
                     jsn ->> 'CONTEXT'   as l_context,
                     jsn ->> 'FATAL'     as l_fatal
-             from base)
+             from base
+             )
 --select distinct on (l_error, l_query, l_detail, l_statement, l_context, l_fatal, db_host) *
-select l_error,
+select distinct on (l_error, db_host) l_error,
        l_query,
        l_detail,
        l_statement,
        l_context,
        l_fatal,
-       db_host,
-       array_agg(error_tracking_id) as error_tracking_ids,
-       max(error_text)              as error_text
+       db_host
+--        array_agg(error_tracking_id) as error_tracking_ids,
+--        max(error_text)              as error_text
 from grp nse
-where db_process_time is null
+where true
+/*     and db_process_time is null
   and not exists (select null
                   from grp se
                   where se.db_process_time is not null
@@ -301,7 +306,9 @@ where db_process_time is null
                     and se.l_context is not distinct from nse.l_context
                     and se.l_fatal is not distinct from nse.l_fatal
                     and se.db_host = nse.db_host)
-group by l_error, l_query, l_detail, l_statement, l_context, l_fatal,
+
+ */
+group by l_error, -- l_query, l_detail, l_statement, l_context, l_fatal,
          db_host;
 
 
