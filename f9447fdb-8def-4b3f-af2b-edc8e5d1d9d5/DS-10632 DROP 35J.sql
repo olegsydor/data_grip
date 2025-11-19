@@ -3,7 +3,11 @@ alter table genesis2.clearing_account add column if not exists sg_brid varchar;
 comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used for populating tag in 35=J. Copy from SG_ACCOUNT value';
 
 alter table genesis2.clearing_account add column if not exists sg_sub_account_name varchar;
-comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used for populating tag in 35=J. Copy from SG_ACCOUNT value';
+comment on column genesis2.clearing_account.sg_sub_account_name is 'SG allocation field used for populating tag in 35=J. Copy from SG_SUB_ACCOUNT value';
+
+alter table genesis2.clearing_account add column if not exists sg_mint_account varchar;
+comment on column genesis2.clearing_account.sg_mint_account is 'SG allocation field used for populating tag in 35=J. Copy from SG_MINT_ACCOUNT value';
+
 
 create or replace function dash360.get_data_for_allocations(in_alloc_instr_id int8, in_date_id int4 default null)
     returns jsonb
@@ -11,6 +15,7 @@ create or replace function dash360.get_data_for_allocations(in_alloc_instr_id in
 as
 $fx$
     -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
+    -- 20251119 SO https://dashfinancial.atlassian.net/browse/DS-10739
 declare
     l_return_jsonb jsonb;
 begin
@@ -41,14 +46,15 @@ begin
                                )
     from genesis2.allocation_instruction ai
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
-             join lateral (select count(*)                                              as alloc_cnt,
+             join lateral (select count(*) as alloc_cnt,
                                   jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
                                                                'allocQty', aie.alloc_qty,
                                                                'clrFirm', ca.clearing_account_number,
                                                                'actionableId', aie.occ_actionable_id,
                                                                'brid', ca.sg_brid,
                                                                'subAccount', ca.sg_sub_account_name,
-                                                               'individualAllocID', aie.allocation_instruction_entry_id))
+                                                               'individualAllocID', aie.allocation_instruction_entry_id,
+                                                               'sgMintAccount', ca.sg_mint_account))
                                       as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.clearing_account ca
@@ -123,6 +129,7 @@ $function$
 -- OS: 20250604 https://dashfinancial.atlassian.net/browse/DS-10060 added is_intraday_auto_allocate, removed #variable_conflict use_variable
 -- OS: 20250626 without ticket added new input parameter in_account_ids (back-end will call this procedure per account instead of cache)
 -- OS: 20251031 https://dashfinancial.atlassian.net/browse/DS-10634 added 'sg_brid', 'sg_sub_account_name'
+-- OS: 20251119 https://dashfinancial.atlassian.net/browse/DS-10739 added sg_mint_account
 begin
     return query
         select acc.account_id::bigint,
@@ -132,8 +139,8 @@ begin
                     else acc.is_auto_allocate
                    end) as is_auto_allocate,
                jsonb_agg(jsonb_object(
-                       array ['ca_number', 'def' , 'ca_name', 'oaid', 'visible', 'alloc_ratio', 'auto_alloc_to', 'sg_brid', 'sg_sub_account_name'],
-                       array [ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::text, ca.auto_alloc_ratio::text, ca.is_auto_alloc_to, ca.sg_brid, ca.sg_sub_account_name ])),
+                       array ['ca_number', 'def' , 'ca_name', 'oaid', 'visible', 'alloc_ratio', 'auto_alloc_to', 'sg_brid', 'sg_sub_account_name', 'sg_mint_account'],
+                       array [ca.clearing_account_number, ca.is_default , ca.clearing_account_name, ca.occ_actionable_id, ca.is_visible_for_manual_allocation::text, ca.auto_alloc_ratio::text, ca.is_auto_alloc_to, ca.sg_brid, ca.sg_sub_account_name, ca.sg_mint_account])),
                acc.is_intraday_auto_allocate
         from genesis2.account acc
                  inner join genesis2.clearing_account ca
@@ -158,15 +165,20 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_set_account_config(int8, text, bpchar, bpchar, int4, bpchar);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts text, in_is_auto_allocate character DEFAULT NULL::character(1), in_instrumnt_type_id character DEFAULT 'O'::bpchar, in_user_id integer DEFAULT NULL::integer, in_is_intraday_auto_allocate character DEFAULT NULL::bpchar)
- RETURNS integer
- LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts text,
+                                                                  in_is_auto_allocate character DEFAULT NULL::character(1),
+                                                                  in_instrumnt_type_id character DEFAULT 'O'::bpchar,
+                                                                  in_user_id integer DEFAULT NULL::integer,
+                                                                  in_is_intraday_auto_allocate character DEFAULT NULL::bpchar)
+    RETURNS integer
+    LANGUAGE plpgsql
  COST 1
 AS $function$
     -- MG: 20210413 add support to is_option_auto_allocate field
 -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208 is_visible_for_manual_allocation  and user_id fields have been introduced
 -- OS: 20250604 https://dashfinancial.atlassian.net/browse/DS-10060 added is_intraday_auto_allocate, removed #variable_conflict use_variable
 -- OS: 20251031 https://dashfinancial.atlassian.net/browse/DS-10634 added 'sg_brid', 'sg_sub_account_name'
+-- OS: 20251119 https://dashfinancial.atlassian.net/browse/DS-10739 added sg_mint_account
 
 declare
     l_clearing_account_type smallint;
@@ -233,7 +245,7 @@ begin
     insert into genesis2.clearing_account (account_id, clearing_account_type, clearing_account_number, is_default,
                                            market_type, is_deleted, cmta, clearing_account_name, occ_actionable_id,
                                            user_id, is_visible_for_manual_allocation, auto_alloc_ratio, is_auto_alloc_to,
-                                           sg_brid, sg_sub_account_name)
+                                           sg_brid, sg_sub_account_name, sg_mint_account)
     select in_account_id,
            l_clearing_account_type::varchar,
            sj ->> 'ca_number'             as clearing_account_number,
@@ -249,7 +261,8 @@ begin
            coalesce((sj ->> 'alloc_ratio')::numeric, 1),
            sj ->> 'auto_alloc_to',
            sj ->> 'sg_brid',
-           sj ->> 'sg_sub_account_name'
+           sj ->> 'sg_sub_account_name',
+           sj ->> 'sg_mint_account'
     from (select value as sj
           from jsonb_array_elements(l_clearing_accounts)) l1;
 
@@ -291,10 +304,10 @@ $fx$
 declare
     l_drop_message_status_id int4;
 begin
-    if in_drop_message_type = 'N' and not exists (select null
+    if in_drop_message_type in ('N', 'C') and not exists (select null
                                                   from genesis2.alloc_drop_message_status
                                                   where alloc_instr_id = in_alloc_instr_id
-                                                    and drop_message_type = 'N') then
+                                                    and drop_message_type = in_drop_message_type) then
         insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
         values (in_alloc_instr_id, in_drop_message_type)
         returning drop_message_status_id into l_drop_message_status_id;
@@ -346,7 +359,8 @@ create or replace function dash360.allocations_clearing_accounts_by_account_id(i
                 auto_alloc_ratio                 numeric,
                 is_auto_alloc_to                 character,
                 sg_brid                          varchar,
-                sg_sub_account_name              varchar
+                sg_sub_account_name              varchar,
+                sg_mint_account                  varchar
 
             )
     LANGUAGE plpgsql
@@ -356,6 +370,7 @@ $function$
     -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208
 -- SO: 20250610 https://dashfinancial.atlassian.net/browse/D360-15839
 -- SO: 20251103 https://dashfinancial.atlassian.net/browse/D360-16593
+-- SO: 20251119 https://dashfinancial.atlassian.net/browse/DS-10739 added sg_mint_account
 begin
 
     return query
@@ -372,7 +387,8 @@ begin
                ca.auto_alloc_ratio,
                ca.is_auto_alloc_to,
                ca.sg_brid,
-               ca.sg_sub_account_name
+               ca.sg_sub_account_name,
+               ca.sg_mint_account
         from genesis2.clearing_account ca
         where ca.account_id = in_account_id
           and ca.market_type = in_market_type
@@ -399,13 +415,15 @@ CREATE OR REPLACE FUNCTION dash360.allocations_instruction_entries(in_alloc_inst
                 account_nickname        character varying,
                 account_id              integer,
                 sg_brid                 varchar,
-                sg_sub_account_name     varchar
+                sg_sub_account_name     varchar,
+                sg_mint_account         varchar
             )
     LANGUAGE plpgsql
     COST 1
 AS
 $function$
     -- SO: 20251103 https://dashfinancial.atlassian.net/browse/D360-16593
+    -- SO: 20251119 https://dashfinancial.atlassian.net/browse/DS-10739 added sg_mint_account
 begin
 
     return query
@@ -420,7 +438,8 @@ begin
                e.account_nickname,
                a.account_id,
                ca.sg_brid,
-               ca.sg_sub_account_name
+               ca.sg_sub_account_name,
+               ca.sg_mint_account
         from genesis2.allocation_instruction_entry e
                  inner join genesis2.allocation_instruction a
                             on a.alloc_instr_id = e.alloc_instr_id and a.is_deleted = 'N' and a.date_id = in_date_id
