@@ -85,4 +85,25 @@ select 29748-5008
 
 select * from
 staging.sync_test_calculated_metrics
-where date_id = :p_date_id
+where date_id = :p_date_id;
+
+
+-- check 20251118
+select orig_cl_ord_id,
+       msg_type,
+       cl_ord_id,
+       parent_cl_ord_id,
+       fix_date,
+       eod.leg_ref_id,
+       inc.leg_ref_id--, load_batch_id
+from partitions.hft_fix_message_event_20251118_eod eod
+         join lateral ( select inc.leg_ref_id
+                        from partitions.hft_fix_message_event_20251117 inc
+                        where inc.orig_cl_ord_id = eod.orig_cl_ord_id
+                          and eod.msg_type = inc.msg_type
+                          and eod.cl_ord_id = inc.cl_ord_id
+                          and eod.parent_cl_ord_id = inc.parent_cl_ord_id
+                          and eod.fix_date = inc.fix_date
+--                           and eod.leg_ref_id = inc.leg_ref_id
+                        limit 1) inc on true
+limit 500
