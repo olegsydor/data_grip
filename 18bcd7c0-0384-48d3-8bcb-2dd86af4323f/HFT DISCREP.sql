@@ -106,4 +106,13 @@ from partitions.hft_fix_message_event_20251118_eod eod
                           and eod.fix_date = inc.fix_date
 --                           and eod.leg_ref_id = inc.leg_ref_id
                         limit 1) inc on true
-limit 500
+limit 500;
+
+
+select * from hft.hft_fix_message_event
+where date_id = 20251117
+and cl_ord_id = 'EBAA0078-20251117'
+
+select * from partitions.hft_fix_message_event_new_--partitions.hft_fix_message_event_reload_node2
+where date_id = 20251117
+and cl_ord_id = 'EBAA0078-20251117'

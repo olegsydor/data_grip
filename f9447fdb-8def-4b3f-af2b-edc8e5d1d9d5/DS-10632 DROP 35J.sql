@@ -83,7 +83,7 @@ begin
                                                   limit 1) fmj on true
                            where aitr.alloc_instr_id = ai.alloc_instr_id
                              and aitr.date_id = ai.date_id
-                             and is_busted = 'N'
+--                              and is_busted = 'N'
                            limit 1) aitr on true
 
              left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
