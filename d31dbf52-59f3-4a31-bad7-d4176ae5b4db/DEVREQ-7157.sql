@@ -96,4 +96,93 @@ end;
 $function$
 ;
 
-select * from t_legs_exceed
+select * from t_legs_exceed;
+
+
+with cte as (
+	select
+		to_char("StatusDate", 'YYYY-MM-DD') as status_date,
+		a.account_name,
+		hods."ClOrdID" as client_order_id,
+		cf.customer_or_firm_name,
+		sum(coalesce(hods."CumQty", 0))     as cum_qty,
+		1::int as cnt,
+		count(distinct hods."DisplayInstrumentID")::int as cnt_leg
+	from dwh.historic_order_details_storage hods
+	join dwh.d_account a on a.account_id = hods."AccountID"
+	left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+	where hods."Status_Date_id" between 20251120 and 20251120
+		and hods."CustomerOrderID" is null
+		and a.account_name in ('IMC_BP', 'IMCCONTRA_BP')
+	group by status_date, account_name, client_order_id, customer_or_firm_name
+)
+select
+	c.status_date,
+	c.account_name,
+	c.customer_or_firm_name,
+	sum(c.cum_qty) as cum_qty,
+	--sum(c.cnt) as cnt,
+	--sum(c.cnt_leg) as cnt_leg,
+	sum(case
+			when c.cnt_leg > 8 then c.cnt_leg
+			else c.cnt
+	end) as expected_cnt
+from cte c
+group by c.status_date, c.account_name, c.customer_or_firm_name;
+
+select array_agg(account_id)
+           from dwh.d_account a
+               where true
+and a.account_name in ('IMC_BP', 'IMCCONTRA_BP') -- {56592,59790}
+
+
+ drop table if exists t_legs_exceed;
+    create temp table t_legs_exceed as
+    select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
+           a.account_name,
+           cf.customer_or_firm_name,
+           count(*) - 1                        as count_legs_minus_1
+    from dwh.historic_order_details_storage hods
+             join dwh.d_account a on a.account_id = hods."AccountID"
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+    where hods."Status_Date_id" between 20251120 and 20251120
+      and hods."CustomerOrderID" is null
+      and hods."AccountID" = any ('{56592,59790}')
+      and hods."MultilegReportingType" = '2'
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name
+    having count(distinct hods."DisplayInstrumentID") > 8;
+
+select * from t_legs_exceed;
+select * from t_ordinary
+
+    drop table if exists t_ordinary;
+    create temp table t_ordinary as
+    select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
+           a.account_name,
+           cf.customer_or_firm_name,
+           sum(coalesce(hods."CumQty", 0))     as cum_qty,
+           count(distinct hods."ClOrdID")      as cnt
+    from dwh.historic_order_details_storage hods
+             join dwh.d_account a on a.account_id = hods."AccountID"
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+    where hods."Status_Date_id" between 20251120 and 20251120
+--       and case when in_instrument_type is null then true else hods."InstrumentType" = in_instrument_type end
+      and hods."CustomerOrderID" is null
+      and hods."AccountID" = any ('{56592,59790}')
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name;
+
+
+  select
+                                   tor.status_date,
+                                   tor.account_name,
+                                   tor.customer_or_firm_name,
+                                   tor.cum_qty::text,
+                                   (tor.cnt + coalesce(tex.count_legs_minus_1, 0))::text
+
+        from t_ordinary tor
+                 left join lateral (select count_legs_minus_1
+                                    from t_legs_exceed tex
+                                    where tex.status_date = tor.status_date
+                                      and tex.account_name = tor.account_name
+                                      and tex.customer_or_firm_name = tor.customer_or_firm_name
+                                    limit 1) tex on true;
