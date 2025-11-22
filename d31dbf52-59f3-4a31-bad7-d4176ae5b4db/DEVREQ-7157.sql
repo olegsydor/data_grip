@@ -1,10 +1,13 @@
 -- DROP FUNCTION dash360.report_surveillance_socgen_parent_order_count(int4, int4, varchar);
 select * from trash.report_surveillance_socgen_parent_order_count(20251001, 20251031);
 
-select * from trash.report_surveillance_socgen_parent_order_count(20251001, 20251031);
+select * from trash.report_surveillance_socgen_parent_order_count(20251120, 20251120, in_account_ids := '{56592,59790}');
+drop function trash.report_surveillance_socgen_parent_order_count;
+
 CREATE or replace FUNCTION trash.report_surveillance_socgen_parent_order_count(in_start_date_id integer DEFAULT get_dateid((date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date),
-                                                                    in_end_date_id integer DEFAULT get_dateid(CURRENT_DATE),
-                                                                    in_instrument_type character varying DEFAULT NULL::character varying)
+                                                                               in_end_date_id integer DEFAULT get_dateid(CURRENT_DATE),
+                                                                               in_instrument_type character varying DEFAULT NULL::character varying,
+                                                                               in_account_ids int4[] default '{}'::int4[])
     RETURNS TABLE
             (
                 "row" text
@@ -30,16 +33,18 @@ begin
     into l_step_id;
     select array_agg(account_id)
     into l_account_ids
-    from dwh.d_account
+    from dwh.d_account ac
     where true
-      and trading_firm_id in ('socgenpsc', 'socgeneqd'); --'socgen01', 'LPTF286'
+      and case
+              when in_account_ids = '{}' then trading_firm_id in ('socgenpsc', 'socgeneqd')
+              else ac.account_id = any (in_account_ids) end; --'socgen01', 'LPTF286'
 
     drop table if exists t_legs_exceed;
     create temp table t_legs_exceed as
     select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
            a.account_name,
            cf.customer_or_firm_name,
-           count(*) - 1                        as count_legs_minus_1
+           count(*)                            as count_legs
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on a.account_id = hods."AccountID"
              left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
@@ -47,7 +52,7 @@ begin
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any (l_account_ids)
       and hods."MultilegReportingType" = '2'
-    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name, "ClOrdID"
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name, hods."ClOrdID"
     having count(distinct hods."DisplayInstrumentID") > l_leg_count;
 
     drop table if exists t_ordinary;
@@ -75,14 +80,15 @@ begin
                                    tor.account_name,
                                    tor.customer_or_firm_name,
                                    tor.cum_qty::text,
-                                   (tor.cnt + coalesce(tex.count_legs_minus_1, 0))::text
+                                   (tor.cnt + coalesce(tex.count_legs, 0))::text
                                    ], ',', '')
         from t_ordinary tor
-                 left join lateral (select count_legs_minus_1
+                 left join lateral (select sum(count_legs - 1) as count_legs
                                     from t_legs_exceed tex
                                     where tex.status_date = tor.status_date
                                       and tex.account_name = tor.account_name
                                       and tex.customer_or_firm_name = tor.customer_or_firm_name
+                                    group by tex.status_date, tex.account_name, tex.customer_or_firm_name
                                     limit 1) tex on true;
     get diagnostics row_cnt = row_count;
 
@@ -114,6 +120,7 @@ with cte as (
 	where hods."Status_Date_id" between 20251120 and 20251120
 		and hods."CustomerOrderID" is null
 		and a.account_name in ('IMC_BP', 'IMCCONTRA_BP')
+	    and a.account_name = 'IMC_BP'
 	group by status_date, account_name, client_order_id, customer_or_firm_name
 )
 select
@@ -141,7 +148,8 @@ and a.account_name in ('IMC_BP', 'IMCCONTRA_BP') -- {56592,59790}
     select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
            a.account_name,
            cf.customer_or_firm_name,
-           count(*) - 1                        as count_legs_minus_1
+           count(*)                        as count_legs_minus
+--     select a.account_name, *
     from dwh.historic_order_details_storage hods
              join dwh.d_account a on a.account_id = hods."AccountID"
              left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
@@ -149,7 +157,8 @@ and a.account_name in ('IMC_BP', 'IMCCONTRA_BP') -- {56592,59790}
       and hods."CustomerOrderID" is null
       and hods."AccountID" = any ('{56592,59790}')
       and hods."MultilegReportingType" = '2'
-    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name
+
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name, hods."ClOrdID"
     having count(distinct hods."DisplayInstrumentID") > 8;
 
 select * from t_legs_exceed;
@@ -172,17 +181,54 @@ select * from t_ordinary
     group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name;
 
 
-  select
+ drop table if exists t_legs_exceed;
+    create temp table t_legs_exceed as
+    select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
+           a.account_name,
+           cf.customer_or_firm_name,
+           count(*)                            as count_legs
+    from dwh.historic_order_details_storage hods
+             join dwh.d_account a on a.account_id = hods."AccountID"
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+    where hods."Status_Date_id" between 20251120 and 20251120
+      and hods."CustomerOrderID" is null
+      and hods."AccountID" = any ('{56592,59790}')
+      and hods."MultilegReportingType" = '2'
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name, hods."ClOrdID"
+    having count(distinct hods."DisplayInstrumentID") > 8;
+
+    drop table if exists t_ordinary;
+    create temp table t_ordinary as
+    select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
+           a.account_name,
+           cf.customer_or_firm_name,
+           sum(coalesce(hods."CumQty", 0))     as cum_qty,
+           count(distinct hods."ClOrdID")      as cnt
+    from dwh.historic_order_details_storage hods
+             join dwh.d_account a on a.account_id = hods."AccountID"
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+    where hods."Status_Date_id" between 20251120 and 20251120
+--       and case when in_instrument_type is null then true else hods."InstrumentType" = in_instrument_type end
+      and hods."CustomerOrderID" is null
+      and hods."AccountID" = any ('{56592,59790}')
+    group by to_char("StatusDate", 'YYYY-MM-DD'), a.account_name, cf.customer_or_firm_name;
+
+    return query
+        select 'Period,Account,Capacity,Qty,Parent Order Count';
+
+    return query
+        select --array_to_string(ARRAY [
                                    tor.status_date,
                                    tor.account_name,
                                    tor.customer_or_firm_name,
                                    tor.cum_qty::text,
-                                   (tor.cnt + coalesce(tex.count_legs_minus_1, 0))::text
-
+                                   (tor.cnt + coalesce(tex.count_legs, 0))::text
+                                --   ], ',', '')
         from t_ordinary tor
-                 left join lateral (select count_legs_minus_1
+                 left join lateral (select sum(count_legs -1) as count_legs
                                     from t_legs_exceed tex
                                     where tex.status_date = tor.status_date
                                       and tex.account_name = tor.account_name
                                       and tex.customer_or_firm_name = tor.customer_or_firm_name
+                                    group by tex.status_date, tex.account_name, tex.customer_or_firm_name
                                     limit 1) tex on true;
