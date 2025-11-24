@@ -37,8 +37,9 @@ begin
     where true
       and case
               when in_account_ids = '{}' then trading_firm_id in ('socgenpsc', 'socgeneqd')
-              else ac.account_id = any (in_account_ids) end; --'socgen01', 'LPTF286'
+              else ac.account_id = any (in_account_ids) end;
 
+    /*
     drop table if exists t_legs_exceed;
     create temp table t_legs_exceed as
     select to_char("StatusDate", 'YYYY-MM-DD') as status_date,
@@ -90,6 +91,41 @@ begin
                                       and tex.customer_or_firm_name = tor.customer_or_firm_name
                                     group by tex.status_date, tex.account_name, tex.customer_or_firm_name
                                     limit 1) tex on true;
+    */
+
+    return query
+        select 'Period,Account,Capacity,Qty,Parent Order Count';
+
+    return query
+    with cte as (select to_char("StatusDate", 'YYYY-MM-DD')             as status_date,
+                        a.account_name,
+                        hods."ClOrdID"                                  as client_order_id,
+                        cf.customer_or_firm_name,
+                        sum(coalesce(hods."CumQty", 0))                 as cum_qty,
+                        1::int                                          as cnt,
+                        count(distinct hods."DisplayInstrumentID")::int as cnt_leg
+                 from dwh.historic_order_details_storage hods
+                          join dwh.d_account a on a.account_id = hods."AccountID"
+                          left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = hods."CustomerOrFirm")
+                 where hods."Status_Date_id" between in_start_date_id and in_end_date_id
+                   and case
+                           when in_instrument_type is null then true
+                           else hods."InstrumentType" = in_instrument_type end
+                   and hods."CustomerOrderID" is null
+                   and hods."AccountID" = any (l_account_ids)
+                 group by status_date, account_name, client_order_id, customer_or_firm_name)
+    select array_to_string(ARRAY [
+                               c.status_date,
+                               c.account_name,
+                               c.customer_or_firm_name,
+                               sum(c.cum_qty)::text,
+                               (sum(case
+                                        when c.cnt_leg > l_leg_count then c.cnt_leg
+                                        else c.cnt
+                                   end))::text
+                               ], ',', '')
+    from cte c
+    group by c.status_date, c.account_name, c.customer_or_firm_name;
     get diagnostics row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
