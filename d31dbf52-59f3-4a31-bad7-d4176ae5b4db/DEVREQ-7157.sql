@@ -1,3 +1,6 @@
+select 13 % 12
+
+
 -- DROP FUNCTION dash360.report_surveillance_socgen_parent_order_count(int4, int4, varchar);
 select * from trash.report_surveillance_socgen_parent_order_count(20251001, 20251031);
 
