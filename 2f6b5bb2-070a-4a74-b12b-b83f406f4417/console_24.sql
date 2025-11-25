@@ -27,4 +27,14 @@ SELECT n,
 FROM training.piano;
 
 insert into training.piano(res)
-select null from generate_series(1, 100)
+select null from generate_series(1, 100);
+
+
+select n,
+       (n+1) * (n+2) * (4 * n + 3) / 6 as res
+from training.piano;
+
+
+select n,
+       (power(-1, n) * (4 * power(n, 2) + n * 10 + 5) - 1) / 4 as res
+from training.piano;
