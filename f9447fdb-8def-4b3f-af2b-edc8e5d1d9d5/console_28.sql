@@ -2,6 +2,8 @@ create index if not exists occ_trade_data_date_id_idx on trash.occ_trade_data (d
 create index if not exists occ_trade_data_clearing_member_number_idx on trash.occ_trade_data (clearing_member_number) where gup_clearing_firm_originator is null;
 create index if not exists occ_trade_data_rpt_id_side_idx on trash.occ_trade_data (rpt_id, side);
 
+alter table trash.occ_trade_data add constraint trash_occ_trade_data_pk primary key (trade_id);
+
 create sequence occ_data.occ_transfer_to_trade_match_id_seq
     increment by 1
     minvalue 1
@@ -21,49 +23,94 @@ create table if not exists occ_data.occ_matched_trade_record
     load_batch_id                  int4      not null, -- load_batch_id of the job
     transfer_matching_time         timestamp not null default clock_timestamp()
 );
-comment on table occ_data.occ_matched_trade_record is 'The table from matched trades '
+comment on table occ_data.occ_matched_trade_record is 'The table from matched trades https://dashfinancial.atlassian.net/wiki/spaces/DASH360/pages/5389516801/DB+Job+Algo+Direct+Matching+OCC+Transfers+vs+OCC+Trades';
+comment on column occ_data.occ_matched_trade_record.occ_matched_trade_record_id is 'PK';
+comment on column occ_data.occ_matched_trade_record.trade_id is 'Matched trade_id. FK to occ_trade_data (in schema trash for dev\testing!!!';
+comment on column occ_data.occ_matched_trade_record.occ_transfer_to_trade_match_id is 'Matching ID';
+comment on column occ_data.occ_matched_trade_record.load_batch_id is 'load_batch_id of the job';
+comment on column occ_data.occ_matched_trade_record.transfer_matching_time is 'Matching time - the same as db_create_time';
 
 
-create temp table t_base as
-select *
-from trash.occ_trade_data otd
-where clearing_member_number in ('00333', '00733')
-  and gup_clearing_firm_originator is null
-  and date_id = 20251110
-  and trans_type <> '1'
-  and not exists (select null
-                  from trash.occ_trade_data ino
-                  where clearing_member_number in ('00333', '00733')
-                    and gup_clearing_firm_originator is null
-                    and date_id = 20251110
-                    and trans_type = '1'
-                    and ino.rpt_id = otd.rpt_id
-                    and ino.side = otd.side);
+drop function if exists occ_data.matching_occ_trade_transfer;
+create or replace function occ_data.matching_occ_trade_transfer(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
+    returns int4
+    language plpgsql
+as
+$$
+    -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
+declare
+    l_load_id   int;
+    l_step_id   int;
+    l_row_count int;
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
 
-with first_try as
-         (select date_id,
-                 instrument_id,
-                 last_px,
-                 sum(case when trade_type = '0' and side = '1' then last_qty else 0 end)                    as b1,
-                 sum(case when trade_type = '0' and side = '2' then last_qty else 0 end)                    as b2,
-                 sum(case when trade_type = '3' and side = '1' then last_qty else 0 end)                    as b3,
-                 sum(case when trade_type = '3' and side = '2' then last_qty else 0 end)                    as b4,
-                 array_remove(array_agg(case when trade_type = '0' and side = '1' then trade_id end), null) as t1,
-                 array_remove(array_agg(case when trade_type = '0' and side = '2' then trade_id end), null) as t2,
-                 array_remove(array_agg(case when trade_type = '3' and side = '1' then trade_id end), null) as t3,
-                 array_remove(array_agg(case when trade_type = '3' and side = '2' then trade_id end), null) as t4
-          from t_base
-          where true
---             and date_id = 20251110
---             and instrument_id = 170827258
---             and last_px = 0.08
-          group by date_id,
-                   instrument_id,
-                   last_px)
-select 'here will be a serial' as match_id,
-       case when b1 <> 0 and b1 = b4 then t1 || t4 end,
-       case when b2 <> 0 and b2 = b3 then t2 || t3 end
-, t1, t4, t2, t3
-from first_try
-where true
-  and ((b1 > 0 and b1 = b4) or (b2 > 0 and b2 = b3));
+    select public.load_log(l_load_id, l_step_id,
+                           'matching_occ_trade_transfer for ' || in_date_id::text || ' STARTED ====', 0,
+                           'O')
+    into l_step_id;
+
+    -- 1. Selecting data for groupping
+    create temp table t_base as
+    select *
+    from trash.occ_trade_data otd
+    where clearing_member_number in ('00333', '00733')
+      and gup_clearing_firm_originator is null
+      and date_id = in_date_id
+      and trans_type <> '1'
+      and not exists (select null
+                      from trash.occ_trade_data ino
+                      where clearing_member_number in ('00333', '00733')
+                        and gup_clearing_firm_originator is null
+                        and date_id = in_date_id
+                        and trans_type = '1'
+                        and ino.rpt_id = otd.rpt_id
+                        and ino.side = otd.side);
+
+
+    -- 2. bundle groupping
+    /*
+     groupping by date_id, instrument_id and last_px depending on trade_type and side into 4 groups
+     all trades inside the groups get occ_transfer_to_trade_match_id if the groups 1 and 4 or 2 and 3 have the same qty (> 0)
+     */
+    insert into occ_data.occ_matched_trade_record (trade_id, occ_transfer_to_trade_match_id, load_batch_id)
+    with first_try as
+        (select date_id,
+                instrument_id,
+                last_px,
+                sum(case when trade_type = '0' and side = '1' then last_qty else 0 end)                    as b1,
+                sum(case when trade_type = '0' and side = '2' then last_qty else 0 end)                    as b2,
+                sum(case when trade_type = '3' and side = '1' then last_qty else 0 end)                    as b3,
+                sum(case when trade_type = '3' and side = '2' then last_qty else 0 end)                    as b4,
+                array_remove(array_agg(case when trade_type = '0' and side = '1' then trade_id end), null) as t1,
+                array_remove(array_agg(case when trade_type = '0' and side = '2' then trade_id end), null) as t2,
+                array_remove(array_agg(case when trade_type = '3' and side = '1' then trade_id end), null) as t3,
+                array_remove(array_agg(case when trade_type = '3' and side = '2' then trade_id end), null) as t4
+         from t_base
+         where true
+         group by date_id,
+                  instrument_id,
+                  last_px)
+       , all_matched as (select nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id,
+--                          case when b1 <> 0 and b1 = b4 then t1 || t4 end as grp14,
+--                          case when b2 <> 0 and b2 = b3 then t2 || t3 end as grp23,
+                                t1 || t4 || t2 || t3                                   as all_trades
+                         from first_try
+                         where true
+                           and ((b1 > 0 and b1 = b4) or (b2 > 0 and b2 = b3)))
+    select unnest(all_trades), match_id, l_load_id
+    from all_matched;
+    get diagnostics l_row_count = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'matching_occ_trade_transfer for ' || in_date_id::text || ' bundle groupping ====',
+                           l_row_count,
+                           'O')
+    into l_step_id;
+
+    -- 3 one-by-one groupping
+    
+end;
+$$
+;
