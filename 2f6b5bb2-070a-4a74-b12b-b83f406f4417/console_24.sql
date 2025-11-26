@@ -73,7 +73,38 @@ create table training.rental
 );
 set search_path to 'training';
 
-select * from rental re
-join inventory inv on inv.inventory_id = re.inventory_id
-join film fi on fi.film_id = inv.film_id
-join customer cu on cu.customer_id = re.customer_id
+select re.customer_id,
+       concat_ws(' ', first_name, last_name) as full_name,
+       count(*)                              as total_rentals
+from rental re
+         join inventory inv on inv.inventory_id = re.inventory_id
+         join film fi on fi.film_id = inv.film_id
+         join customer cu on cu.customer_id = re.customer_id
+group by re.customer_id, first_name, last_name
+-- having sum((rating = 'NC-17') :: int) = 0
+having not bool_or(rating = 'NC-17') -- It returns TRUE if at least one value in the group is TRUE. If all values in the group are FALSE, the function returns FALSE. NULL values are ignored by BOOL_OR()
+-- having not bool_and(rating = 'NC-17') -- returns TRUE only if all the input values within the aggregation are TRUE. If any of the input values are FALSE, or if there are no non-NULL TRUE values and at least one FALSE value, it returns FALSE. If all input values are NULL, it returns NULL
+order by count(*) desc, last_name, first_name
+limit 5;
+
+create table training.film_2
+(
+    film_id          integer   not null,
+    title            varchar   not null,
+    description      text      not null,
+    release_year     integer   not null,
+    language_id      integer   not null,
+    rental_duration  integer   not null,
+    rental_rate      numeric   not null,
+    length           integer   not null,
+    replacement_cost numeric   not null,
+    rating           varchar   not null,
+    last_update      timestamp not null,
+    special_features text[]    not null
+);
+
+select unnest(:in_arr::text[]) order by 1 desc
+
+select distinct film_id, title, array_agg(feature order by feature desc) from (select *, unnest(special_features) as feature
+               from training.film_2) x
+group by title
