@@ -38,3 +38,42 @@ from training.piano;
 select n,
        (power(-1, n) * (4 * power(n, 2) + n * 10 + 5) - 1) / 4 as res
 from training.piano;
+
+
+
+create table training.customer
+(
+    customer_id integer not null,
+    first_name  varchar not null,
+    last_name   varchar not null,
+    email       varchar not null
+);
+
+create table training.inventory
+(
+    inventory_id integer  not null,
+    film_id      smallint not null,
+    store_id     smallint not null
+);
+
+create table training.film
+(
+    film_id     integer not null,
+    title       varchar not null,
+    description text    not null,
+    rating      varchar not null
+);
+create table training.rental
+(
+    rental_id    integer   not null,
+    customer_id  integer   not null,
+    inventory_id integer   not null,
+    rental_date  timestamp not null,
+    return_date  timestamp
+);
+set search_path to 'training';
+
+select * from rental re
+join inventory inv on inv.inventory_id = re.inventory_id
+join film fi on fi.film_id = inv.film_id
+join customer cu on cu.customer_id = re.customer_id

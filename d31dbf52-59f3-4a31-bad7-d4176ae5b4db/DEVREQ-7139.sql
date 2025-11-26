@@ -327,4 +327,5 @@ select distinct on (date_id) date_id,
                                               from consolidator.consolidator_message cmi
                                               where cmi.date_id = cm.date_id) then true
                                  else false end as is_present
-from consolidator.consolidator_message cm;
+from consolidator.consolidator_message cm
+where cm.date_id between 20250715 and 20250730;
