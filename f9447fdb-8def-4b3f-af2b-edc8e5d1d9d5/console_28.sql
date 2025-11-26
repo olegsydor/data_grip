@@ -110,7 +110,7 @@ begin
     into l_step_id;
 
     -- 3 one-by-one groupping
-    
+
 end;
 $$
 ;
