@@ -321,3 +321,10 @@ $$;
 select * from trash.so_print_report()
 
 
+select distinct on (date_id) date_id,
+                             case
+                                 when exists (select null
+                                              from consolidator.consolidator_message cmi
+                                              where cmi.date_id = cm.date_id) then true
+                                 else false end as is_present
+from consolidator.consolidator_message cm;
