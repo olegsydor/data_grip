@@ -17,3 +17,8 @@ select * from (
 
 
 select * from dq.get_unmatched_orders(20251126,20251126,false);
+
+
+select  cl.order_id, cl.create_date_id, cl.fix_connection_id , cl.client_order_id
+		from staging.client_order cl
+where cl.create_date_id = 20251126
