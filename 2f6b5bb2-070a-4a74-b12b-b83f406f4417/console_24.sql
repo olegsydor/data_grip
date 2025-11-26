@@ -105,7 +105,12 @@ create table training.film_2
 
 select unnest(:in_arr::text[]) order by 1 desc
 
-select distinct on(film_id, title, array_agg(feature order by feature desc)) film_id, title, special_features
-    from (select *, unnest(special_features) as feature
-               from training.film_2) x
-group by title, film_id
+select min(film_id)          as film_id,
+       min(title)            as title,
+       min(special_features) as special_features
+from (select film_id, title, array_agg(feature order by feature desc) as chk, special_features
+      from (select *, unnest(special_features) as feature
+            from training.film_2) x
+      group by title, film_id, special_features) y
+group by chk
+order by 2, 3
