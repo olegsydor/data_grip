@@ -114,3 +114,29 @@ from (select film_id, title, array_agg(feature order by feature desc) as chk, sp
       group by title, film_id, special_features) y
 group by chk
 order by 2, 3
+
+
+select t.table_schema, t.table_name, c.column_name, *
+from information_schema.tables t
+         inner join information_schema.columns c on (c.table_name = t.table_name and c.table_schema = t.table_schema)
+left join db_management.table_partman tp on (tp.table_name = t.table_name and )
+where true
+and t.table_schema not in
+      ('information_schema', 'pg_catalog')
+  and c.data_type = 'integer'
+  and t.table_type = 'BASE TABLE';
+
+select pg_inherits.nspname, pn.relname
+									 FROM pg_inherits
+								JOIN pg_class AS child ON (inhrelid=child.oid)
+								JOIN pg_class as parent ON (inhparent=parent.oid)
+								JOIN pg_namespace pn ON pn.oid = parent.relnamespace
+								JOIN pg_namespace cn ON cn.oid = child.relnamespace
+								where child.relkind not in ('i', 'f')
+								  and parent.relkind not in ('i')
+								  and child.relispartition
+								  and pn.nspname = 'genesis2'
+								  and parent.relname = 'trade_record'
+								  and cn.nspname = scr.part_schema_name
+  								  and child.relname like parent.relname||'_________' -- table_name + date (YYYYMMDD)
+								 order by child.relname	desc
