@@ -115,28 +115,81 @@ from (select film_id, title, array_agg(feature order by feature desc) as chk, sp
 group by chk
 order by 2, 3
 
+create or replace function training.sum_all_columns()
+    returns int8
+    language plpgsql
+as
+$$
+declare
+    scr         record;
+    l_txt       text;
+    l_sum       int8;
+    l_sum_total int8 := 0;
+begin
+    for scr in (select t.table_schema, t.table_name, c.column_name
+                from information_schema.tables t
+                         inner join information_schema.columns c
+                                    on (c.table_name = t.table_name and c.table_schema = t.table_schema)
+                where true
+                  and t.table_schema not in
+                      ('information_schema', 'pg_catalog')
+                  and c.data_type = 'integer'
+                  and t.table_type = 'BASE TABLE'
+                  and not exists (select null
+                                  FROM pg_inherits
+                                           JOIN pg_class AS child ON (inhrelid = child.oid)
+                                           JOIN pg_class as parent ON (inhparent = parent.oid)
+                                           JOIN pg_namespace pn ON pn.oid = parent.relnamespace
+                                           JOIN pg_namespace cn ON cn.oid = child.relnamespace
+                                  where child.relkind not in ('i', 'f')
+                                    and parent.relkind not in ('i')
+                                    and child.relispartition
+                                    and t.table_schema = cn.nspname
+                                    and t.table_name = child.relname)
+                limit 5)
+        loop
+            l_txt = 'select sum(' || scr.column_name || ') from ' || scr.table_schema || '.' ||
+                    scr.table_name || ';';
+            execute l_txt into l_sum;
+            raise notice 'execute it - %, (%)', l_txt, l_sum;
+            l_sum_total = l_sum_total + coalesce(l_sum, 0);
+        end loop;
+    return l_sum_total;
+end;
+$$
+;
 
-select t.table_schema, t.table_name, c.column_name, *
-from information_schema.tables t
-         inner join information_schema.columns c on (c.table_name = t.table_name and c.table_schema = t.table_schema)
-left join db_management.table_partman tp on (tp.table_name = t.table_name and )
-where true
-and t.table_schema not in
-      ('information_schema', 'pg_catalog')
-  and c.data_type = 'integer'
-  and t.table_type = 'BASE TABLE';
 
-select pg_inherits.nspname, pn.relname
-									 FROM pg_inherits
-								JOIN pg_class AS child ON (inhrelid=child.oid)
-								JOIN pg_class as parent ON (inhparent=parent.oid)
-								JOIN pg_namespace pn ON pn.oid = parent.relnamespace
-								JOIN pg_namespace cn ON cn.oid = child.relnamespace
-								where child.relkind not in ('i', 'f')
-								  and parent.relkind not in ('i')
-								  and child.relispartition
-								  and pn.nspname = 'genesis2'
-								  and parent.relname = 'trade_record'
-								  and cn.nspname = scr.part_schema_name
-  								  and child.relname like parent.relname||'_________' -- table_name + date (YYYYMMDD)
-								 order by child.relname	desc
+CREATE OR REPLACE FUNCTION search_columns()
+RETURNS TABLE(schemaname text, tablename text, columnname text, total text)
+AS $$
+BEGIN
+  FOR schemaname, tablename, columnname IN
+    SELECT
+      c.table_schema
+      , c.table_name
+      , c.column_name
+    FROM information_schema.columns c
+    LEFT JOIN information_schema.tables t
+          ON  c.table_catalog = t.table_catalog
+          AND c.table_schema = t.table_schema
+          AND c.table_name = t.table_name
+    WHERE
+      c.data_type = 'integer'
+      AND c.table_schema NOT IN ('information_schema', 'pg_catalog')
+      AND t.table_type = 'BASE TABLE'
+  LOOP
+    FOR total IN
+      EXECUTE FORMAT('SELECT SUM(%I) AS %I FROM %I.%I', columnname, columnname, schemaname, tablename)
+    LOOP
+      RAISE NOTICE 'hit in %.%', schemaname, tablename;
+      RETURN NEXT;
+    END LOOP;
+  END LOOP;
+END;
+$$ LANGUAGE PLPGSQL;
+
+select * from training.sum_all_columns();
+select sum(account_id)
+-- into l_sum
+from genesis2.trade_for_allocations;
