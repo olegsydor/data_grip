@@ -20,6 +20,7 @@ create table if not exists occ_data.occ_matched_trade_record
     trade_id                       int8      not null
         constraint occ_matched_trade_record_occ_trade_data_fk references trash.occ_trade_data (trade_id),
     occ_transfer_to_trade_match_id int4      not null, -- from the sequence inside the function
+    matching_type bpchar not null,
     load_batch_id                  int4      not null, -- load_batch_id of the job
     transfer_matching_time         timestamp not null default clock_timestamp()
 );
@@ -27,6 +28,7 @@ comment on table occ_data.occ_matched_trade_record is 'The table from matched tr
 comment on column occ_data.occ_matched_trade_record.occ_matched_trade_record_id is 'PK';
 comment on column occ_data.occ_matched_trade_record.trade_id is 'Matched trade_id. FK to occ_trade_data (in schema trash for dev\testing!!!';
 comment on column occ_data.occ_matched_trade_record.occ_transfer_to_trade_match_id is 'Matching ID';
+comment on column occ_data.occ_matched_trade_record.matching_type is 'type of matching: B - bundle, R - row-by-row';
 comment on column occ_data.occ_matched_trade_record.load_batch_id is 'load_batch_id of the job';
 comment on column occ_data.occ_matched_trade_record.transfer_matching_time is 'Matching time - the same as db_create_time';
 
@@ -166,7 +168,7 @@ from t_base tb1
     and tb1.last_px = t14.last_px
     and tb1.trade_id = t14.trade_id_ut1
     and tb1.trade_type = '0'
-    and tb1.side = '1' limit 1) tb1 on true
+    and tb1.side = '1') limit 1) t14 on true
 join lateral (select tb4.trade_id, tb4.last_qty, tb4.trade_record_time from t_base tb4 join t14 on tb4.date_id = t14.date_id
     and tb4.instrument_id = t14.instrument_id
     and tb4.last_px = t14.last_px
@@ -177,3 +179,11 @@ join lateral (select tb4.trade_id, tb4.last_qty, tb4.trade_record_time from t_ba
      and tb4.last_qty = tb1.last_qty
 --     and tb4.trade_record_time >= tb1.trade_record_time
     limit 1) tb4 on true
+where tb1.trade_id = any('{1424134380,1424441669,1424118004,1422287351}')
+;
+
+select * from t_base
+    where trade_id = any('{1424134380,1424441669,1424118004,1422287351}')
+and true
+--          and (trade_type = '3' and side = '2')
+        and (trade_type = '0' and side = '1')
