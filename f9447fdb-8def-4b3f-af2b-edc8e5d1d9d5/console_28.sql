@@ -30,18 +30,21 @@ comment on column occ_data.occ_matched_trade_record.occ_transfer_to_trade_match_
 comment on column occ_data.occ_matched_trade_record.load_batch_id is 'load_batch_id of the job';
 comment on column occ_data.occ_matched_trade_record.transfer_matching_time is 'Matching time - the same as db_create_time';
 
+create index if not exists occ_matched_trade_record_trade_id_idx on occ_data.occ_matched_trade_record (trade_id);
 
 drop function if exists occ_data.matching_occ_trade_transfer;
 create or replace function occ_data.matching_occ_trade_transfer(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4)
-    returns int4
+    returns jsonb
     language plpgsql
 as
 $$
     -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
 declare
-    l_load_id   int;
-    l_step_id   int;
-    l_row_count int;
+    l_load_id        int;
+    l_step_id        int;
+    l_row_count      int;
+    l_bundle_cnt     int4 := 0;
+    l_row_by_row_cnt int4 := 0;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -52,6 +55,7 @@ begin
     into l_step_id;
 
     -- 1. Selecting data for groupping
+    drop table if exists t_base;
     create temp table t_base as
     select *
     from trash.occ_trade_data otd
@@ -101,16 +105,75 @@ begin
                            and ((b1 > 0 and b1 = b4) or (b2 > 0 and b2 = b3)))
     select unnest(all_trades), match_id, l_load_id
     from all_matched;
-    get diagnostics l_row_count = row_count;
+    get diagnostics l_bundle_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id,
                            'matching_occ_trade_transfer for ' || in_date_id::text || ' bundle groupping ====',
-                           l_row_count,
+                           l_bundle_cnt,
                            'O')
     into l_step_id;
 
+
     -- 3 one-by-one groupping
+    return jsonb_build_object('bundle groupped', l_bundle_cnt, 'row_by_row groupped', l_row_by_row_cnt);
 
 end;
 $$
 ;
+
+select * from occ_data.matching_occ_trade_transfer(20251110);
+select * from occ_data.occ_matched_trade_record;
+
+
+select tb.* from t_base tb
+left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+where omt.trade_id is null;
+
+create temp table t_second_try as
+select date_id,
+       instrument_id,
+       last_px,
+       sum(case when trade_type = '0' and side = '1' then last_qty else 0 end)                       as b1,
+       sum(case when trade_type = '0' and side = '2' then last_qty else 0 end)                       as b2,
+       sum(case when trade_type = '3' and side = '1' then last_qty else 0 end)                       as b3,
+       sum(case when trade_type = '3' and side = '2' then last_qty else 0 end)                       as b4,
+       array_remove(array_agg(case when trade_type = '0' and side = '1' then tb.trade_id end), null) as t1,
+       array_remove(array_agg(case when trade_type = '0' and side = '2' then tb.trade_id end), null) as t2,
+       array_remove(array_agg(case when trade_type = '3' and side = '1' then tb.trade_id end), null) as t3,
+       array_remove(array_agg(case when trade_type = '3' and side = '2' then tb.trade_id end), null) as t4
+from t_base tb
+         left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+where omt.trade_id is null
+group by date_id,
+         instrument_id,
+         last_px
+having ((sum(case when trade_type = '0' and side = '1' then last_qty else 0 end) > 0 and
+         sum(case when trade_type = '3' and side = '2' then last_qty else 0 end) > 0)
+    or
+        (sum(case when trade_type = '0' and side = '2' then last_qty else 0 end) > 0
+            and sum(case when trade_type = '3' and side = '1' then last_qty else 0 end) > 0))
+;
+
+with t14 as (select date_id, instrument_id, last_px, trade_id_ut1, trade_id_ut4
+             from t_second_try,
+                  unnest(t1) as trade_id_ut1,
+                  unnest(t4) as trade_id_ut4
+             where (b1 > 0 and b4 > 0))
+select tb1.trade_id, tb1.last_qty, tb1.trade_record_time, tb4.trade_id, tb4.last_qty, tb4.trade_record_time
+from t_base tb1
+         join lateral (select tb1.trade_id, tb1.last_qty, tb1.trade_record_time from t14 where (tb1.date_id = t14.date_id
+    and tb1.instrument_id = t14.instrument_id
+    and tb1.last_px = t14.last_px
+    and tb1.trade_id = t14.trade_id_ut1
+    and tb1.trade_type = '0'
+    and tb1.side = '1' limit 1) tb1 on true
+join lateral (select tb4.trade_id, tb4.last_qty, tb4.trade_record_time from t_base tb4 join t14 on tb4.date_id = t14.date_id
+    and tb4.instrument_id = t14.instrument_id
+    and tb4.last_px = t14.last_px
+    and tb4.trade_id = t14.trade_id_ut4
+    and tb4.trade_type = '3'
+    and tb4.side = '2'
+    where true
+     and tb4.last_qty = tb1.last_qty
+--     and tb4.trade_record_time >= tb1.trade_record_time
+    limit 1) tb4 on true
