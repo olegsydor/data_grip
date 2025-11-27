@@ -164,3 +164,10 @@ $function$
         */
 
        select * from dwh.flat_trade_record where account_id = any('{76169,76172}')
+
+
+select cl.client_order_id, cl.fix_message_id,  ex.*, cl.*
+from dwh.client_order cl
+left join dwh.execution ex on ex.order_id = cl.order_id
+where true
+and cl.create_date_id = 20251126
