@@ -193,3 +193,30 @@ select * from training.sum_all_columns();
 select sum(account_id)
 -- into l_sum
 from genesis2.trade_for_allocations;
+
+create table training.availability
+(
+    id          int4      not null,
+    user_id     int4      not null,
+    avail_start timestamp not null,
+    avail_end   timestamp not null
+);
+insert into training.availability (id, user_id, avail_start, avail_end)
+values (1, 777, '2023-07-24 16:00:00', '2023-07-24 17:00:00'),
+       (2, 777, '2023-07-24 16:00:00', '2023-07-24 16:50:00'),
+       (3, 777, '2023-07-24 18:00:00', '2023-07-24 18:30:00'),
+       (4, 777, '2023-07-24 17:30:00', '2023-07-24 18:10:00'),
+       (5, 777, '2023-07-24 16:00:00', '2023-07-24 17:10:00'),
+       (6, 777, '2023-07-24 16:00:00', '2023-07-24 16:50:00');
+
+with base as (select *,
+                     case
+                         when next_start <= avail_end then 1
+                         else 0
+                         end as seq
+              from (select avail_start,
+                           avail_end,
+                           lead(avail_start) over (partition by user_id order by avail_start) as next_start
+                    from training.availability) x)
+select *
+from base

@@ -191,6 +191,6 @@ $$
 ;
 
 select * from occ_data.matching_occ_trade_transfer(20251118, true);
-select * from occ_data.matching_occ_trade_transfer(20251118, false);
+select * from occ_data.matching_occ_trade_transfer(20251121, false);
 select * from occ_data.occ_matched_trade_record;
 truncate occ_data.occ_matched_trade_record;
