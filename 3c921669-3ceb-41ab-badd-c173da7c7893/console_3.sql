@@ -5,7 +5,12 @@ CREATE TABLE "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP"
     CONSTRAINT "PK_SG_DASH_EXEC_BROKER_MAP" PRIMARY KEY ("DASH_EXEC_BROKER")
 );
 alter table "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP" add "TRADING_FIRM_ID" VARCHAR2(9) references "GENESIS2_QA_20100601"."SG_TRADING_FIRM" ("TRADING_FIRM_ID");
-commit
+commit;
+update "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP"
+    set TRADING_FIRM_ID = '360sga'
+where TRADING_FIRM_ID is null;
+select * from "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP";
+
 insert into "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP" (DASH_EXEC_BROKER, OPT_EXEC_BROKER)
 VALUES ('BAYCRESTAMUS', 'BAYC');
 insert into "GENESIS2_QA_20100601"."SG_DASH_EXEC_BROKER_MAP" (DASH_EXEC_BROKER, OPT_EXEC_BROKER)
@@ -95,7 +100,7 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_sg_account(
     l_parent_sub_account     char;
     l_parent_mint_account    char;
     l_parent_sales_trader_id char;
-    l_opt_exec_broker_by_dash_broker varchar2(20);
+    l_opt_dash_broker        varchar2(20);
 
 begin
 
@@ -119,10 +124,10 @@ begin
 
     if in_dash_broker is not null then
         select max(OPT_EXEC_BROKER)
-        into l_opt_exec_broker_by_dash_broker
+        into l_opt_dash_broker
         from SG_DASH_EXEC_BROKER_MAP
         where DASH_EXEC_BROKER = IN_DASH_BROKER
-        and TRADING_FIRM_ID = (select * from SG_TRADING_FIRM);
+          and TRADING_FIRM_ID = (select TRADING_FIRM_ID from SG_ACCOUNT where ACCOUNT_ID = in_account_id);
     end if;
 
     IF l_opt_is_fix_execbrok_pr = 'N' OR in_opt_exec_broker IS NULL  THEN
@@ -245,7 +250,7 @@ where ACCOUNT_ID = in_account_id;
            '"SG_SUB_ACCOUNT": "' || l_sg_sub_account || '",' ||
            '"SG_MINT_ACCOUNT": "' || l_sg_mint_account || '",' ||
            '"SG_SALES_TRADER_ID": "' || l_sg_sales_trader_id ||
-           '"OPT_EXEC_BROKER_BY_DASH_BROKER": "' || l_opt_exec_broker_by_dash_broker ||
+           '"OPT_EXEC_BROKER_BY_DASH_BROKER": "' || l_opt_dash_broker ||
            '"}'
 --select 'DATA'
     into l_return
