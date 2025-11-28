@@ -209,14 +209,34 @@ values (1, 777, '2023-07-24 16:00:00', '2023-07-24 17:00:00'),
        (5, 777, '2023-07-24 16:00:00', '2023-07-24 17:10:00'),
        (6, 777, '2023-07-24 16:00:00', '2023-07-24 16:50:00');
 
-with base as (select *,
-                     case
-                         when next_start <= avail_end then 1
-                         else 0
-                         end as seq
-              from (select avail_start,
-                           avail_end,
-                           lead(avail_start) over (partition by user_id order by avail_start) as next_start
-                    from training.availability) x)
-select *
-from base
+with base as (select *, lag(seq) over (order by 1) as is_changed
+              from (select *,
+                           case
+                               when next_start <= avail_end then 1
+                               else 0
+                               end as seq
+                    from (
+                    select avail_start,
+                                 avail_end,
+                                 lead(avail_start) over (partition by user_id order by avail_start) as next_start,
+                                 lead(avail_end) over (partition by user_id order by avail_start) as next_end,
+                                 lower(avail_start, lead(avail_start) over (partition by user_id order by avail_start)) as st,
+                                 greatest(avail_end, lead(avail_end) over (partition by user_id order by avail_start)) as en
+                          from training.availability
+                          ) x) y)
+    select
+    case when ((seq = 0 and is_changed = 1)) then 1 else 0 end, * from base
+
+
+select vendor, min(startdate) as startdate, max(enddate) as enddate, grp
+from (
+      select vendor, auth, startdate, enddate,
+             sum(rst) over (order by vendor, startdate) as grp
+      from (
+             select id, user_id, avail_start, avail_end,
+                    case when lag(avail_end) over (partition by user_id order by user_id, avail_start) < avail_start then 1 end rst
+             from  training.availability
+           ) t1
+     ) t2
+group by grp, vendor
+order by startdate
