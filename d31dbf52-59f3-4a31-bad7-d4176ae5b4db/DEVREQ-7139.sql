@@ -329,3 +329,36 @@ select distinct on (date_id) date_id,
                                  else false end as is_present
 from consolidator.consolidator_message cm
 where cm.date_id between 20250715 and 20250730;
+
+
+
+create or replace  function trash.so_parent_order(in_cnt int4 default 1000)
+    returns int4
+    language plpgsql
+as
+$$
+DECLARE
+    -- variables
+    l_order_list int8[];
+BEGIN
+
+    select array_agg(order_id)
+    into l_order_list
+    from (select order_id
+          from trash.so_f_parent_order tf
+          where not tf.is_processed
+          order by order_id asc
+          limit in_cnt) x;
+    perform data_marts.load_parent_order_inc(in_parent_order_ids := l_order_list, in_date_id := 20251128);
+
+    update trash.so_f_parent_order tf
+    set is_processed = true
+    where tf.order_id = any (l_order_list)
+      and not tf.is_processed;
+
+    raise notice 'processed: - %', array_length(l_order_list, 1);
+    return array_length(l_order_list, 1);
+END
+$$;
+
+select * from trash.so_parent_order()
