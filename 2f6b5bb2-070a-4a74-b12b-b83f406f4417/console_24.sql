@@ -194,6 +194,8 @@ select sum(account_id)
 -- into l_sum
 from genesis2.trade_for_allocations;
 
+
+------- AVAILABILITY
 create table training.availability
 (
     id          int4      not null,
@@ -220,7 +222,7 @@ with base as (select *, lag(seq) over (order by 1) as is_changed
                                  avail_end,
                                  lead(avail_start) over (partition by user_id order by avail_start) as next_start,
                                  lead(avail_end) over (partition by user_id order by avail_start) as next_end,
-                                 lower(avail_start, lead(avail_start) over (partition by user_id order by avail_start)) as st,
+                                 least(avail_start, lead(avail_start) over (partition by user_id order by avail_start)) as st,
                                  greatest(avail_end, lead(avail_end) over (partition by user_id order by avail_start)) as en
                           from training.availability
                           ) x) y)
@@ -240,3 +242,48 @@ from (
      ) t2
 group by grp, vendor
 order by startdate
+
+
+
+select *
+--      , case
+--            when exists (select null
+--                         from training.availability ai
+--                         where ai.avail_start <= av.avail_start
+--                           and ai.avail_end >= av.avail_end
+--                           and ai.user_id = av.user_id
+--                           and ai.id <> av.id) then 'remove' end
+from training.availability av
+where true
+  and not exists (select null
+                  from training.availability ai
+                  where ai.avail_start <= av.avail_start
+                    and ai.avail_end >= av.avail_end
+                    and ai.user_id = av.user_id
+                    and ai.id <> av.id);
+
+with base as (select *
+              from training.availability av
+              where true
+                and not exists (select null
+                                from training.availability ai
+                                where ai.avail_start <= av.avail_start
+                                  and ai.avail_end >= av.avail_end
+                                  and ai.user_id = av.user_id
+                                  and ai.id <> av.id))
+select extract(epoch from sum(mx - mn)) / 60
+from (select user_id, min(avail_start) as mn, max(avail_end) as mx
+      from (select user_id,
+                   avail_start,
+                   avail_end,
+                   sum(rst) over (order by user_id, avail_start) as grp
+            from (select *,
+                         case
+                             when lag(avail_end) over (partition by user_id order by user_id, avail_start) <
+                                  avail_start then 1 end rst
+                  from base) t1) t2
+
+      group by user_id, coalesce(grp, 0)) x
+group by user_id;
+
+
