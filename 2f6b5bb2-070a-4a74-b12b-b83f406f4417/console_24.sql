@@ -265,25 +265,29 @@ where true
 with base as (select *
               from training.availability av
               where true
+                and user_id = 777
                 and not exists (select null
                                 from training.availability ai
-                                where ai.avail_start <= av.avail_start
-                                  and ai.avail_end >= av.avail_end
+                                where true
+                                  and ((ai.avail_start <= av.avail_start
+                                    and ai.avail_end > av.avail_end)
+                                    or (ai.avail_start < av.avail_start
+                                        and ai.avail_end > av.avail_end))
                                   and ai.user_id = av.user_id
                                   and ai.id <> av.id))
-select extract(epoch from sum(mx - mn)) / 60
-from (select user_id, min(avail_start) as mn, max(avail_end) as mx
-      from (select user_id,
-                   avail_start,
+select (extract(epoch from sum(mx - mn)) / 60.0)::int as total_minutes
+from (select min(avail_start) as mn, max(avail_end) as mx
+      from (select avail_start,
                    avail_end,
                    sum(rst) over (order by user_id, avail_start) as grp
             from (select *,
                          case
-                             when lag(avail_end) over (partition by user_id order by user_id, avail_start) <
+                             when lag(avail_end) over (partition by user_id order by user_id, avail_start) <=
                                   avail_start then 1 end rst
                   from base) t1) t2
+      group by grp) x;
+;
 
-      group by user_id, coalesce(grp, 0)) x
-group by user_id;
-
-
+  select  avail_start,avail_end
+  ,max(avail_end) over (order by avail_start rows unbounded preceding exclude current row) as t
+  from training.availability where user_id=777
