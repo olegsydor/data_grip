@@ -332,7 +332,7 @@ where cm.date_id between 20250715 and 20250730;
 
 
 
-create or replace  function trash.so_parent_order(in_cnt int4 default 1000)
+create or replace function trash.so_parent_order(in_cnt int4 default 1000)
     returns int4
     language plpgsql
 as
@@ -361,4 +361,13 @@ BEGIN
 END
 $$;
 
-select * from trash.so_parent_order()
+select * from trash.so_parent_order();
+
+alter table trash.so_f_parent_order add constraint so_f_parent_order_pk primary key (order_id);
+
+insert into trash.so_f_parent_order
+select distinct order_id, exec_date_id, false as is_processed
+from dwh.execution
+where is_parent_level
+and exec_date_id = 20251128
+on conflict(order_id) do nothing;
