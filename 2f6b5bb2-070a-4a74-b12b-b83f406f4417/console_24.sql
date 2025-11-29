@@ -288,6 +288,33 @@ from (select min(avail_start) as mn, max(avail_end) as mx
       group by grp) x;
 ;
 
-  select  avail_start,avail_end
-  ,max(avail_end) over (order by avail_start rows unbounded preceding exclude current row) as t
-  from training.availability where user_id=777
+select sum(greatest(0, extract(epoch from e - b)::int)) / 60 as total_minutes
+from (
+  select
+      avail_start, avail_end, max(avail_end) over w,
+      --
+      greatest(avail_start, max(avail_end) over w) as b,
+      avail_end as e
+  from training.availability
+  where user_id = 777
+  window w as (order by avail_start rows unbounded preceding exclude current row)
+) be;
+
+-- STUDENTS
+create table training.students (
+    "group" text,
+    name text
+);
+
+insert into training.students ("group", name)
+values ('K-12', 'Alex'), ('K-12', 'John');
+
+select 'select * from training.students
+where name = '''||:in_name||''';'
+
+select 'select * from training.students
+where name = '''||'Alex or "group" = ''K-12'''||';'
+
+
+select * from training.students
+where name = 'Alexandra' or "group" = 'K-12';
