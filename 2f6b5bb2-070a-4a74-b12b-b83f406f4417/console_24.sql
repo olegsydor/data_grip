@@ -312,8 +312,10 @@ values ('K-12', 'Alex'), ('K-12', 'John');
 select 'select * from training.students
 where name = '''||:in_name||''';'
 
-select 'select * from training.students
-where name = '''||'Alex or "group" = ''K-12'''||';'
+select * from training.students
+where name like 'Alex' or "group" = 'K-12';
+
+
 
 
 select * from training.students

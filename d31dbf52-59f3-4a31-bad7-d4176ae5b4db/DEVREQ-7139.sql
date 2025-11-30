@@ -371,3 +371,9 @@ from dwh.execution
 where is_parent_level
 and exec_date_id = 20251128
 on conflict(order_id) do nothing;
+
+
+        CREATE OR REPLACE PROCEDURE staging.f_moving_to_tail(IN in_schema_name text, IN in_table_name text,
+                                                             IN in_tail_partition_name text, IN in_next_date_id integer,
+                                                             IN in_next_next_date_id integer, IN in_min_date_id integer)
+            LANGUAGE plpgsql
