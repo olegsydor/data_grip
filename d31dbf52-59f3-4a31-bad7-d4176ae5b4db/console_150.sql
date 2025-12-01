@@ -77,3 +77,6 @@ from (select right(child.relname, 8) as child
       )  x
 order by 1
 limit 1 offset 1
+
+
+select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "N","OPT_CUST_OR_FIRM": "0","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "019","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": "","OPT_EXEC_BROKER_BY_DASH_BROKER": ""}'::jsonb
