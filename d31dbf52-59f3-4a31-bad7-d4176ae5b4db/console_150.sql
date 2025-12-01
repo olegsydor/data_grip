@@ -62,3 +62,18 @@ call staging.f_moving_to_tail(in_schema_name := 'market_data', in_table_name := 
                               in_tail_partition_name := 'trade_stb', in_next_date_id := 20250829,
                               in_next_next_date_id := 20250829,
                               in_min_date_id := 20250401);
+
+
+select child
+from (select right(child.relname, 8) as child
+      from pg_inherits
+               join pg_class parent on pg_inherits.inhparent = parent.oid
+               join pg_class child on pg_inherits.inhrelid = child.oid
+               join pg_namespace nmsp_parent on nmsp_parent.oid = parent.relnamespace
+      where parent.relname like 'trade'
+        and nmsp_parent.nspname = 'market_data'
+        and length(child.relname) > 6
+      order by 1
+      )  x
+order by 1
+limit 1 offset 1
