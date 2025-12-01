@@ -337,7 +337,7 @@ where cm.date_id between 20250715 and 20250730;
 
 -- EVERYTHING BELOW IS NOT FROM THIS TASK
 
-create or replace function trash.so_parent_order(in_cnt int4 default 1000)
+create or replace function trash.so_parent_order(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int4, in_cnt int4 default 1000)
     returns int4
     language plpgsql
 as
@@ -354,7 +354,7 @@ BEGIN
           where not tf.is_processed
           order by order_id asc
           limit in_cnt) x;
-    perform data_marts.load_parent_order_inc(in_parent_order_ids := l_order_list, in_date_id := 20251128);
+    perform data_marts.load_parent_order_inc(in_parent_order_ids := l_order_list, in_date_id := in_date_id);
 
     update trash.so_f_parent_order tf
     set is_processed = true
@@ -365,3 +365,13 @@ BEGIN
     return array_length(l_order_list, 1);
 END
 $$;
+
+select count(*) from trash.so_f_parent_order
+where not is_processed
+
+insert into trash.so_f_parent_order
+select distinct order_id, exec_date_id, false as is_processed
+from dwh.execution
+where is_parent_level
+and exec_date_id = 20251201
+on conflict(order_id) do nothing;
