@@ -22,13 +22,15 @@ select
 
  ;
 */
-
-
+select * from dwh.d_account
+where account_name = 'FUTCRET'
+ 20250601 - 20251130
         create temp table t_yc as
         select *
         from data_marts.f_yield_capture yc
         where yc.status_date_id between :in_start_date_id and :in_end_date_id
-          and yc.account_id = any ('{68698,63384,63109,63706}')
+--           and yc.account_id = any ('{68698,63384,63109,63706}')
+          and yc.account_id = any ('{63109}')
           and yc.multileg_reporting_type in ('1', '2')
           and yc.is_marketable = 'N'
           and yc.order_price >= 1
@@ -40,7 +42,8 @@ select
         from t_yc as par
                  join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
         where str.status_date_id between :in_start_date_id and :in_end_date_id
-          and str.account_id = any ('{68698,63384,63109,63706}')
+--           and str.account_id = any ('{68698,63384,63109,63706}')
+          and str.account_id = any ('{63109}')
           and str.parent_order_id is not null;
 
 
@@ -212,12 +215,12 @@ where true
   and str.parent_order_id is not null;
 
 select *
-into trash.so_to_delete
+into  trash.so_to_delete
 from t_yc;
 
 create index on t_yc (status_date_id);
 
-create table trash.so_equity_non_marketable_oct as
+create table trash.so_equity_non_marketable_jun_nov as
 select case when yc.parent_order_id is null then 'Parent' else 'Child' end as "Row Type",
        to_char(co.create_time, 'MM/DD/YYYY')                               as "Create Date",
        to_char(co.create_time, 'HH24:MI:SS.US')                            as "Create Time",
@@ -360,20 +363,3 @@ BEGIN
     return array_length(l_order_list, 1);
 END
 $$;
-
-select * from trash.so_parent_order();
-
-alter table trash.so_f_parent_order add constraint so_f_parent_order_pk primary key (order_id);
-
-insert into trash.so_f_parent_order
-select distinct order_id, exec_date_id, false as is_processed
-from dwh.execution
-where is_parent_level
-and exec_date_id = 20251128
-on conflict(order_id) do nothing;
-
-
-        CREATE OR REPLACE PROCEDURE staging.f_moving_to_tail(IN in_schema_name text, IN in_table_name text,
-                                                             IN in_tail_partition_name text, IN in_next_date_id integer,
-                                                             IN in_next_next_date_id integer, IN in_min_date_id integer)
-            LANGUAGE plpgsql
