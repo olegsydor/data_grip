@@ -275,7 +275,9 @@ from trash.so_to_delete as yc
 where true;
 
 
-create index on trash.so_equity_non_marketable_oct ("Order ID")
+create index on trash.so_equity_non_marketable_jun_nov ("Order ID");
+select count(*) from trash.so_equity_non_marketable_jun_nov;
+
 create or replace function trash.so_print_report()
     returns table
             (
@@ -314,7 +316,7 @@ begin
                                    "NBBO Ask Px"::text,
                                    "NBBO Ask Qty"::text
                                    ], ',', '')
-        from trash.so_equity_non_marketable_oct
+        from trash.so_equity_non_marketable_jun_nov
         where "Symbol" not in
               ('ZVZZT', 'ZWZZT', 'CBO', 'CBX', 'IBO', 'IGZ', 'ZBZX', 'ZTEST', 'ZTST', 'ZZZ', 'ZZK', 'ZVV')
         order by "Order ID";
@@ -333,7 +335,7 @@ select distinct on (date_id) date_id,
 from consolidator.consolidator_message cm
 where cm.date_id between 20250715 and 20250730;
 
-
+-- EVERYTHING BELOW IS NOT FROM THIS TASK
 
 create or replace function trash.so_parent_order(in_cnt int4 default 1000)
     returns int4
