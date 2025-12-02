@@ -355,13 +355,14 @@ BEGIN
           order by order_id asc
           limit in_cnt) x;
     perform data_marts.load_parent_order_inc(in_parent_order_ids := l_order_list, in_date_id := in_date_id);
+    raise notice 'processed - %', clock_timestamp();
 
     update trash.so_f_parent_order tf
     set is_processed = true
     where tf.order_id = any (l_order_list)
       and not tf.is_processed;
 
-    raise notice 'processed: - %', array_length(l_order_list, 1);
+    raise notice 'finished: - %, %', clock_timestamp(), array_length(l_order_list, 1);
     return array_length(l_order_list, 1);
 END
 $$;
@@ -375,3 +376,9 @@ from dwh.execution
 where is_parent_level
 and exec_date_id = 20251201
 on conflict(order_id) do nothing;
+
+
+select * from trash.so_f_parent_order tpo
+join data_marts.f_parent_order fpo on fpo.status_date_id = tpo.exec_date_id and fpo.parent_order_id = tpo.order_id
+where not tpo.is_processed
+and tpo.exec_date_id = 20251201
