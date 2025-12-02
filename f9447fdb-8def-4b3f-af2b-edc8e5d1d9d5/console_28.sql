@@ -194,3 +194,6 @@ select * from occ_data.matching_occ_trade_transfer(20251118, true);
 select * from occ_data.matching_occ_trade_transfer(20251121, true);
 select * from occ_data.occ_matched_trade_record;
 truncate occ_data.occ_matched_trade_record;
+
+
+select min(date_id), max(date_id) from trash.occ_trade_data
