@@ -80,3 +80,24 @@ limit 1 offset 1
 
 
 select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "N","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "N","OPT_CUST_OR_FIRM": "0","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "N","OPT_EXEC_BROKER": "019","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": "","OPT_EXEC_BROKER_BY_DASH_BROKER": ""}'::jsonb
+
+
+
+select * from public.get_business_date_back(current_date, 4)
+union all
+select * from public.get_business_date_back(current_date, 3)
+union all
+select * from public.get_business_date_back(current_date, 2)
+union all
+select * from public.get_business_date_back(current_date, 1);
+
+SELECT generated.holiday_date AS workday
+	FROM  (
+	    SELECT generate_series(dday-8 , dday , interval '1d')::date AS holiday_date
+	    FROM (SELECT current_date - :in_offset AS dday) x
+	    ) generated
+	LEFT   JOIN public.holiday_calendar h on (generated.holiday_date = h.holiday_date)
+	LEFT   JOIN public.banking_holiday_calendar bh  on (generated.holiday_date = bh.banking_holiday_date )
+	WHERE  h.holiday_date IS null and CASE WHEN :ignore_banking_holiday = FALSE THEN bh.banking_holiday_date is NULL ELSE 1=1 END
+	AND    extract(isodow from generated.holiday_date) < 6
+	ORDER  BY generated.holiday_date desc
