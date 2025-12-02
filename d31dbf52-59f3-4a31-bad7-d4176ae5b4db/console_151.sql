@@ -43,11 +43,9 @@ end;
 $function$
 ;
 
-
- select sum(del) as delay_in_seconds
-    from ( select is_processed, extract (epoch from max(subscribe_time))* case when is_processed then (-1) else 1 end as del
+select *
       from public.etl_subscriptions
       where source_table_name = 'execution'
         and subscription_name = 'f_parent_order'
         and date_id = 20251202
-        group by is_processed) x;
+        and not is_processed
