@@ -8,11 +8,12 @@ with base
              where true
                and routine_name !~~* all (ARRAY ['%_bkp%', '%_old%', '%_tst%', '%_test%'])
                and rt.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
-               and routine_definition ilike $$%public.load_log%$$)
+--                and routine_definition ilike $$%public.load_log%$$
+    )
 select specific_schema,
        specific_name,
        load_log_substr,
-       substring(routine_definition, format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)),
+       substring(routine_definition, format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)) as sequence,
        routine_definition
 from base;
 
