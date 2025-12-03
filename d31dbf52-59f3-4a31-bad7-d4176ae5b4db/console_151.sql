@@ -47,5 +47,5 @@ select *
       from public.etl_subscriptions
       where source_table_name = 'execution'
         and subscription_name = 'f_parent_order'
-        and date_id = 20251202
+        and date_id = 20251203
         and not is_processed
