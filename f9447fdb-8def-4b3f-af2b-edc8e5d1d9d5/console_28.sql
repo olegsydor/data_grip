@@ -1,3 +1,15 @@
+
+import foreign schema occ_data limit to (occ_trade_data)
+from server postgres_prod_genesis2
+into staging;
+
+insert into trash.occ_trade_data
+select *
+from staging.occ_trade_data
+where date_id between 20251127 and 20251202;
+
+select min(date_id), max(date_id) from trash.occ_trade_data
+
 create index if not exists occ_trade_data_date_id_idx on trash.occ_trade_data (date_id);
 create index if not exists occ_trade_data_clearing_member_number_idx on trash.occ_trade_data (clearing_member_number) where gup_clearing_firm_originator is null;
 create index if not exists occ_trade_data_rpt_id_side_idx on trash.occ_trade_data (rpt_id, side);
@@ -67,13 +79,14 @@ begin
                                0,
                                'O')
         into l_step_id;
+        analyze occ_data.occ_matched_trade_record;
     end if;
 
     -- 1. Selecting data for groupping
     drop table if exists t_base;
     create temp table t_base as
     select otd.*
-    from trash.occ_trade_data otd
+    from occ_data.occ_trade_data otd
              left join occ_data.occ_matched_trade_record omt
                        on omt.trade_id = otd.trade_id and omt.date_id = otd.date_id
     where true
@@ -83,7 +96,7 @@ begin
       and otd.date_id = in_date_id
       and otd.trans_type <> '1'
       and not exists (select null
-                      from trash.occ_trade_data ino
+                      from occ_data.occ_trade_data ino
                       where ino.clearing_member_number in ('00333', '00733')
                         and ino.gup_clearing_firm_originator is null
                         and ino.date_id = in_date_id
@@ -193,7 +206,29 @@ $$
 select * from occ_data.matching_occ_trade_transfer(20251118, true);
 select * from occ_data.matching_occ_trade_transfer(20251121, true);
 select * from occ_data.occ_matched_trade_record;
-truncate occ_data.occ_matched_trade_record;
+
+select * from occ_data.matching_occ_trade_transfer(20251124, true);
+select * from occ_data.matching_occ_trade_transfer(20251125, true);
+select * from occ_data.matching_occ_trade_transfer(20251126, true);
+select * from occ_data.matching_occ_trade_transfer(20251127, true);
+select * from occ_data.matching_occ_trade_transfer(20251128, true);
+select * from occ_data.matching_occ_trade_transfer(20251201, true);
+select * from occ_data.matching_occ_trade_transfer(20251202, true);
 
 
-select min(date_id), max(date_id) from trash.occ_trade_data
+select * from occ_data.occ_trade_data
+where date_id between 20251126 and 20251202;
+
+delete from occ_data.occ_trade_data
+where date_id between 20251126 and 20251202;
+
+insert into occ_data.occ_trade_data (trade_id, date_id, rpt_id, previously_reported, last_qty, last_px, trans_type, report_type, trade_type, trade_sub_type, matchid, clearing_business_date, match_status, instrument_id, symbol, cfi, maturity_date, strike_px, mic_code, side, input_device, open_close, optional_data, secondary_order_id, capacity, exchange_optional_data, linkage_originating_exch, multileg_reporting_type, secondary_exch_exec_id, clearing_member_number, account_type, subaccount_originator, gup_clearing_firm_originator, exec_broker_originator, customer_acct_originator, exec_time_originator, contra_side, contra_open_close, contra_optionaldata, contra_secondary_order_id, contra_custcapacity, contra_exchangeoptionaldata, contra_multileg_reporting_type, contra_seconday_exch_exec_id, contra_clearing_member_number, contra_account_type, contra_subaccount, contra_gup_clearing_firm, contra_exec_broker, exec_time_contra, account_id, trade_record_time, claimed_by_user_id, claim_status, etl_job_id, billing_entity_resolution_type, pg_update_time, matched_by_opt_rule_id)
+;
+select distinct matched_by_opt_rule_id
+       --trade_id, date_id, rpt_id, previously_reported, last_qty, last_px, trans_type, report_type, trade_type, trade_sub_type, matchid, clearing_business_date, match_status, instrument_id, symbol, cfi, maturity_date, strike_px, mic_code, side, input_device, open_close, optional_data, secondary_order_id, capacity, exchange_optional_data, linkage_originating_exch, multileg_reporting_type, secondary_exch_exec_id, clearing_member_number, account_type, subaccount_originator, gup_clearing_firm_originator, exec_broker_originator, customer_acct_originator, exec_time_originator, contra_side, contra_open_close, contra_optionaldata, contra_secondary_order_id, contra_custcapacity, contra_exchangeoptionaldata, contra_multileg_reporting_type, contra_seconday_exch_exec_id, contra_clearing_member_number, contra_account_type, contra_subaccount, contra_gup_clearing_firm, contra_exec_broker, exec_time_contra, account_id, trade_record_time, claimed_by_user_id, claim_status, etl_job_id, billing_entity_resolution_type, pg_update_time, matched_by_opt_rule_id
+from trash.occ_trade_data otd
+left join occ_data.occ_optional_data_rules odr on odr.rule_id=otd.matched_by_opt_rule_id
+where date_id between 20251126 and 20251202
+and otd.matched_by_opt_rule_id is not null
+  and odr.rule_id is null;
+select * from occ_data.occ_optional_data_rules
