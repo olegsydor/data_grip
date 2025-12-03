@@ -730,3 +730,22 @@ $function$
 
 COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
 
+
+
+with base
+         as (select distinct on (rt.routine_schema, rt.routine_name) substring(routine_definition FROM 'public\.load_log\(\s*([^,]+)') as load_log_substr,
+                                                                     rt.specific_schema,
+                                                                     rt.specific_name,
+                                                                     routine_definition
+             from information_schema.routines rt
+                      left join information_schema.parameters pm on rt.specific_name = pm.specific_name
+             where true
+               and routine_name !~~* all (ARRAY ['%_bkp%', '%_old%', '%_tst%', '%_test%'])
+               and rt.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
+               and routine_definition ilike $$%public.load_log%$$)
+select specific_schema,
+       specific_name,
+       load_log_substr,
+       substring(routine_definition, format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)),
+       routine_definition
+from base;
