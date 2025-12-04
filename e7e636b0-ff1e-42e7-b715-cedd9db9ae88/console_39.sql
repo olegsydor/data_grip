@@ -179,7 +179,7 @@ begin
 
     select public.load_log(l_load_id, l_step_id,
                            'matching_occ_trade_transfer for ' || in_date_id::text || ' row_by-row groupping completed',
-                           l_bundle_cnt,
+                           l_row_by_row_cnt,
                            'O')
     into l_step_id;
 
@@ -188,4 +188,23 @@ begin
 end;
 $$
 ;
-select * from occ_data.matching_occ_trade_transfer(20251120);
+select * from occ_data.matching_occ_trade_transfer(20251121, true);
+select * from occ_data.matching_occ_trade_transfer(20251122, true);
+select * from occ_data.matching_occ_trade_transfer(20251123, true);
+select * from occ_data.matching_occ_trade_transfer(20251124, true);
+select * from occ_data.matching_occ_trade_transfer(20251125, true);
+select * from occ_data.matching_occ_trade_transfer(20251126, true);
+select * from occ_data.matching_occ_trade_transfer(20251127, true);
+select * from occ_data.matching_occ_trade_transfer(20251128, true);
+select * from occ_data.matching_occ_trade_transfer(20251129, true);
+select * from occ_data.matching_occ_trade_transfer(20251130, true);
+select * from occ_data.matching_occ_trade_transfer(20251201, true);
+select * from occ_data.matching_occ_trade_transfer(20251202, true);
+select * from occ_data.matching_occ_trade_transfer(20251203, true);
+select * from occ_data.matching_occ_trade_transfer(20250919, true);
+
+ select null, null from (values (0, 'zero'), (1, 'one'), (2, 'two')) as t(digit, status)' AND status = 'active'
+    ORDER BY 2
+
+                    select null, null from (values (0, 'zero'), (1, 'one'), (2, 'two')) as t(digit, status)' AND status = 'active'
+    ORDER BY 2
