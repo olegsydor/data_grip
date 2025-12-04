@@ -315,8 +315,42 @@ where name = '''||:in_name||''';'
 select * from training.students
 where name like 'Alex' or "group" = 'K-12';
 
+create table training.categories (
+    id int,
+    parent int
+);
+
+insert into training.categories(id, parent)
+values (1, null), (2, 1), (3, 2), (4, 3), (5, 3), (6, 3);
+
+truncate training.categories;
+create table training.items (
+    id int,
+    category_id int
+);
+truncate training.items;
 
 
+insert into training.items (id, category_id)
+values (6, 0), (5, 1), (4, 5), (2, 3)
 
-select * from training.students
-where name = 'Alexandra' or "group" = 'K-12';
+create function training.cnt_tree(in_id int4)
+    returns int
+    language sql
+as
+$$
+    with recursive total (id, parent) as
+                   (select ca.id, ca.parent
+                    from training.categories ca
+                    where true
+--              and ca.parent is not null
+                      and ca.id = in_id
+                    union all
+                    select ca.id, ca.parent
+                    from training.categories ca
+                             join total on ca.id = total.parent)
+select count(*)
+from total;
+$$;
+
+select id, training.cnt_tree(id) from training.categories
