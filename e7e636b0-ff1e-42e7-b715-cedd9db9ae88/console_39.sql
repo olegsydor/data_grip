@@ -208,3 +208,6 @@ select * from occ_data.matching_occ_trade_transfer(20250919, true);
 
                     select null, null from (values (0, 'zero'), (1, 'one'), (2, 'two')) as t(digit, status)' AND status = 'active'
     ORDER BY 2
+
+
+ select '{"OPT_IS_FIX_CLFIRM_PROCESSED": "Y","OPT_CLEARING_FIRM": "","OPT_IS_FIX_CUSTFIRM_PROCESSED": "N","OPT_CUST_OR_FIRM": "1","CLIENT_CUST_OR_FIRM": "","OPT_IS_FIX_EXECBROK_PROCESSED": "Y","OPT_EXEC_BROKER": "792","OPT_OCC_ID": "","SG_SUB_ACCOUNT": "SUBONE","SG_MINT_ACCOUNT": "","SG_SALES_TRADER_ID": "","OPT_EXEC_BROKER_BY_DASH_BROKER": "XCHF"}'::jsonb
