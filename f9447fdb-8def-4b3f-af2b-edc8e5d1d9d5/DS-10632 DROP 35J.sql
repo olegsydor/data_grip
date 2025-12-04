@@ -735,17 +735,31 @@ COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The re
 with base
          as (select distinct on (rt.routine_schema, rt.routine_name) substring(routine_definition FROM 'public\.load_log\(\s*([^,]+)') as load_log_substr,
                                                                      rt.specific_schema,
-                                                                     rt.specific_name,
+                                                                     rt.routine_name,
                                                                      routine_definition
              from information_schema.routines rt
                       left join information_schema.parameters pm on rt.specific_name = pm.specific_name
              where true
-               and routine_name !~~* all (ARRAY ['%_bkp%', '%_old%', '%_tst%', '%_test%'])
-               and rt.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
-
+--               and routine_name !~~* all (ARRAY ['%_bkp%', '%_old%', '%_tst%'])
+               and rt.routine_schema not in ('trash', 'pg_catalog', 'information_schema'))
 select specific_schema,
-       specific_name,
-       load_log_substr,
-       substring(routine_definition, format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)),
+       routine_name,
+       load_log_substr                                                                                  as passing_variable,
+       substring(routine_definition,
+                 format('(?m)^\s*(?!--)select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)) as option2,
+       substring(
+               regexp_replace(
+                       regexp_replace(
+                               routine_definition,
+                               '/\*[\s\S]*?\*/', -- remove block comments
+                               '',
+                               'g'
+                       ),
+                       '--.*$', -- remove single comment
+                       '',
+                       'gm'
+               ),
+               format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr))                 as option3,
        routine_definition
-from base;
+from base
+where routine_name = 'sy_test_seq';
