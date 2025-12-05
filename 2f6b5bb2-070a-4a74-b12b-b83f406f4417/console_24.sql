@@ -343,23 +343,24 @@ values (1, null),
        (9, 4),
        (10, 4),
        (11, 4),
-       (15, 4),
-       (16, 6),
-       (17, 6),
+       (12, 4),
+       (13, 6),
+       (14, 6),
+       (15, 8),
+       (16, 8),
+       (17, 8),
        (18, 8),
        (19, 8),
-       (20, 8),
-       (21, 8),
-       (22, 8),
-       (23, 17),
-       (24, 17),
-       (25, 20),
-       (26, 20),
-       (27, null),
-       (28, 24)
+       (20, 17),
+       (21, 17),
+       (22, 20),
+       (23, 20),
+       (24, null),
+       (25, 24),
+       (26, 24)
 
 
-insert into training.items (id, category_id)
+insert into training.items (category_id, id)
 values (6, 5), (2, 7), (5, 9), (4, 10), (4, 11), (1, 13), (1, 14),
   (2, 16), (3, 18), (5, 21), (4, 22), (20, 25), (5, 26)
 
@@ -380,7 +381,7 @@ select id, array_agg(DISTINCT elem ORDER BY elem) FROM total, unnest(lst) AS ele
 group by id
 
 $$;
- drop table t_os
+ drop table t_os;
 create temp table t_os (id, elem) as
     with recursive total (id, parent, lst) as
                    (select ca.id, ca.parent, array[ca.id]
@@ -393,12 +394,14 @@ create temp table t_os (id, elem) as
     select id
        , array_agg(DISTINCT elem ORDER BY elem) FROM total
        , unnest(lst) AS elem
-        group by id
+        group by id;
+
+select * from t_os;
 
 with base as (
     select  id, unnest(elem) as el
     from t_os)
-select base.id, items.category_id
+select base.id, sum(items.category_id)
 from base
 join training.items on items.id = base.el
     group by base.id;
