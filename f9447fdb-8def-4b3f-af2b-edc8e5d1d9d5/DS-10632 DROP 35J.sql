@@ -732,12 +732,11 @@ COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The re
 
 
 
--- DROP FUNCTION dash360.get_data_for_allocations(int8, int4);
-
 CREATE OR REPLACE FUNCTION dash360.get_data_for_allocation_drop(in_alloc_instr_id bigint, in_date_id integer DEFAULT NULL::integer)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS
+$function$
     -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
 declare
     l_return_jsonb jsonb;
@@ -765,10 +764,33 @@ begin
                                                   'noExecs', aitr.trade_cnt,
                                                   'trades', aitr.trades,
                                                   'noAllocs', aie.alloc_cnt,
-                                                  'allocationEntries', aie.entries
+                                                  'allocationEntries', aie.entries,
+                                                  'CCRU', ccr.rate,
+                                                  'amount', ccr.amount
                                )
     from genesis2.allocation_instruction ai
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
+             left join lateral (select sum(l1.rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as rate,
+                                       sum(amount)                                              as amount
+                                from genesis2.alloc_instr2trade_record alt
+                                         inner join genesis2.trade_record tr
+                                                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+                                         left join lateral (select tl.rate,
+                                                                   tl.amount,
+                                                                   row_number()
+                                                                   over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+                                                            from genesis2.trade_level_book_record tl
+                                                                     inner join genesis2.book_record_creator cr
+                                                                                on tl.book_record_creator_id = cr.book_record_creator_id
+                                                            where tl.date_id = in_date_id
+                                                              AND tl.book_record_type_id = 'CCRU'
+                                                              and tl.trade_record_id = alt.trade_record_id) l1
+                                                   on true
+                                where alt.alloc_instr_id = ai.alloc_instr_id
+                                  and tr.is_busted = 'N'
+                                  and (l1.rn = 1 or l1.rn is null)
+        ) ccr on true
+
              join lateral (select count(*) as alloc_cnt,
                                   jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
                                                                'allocQty', aie.alloc_qty,
@@ -777,14 +799,16 @@ begin
                                                                'brid', ca.sg_brid,
                                                                'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
-                                                               'sgMintAccount', ca.sg_mint_account))
-                                      as entries
+                                                               'sgMintAccount', ca.sg_mint_account,
+                                                               'notHamiltonYet', ccr.amount::numeric / aie.alloc_qty
+                                            ))
+                                           as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.clearing_account ca
-                                         on (ca.clearing_account_id = aie.clearing_account_id
+                                              on (ca.clearing_account_id = aie.clearing_account_id
 --                                                  and ca.clearing_account_type = '1'
 --                                                  and ca.market_type = di.instrument_type_id
-                                             )
+                                                  )
                                     join genesis2.account ac on ac.account_id = ai.account_id
                            where aie.alloc_instr_id = ai.alloc_instr_id
                              and aie.date_id = ai.date_id
@@ -815,6 +839,15 @@ begin
       and ai.alloc_instr_id = in_alloc_instr_id
       and case when in_date_id is null then true else ai.date_id = in_date_id end;
     return l_return_jsonb;
-end;
+end ;
 $function$
 ;
+
+
+select alloc_instr_id, dash360.get_data_for_allocation_drop(ai.alloc_instr_id, ai.date_id)
+from genesis2.allocation_instruction ai
+where date_id = 20251107;
+
+
+select dash360.get_data_for_allocation_drop(-101187, 20251107);
+select dash360.get_data_for_allocations(-99683);
