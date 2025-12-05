@@ -329,10 +329,39 @@ create table training.items (
     category_id int
 );
 truncate training.items;
+truncate training.categories;
+
+insert into training.categories
+values (1, null),
+       (2, 1),
+       (3, 1),
+       (4, 2),
+       (5, 2),
+       (6, 3),
+       (7, 3),
+       (8, 3),
+       (9, 4),
+       (10, 4),
+       (11, 4),
+       (15, 4),
+       (16, 6),
+       (17, 6),
+       (18, 8),
+       (19, 8),
+       (20, 8),
+       (21, 8),
+       (22, 8),
+       (23, 17),
+       (24, 17),
+       (25, 20),
+       (26, 20),
+       (27, null),
+       (28, 24)
 
 
 insert into training.items (id, category_id)
-values (6, 0), (5, 1), (4, 5), (2, 3)
+values (6, 5), (2, 7), (5, 9), (4, 10), (4, 11), (1, 13), (1, 14),
+  (2, 16), (3, 18), (5, 21), (4, 22), (20, 25), (5, 26)
 
 create function training.last_parent(in_id int4)
     returns int
@@ -351,7 +380,7 @@ select id, array_agg(DISTINCT elem ORDER BY elem) FROM total, unnest(lst) AS ele
 group by id
 
 $$;
-
+ drop table t_os
 create temp table t_os (id, elem) as
     with recursive total (id, parent, lst) as
                    (select ca.id, ca.parent, array[ca.id]
@@ -365,9 +394,15 @@ create temp table t_os (id, elem) as
        , array_agg(DISTINCT elem ORDER BY elem) FROM total
        , unnest(lst) AS elem
         group by id
+
 with base as (
     select  id, unnest(elem) as el
     from t_os)
-select id, sum(el)
+select base.id, items.category_id
 from base
-    group by id
+join training.items on items.id = base.el
+    group by base.id;
+
+select * from training.items;
+
+select * from training.categories
