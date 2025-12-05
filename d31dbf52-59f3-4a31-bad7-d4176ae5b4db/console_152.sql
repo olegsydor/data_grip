@@ -40,7 +40,11 @@ begin
         select array_agg(distinct (po.client_order_id))
         into l_add_parent_client_orders
         from dwh.client_order co
-                 join dwh.client_order po on po.order_id = co.parent_order_id
+                 join lateral (select client_order_id
+                               from dwh.client_order po
+                               where po.order_id = co.parent_order_id
+                                 and po.create_date_id between in_start_date_id and in_end_date_id
+                               limit 1) po on true
         where true
           and co.client_order_id = any (in_street_client_order_ids)
           and co.parent_order_id is not null
@@ -48,13 +52,15 @@ begin
                   when coalesce(in_account_ids, '{}') = '{}' then true
                   else co.account_id = any (in_account_ids) end
           and co.multileg_reporting_type in ('1', '2')
-          and co.create_date_id between in_start_date_id and in_end_date_id
-          and po.create_date_id between in_start_date_id and in_end_date_id;
-
+          and co.create_date_id between in_start_date_id and in_end_date_id;
 
         if l_add_parent_client_orders is null then
             l_add_parent_client_orders = '{}';
         end if;
+
+            select public.load_log(l_load_id, l_step_id, 'report_compliance_order_blotter_reg for ' || in_start_date_id::text ||
+                                                 '-' || in_end_date_id::text || ' add parent_order filter for '||l_add_parent_client_orders::text, 0, 'O')
+    into l_step_id;
     end if;
 
     drop table if exists order_ids_cte;
@@ -112,7 +118,7 @@ begin
             and pyc.order_id = co.parent_order_id;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, 'co  created ', l_row_cnt, 'C')
+    select public.load_log(l_load_id, l_step_id, 'additional temp table created ', l_row_cnt, 'C')
     into l_step_id;
 
     analyze co;
@@ -275,7 +281,7 @@ begin
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, 'report_compliance_order_blotter_reg for ' || in_start_date_id::text ||
-                                                 '-' || in_end_date_id::text || ' STARTED ====', l_row_cnt, 'O')
+                                                 '-' || in_end_date_id::text || ' COMPLETED ====', l_row_cnt, 'O')
     into l_step_id;
 
 end ;
