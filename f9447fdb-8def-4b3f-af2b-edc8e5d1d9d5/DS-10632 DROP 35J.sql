@@ -1,11 +1,13 @@
-
-alter table genesis2.clearing_account add column if not exists sg_brid varchar;
+alter table genesis2.clearing_account
+    add column if not exists sg_brid varchar;
 comment on column genesis2.clearing_account.sg_brid is 'SG allocation field used for populating tag in 35=J. Copy from SG_ACCOUNT value';
 
-alter table genesis2.clearing_account add column if not exists sg_sub_account_name varchar;
+alter table genesis2.clearing_account
+    add column if not exists sg_sub_account_name varchar;
 comment on column genesis2.clearing_account.sg_sub_account_name is 'SG allocation field used for populating tag in 35=J. Copy from SG_SUB_ACCOUNT value';
 
-alter table genesis2.clearing_account add column if not exists sg_mint_account varchar;
+alter table genesis2.clearing_account
+    add column if not exists sg_mint_account varchar;
 comment on column genesis2.clearing_account.sg_mint_account is 'SG allocation field used for populating tag in 35=J. Copy from SG_MINT_ACCOUNT value';
 
 
@@ -55,13 +57,13 @@ begin
                                                                'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
                                                                'sgMintAccount', ca.sg_mint_account))
-                                      as entries
+                                           as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.clearing_account ca
-                                         on (ca.clearing_account_id = aie.clearing_account_id
+                                              on (ca.clearing_account_id = aie.clearing_account_id
 --                                                  and ca.clearing_account_type = '1'
 --                                                  and ca.market_type = di.instrument_type_id
-                                             )
+                                                  )
                                     join genesis2.account ac on ac.account_id = ai.account_id
                            where aie.alloc_instr_id = ai.alloc_instr_id
                              and aie.date_id = ai.date_id
@@ -172,8 +174,9 @@ CREATE OR REPLACE FUNCTION dash360.allocations_set_account_config(in_account_id 
                                                                   in_is_intraday_auto_allocate character DEFAULT NULL::bpchar)
     RETURNS integer
     LANGUAGE plpgsql
- COST 1
-AS $function$
+    COST 1
+AS
+$function$
     -- MG: 20210413 add support to is_option_auto_allocate field
 -- SY: 20240430 https://dashfinancial.atlassian.net/browse/DS-8208 is_visible_for_manual_allocation  and user_id fields have been introduced
 -- OS: 20250604 https://dashfinancial.atlassian.net/browse/DS-10060 added is_intraday_auto_allocate, removed #variable_conflict use_variable
@@ -183,7 +186,7 @@ AS $function$
 declare
     l_clearing_account_type smallint;
     l_row_cnt               int;
-    l_clearing_accounts jsonb;
+    l_clearing_accounts     jsonb;
 
 begin
     l_clearing_accounts := in_clearing_accounts::jsonb;
@@ -244,7 +247,8 @@ begin
 
     insert into genesis2.clearing_account (account_id, clearing_account_type, clearing_account_number, is_default,
                                            market_type, is_deleted, cmta, clearing_account_name, occ_actionable_id,
-                                           user_id, is_visible_for_manual_allocation, auto_alloc_ratio, is_auto_alloc_to,
+                                           user_id, is_visible_for_manual_allocation, auto_alloc_ratio,
+                                           is_auto_alloc_to,
                                            sg_brid, sg_sub_account_name, sg_mint_account)
     select in_account_id,
            l_clearing_account_type::varchar,
@@ -305,9 +309,9 @@ declare
     l_drop_message_status_id int4;
 begin
     if in_drop_message_type in ('N', 'C') and not exists (select null
-                                                  from genesis2.alloc_drop_message_status
-                                                  where alloc_instr_id = in_alloc_instr_id
-                                                    and drop_message_type = in_drop_message_type) then
+                                                          from genesis2.alloc_drop_message_status
+                                                          where alloc_instr_id = in_alloc_instr_id
+                                                            and drop_message_type = in_drop_message_type) then
         insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
         values (in_alloc_instr_id, in_drop_message_type)
         returning drop_message_status_id into l_drop_message_status_id;
@@ -453,7 +457,8 @@ end;
 $function$
 ;
 
-select * from dash360.allocations_snapshot(in_date_id := 20251201)
+select *
+from dash360.allocations_snapshot(in_date_id := 20251201)
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
 
 CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
@@ -732,12 +737,14 @@ COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The re
 
 
 
-CREATE OR REPLACE FUNCTION dash360.get_data_for_allocation_drop(in_alloc_instr_id bigint, in_date_id integer DEFAULT NULL::integer)
-    RETURNS jsonb
-    LANGUAGE plpgsql
-AS
+create or replace function dash360.get_data_for_allocation_drop(in_alloc_instr_id bigint, in_date_id integer default null::integer)
+    returns jsonb
+    language plpgsql
+as
 $function$
     -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
+    -- 20251119 SO https://dashfinancial.atlassian.net/browse/DS-10739
+    -- 20251205 SO https://dashfinancial.atlassian.net/browse/DS-10739 New atrributes in the result json were added
 declare
     l_return_jsonb jsonb;
 begin
@@ -765,8 +772,8 @@ begin
                                                   'trades', aitr.trades,
                                                   'noAllocs', aie.alloc_cnt,
                                                   'allocationEntries', aie.entries,
-                                                  'CCRU', ccr.rate,
-                                                  'amount', ccr.amount
+                                                  'CCRURate', ccr.rate,
+                                                  'CCRUTotalAmount', ccr.amount
                                )
     from genesis2.allocation_instruction ai
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
@@ -800,7 +807,8 @@ begin
                                                                'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
                                                                'sgMintAccount', ca.sg_mint_account,
-                                                               'notHamiltonYet', ccr.amount::numeric / aie.alloc_qty
+                                                               'AllocEntryCCRURate', ccr.rate,
+                                            'AllocEntryCCRUTotalAmount', round(ccr.amount * 1.0 * aie.alloc_qty / total_qty, 2)
                                             ))
                                            as entries
                            from genesis2.allocation_instruction_entry aie
