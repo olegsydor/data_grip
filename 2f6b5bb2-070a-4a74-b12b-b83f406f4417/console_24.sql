@@ -365,6 +365,9 @@ create temp table t_os (id, elem) as
        , array_agg(DISTINCT elem ORDER BY elem) FROM total
        , unnest(lst) AS elem
         group by id
-
-    select *--id, unnest(elem) as elem
-    from t_os
+with base as (
+    select  id, unnest(elem) as el
+    from t_os)
+select id, sum(el)
+from base
+    group by id

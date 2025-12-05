@@ -732,34 +732,89 @@ COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The re
 
 
 
-with base
-         as (select distinct on (rt.routine_schema, rt.routine_name) substring(routine_definition FROM 'public\.load_log\(\s*([^,]+)') as load_log_substr,
-                                                                     rt.specific_schema,
-                                                                     rt.routine_name,
-                                                                     routine_definition
-             from information_schema.routines rt
-                      left join information_schema.parameters pm on rt.specific_name = pm.specific_name
-             where true
---               and routine_name !~~* all (ARRAY ['%_bkp%', '%_old%', '%_tst%'])
-               and rt.routine_schema not in ('trash', 'pg_catalog', 'information_schema'))
-select specific_schema,
-       routine_name,
-       load_log_substr                                                                                  as passing_variable,
-       substring(routine_definition,
-                 format('(?m)^\s*(?!--)select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr)) as option2,
-       substring(
-               regexp_replace(
-                       regexp_replace(
-                               routine_definition,
-                               '/\*[\s\S]*?\*/', -- remove block comments
-                               '',
-                               'g'
-                       ),
-                       '--.*$', -- remove single comment
-                       '',
-                       'gm'
-               ),
-               format('select\s+nextval\(''([^'']+)''\)\s+into\s+%s', load_log_substr))                 as option3,
-       routine_definition
-from base
-where routine_name = 'sy_test_seq';
+-- DROP FUNCTION dash360.get_data_for_allocations(int8, int4);
+
+CREATE OR REPLACE FUNCTION dash360.get_data_for_allocation_drop(in_alloc_instr_id bigint, in_date_id integer DEFAULT NULL::integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
+    -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
+declare
+    l_return_jsonb jsonb;
+begin
+    select into l_return_jsonb jsonb_build_object('tradeDate', ai.date_id,
+                                                  'processTime', ai.create_time,
+                                                  'side', ai.side,
+                                                  'symbol', di.symbol,
+                                                  'secType',
+                                                  case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
+                                                  'putOrCall',
+                                                  case when di.instrument_type_id = 'O' then oc.put_call end,
+                                                  'strikePx',
+                                                  case when di.instrument_type_id = 'O' then oc.strike_price end,
+                                                  'maturityDay',
+                                                  case
+                                                      when di.instrument_type_id = 'O'
+                                                          then to_char(oc.maturity_day, 'FM00') end,
+                                                  'maturityMonthYear', case
+                                                                           when di.instrument_type_id = 'O' then
+                                                                               to_char(oc.maturity_year, 'FM0000') ||
+                                                                               to_char(oc.maturity_month, 'FM00') end,
+                                                  'totalQty', ai.total_qty,
+                                                  'avgPx', ai.avg_px,
+                                                  'noExecs', aitr.trade_cnt,
+                                                  'trades', aitr.trades,
+                                                  'noAllocs', aie.alloc_cnt,
+                                                  'allocationEntries', aie.entries
+                               )
+    from genesis2.allocation_instruction ai
+             join genesis2.instrument di on di.instrument_id = ai.instrument_id
+             join lateral (select count(*) as alloc_cnt,
+                                  jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
+                                                               'allocQty', aie.alloc_qty,
+                                                               'clrFirm', ca.clearing_account_number,
+                                                               'actionableId', aie.occ_actionable_id,
+                                                               'brid', ca.sg_brid,
+                                                               'subAccount', ca.sg_sub_account_name,
+                                                               'individualAllocID', aie.allocation_instruction_entry_id,
+                                                               'sgMintAccount', ca.sg_mint_account))
+                                      as entries
+                           from genesis2.allocation_instruction_entry aie
+                                    left join genesis2.clearing_account ca
+                                         on (ca.clearing_account_id = aie.clearing_account_id
+--                                                  and ca.clearing_account_type = '1'
+--                                                  and ca.market_type = di.instrument_type_id
+                                             )
+                                    join genesis2.account ac on ac.account_id = ai.account_id
+                           where aie.alloc_instr_id = ai.alloc_instr_id
+                             and aie.date_id = ai.date_id
+                           limit 1) aie on true
+             join lateral (select count(*) as trade_cnt,
+                                  jsonb_agg(jsonb_build_object('dashExecId', tr.exch_exec_id,
+                                                               'secondaryExchExecId', tr.secondary_exch_exec_id,
+                                                               'lastQty', tr.last_qty,
+                                                               'legRefId', tr.leg_ref_id,
+                                                               'chainExecId', fmj.chain_exec_id)
+                                  )        as trades
+                           from genesis2.alloc_instr2trade_record aitr
+                                    join genesis2.trade_record tr
+                                         on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+                                    join lateral (select fix_message ->> '10710' as chain_exec_id
+                                                  from staging.fix_message_json fmj
+                                                  where fmj.date_id = aitr.date_id
+                                                    and fmj.fix_message_id = tr.trade_fix_message_id
+                                                  limit 1) fmj on true
+                           where aitr.alloc_instr_id = ai.alloc_instr_id
+                             and aitr.date_id = ai.date_id
+--                             and is_busted = 'N'
+                           limit 1) aitr on true
+
+             left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
+             left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+    where true
+      and ai.alloc_instr_id = in_alloc_instr_id
+      and case when in_date_id is null then true else ai.date_id = in_date_id end;
+    return l_return_jsonb;
+end;
+$function$
+;
