@@ -808,7 +808,7 @@ begin
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
                                                                'sgMintAccount', ca.sg_mint_account,
                                                                'AllocEntryCCRURate', ccr.rate,
-                                            'AllocEntryCCRUTotalAmount', round(ccr.amount * 1.0 * aie.alloc_qty / total_qty, 2)
+                                            'AllocEntryCCRUTotalAmount', ccr.amount * 1.0 * aie.alloc_qty / total_qty
                                             ))
                                            as entries
                            from genesis2.allocation_instruction_entry aie
