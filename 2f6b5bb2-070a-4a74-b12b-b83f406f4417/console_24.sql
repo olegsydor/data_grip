@@ -334,23 +334,37 @@ truncate training.items;
 insert into training.items (id, category_id)
 values (6, 0), (5, 1), (4, 5), (2, 3)
 
-create function training.cnt_tree(in_id int4)
+create function training.last_parent(in_id int4)
     returns int
     language sql
 as
 $$
-    with recursive total (id, parent) as
-                   (select ca.id, ca.parent
+    with recursive total (id, parent, lst) as
+                   (select ca.id, ca.parent, array[ca.id]
                     from training.categories ca
                     where true
---              and ca.parent is not null
-                      and ca.id = in_id
                     union all
-                    select ca.id, ca.parent
+                    select ca.id, ca.parent, lst||ca.id
                     from training.categories ca
                              join total on ca.id = total.parent)
-select count(*)
-from total;
+select id, array_agg(DISTINCT elem ORDER BY elem) FROM total, unnest(lst) AS elem
+group by id
+
 $$;
 
-select id, training.cnt_tree(id) from training.categories
+create temp table t_os (id, elem) as
+    with recursive total (id, parent, lst) as
+                   (select ca.id, ca.parent, array[ca.id]
+                    from training.categories ca
+                    where true
+                    union all
+                    select ca.id, ca.parent, lst||ca.id
+                    from training.categories ca
+                             join total on ca.id = total.parent)
+    select id
+       , array_agg(DISTINCT elem ORDER BY elem) FROM total
+       , unnest(lst) AS elem
+        group by id
+
+    select *--id, unnest(elem) as elem
+    from t_os
