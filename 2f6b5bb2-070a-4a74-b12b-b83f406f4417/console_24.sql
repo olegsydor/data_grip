@@ -408,4 +408,28 @@ join training.items on items.id = base.el
 
 select * from training.items;
 
-select * from training.categories
+select * from training.categories;
+
+create table training.hamilton
+(
+    id          int4,
+    category_id int4,
+    suma        numeric
+);
+insert into training.hamilton (id, category_id, suma)
+values (1, 1, 5),
+       (2, 1, 10),
+       (3, 1, 2.5),
+       (4, 1, 5.1),
+       (5, 2, 1),
+       (6, 2, 1),
+       (7, 2, 3.1);
+
+select *,
+       sum(suma) over (partition by category_id) as cat_suma,
+       sum(suma) over (partition by category_id order by category_id, suma rows unbounded preceding and  ) as cat_suma_,
+       round(suma / sum(suma) over (partition by category_id), 4) as perc_suma
+from training.hamilton
+order by category_id, perc_suma
+
+
