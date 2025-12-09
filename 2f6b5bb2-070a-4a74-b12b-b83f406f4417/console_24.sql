@@ -498,4 +498,25 @@ create table training.transactions
 
 insert into training.transactions (user_id, country, date, amount)
 values (1, 'Spain', '2020-01-01', 1),
-       (1, 'Spain')
+       (1, 'Spain', '2020-03-01', 2),
+       (1, 'Spain', '2020-04-30', 3),
+       (1, 'Spain', '2020-06-29', 4),
+       (1, 'Spain', '2020-08-28', 5),
+       (2, 'Spain', '2020-01-31', 7),
+       (2, 'Spain', '2020-03-31', 6),
+       (2, 'Spain', '2020-05-30', 5);
+
+insert into training.transactions (user_id, country, date, amount)
+values (1, 'Spain', '2021-01-11', 7)
+
+
+select id,
+       user_id,
+       country,
+       date,
+       amount,
+       sum(amount) over w              as treshold,
+       date - first_value(date) over w as diff,
+       case when sum(amount) over w >= 15 then true else false end
+from training.transactions
+window w as (partition by user_id order by date)
