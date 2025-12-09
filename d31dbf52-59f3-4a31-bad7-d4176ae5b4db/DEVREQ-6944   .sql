@@ -3,12 +3,12 @@ select * from trash.report_fintech_adh_allocation_xls(in_start_date_id := 202512
 
 
 CREATE FUNCTION trash.report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                     in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
-                                                                     in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                                     in_instrument_type character DEFAULT NULL::bpchar,
-                                                                     in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                     in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
-                                                                     in_include_all character DEFAULT 'N'::bpchar)
+                                                        in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+                                                        in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                        in_instrument_type character DEFAULT NULL::bpchar,
+                                                        in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                        in_occ_actionable_id character varying[] DEFAULT '{}'::character varying[],
+                                                        in_include_all character DEFAULT 'N'::bpchar)
     RETURNS TABLE
             (
                 "Trading Firm"         character varying,
@@ -52,11 +52,18 @@ $function$
     -- AK 20241121 https://dashfinancial.atlassian.net/browse/DS-9086 added new column to return table Client Commission
     -- OS 20251105 https://dashfinancial.atlassian.net/browse/DEVREQ-7052 PTA only|All trades
     -- OS 20251209 https://dashfinancial.atlassian.net/browse/DEVREQ-6944 Add "Account Nickname" field
-begin
-    declare
-        l_load_id int;
+
+declare
+    l_load_id int;
     l_step_id int;
     l_row_cnt int;
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_allocation_xls for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
     return query
         with ftr as (select tr.date_id,
                             tr.trade_record_time::date                                  as trade_record_time,
@@ -186,23 +193,23 @@ begin
         select base."Trading Firm",
                base."Account",
                base."Date",
-               coalesce(aie.occ_actionable_id, base.street_account_name)                           as "OCC AID",
-               coalesce(ca.clearing_account_number, base."CMTA")                                   as "Clearing Account",
-               base.account_nickname                                                               as "Account Nickname",
+               coalesce(aie.occ_actionable_id, base.street_account_name) as "OCC AID",
+               coalesce(ca.clearing_account_number, base."CMTA")         as "Clearing Account",
+               base.account_nickname                                     as "Account Nickname",
                base."Settlement Date",
                base."Alloc ID",
                case
                    when ai.created_by_subsystem_id = 'RPS' then 'auto'
                    else ui.user_name
-                   end                                                                             as "Allocated By",
-               to_char(ai.create_time, 'HH24:MI:SS.US')                                            as "Alloc Time",
+                   end                                                   as "Allocated By",
+               to_char(ai.create_time, 'HH24:MI:SS.US')                  as "Alloc Time",
                base."Sec Type",
                base."Symbol",
                base."Side",
                base."O/C",
                --base."Exec Qty",
 --               (case when in_include_all = 'Y' then base."Exec Qty" else ai.total_qty end)::bigint as "Exec Qty",
-               coalesce(ai.total_qty, base."Exec Qty")                                             as "Exec Qty",
+               coalesce(ai.total_qty, base."Exec Qty")                   as "Exec Qty",
                base."Avg Px",
                base."Alloc Qty",
                base."Principal Amount",
@@ -221,8 +228,8 @@ begin
                --base."Client Commission"
 --               (aie.alloc_qty * 1.0 / ai.total_qty * client_commission_rate_sum)::numeric          as "Client Commission",
                coalesce(
-                   (aie.alloc_qty * 1.0 / ai.total_qty * client_commission_rate_sum)::numeric,
-                    ftr_client_commission_rate_sum)                                                as "Client Commission"
+                       (aie.alloc_qty * 1.0 / ai.total_qty * client_commission_rate_sum)::numeric,
+                       ftr_client_commission_rate_sum)                   as "Client Commission"
         from base
                  left join lateral (select *
                                     from staging.allocation_instruction ai
@@ -239,7 +246,11 @@ begin
                   when coalesce(in_occ_actionable_id, '{}') = '{}' then true
                   else aie.occ_actionable_id = any (in_occ_actionable_id) end
         order by base."Date", base."Trading Firm", base."Account", base."Symbol", base."Side";
-
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_allocation_xls for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
 
 end ;
 $function$

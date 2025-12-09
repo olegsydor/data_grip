@@ -231,4 +231,55 @@ left join occ_data.occ_optional_data_rules odr on odr.rule_id=otd.matched_by_opt
 where date_id between 20251126 and 20251202
 and otd.matched_by_opt_rule_id is not null
   and odr.rule_id is null;
-select * from occ_data.occ_optional_data_rules
+select * from occ_data.occ_optional_data_rules;
+
+select * from t_base
+select * from t_first
+
+
+create temp table t_third as
+    select tb.*
+    from t_base tb
+             left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+    where omt.trade_id is null;
+
+
+with grp1 as (select b1.date_id,
+                     b1.instrument_id,
+                     array_agg(b1.trade_id)        as trades,
+                     sum(b1.last_qty * b1.last_px) as sm,
+                     sum(b1.last_qty)              as sm_qty,
+                     b1.side                       as side
+
+              from t_third b1
+              where true
+                and b1.trade_type = '0'
+                and b1.side in ('1', '2')
+              group by b1.date_id, b1.instrument_id, b1.side)
+   , grp4 as (select b4.date_id,
+                     b4.instrument_id,
+                     array_agg(b4.trade_id)        as trades,
+                     sum(b4.last_qty * b4.last_px) as sm,
+                     sum(b4.last_qty)              as sm_qty,
+                     b4.side                       as side
+              from t_third b4
+              where true
+                and b4.trade_type = '3'
+                and b4.side in ('1', '2')
+              group by b4.date_id,
+                       b4.instrument_id, b4.side)
+, evrt as (select g1.trades || g4.trades as trades
+           from grp1 as g1
+                    join lateral (select *
+                                  from grp4 as g4
+                                  where true
+                                    and g4.instrument_id = g1.instrument_id
+                                    and g4.sm_qty = g1.sm_qty
+                                    and g4.sm = g1.sm
+                                    and case
+                                            when g1.side = '1' then g4.side = '2'
+                                            when g1.side = '2' then g4.side = '1' end
+                                  limit 1) g4 on true)
+select unnest(trades),
+from evrt
+
