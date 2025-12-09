@@ -129,6 +129,8 @@ create index on trash.so_equity_non_marketable_jun_nov ("Order ID");
 select count(*) from trash.so_equity_non_marketable_jun_nov;
 
 
+select *
+from trash.so_equity_non_marketable_data(20251201, 20251205, '{68698,63384,63109,63706}'::int4[]);
 
 drop function if exists trash.so_equity_non_marketable_data;
 create or replace function trash.so_equity_non_marketable_data(in_start_date_id int4, in_end_date_id int4, in_account_ids int4[])

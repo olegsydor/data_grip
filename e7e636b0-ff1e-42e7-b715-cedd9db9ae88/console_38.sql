@@ -56,3 +56,8 @@ WHERE date_id = 20251201 and dataset = 26478839;
                                 FROM dash_reporting.bofa_allocation_report AS bar
                                 WHERE date_id = 20251201
                                   and dataset = 26478839)
+
+
+
+    select * from allocation_instruction_entry
+        where alloc_instr_id in (-307260699, -307260640)
