@@ -509,15 +509,24 @@ values (1, 'Spain', '2020-01-01', 1),
 insert into training.transactions (user_id, country, date, amount)
 values (1, 'Spain', '2021-01-11', 7)
 
-
+with base as (select id,
+                     user_id as us_id,
+                     country,
+                     date,
+                     amount,
+                     sum(amount) over w                                                                    as treshold,
+                     date - first_value(date) over w                                                       as diff,
+                     case
+                         when sum(amount) over w >= 15
+                             and sum(amount) over w - amount < 15 then date - first_value(date) over w end as days_to
+              from training.transactions
+              window w as (partition by user_id order by date))
 select id,
-       user_id,
-       country,
+       case when days_to is not null then us_id end as user_id,
+       case when days_to is not null then country end as country,
        date,
        amount,
-       sum(amount) over w              as treshold,
-       date - first_value(date) over w as diff,
-       case when sum(amount) over w >= 15
-           and sum(amount) over w - amount < 15 then date - first_value(date) over w end
-from training.transactions
-window w as (partition by user_id order by date);
+       days_to      as days_to_reach_threshold,
+       case when days_to is not null then avg(days_to) over() end as avg_country_days_to_reach_threshold
+from base
+order by us_id, id
