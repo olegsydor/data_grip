@@ -1,8 +1,8 @@
 -- DROP FUNCTION dash360.report_fintech_adh_allocation_xls(int4, int4, _int4, bpchar, _varchar, _varchar, bpchar);
-select * from trash.report_fintech_adh_allocation_xls(in_start_date_id := 20251208, in_end_date_id := 20251208, in_account_ids := '{11806,2928}')
+select * from dash360.report_fintech_adh_allocation_xls(in_start_date_id := 20251208, in_end_date_id := 20251208, in_account_ids := '{11806,2928}');
 
 
-CREATE FUNCTION trash.report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
+CREATE FUNCTION dash360.report_fintech_adh_allocation_xls(in_start_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                         in_end_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                         in_account_ids integer[] DEFAULT '{}'::integer[],
                                                         in_instrument_type character DEFAULT NULL::bpchar,
