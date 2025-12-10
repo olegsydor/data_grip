@@ -517,6 +517,7 @@ select id,
        amount,
        sum(amount) over w              as treshold,
        date - first_value(date) over w as diff,
-       case when sum(amount) over w >= 15 then true else false end
+       case when sum(amount) over w >= 15
+           and sum(amount) over w - amount < 15 then date - first_value(date) over w end
 from training.transactions
-window w as (partition by user_id order by date)
+window w as (partition by user_id order by date);
