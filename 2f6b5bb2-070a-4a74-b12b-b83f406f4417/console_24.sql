@@ -560,12 +560,11 @@ insert into training.sequence_series (id)
 select unnest('{1, 2, 3, 4, 4, 5, 7, 8, 10, 15, 16, 19, 20, 21, 25, 28, 30}'::int4[]);
 
 
-
 select
-    id,
-    lag(id) over(order by id) as prev,
-    lead(id) over(order by id) as nxt
-from training.sequence_series
-
-
-    first_value(id) over(order by id rows between 2 preceding and current row )
+    lag(nxt) over(order by id), id
+from (
+select id,
+             lead(id) over (order by id) as nxt
+      from training.sequence_series
+      ) x
+where nxt - id > 1

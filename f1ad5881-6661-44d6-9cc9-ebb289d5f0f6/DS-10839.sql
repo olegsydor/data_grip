@@ -232,7 +232,7 @@ select
     fmj2.fix_message_jsonb ->> ''10701'' AS soc_gen_sub_account,
     fmj2.fix_message_jsonb ->> ''10711'' AS soc_gen_contributor_id,
     -- case when tr.exchange_id = any(''{AMEX,AMEXDH,AMEXML,AMEXP,ARCA,ARCADH,ARCAE,ARCAML,ARCAP}'') then fmj.fix_message_jsonb ->> ''9843'' end AS pillar_deal_id
-    fmj.fix_message_jsonb ->> ''9843'' AS pillar_deal_id
+    fmj.fix_message_jsonb ->> ''9483'' AS pillar_deal_id
     from dwh.flat_trade_record tr
     --inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
     inner join lateral(select * from dwh.d_instrument i where i.instrument_id = tr.instrument_id limit 1)i on true
