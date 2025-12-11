@@ -573,9 +573,11 @@ where ((nxt - id > 1)
     or (nxt is null));
 
 
-select id + 1      as gap_start,
-       next_nr - 1 as gap_end
-from (select id,
-             lead(id) over (order by id) as next_nr
-      from training.sequence_series) nr
-where nr.next_nr - nr.id > 1
+with brd as (select id + 1      as gap_start,
+                    next_nr - 1 as gap_end
+             from (select id,
+                          lead(id) over (order by id) as next_nr
+                   from training.sequence_series) nr
+             where nr.next_nr - nr.id > 1)
+select * from brd
+join lateral(select id from training.sequence_series ts where ts.id = brd.gap_end-1 limit 1) t on true
