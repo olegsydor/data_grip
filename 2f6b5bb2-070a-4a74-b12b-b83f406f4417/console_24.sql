@@ -549,4 +549,24 @@ select a.id, b.user_id, b.country, a.date, a.amount,
   round(avg(b.days) over (partition by b.country)) as avg_country_days_to_reach_threshold
 from t a left join t b on a.id = b.id and b.total >= 15
 where a.prev_total < 15
-order by a.user_id, a.id
+order by a.user_id, a.id;
+
+
+create table training.sequence_series (
+    id int4
+);
+
+insert into training.sequence_series (id)
+select unnest('{1, 2, 3, 4, 4, 5, 7, 8, 10, 15, 16, 19, 20, 21, 25, 28, 30}'::int4[]);
+
+
+select * from (
+select
+    id,
+    lag(id) over(order by id) as prev,
+    lead(id) over(order by id) as nxt,
+    case when id -  lag(id) over(order by id) > 1 then 0
+        when lead(id) over(order by id) - id > 1 then 1
+        end
+from training.sequence_series
+) x
