@@ -1,10 +1,99 @@
 -- DROP FUNCTION dash360.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
 
-CREATE OR REPLACE FUNCTION dash360.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[], start_status_date_id integer DEFAULT NULL::integer, end_status_date_id integer DEFAULT NULL::integer, start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, end_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone, user_filter character varying DEFAULT NULL::character varying, is_demo character DEFAULT 'N'::bpchar, in_limit integer DEFAULT 30)
- RETURNS TABLE(trade_record_id bigint, orig_trade_record_id bigint, trade_record_time timestamp without time zone, exec_id bigint, client_order_id character varying, street_client_order_id character varying, trading_firm_id character varying, side character, account_id integer, open_close character, last_qty integer, last_px numeric, last_mkt character varying, trade_liquidity_indicator character varying, trade_liquidity_indicator_text character varying, ex_destination character varying, sub_strategy character varying, opt_customer_firm character, exec_broker character varying, cmta character varying, client_id character varying, multileg_reporting_type character, is_cross_order character, exch_exec_id character varying, secondary_exch_exec_id character varying, fix_comp_id character varying, tcce_account_dash_commission_amount numeric, tcce_account_execution_cost numeric, tcce_firm_dash_commission_amount numeric, tcce_firm_execution_cost numeric, tcce_mss_fee_amount numeric, tcce_maker_taker_fee_amount numeric, tcce_occ_fee_amount numeric, tcce_option_regulatory_fee_amount numeric, tcce_royalty_fee_amount numeric, tcce_sec_fee_amount numeric, tcce_transaction_fee_amount numeric, tcce_trade_processing_fee_amount numeric, symbol character varying, display_instrument_id character varying, last_trade_date timestamp without time zone, real_exchange_id character varying, principal_amount numeric, ask_price numeric, bid_price numeric, ask_qty integer, bid_qty integer, trade_record_reason character, fee_sensitivity smallint, instrument_type_id character, client_commission_rate numeric, customer_review_status character, remarks character varying, blaze_account_alias character varying, street_exec_broker character varying, street_account_name character varying, street_cross_type character, post_trade_allocation_status character, auction_id bigint, order_id bigint, subsystem_id character varying, street_order_id bigint, opt_customer_or_firm character varying, put_call character, strike_price numeric, symbol_suffix character varying, clearing_account_number character varying, sub_account character varying, allocation_avg_price numeric, account_nickname character varying, date_id integer, street_mpid character varying, chain_id text, linked_id text, source_id text, chain_exec_id text, soc_gen_sub_account text, soc_gen_contributor_id text)
- LANGUAGE plpgsql
- COST 1
-AS $function$
+CREATE OR REPLACE FUNCTION dash360.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                       start_status_date_id integer DEFAULT NULL::integer,
+                                                                       end_status_date_id integer DEFAULT NULL::integer,
+                                                                       start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone,
+                                                                       end_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone,
+                                                                       user_filter character varying DEFAULT NULL::character varying,
+                                                                       is_demo character DEFAULT 'N'::bpchar,
+                                                                       in_limit integer DEFAULT 30)
+    RETURNS TABLE
+            (
+                trade_record_id                     bigint,
+                orig_trade_record_id                bigint,
+                trade_record_time                   timestamp without time zone,
+                exec_id                             bigint,
+                client_order_id                     character varying,
+                street_client_order_id              character varying,
+                trading_firm_id                     character varying,
+                side                                character,
+                account_id                          integer,
+                open_close                          character,
+                last_qty                            integer,
+                last_px                             numeric,
+                last_mkt                            character varying,
+                trade_liquidity_indicator           character varying,
+                trade_liquidity_indicator_text      character varying,
+                ex_destination                      character varying,
+                sub_strategy                        character varying,
+                opt_customer_firm                   character,
+                exec_broker                         character varying,
+                cmta                                character varying,
+                client_id                           character varying,
+                multileg_reporting_type             character,
+                is_cross_order                      character,
+                exch_exec_id                        character varying,
+                secondary_exch_exec_id              character varying,
+                fix_comp_id                         character varying,
+                tcce_account_dash_commission_amount numeric,
+                tcce_account_execution_cost         numeric,
+                tcce_firm_dash_commission_amount    numeric,
+                tcce_firm_execution_cost            numeric,
+                tcce_mss_fee_amount                 numeric,
+                tcce_maker_taker_fee_amount         numeric,
+                tcce_occ_fee_amount                 numeric,
+                tcce_option_regulatory_fee_amount   numeric,
+                tcce_royalty_fee_amount             numeric,
+                tcce_sec_fee_amount                 numeric,
+                tcce_transaction_fee_amount         numeric,
+                tcce_trade_processing_fee_amount    numeric,
+                symbol                              character varying,
+                display_instrument_id               character varying,
+                last_trade_date                     timestamp without time zone,
+                real_exchange_id                    character varying,
+                principal_amount                    numeric,
+                ask_price                           numeric,
+                bid_price                           numeric,
+                ask_qty                             integer,
+                bid_qty                             integer,
+                trade_record_reason                 character,
+                fee_sensitivity                     smallint,
+                instrument_type_id                  character,
+                client_commission_rate              numeric,
+                customer_review_status              character,
+                remarks                             character varying,
+                blaze_account_alias                 character varying,
+                street_exec_broker                  character varying,
+                street_account_name                 character varying,
+                street_cross_type                   character,
+                post_trade_allocation_status        character,
+                auction_id                          bigint,
+                order_id                            bigint,
+                subsystem_id                        character varying,
+                street_order_id                     bigint,
+                opt_customer_or_firm                character varying,
+                put_call                            character,
+                strike_price                        numeric,
+                symbol_suffix                       character varying,
+                clearing_account_number             character varying,
+                sub_account                         character varying,
+                allocation_avg_price                numeric,
+                account_nickname                    character varying,
+                date_id                             integer,
+                street_mpid                         character varying,
+                chain_id                            text,
+                linked_id                           text,
+                source_id                           text,
+                chain_exec_id                       text,
+                soc_gen_sub_account                 text,
+                soc_gen_contributor_id              text,
+                pillar_deal_id                      text
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
 declare
     select_stmt text;
     sql_params  text;
@@ -141,7 +230,9 @@ select
     fmj.fix_message_jsonb ->> ''10709'' AS source_id,
     COALESCE(fmj.fix_message_jsonb ->> ''10710'', fmj.fix_message_jsonb ->> ''9769'') AS chain_exec_id,
     fmj2.fix_message_jsonb ->> ''10701'' AS soc_gen_sub_account,
-    fmj2.fix_message_jsonb ->> ''10711'' AS soc_gen_contributor_id
+    fmj2.fix_message_jsonb ->> ''10711'' AS soc_gen_contributor_id,
+    -- case when tr.exchange_id = any(''{AMEX,AMEXDH,AMEXML,AMEXP,ARCA,ARCADH,ARCAE,ARCAML,ARCAP}'') then fmj.fix_message_jsonb ->> ''9843'' end AS pillar_deal_id
+    fmj.fix_message_jsonb ->> ''9843'' AS pillar_deal_id
     from dwh.flat_trade_record tr
     --inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
     inner join lateral(select * from dwh.d_instrument i where i.instrument_id = tr.instrument_id limit 1)i on true
@@ -176,3 +267,6 @@ execute select_stmt using start_status_date_id, end_status_date_id, account_ids,
 end;
 $function$
 ;
+
+select *
+from dash360.executions_blotter_child_executions(start_status_date_id := 20251210, end_status_date_id := 20251211)
