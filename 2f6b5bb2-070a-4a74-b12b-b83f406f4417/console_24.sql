@@ -559,12 +559,23 @@ create table training.sequence_series (
 insert into training.sequence_series (id)
 select unnest('{1, 2, 3, 4, 4, 5, 7, 8, 10, 15, 16, 19, 20, 21, 25, 28, 30}'::int4[]);
 
+insert into training.sequence_series (id)
+values (34)
 
-select
-    lag(nxt) over(order by id), id
-from (
-select id,
+
+select coalesce(lag(nxt) over (order by id),
+                (select min(id) from training.sequence_series)),
+       id
+from (select id,
              lead(id) over (order by id) as nxt
-      from training.sequence_series
-      ) x
-where nxt - id > 1
+      from training.sequence_series) x
+where ((nxt - id > 1)
+    or (nxt is null));
+
+
+select id + 1      as gap_start,
+       next_nr - 1 as gap_end
+from (select id,
+             lead(id) over (order by id) as next_nr
+      from training.sequence_series) nr
+where nr.next_nr - nr.id > 1
