@@ -97,7 +97,7 @@ begin
           , to_char(tr.order_process_time, 'YYYYMMDD')::integer as order_date_id
 --          , jo.fix_message ->> '143' as t_143
           , tr.ex_destination,
-          par.treports_id as par_report_id,
+          par.report_id as par_report_id,
           coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as str_report_id
         from dwh.flat_trade_record tr
          left join lateral (select venue_exec_id, exchange_transaction_id, treports_id, report_id
