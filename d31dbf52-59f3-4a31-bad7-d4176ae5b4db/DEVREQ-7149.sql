@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.report_isi_bill_changes_monthly(int4, int4, _varchar);
 
-CREATE OR REPLACE FUNCTION dash360.report_isi_bill_changes_monthly(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer, p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+CREATE or replace FUNCTION trash.so_report_isi_bill_changes_monthly(p_start_date_id integer DEFAULT NULL::integer, p_end_date_id integer DEFAULT NULL::integer, p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
  RETURNS TABLE(export_row text)
  LANGUAGE plpgsql
 AS $function$
@@ -85,7 +85,8 @@ begin
 
      DROP TABLE IF EXISTS tmp_606_isi_bill_changes;
 
-       create temp table tmp_606_isi_bill_changes with (parallel_workers = 4) ON COMMIT drop as
+       create temp table tmp_606_isi_bill_changes with (parallel_workers = 4) --ON COMMIT drop
+           as
         select to_char(tr.trade_record_time, 'YYYY-MM-DD') as date_
           , tr.order_id
           , tr.trade_record_id as report_id
@@ -96,15 +97,25 @@ begin
           , to_char(tr.order_process_time, 'YYYYMMDD')::integer as order_date_id
 --          , jo.fix_message ->> '143' as t_143
           , tr.ex_destination,
-          par.treports_id as par_report_id
+          par.treports_id as par_report_id,
+          coalesce(str.treports_id::text, tr.secondary_exch_exec_id) as str_report_id
         from dwh.flat_trade_record tr
-         left join lateral (select venue_exec_id, exchange_transaction_id, treports_id
+         left join lateral (select venue_exec_id, exchange_transaction_id, treports_id, report_id
                                 from t_execution cbe -- compliance.blaze_execution cbe
                                 where cbe.client_order_id = tr.client_order_id
                                   and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
                                   and cbe.date_id = tr.date_id
                                   and cbe.date_id between l_start_date_id and l_end_date_id
                                 limit 1) par on true
+             left join lateral (
+        select treports_id --order_id, report_id, client_order_id, torders_id, exchange_transaction_id
+        from t_execution cbe --compliance.blaze_execution cbe
+        where cbe.client_order_id = tr.client_order_id
+          and cbe.exchange_transaction_id = par.exchange_transaction_id
+          and cbe.report_id = par.report_id
+          and cbe.date_id = tr.date_id
+          and cbe.date_id between l_start_date_id and l_end_date_id
+        ) str on true
           left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
         where tr.date_id between l_start_date_id and p_end_date_id
           and tr.account_id = any(l_account_ids)
@@ -127,7 +138,7 @@ analyze tmp_606_isi_bill_changes;
     select
       coalesce(s.date_::varchar, '')                        ||','||  --
       coalesce(s.order_id::varchar, '')                     ||','||  --
-      coalesce(s.par_report_id::text, s.report_id::text, '')    ||','||  --
+      coalesce(s.str_report_id, s.par_report_id::text, s.report_id::text, '')    ||','||  --
 --      coalesce(s.report_id::varchar, '')                    ||','||  --
       coalesce(s.tag_17::varchar, '')                                --
       --coalesce(s.street_tag_17::varchar, '')                         --
@@ -135,7 +146,7 @@ analyze tmp_606_isi_bill_changes;
       as roe
     from
       (
-        select date_, order_id, report_id, tag_17, par_report_id --, street_tag_17
+        select date_, order_id, report_id, tag_17, par_report_id, str_report_id --, street_tag_17
         from tmp_606_isi_bill_changes
         order by 1,2,3
       ) s
@@ -147,3 +158,6 @@ analyze tmp_606_isi_bill_changes;
 end;
 $function$
 ;
+select *
+from trash.so_report_isi_bill_changes_monthly(p_start_date_id := 20251101, p_end_date_id := 20251130,
+                                           p_trading_firm_ids := '{vision01}');
