@@ -581,3 +581,45 @@ with brd as (select id + 1      as gap_start,
              where nr.next_nr - nr.id > 1)
 select * from brd
 join lateral(select id from training.sequence_series ts where ts.id = brd.gap_end-1 limit 1) t on true
+;
+
+drop table training.sums;
+create table training.sums
+(
+    id   int4,
+    qty  int4,
+    side int4
+);
+truncate training.sums;
+
+insert into training.sums (id, qty, side)
+values (1, 2, 1),
+       (2, 2, 1),
+       (3, 3, 1),
+       (4, 10, 1),
+       (8, 10, 1),
+       (9, 5, 1),
+       (5, 2, 2),
+       (6, 2, 2),
+       (7, 10, 2),
+       (10, 5, 1);
+
+select s1.id, s2.id, s1.qty
+from training.sums s1
+          join lateral (select * from training.sums s2 where s2.qty = s1.qty and s2.side = 2 limit 1) s2 on true
+where s1.side = 1;
+
+with s1 as (
+    select *, row_number() over (partition by qty order by id) as rn
+    from training.sums
+    where side = 1
+),
+s2 as (
+    select *, row_number() over (partition by qty order by id) as rn
+    from training.sums
+    where side = 2
+)
+select s1.id as s1_id, s2.id as s2_id, s1.qty
+from s1
+join s2 using (qty, rn)
+order by s1_id;
