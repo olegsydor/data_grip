@@ -1139,3 +1139,67 @@ from pre;
 	       l_load_id,
 	       '2'
 	from pre;
+
+
+    drop table if exists t_base;
+    create temp table t_base as
+    select otd.*
+    from trash.occ_trade_data otd
+             left join occ_data.occ_matched_trade_record omt
+                       on omt.trade_id = otd.trade_id and omt.date_id = otd.date_id
+    where true
+      and omt.trade_id is null
+      and otd.clearing_member_number in ('00333', '00733')
+      and otd.gup_clearing_firm_originator is null
+      and otd.date_id = :in_date_id
+      and otd.trans_type <> '1'
+      and not exists (select null
+                      from trash.occ_trade_data ino
+                      where ino.clearing_member_number in ('00333', '00733')
+                        and ino.gup_clearing_firm_originator is null
+                        and ino.date_id = :in_date_id
+                        and ino.trans_type = '1'
+                        and ino.rpt_id = otd.rpt_id
+                        and ino.side = otd.side);
+
+    drop table if exists t_second;
+    create temp table t_second as
+    select tb.*
+    from t_base tb
+             left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+    where omt.trade_id is null;
+    create index on t_second (date_id, instrument_id, last_px, trans_type, side);
+
+
+
+	with left as (select
+	                     b1.trade_id,
+	                     b1.date_id,
+	                     b1.instrument_id,
+	                     b1.last_px,
+	                     b1.last_qty,
+	                     row_number() over (partition by b1.date_id, b1.instrument_id, b1.last_px, b1.last_qty)
+	              from t_second b1
+-- 	                       join lateral (select b4.trade_id
+-- 	                                     from t_second b4
+-- 	                                     where b4.date_id = b1.date_id
+-- 	                                       and b4.instrument_id = b1.instrument_id
+-- 	                                       and b4.last_px = b1.last_px
+-- 	                                       and b4.last_qty = b1.last_qty
+-- 	                                       and b4.pg_db_create_time >= b1.pg_db_create_time
+-- 	                                       and b4.trade_type = '3'
+-- 	                                       and b4.side != b1.side
+-- 	                                     order by pg_db_create_time
+-- 	                                     limit 1
+-- 	                  ) b4 on true
+	              where true
+	                and b1.trade_type = '0')
+	   , pre as (select distinct on (opposite_trade) array [trade_id, opposite_trade]                       as trades,
+	                                                 nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
+	             from base)
+	select unnest(trades) as trade_id,
+	       in_date_id,
+	       match_id,
+	       l_load_id,
+	       '2'
+	from pre;
