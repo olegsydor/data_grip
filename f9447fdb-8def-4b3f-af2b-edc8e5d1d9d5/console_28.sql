@@ -1076,15 +1076,12 @@ end;
 $function$
 ;
 
-
 -- DROP FUNCTION occ_data.matching_occ_trade_transfer(int4, bool);
 
-CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
-                                                                is_rematch boolean DEFAULT false)
-    RETURNS jsonb
-    LANGUAGE plpgsql
-AS
-$function$
+CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, is_rematch boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
     -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
     -- SO 20251209 https://dashfinancial.atlassian.net/browse/DS-10830
 declare
@@ -1093,6 +1090,7 @@ declare
     l_bundle_cnt     int4 := 0;
     l_row_by_row_cnt int4 := 0;
     l_notional_cnt   int4 := 0;
+    l_notional_tolerancy_cnt int4 := 0;
     l_account_cnt    int4 := 0;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -1185,65 +1183,22 @@ begin
      with the same date_id, instrument_id, last_px but type=3 and opposite side=2|1
      and the same last_qty: one-by-one
      */
-    /*
-    commented (OS) to provide the better version of matching
-    drop table if exists t_second;
-    create temp table t_second as
-    select tb.*
-    from t_base tb
-             left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
-    where omt.trade_id is null;
-    create index on t_second (date_id, instrument_id, last_px, trans_type, side);
-
-
-    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
-                                                   matching_type)
-	with base as (select b1.date_id,
-	                     b1.instrument_id,
-	                     b1.last_px,
-	                     b1.trade_id,
-	                     b4.trade_id as opposite_trade
-	              from t_second b1
-	                       join lateral (select b4.trade_id
-	                                     from t_second b4
-	                                     where b4.date_id = b1.date_id
-	                                       and b4.instrument_id = b1.instrument_id
-	                                       and b4.last_px = b1.last_px
-	                                       and b4.last_qty = b1.last_qty
-	                                       and b4.pg_db_create_time >= b1.pg_db_create_time
-	                                       and b4.trade_type = '3'
-	                                       and b4.side != b1.side
-	                                     order by pg_db_create_time
-	                                     limit 1
-	                  ) b4 on true
-	              where true
-	                and b1.trade_type = '0')
-	   , pre as (select distinct on (opposite_trade) array [trade_id, opposite_trade]                       as trades,
-	                                                 nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
-	             from base)
-	select unnest(trades) as trade_id,
-	       in_date_id,
-	       match_id,
-	       l_load_id,
-	       '2'
-	from pre;
-*/
 
     drop table if exists t_second;
     create temp table t_second as
-    select b.trade_id,
-           b.date_id,
-           b.instrument_id,
-           b.last_px,
-           b.last_qty,
-           b.trade_type,
-           b.side,
+    select tb.trade_id,
+           tb.date_id,
+           tb.instrument_id,
+           tb.last_px,
+           tb.last_qty,
+           tb.trade_type,
+           tb.side,
            row_number()
-           over (partition by b.date_id, b.trade_type, b.instrument_id, b.last_px, b.last_qty, b.side order by b.pg_db_create_time) as rn
+           over (partition by tb.date_id, tb.trade_type, tb.instrument_id, tb.last_px, tb.last_qty, tb.side order by tb.pg_db_create_time) as rn
     from t_base tb
              left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
     where omt.trade_id is null;
-    create index on t_second (date_id, instrument_id, last_px, trans_type, side, rn);
+    create index on t_second (date_id, trade_type, instrument_id, last_px, side, rn);
 
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
@@ -1335,6 +1290,43 @@ begin
                            'O')
     into l_step_id;
 
+    --  Notional with not zero tolerancy
+        insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
+                                                   matching_type)
+        with trd_grp as (select g1.trades || g4.trades                                 as trades,
+                                nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
+                         from t_third g1
+                                  join lateral (select *
+                                                from t_third as g4
+                                                where true
+                                                  and g4.trade_type = '3'
+                                                  and g4.instrument_id = g1.instrument_id
+                                                  and g4.sum_qty = g1.sum_qty
+                                                  and abs(g4.sum_px - g1.sum_px)::numeric / g1.sum_px > 0
+                                                  and abs(g4.sum_px - g1.sum_px)::numeric / g1.sum_px <= 0.0001
+                                                  and case
+                                                          when g1.side = '1' then g4.side = '2'
+                                                          when g1.side = '2' then g4.side = '1' end
+                                                limit 1) g4 on true
+                         where true
+                           and g1.trade_type = '0')
+        select unnest(trades) as trade_id,
+               in_date_id,
+               match_id,
+               l_load_id,
+               'X'
+        from trd_grp;
+    get diagnostics l_notional_tolerancy_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'matching_occ_trade_transfer for ' || in_date_id::text ||
+                           ' total notional groupping with non zero tolerancy completed',
+                           l_notional_tolerancy_cnt,
+                           'O')
+    into l_step_id;
+
+
+
 /*
 Match OTrades grouped by Account with one OTransfer (on the same last_qty):
 Group OTrades by {date_id, instrument_id, side, account_id}
@@ -1403,13 +1395,13 @@ IF OTrade Group’s SUM(last_qty) = OTransfer's last_qty
     get diagnostics l_account_cnt = row_count;
 
     return jsonb_build_object('bundle groupped', l_bundle_cnt, 'row_by_row groupped', l_row_by_row_cnt,
-                              'total notional groupped', l_notional_cnt, 'total account groupped', l_account_cnt);
+                              'total notional groupped', l_notional_cnt,
+                              'total notional with non zero tolerancy', l_notional_tolerancy_cnt,
+                              'total account groupped', l_account_cnt);
 
 end;
 $function$
 ;
-
-
 
 
 --    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
