@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4);
 
-CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report_v2(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
 AS $function$
@@ -15,7 +15,7 @@ AS $function$
     --          account_id 263022 is for UAT flow and added in all scripts for compatibility
     -- 20250722 SO https://dashfinancial.atlassian.net/browse/DS-10237 saving the reported data into the table to avoid missing report
     -- 20250725 SO hot fix creating account_ids list
-    -- 20251215 SO Unabled to report -> Reportes
+    -- 20251215 SO Unabled to report -> Reportes. And the part for bust was added. V2 was created keeping in mind that both versions can be run
 
 declare
     l_load_id                 int;
@@ -53,7 +53,7 @@ begin
     into l_alloc_instr_id_reported
     from dash_reporting.bofa_allocation_report
     where date_id between in_start_date_id and in_end_date_id
-      and to_report = 'R';
+      and to_report in ('R', 'U');
 
 
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' allocation_instructions collected',
@@ -120,9 +120,6 @@ begin
                           on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
                               and ca.clearing_account_type = '1' and ca.market_type = 'O')
                      join genesis2.account acc ON (acc.account_id = ca.account_id
---                                                       and acc.is_deleted <> 'Y'
---                 and acc.opt_report_to_mpid = 'MLCB'
---                 and acc.trading_firm_id <> 'cantor'
                 and case when in_is_eod then true else acc.account_id != all (in_removed_account_ids) end
                 )
                      join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
