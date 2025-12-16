@@ -312,6 +312,6 @@ FROM pg_stat_activity
 WHERE state not like 'idle%' AND query NOT ILIKE '%pg_stat_activity%'
 ORDER BY query_start desc;
 
-SELECT pg_cancel_backend(2973438)
+SELECT pg_cancel_backend(2921190)
 
 2973438
