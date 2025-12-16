@@ -131,7 +131,7 @@ begin
                      left join lateral (select ar.date_id
                                         from dash_reporting.bofa_allocation_report ar
                                         where ar.alloc_instr_id = ae.alloc_instr_id
-                                          and to_report = 'R'
+                                          and to_report in ('R', 'U')
                                         limit 1) ar on true
             where alin.date_id between in_start_date_id and in_end_date_id
               and ca.account_id = any (l_account_ids)
@@ -242,7 +242,7 @@ begin
         into l_alloc_instr_id_reported
         from dash_reporting.bofa_allocation_report ba
         where ba.date_id between in_start_date_id and in_end_date_id
-          and ba.to_report in ('R');
+          and ba.to_report in ('R', 'U');
 
         select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD instructions calculated',
                                coalesce(array_length(l_alloc_instr_id_reported, 1), 0), 'O')
@@ -314,7 +314,6 @@ begin
                        then 'U'
                    else 'R' end      as to_report,
                case
-
                    when ftr.orig_trade_record_id is null and exists (select null
                                                                      from t_trade_record_to_exclude tre
                                                                      where tre.trade_record_id = ftr.trade_record_id)
@@ -338,14 +337,7 @@ begin
           and gi.instrument_type_id = 'O'
           and ftr.exec_broker = in_exec_broker
           and tex.trade_record_id is null;
---           and acc.is_deleted <> 'Y'
---           AND acc.opt_report_to_mpid = 'MLCB'
---           AND acc.trading_firm_id <> 'cantor'
 
-        --           and not exists (select null
---                           from t_trade_record_to_exclude rp
---                           where rp.trade_record_id = any
---                                 (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
 
         get diagnostics l_row_cnt = row_count;
         select public.load_log(l_load_id, l_step_id, l_msg_text || ' EOD temp table t_trade_record_to_report created',
@@ -390,7 +382,7 @@ begin
        max(street_account_name) as street_account_name*/
         FROM t_trade_record_to_report rtr
         where date_id between in_start_date_id and in_end_date_id
-          and to_report = 'R'
+          and to_report in ('R', 'U')
           and to_del is null
         group by rtr.date_id, rtr.cmta, rtr.open_close, rtr.order_id, rtr.instrument_id, rtr.side,
                  rtr.opt_is_fix_clfirm_processed, rtr.opt_customer_or_firm,
