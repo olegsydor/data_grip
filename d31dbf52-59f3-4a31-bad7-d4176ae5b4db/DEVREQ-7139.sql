@@ -305,3 +305,12 @@ select distinct on (date_id) date_id,
                                  else false end as is_present
 from consolidator.consolidator_message cm
 where cm.date_id between 20250715 and 20250730;
+
+
+SELECT *
+FROM fix_capture.fix_message_json AS fmj
+where fmj.fix_message_jsonb is not null
+and date_id > 20250101
+and date_id < 20251231
+order by date_id
+limit 1
