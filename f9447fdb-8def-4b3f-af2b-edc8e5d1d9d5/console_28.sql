@@ -1602,6 +1602,44 @@ begin
                         and ino.side = otd.side);
     get diagnostics l_start_cnt = row_count;
 
+
+
+    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
+                                                   matching_type)
+    with base as (select tb.date_id                as date_id,
+                         tb.instrument_id          as instrument_id,
+                         array_agg(tb.trade_id)    as trades,
+                         sum(tb.last_qty)          as sum_qty,
+                         tb.side                   as side,
+                         tb.account_id             as account_id,
+                         max(tb.pg_db_create_time) as pg_db_create_time
+                  from t_four tb
+                           left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+                  where true
+                    and omt.trade_id is null
+                    and tb.trade_type = '0'
+                  group by tb.date_id, tb.instrument_id, tb.side, tb.account_id)
+       , grp as (select base.trades || tf.trade_id                             as trades,
+                        nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
+                 from base
+                          join lateral (select *
+                                        from t_four tf
+                                        where tf.instrument_id = base.instrument_id
+                                          and tf.trade_type = '3'
+                                          and tf.side <> base.side
+                                          and tf.last_qty = base.sum_qty
+                                          and tf.pg_db_create_time >= base.pg_db_create_time
+                                          and tf.account_id is not distinct from base.account_id
+                                        limit 1
+                     ) tf on true)
+    select unnest(trades),
+           in_date_id,
+           match_id,
+           l_load_id,
+           '4'
+    from grp;
+    get diagnostics l_account_cnt = row_count;
+
     /* STEP 1 in the new order
    Match Bundles on the same Total Notional:
    Create Groups of not matched OTD Records:
@@ -1837,47 +1875,11 @@ IF OTrade Group’s SUM(last_qty) = OTransfer's last_qty
     where true
       and omt.trade_id is null;
 
-
-    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
-                                                   matching_type)
-    with base as (select tb.date_id                as date_id,
-                         tb.instrument_id          as instrument_id,
-                         array_agg(tb.trade_id)    as trades,
-                         sum(tb.last_qty)          as sum_qty,
-                         tb.side                   as side,
-                         tb.account_id             as account_id,
-                         max(tb.pg_db_create_time) as pg_db_create_time
-                  from t_four tb
-                           left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
-                  where true
-                    and omt.trade_id is null
-                    and tb.trade_type = '0'
-                  group by tb.date_id, tb.instrument_id, tb.side, tb.account_id)
-       , grp as (select base.trades || tf.trade_id                             as trades,
-                        nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
-                 from base
-                          join lateral (select *
-                                        from t_four tf
-                                        where tf.instrument_id = base.instrument_id
-                                          and tf.trade_type = '3'
-                                          and tf.side <> base.side
-                                          and tf.last_qty = base.sum_qty
-                                          and tf.pg_db_create_time >= base.pg_db_create_time
-                                          and tf.account_id is not distinct from base.account_id
-                                        limit 1
-                     ) tf on true)
-    select unnest(trades),
-           in_date_id,
-           match_id,
-           l_load_id,
-           '4'
-    from grp;
-    get diagnostics l_account_cnt = row_count;
-
     return jsonb_build_object('date_id', in_date_id,
                               'bundle groupped', l_bundle_cnt, 'row_by_row groupped', l_row_by_row_cnt,
                               'total notional groupped', l_notional_cnt,
                               'total notional with non zero tolerancy', l_notional_tolerancy_cnt,
+                              'account groupping', l_account_cnt,
                               'count to match', l_start_cnt,
                               'unmatched', l_start_cnt -
                                            (l_bundle_cnt + l_row_by_row_cnt + l_notional_cnt +
