@@ -1556,7 +1556,7 @@ declare
     l_notional_cnt           int4 := 0;
     l_notional_tolerance_cnt int4 := 0;
     l_account_cnt            int4 := 0;
-    l_account_tolerance_cnt int4:= 0;
+    l_account_tolerance_cnt  int4 := 0;
     l_start_cnt              int4 := 0;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
@@ -1603,7 +1603,7 @@ begin
                         and ino.side = otd.side);
     get diagnostics l_start_cnt = row_count;
 
-        select public.load_log(l_load_id, l_step_id,
+    select public.load_log(l_load_id, l_step_id,
                            'Trades to match ' || in_date_id::text,
                            l_start_cnt,
                            'O')
@@ -1660,7 +1660,7 @@ begin
 
 
 --     Match OTrades grouped by Account with one OTransfer (on the same notional value) with non zero tolerance:
-      insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
+    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
     with base as (select tb.date_id                    as date_id,
                          tb.instrument_id              as instrument_id,
@@ -1687,8 +1687,8 @@ begin
                                           and tf.trade_type = '3'
                                           and tf.side <> base.side
                                           and tf.last_qty = base.sum_qty
-                                          and abs(tf.last_px - base.sum_px)::numeric/base.sum_px > 0
-                                          and abs(tf.last_px - base.sum_px)::numeric/base.sum_px < 0.0001
+                                          and abs(tf.last_px - base.sum_px)::numeric / base.sum_px > 0
+                                          and abs(tf.last_px - base.sum_px)::numeric / base.sum_px < 0.0001
                                           and tf.pg_db_create_time >= base.pg_db_create_time
                                           and tf.account_id is not distinct from base.account_id
                                         limit 1
@@ -1760,7 +1760,7 @@ begin
                            'O')
     into l_step_id;
 
-    --  Notional with not zero tolerancy
+    --  Notional with not zero tolerance
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
     with trd_grp as (select g1.trades || g4.trades                                 as trades,
@@ -1795,7 +1795,6 @@ begin
                            l_notional_tolerance_cnt,
                            'O')
     into l_step_id;
-
 
     -- 3 one-by-one groupping
     /*
@@ -1865,7 +1864,6 @@ begin
     with first_try as
         (select tb.date_id,
                 tb.instrument_id,
-                tb.last_px,
                 sum(case when tb.trade_type = '0' and tb.side = '1' then tb.last_qty else 0 end) as b1,
                 sum(case
                         when tb.trade_type = '0' and tb.side = '2' then tb.last_qty
@@ -1889,8 +1887,7 @@ begin
          where true
            and omt.trade_id is null
          group by tb.date_id,
-                  tb.instrument_id,
-                  tb.last_px)
+                  tb.instrument_id)
        , all_matched as (select nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id,
 --                          case when b1 <> 0 and b1 = b4 then t1 || t4 end as grp14,
 --                          case when b2 <> 0 and b2 = b3 then t2 || t3 end as grp23,
@@ -1908,15 +1905,18 @@ begin
                            'O')
     into l_step_id;
 
+
     return jsonb_build_object('date_id', in_date_id,
-                              'bundle groupped', l_bundle_cnt, 'row_by_row groupped', l_row_by_row_cnt,
+                              'bundle groupped', l_bundle_cnt,
+                              'row_by_row groupped', l_row_by_row_cnt,
                               'total notional groupped', l_notional_cnt,
                               'total notional with non zero tolerance', l_notional_tolerance_cnt,
                               'account groupping', l_account_cnt,
+                              'account groupping with non zero tolerance', l_account_tolerance_cnt,
                               'count to match', l_start_cnt,
                               'unmatched', l_start_cnt -
                                            (l_bundle_cnt + l_row_by_row_cnt + l_notional_cnt +
-                                            l_notional_tolerance_cnt + l_account_cnt));
+                                            l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt));
 end;
 $function$
 ;
