@@ -92,13 +92,14 @@ begin
                    oc.maturity_day,
                    oc.strike_price,
                    case
+                       when alin.is_deleted = 'Y' then 'B' -- Busted
                        when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
                        when or_ai.alloc_instr_ids && l_alloc_instr_id_reported
                            then 'U' -- 'unable to report - alloc_instr_id has been reported before'
                        else 'R' end as to_report
             from genesis2.allocation_instruction_entry ae
                      join genesis2.allocation_instruction alin
-                          on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+                          on alin.alloc_instr_id = ae.alloc_instr_id -- and alin.is_deleted <> 'Y'
                      left join lateral (select alloc_instr_ids
                                         from staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id,
                                                                                      alin.date_id) as x(alloc_instr_ids)
@@ -163,6 +164,7 @@ begin
         select array_to_string(ARRAY [
                                    'DAS' , ----Branch
                                    CASE
+                                       WHEN gen.to_report = 'B' then 'X' -- Busted
                                        WHEN gen.side = '1' THEN 'B'
                                        WHEN gen.side in ('2', '5', '6') THEN 'S'
                                        ELSE 'S'
@@ -182,7 +184,7 @@ begin
                                    'DASH' , ----Execution Venue
 --		street_account_name ||','||--Client Identifier
                                    gen.occ_actionable_id , ----Client Identifier
-                                   to_char(row_number() OVER (), 'FM0000') , --
+                                   to_char(row_number() OVER () , 'FM0000') , --
                                    to_char(((CASE coalesce(gen.min_tick_increment, 0.01)
                                                  WHEN 0.01 THEN gen.opt_penny_commission
                                                  WHEN 0.05 THEN gen.opt_nickel_commission END) * gen.alloc_qty),
@@ -218,7 +220,9 @@ begin
                    l_load_id, 'A'
         from dash_reporting.bofa_allocation_report gen
         where dataset = l_load_id
-          and to_report in ('R', 'U');
+          and to_report in ('R', 'U')
+    order by case to_report when 'B' then 1 when 'R' then 2 when 'U' then 3 end;
+
     get diagnostics l_start_row = row_count;
     return query
         select report_row as ret_row

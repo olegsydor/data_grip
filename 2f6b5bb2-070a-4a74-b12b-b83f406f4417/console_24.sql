@@ -623,3 +623,6 @@ select s1.id as s1_id, s2.id as s2_id, s1.qty
 from s1
 join s2 using (qty, rn)
 order by s1_id;
+
+select *, row_number()  where id > 3 over ()
+from training.sums s1
