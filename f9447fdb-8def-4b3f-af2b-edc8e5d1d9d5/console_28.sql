@@ -1626,7 +1626,7 @@ begin
                            left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
                   where true
                     and omt.trade_id is null
-                    and tb.trade_type = '0'
+                    and tb.trade_type in ('0', '3')
                   group by tb.date_id, tb.instrument_id, tb.side, tb.account_id, tb.trade_type)
        , grp as (select base.trades || tf.trade_id                             as trades,
                         nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
@@ -1642,7 +1642,8 @@ begin
                                           and tf.pg_db_create_time >= base.pg_db_create_time
                                           and tf.account_id is not distinct from base.account_id
                                         limit 1
-                     ) tf on true)
+                     ) tf on true
+                 where base.trade_type = '0')
     select unnest(trades),
            in_date_id,
            match_id,

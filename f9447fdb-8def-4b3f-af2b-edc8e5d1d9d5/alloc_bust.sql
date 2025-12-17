@@ -1,5 +1,6 @@
+alter table dash_reporting.bofa_allocation_report add column if not exists allocation_instruction_entry_id int8;
+
 -- DROP FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4);
-select * from allocation_instruction_entry
 CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report_v2(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
@@ -29,7 +30,7 @@ declare
     l_account_ids             int4[];
 
 begin
-    l_msg_text := 'bofa_allocation_report ' ||
+    l_msg_text := 'bofa_allocation_report_v2 ' ||
                   case when in_is_eod then 'EOD ' else 'intraday ' end ||
                   in_start_date_id::text || '-' || in_end_date_id::text ||
                   ' for ' || case when in_exec_broker is null then 'all exec brokers' else in_exec_broker end || ':';
@@ -66,7 +67,8 @@ begin
             (alloc_instr_id, side, avg_px, date_id, open_close, alloc_qty, opt_is_fix_clfirm_processed,
              ftr_cmta, ca_cmta, opt_is_fix_custfirm_processed, opt_customer_firm, opt_customer_or_firm,
              occ_actionable_id, dataset, instrument_id, opt_penny_commission, opt_nickel_commission, root_symbol,
-             min_tick_increment, put_call, maturity_year, maturity_month, maturity_day, strike_price, to_report)
+             min_tick_increment, put_call, maturity_year, maturity_month, maturity_day, strike_price, to_report,
+            allocation_instruction_entry_id)
             select alin.alloc_instr_id,
                    alin.side,
                    alin.avg_px,
@@ -96,7 +98,8 @@ begin
                        when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
                        when or_ai.alloc_instr_ids && l_alloc_instr_id_reported
                            then 'U' -- 'unable to report - alloc_instr_id has been reported before'
-                       else 'R' end as to_report
+                       else 'R' end as to_report,
+                   ae.allocation_instruction_entry_id
             from genesis2.allocation_instruction_entry ae
                      join genesis2.allocation_instruction alin
                           on alin.alloc_instr_id = ae.alloc_instr_id -- and alin.is_deleted <> 'Y'
@@ -184,7 +187,8 @@ begin
                                    'DASH' , ----Execution Venue
 --		street_account_name ||','||--Client Identifier
                                    gen.occ_actionable_id , ----Client Identifier
-                                   to_char(row_number() OVER () , 'FM0000') , --
+--                                    to_char(row_number() OVER () , 'FM0000') , --
+                                   to_char(right(gen.allocation_instruction_entry_id, 7),  'FM0000000') , --
                                    to_char(((CASE coalesce(gen.min_tick_increment, 0.01)
                                                  WHEN 0.01 THEN gen.opt_penny_commission
                                                  WHEN 0.05 THEN gen.opt_nickel_commission END) * gen.alloc_qty),
@@ -217,13 +221,19 @@ begin
                                    null,
                                    null
                                    ], ',', ''),
-                   l_load_id, 'A'
+                   l_load_id,
+                   case to_report when 'B' then 'B' when 'R' then 'A' when 'U' then 'A' end as report_part
         from dash_reporting.bofa_allocation_report gen
         where dataset = l_load_id
-          and to_report in ('R', 'U')
-    order by case to_report when 'B' then 1 when 'R' then 2 when 'U' then 3 end;
+          and to_report in ('R', 'U', 'B');
 
     get diagnostics l_start_row = row_count;
+    return query
+        select report_row as ret_row
+        from staging.bofa_allocation_report_history
+        where dataset = l_load_id
+          and report_part = 'B';
+
     return query
         select report_row as ret_row
         from staging.bofa_allocation_report_history
@@ -415,7 +425,8 @@ begin
                                        'DASH' , ----Execution Venue
 --		ftr.street_account_name ||','||--Client Identifier
                                        '' , ----Client Identifier
-                                       to_char(row_number() OVER () + l_start_row, 'FM0000') , --
+--                                        to_char(row_number() OVER () + l_start_row, 'FM0000') , --
+                                       '0000000', -- zeros for trades
                                        to_char(((CASE coalesce(OS.MIN_TICK_INCREMENT, 0.01)
                                                      WHEN 0.01 THEN ftr.OPT_PENNY_COMMISSION
                                                      WHEN 0.05 THEN ftr.OPT_NICKEL_COMMISSION END) * ftr.day_cum_qty),
@@ -471,7 +482,10 @@ begin
 end;
 $function$
 ;
-
-COMMENT ON FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4) IS 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
+/* think about the comment
+COMMENT ON FUNCTION dash360.bofa_allocation_report_v2(int4, int4, text, bool, _int4) IS 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
+*/
+
+select right('1234567890', 7)
