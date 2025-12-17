@@ -314,4 +314,4 @@ ORDER BY query_start desc;
 
 SELECT pg_cancel_backend(2921190)
 
-2973438
+select * from pg_stat_progress_analyze

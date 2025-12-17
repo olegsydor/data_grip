@@ -1,5 +1,5 @@
 -- DROP FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4);
-
+select * from allocation_instruction_entry
 CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report_v2(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
