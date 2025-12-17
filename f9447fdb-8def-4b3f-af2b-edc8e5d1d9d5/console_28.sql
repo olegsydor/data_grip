@@ -1921,3 +1921,6 @@ begin
 end;
 $function$
 ;
+
+
+COMMENT ON COLUMN occ_data.occ_matched_trade_record.matching_type IS 'type of matching: 1- Account notional, 2 - Account notional with non zero tolerance, 3 - Total notional, 4 - Total notional with non zero tolerance, 5 - Row-by_row 6 - Bundles, ';
