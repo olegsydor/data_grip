@@ -60,12 +60,17 @@ select cbe.exchange_transaction_id,
            cbe.torders_id,
            cbe.secondary_exch_exec_id,
            cbe.date_id,
-           cbe.venue_exec_id
+           cbe.venue_exec_id,
+           bcl.parentid
            from compliance.blaze_execution cbe
+left join lateral (select parentid from trash.so_liquidpoint_edw_treports lp where true and lp.id = cbe.treports_id limit 1) bcl on true
     where true
-      and cbe.date_id = 20251010
+      and cbe.date_id between l_start_date_id and l_end_date_id
       and (exchange_transaction_id is not null
         or treports_id is not null);
+   get diagnostics l_row_cnt = row_count;
+       select public.load_log(l_load_id, l_step_id, 'Temp table t_execution created', l_row_cnt, 'O')
+   into l_step_id;
 
 
 
@@ -75,33 +80,55 @@ select cbe.exchange_transaction_id,
 
    l_trading_firm_ids := case when p_trading_firm_ids = '{}' then ARRAY['isigroup'] else p_trading_firm_ids end;
 
+   select array_agg(account_id)
+        into l_account_ids
+        from dwh.d_account
+        where true
+          and trading_firm_id = ANY (p_trading_firm_ids);
+
+    select public.load_log(l_load_id, l_step_id, left(' trading_firm_ids = '||l_trading_firm_ids::varchar, 200), 0, 'O')
+   into l_step_id;
+    select public.load_log(l_load_id, l_step_id, ' Period: l_start_date_id = '||l_start_date_id::varchar||', l_end_date_id = '||l_end_date_id::varchar, 0, 'O')
+   into l_step_id;
+
+     DROP TABLE IF EXISTS tmp_606_isi_bill_changes;
 
        create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
 --ON COMMIT drop
 as
-        select par.*, str.*
+        select to_char(tr.trade_record_time, 'YYYY-MM-DD') as date_
+          , tr.order_id
+          , coalesce(str.treports_id,  tr.trade_record_id::text) as report_id
+--          , tr.exch_exec_id as tag_17
+          , coalesce(par.venue_exec_id, tr.exch_exec_id, par.exchange_transaction_id)     as tag_17
+--          , tr.secondary_exch_exec_id as street_tag_17
+          --
+          , to_char(tr.order_process_time, 'YYYYMMDD')::integer as order_date_id
+--          , jo.fix_message ->> '143' as t_143
+          , tr.ex_destination,
+          str.treports_id
         from dwh.flat_trade_record tr
-         left join lateral (select *
+         left join lateral (select venue_exec_id, exchange_transaction_id, treports_id
                                 from t_execution cbe -- compliance.blaze_execution cbe
                                 where cbe.client_order_id = tr.client_order_id
                                   and cbe.secondary_exch_exec_id = tr.secondary_exch_exec_id
                                   and cbe.date_id = tr.date_id
-                                  and cbe.date_id = 20251010
+                                  and cbe.date_id between l_start_date_id and l_end_date_id
                                 limit 1) par on true
                           left  join  lateral  (
-                select  *
+                select  treports_id, systemorderid  --order_id,  report_id,  client_order_id,  torders_id,  exchange_transaction_id
                 from  t_execution  cbe  --compliance.blaze_execution  cbe
                 where  cbe.client_order_id  =  tr.client_order_id
                     and  cbe.exchange_transaction_id  =  par.exchange_transaction_id
                     and  cbe.date_id  =  tr.date_id
-                    and  cbe.date_id = 20251010
+                    and  cbe.date_id  between  l_start_date_id  and l_end_date_id
                 )  str  on  true
           left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
-        where tr.date_id = 20251010
-          and tr.account_id = any('{70108,68232,68233,68234,68235,68236,69981,70029,70094,70095,70096,70097,70098,70099,70100,70101,70102,70103,70104,70105,70106,70107,70109,70110,70111,70112,70113,70524,70525,70526,70527,70528,70529,70530,70531,70532,70600,70601,70602,71611,73537,73627,73658,73659,73681,74532,75566,75605,68405,68406,74964,68212,73660}')
+        where tr.date_id between l_start_date_id and p_end_date_id
+          and tr.account_id = any(l_account_ids)
           and tr.is_busted = 'N'
           and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') <> 'DASH-CBOE') -- DEVREQ-4314 Exclude any execution on orders routed to non-DASH DASHOMS orders.
-and tr.order_id = 100000023187974943
+        ;
 
 analyze tmp_606_isi_bill_changes;
    -- execute 'DROP TABLE IF EXISTS trash.sdn_tmp_606_isi_bill_changes;';
