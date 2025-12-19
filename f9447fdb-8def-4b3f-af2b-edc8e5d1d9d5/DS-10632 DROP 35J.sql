@@ -999,3 +999,51 @@ $function$
 ;
 
 
+-- DROP FUNCTION dash360.dark_visualizer_exch_leaves_qty(int8, int4);
+
+CREATE OR REPLACE FUNCTION dash360.dark_visualizer_exch_leaves_qty(in_parent_order_id bigint, in_date_id integer DEFAULT get_dateid(CURRENT_DATE))
+    RETURNS TABLE
+            (
+                execution_time             timestamp without time zone,
+                exchange_id                character varying,
+                strtg_decision_reason_code smallint,
+                leaves_qty                 bigint
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    # variable_conflict use_column
+begin
+    RETURN QUERY
+        with exec_times as (select distinct date_trunc('second', exec_time) as exec_time
+                            from execution
+                            where exec_date_id = in_date_id
+                              and order_id in (select order_id
+                                               from client_order
+                                               where create_date_id = in_date_id
+                                                 and parent_order_id = in_parent_order_id)
+                              and order_status not in ('A', 'b', 's'))
+        select exec_time, exchange_id, strtg_decision_reason_code, sum(leaves_qty)::int8
+        from (select exec_times.exec_time,
+                     str.strtg_decision_reason_code,
+                     coalesce(e.real_exchange_id, first_value(real_exchange_id)
+                                                  over (partition by ex.order_id order by exec_id)) as              exchange_id,
+                     leaves_qty,
+                     row_number()
+                     over (partition by exec_times.exec_time, ex.order_id order by ex.exec_time desc, exec_id desc) rn--, *
+              from execution ex
+                       inner join exec_times on (ex.exec_time <= exec_times.exec_time)
+                       inner join client_order str
+                                  on (ex.order_id = str.order_id and ex.exec_date_id = str.create_date_id)
+                       left join dwh.d_exchange e on ex.exchange_id = e.exchange_id and e.is_active
+              where exec_date_id = in_date_id
+--				and order_id in (select order_id from client_order where create_date_id = in_date_id and parent_order_id = in_parent_order_id)
+                and parent_order_id = in_parent_order_id
+                and order_status not in ('A', 'b', 's', '6')) bins
+        where bins.rn = 1
+        group by exec_time, exchange_id, strtg_decision_reason_code;
+
+end;
+$function$
+;
