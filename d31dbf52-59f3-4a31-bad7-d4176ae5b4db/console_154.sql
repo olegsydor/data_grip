@@ -160,3 +160,150 @@ end;
 $function$
 ;
 
+---------------------------------------------------------------------------------------
+
+
+
+-- DROP FUNCTION trash.report_isi_bill_changes_monthly_2(int4, int4, _varchar);
+
+create or replace function dash360.report_isi_bill_changes_monthly(p_start_date_id integer default null::integer,
+                                                                   p_end_date_id integer default null::integer,
+                                                                   p_trading_firm_ids character varying[] default '{}'::character varying[])
+    returns table
+            (
+                export_row text
+            )
+    language plpgsql
+as
+$function$
+declare
+    l_row_cnt          integer;
+    l_start_date_id    integer;
+    l_end_date_id      integer;
+    l_trading_firm_ids character varying[];
+    l_load_id          integer;
+    l_step_id          integer;
+    l_account_ids      integer[];
+
+begin
+    -- https://dashfinancial.atlassian.net/browse/DEVREQ-2469
+
+    -- 2024-05-21 DS DEVREQ-4314 Exclude BLAZE/DASH OMS routes on "Billing ExecutionID to Tag17 cross reference"
+    -- 2025-12-19 OS DEVREQ-7149
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly STARTED===', 0, 'O')
+    into l_step_id;
+
+    if p_start_date_id is not null and p_end_date_id is not null
+    then
+        l_start_date_id := p_start_date_id;
+        l_end_date_id := p_end_date_id;
+    else
+        l_start_date_id := (to_char(date_trunc(NOW() - interval '1 month'), 'YYYYMMDD'))::integer;
+        l_end_date_id := (to_char(date_trunc(NOW()) - interval '1 day', 'YYYYMMDD'))::integer;
+
+    end if;
+
+    select public.load_log(l_load_id, l_step_id, 'Temp table t_blaze_client_order created', l_row_cnt, 'O')
+    into l_step_id;
+
+    drop table if exists t_execution;
+    create temp table t_execution as
+    select cbe.exchange_transaction_id,
+           cbe.treports_id,
+           cbe.order_id,
+           cbe.report_id,
+           cbe.client_order_id,
+           cbe.torders_id,
+           cbe.secondary_exch_exec_id,
+           cbe.date_id,
+           cbe.venue_exec_id,
+           cbe.parent_id,
+           cbe.child_report_id
+    from compliance.blaze_execution cbe
+    where true
+      and cbe.date_id between l_start_date_id and l_end_date_id
+      and (exchange_transaction_id is not null
+        or treports_id is not null);
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'Temp table t_execution created', l_row_cnt, 'O')
+    into l_step_id;
+
+    create index on t_execution (date_id);
+    create index on t_execution (client_order_id, secondary_exch_exec_id);
+    create index on t_execution (client_order_id, exchange_transaction_id);
+
+    l_trading_firm_ids := case when p_trading_firm_ids = '{}' then ARRAY ['isigroup'] else p_trading_firm_ids end;
+
+    select array_agg(account_id)
+    into l_account_ids
+    from dwh.d_account
+    where true
+      and trading_firm_id = ANY (p_trading_firm_ids);
+
+    select public.load_log(l_load_id, l_step_id, left(' trading_firm_ids = ' || l_trading_firm_ids::varchar, 200), 0,
+                           'O')
+    into l_step_id;
+    select public.load_log(l_load_id, l_step_id,
+                           ' Period: l_start_date_id = ' || l_start_date_id::varchar || ', l_end_date_id = ' ||
+                           l_end_date_id::varchar, 0, 'O')
+    into l_step_id;
+
+    DROP TABLE IF EXISTS tmp_606_isi_bill_changes;
+
+    create temp table tmp_606_isi_bill_changes with (parallel_workers = 4)
+--ON COMMIT drop
+    as
+    select to_char(tr.trade_record_time, 'YYYY-MM-DD')                               as date_id
+         , tr.order_id
+         , coalesce(str.treports_id, tr.trade_record_id)                             as report_id
+         , coalesce(par.venue_exec_id, tr.exch_exec_id, par.exchange_transaction_id) as tag_17
+         , to_char(tr.order_process_time, 'YYYYMMDD')::integer                       as order_date_id
+         , tr.ex_destination
+         , str.treports_id
+    from dwh.flat_trade_record tr
+             left join lateral (select venue_exec_id, exchange_transaction_id, child_report_id, order_id
+                                from t_execution par
+                                where par.client_order_id = tr.client_order_id
+                                  and par.secondary_exch_exec_id = tr.secondary_exch_exec_id
+                                limit 1) par on true
+             left join lateral (select treports_id
+                                from t_execution str
+                                where true
+                                  and str.report_id = par.child_report_id
+                                  and str.parent_id = par.order_id ) str on true
+             left join fix_capture.fix_message_json jo on tr.order_fix_message_id = jo.fix_message_id and
+                                                          jo.date_id = to_char(tr.order_process_time, 'YYYYMMDD')::integer
+    where tr.date_id between l_start_date_id and p_end_date_id
+      and tr.account_id = any (l_account_ids)
+      and tr.is_busted = 'N'
+      and not (tr.ex_destination = 'BRKPT' and coalesce(jo.fix_message ->> '143', '-1') <>
+                                               'DASH-CBOE') -- DEVREQ-4314 Exclude any execution on orders routed to non-DASH DASHOMS orders.
+    ;
+
+    analyze tmp_606_isi_bill_changes;
+
+    return query
+        select 'DATE,ORDERID,REPORTID,TAG17' as roe;
+
+    return query
+        select array_to_string(ARRAY [
+                                   s.date_id::varchar,
+                                   s.order_id::varchar,
+                                   s.report_id::varchar,
+                                   s.tag_17::varchar
+                                   ], ',', '')
+        from tmp_606_isi_bill_changes s
+        order by date_id, order_id, report_id;
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, 'dash360.report_isi_bill_changes_monthly COMPLETE===',
+                           coalesce(l_row_cnt, 0), 'O')
+    into l_step_id;
+
+end;
+$function$
+;
