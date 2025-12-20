@@ -625,4 +625,27 @@ join s2 using (qty, rn)
 order by s1_id;
 
 select *, row_number()  where id > 3 over ()
-from training.sums s1
+from training.sums s1;
+
+create table training.plan_usage_summary
+(
+    id                 int4,        -- primary key
+    imd_id             int4,        -- The ID of the Integrated Medical Database
+    total_trx_per_plan numeric,     -- Total number of transactions for the plan
+    plan_name          varchar(255) -- Name of the medical plan. "0" means no specific plan
+);
+insert into training.plan_usage_summary(id, imd_id, total_trx_per_plan, plan_name)
+values (1, 1111005, 79, 'Medicaid Illinois (Idpa)'),
+       (2, 1111531, 100, 'Medicaid Al'),
+       (3, 1111005, 100, 'Medicaid Al'),
+       (4, 1111005, 5, 'Tricare North Region'),
+       (5, 1111005, 1, 'Other'),
+       (6, 1111531, 100, 'Bcbs Federal'),
+       (7, 1111531, 100, 'Self Pay');
+
+select distinct on (imd_id)
+    imd_id, *
+    from training.plan_usage_summary
+
+
+
