@@ -631,7 +631,7 @@ create table training.plan_usage_summary
 (
     id                 int4,        -- primary key
     imd_id             int4,        -- The ID of the Integrated Medical Database
-    total_trx_per_plan numeric,     -- Total number of transactions for the plan
+    total_trx_per_plan float,     -- Total number of transactions for the plan
     plan_name          varchar(255) -- Name of the medical plan. "0" means no specific plan
 );
 insert into training.plan_usage_summary(id, imd_id, total_trx_per_plan, plan_name)
@@ -643,9 +643,85 @@ values (1, 1111005, 79, 'Medicaid Illinois (Idpa)'),
        (6, 1111531, 100, 'Bcbs Federal'),
        (7, 1111531, 100, 'Self Pay');
 
-select distinct on (imd_id)
-    imd_id, *
-    from training.plan_usage_summary
+
+select * from training.plan_usage_summary;
+
+set search_path = 'training';
 
 
+with base as (select imd_id,
+                     pin.plan_name,
+                     pin.total_trx_per_plan::numeric /
+                     sum(pin.total_trx_per_plan::numeric) over (partition by pin.imd_id) as perc_sharp
+              from plan_usage_summary pin)
+    , nxt as (
+   select imd_id
+                  , plan_name
+                  , round(perc_sharp, 2)                                              as perc
+                  , row_number() over (partition by imd_id order by perc_sharp desc ) as rn
+             from base
+             where plan_name <> '0')
+select nxt.imd_id                                       as imd_id,
+       max(case when nxt.rn = 1 then nxt.plan_name end) as top_first_plan,
+       max(case when nxt.rn = 1 then nxt.perc end)      as top_first,
+       max(case when nxt.rn = 2 then nxt.plan_name end) as top_second_plan,
+       max(case when nxt.rn = 2 then nxt.perc end)      as top_second,
+       max(case when nxt.rn = 3 then nxt.plan_name end) as top_third_plan,
+       max(case when nxt.rn = 3 then nxt.perc end)      as top_third
+from nxt
+group by nxt.imd_id
+order by 1
+;
 
+with t as (
+  select imd_id,
+    array_agg(plan_name order by total_trx_per_plan desc) filter (where plan_name <> '0') as names,
+    array_agg(total_trx_per_plan order by total_trx_per_plan desc) filter (where plan_name <> '0') as ns_trx,
+    sum(total_trx_per_plan) as n_trx_total
+  from plan_usage_summary
+  group by imd_id
+)
+select imd_id,
+  names[1] as top_first_plan, round(ns_trx[1]::numeric / n_trx_total::numeric, 2) as top_first,
+  names[2] as top_second_plan, round(ns_trx[2]::numeric / n_trx_total::numeric, 2) as top_second,
+  names[3] as top_third_plan, round(ns_trx[3]::numeric / n_trx_total::numeric, 2) as top_third
+from t
+order by imd_id;
+
+select 7 %
+
+create or replace function training.is_prime(in_numb int4)
+    returns boolean
+    language plpgsql
+as
+$$
+declare
+    sq int4 := sqrt(in_numb)::int4;
+    x  record;
+begin
+    if in_numb < 4 then
+        return true;
+    end if;
+
+    if in_numb % 6 in (2, 3, 4, 6) then
+        return false;
+    end if;
+
+    for x in (select * from generate_series(2, sq) as each)
+        loop
+            if in_numb % x.each = 0 then
+                return false;
+            end if;
+        end loop;
+    return true;
+end;
+$$;
+
+create temp table t_os as
+with al as (select nmb
+            from generate_series(1, 100000) as nmb)
+select nmb, is_prime(nmb), sqrt(nmb)::int4
+from al;
+
+select * from t_os
+where is_prime
