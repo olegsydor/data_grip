@@ -766,7 +766,38 @@ from customer cu
     join rental re on re.customer_id = cu.customer_id
 join payment pa on pa.rental_id = re.rental_id
 where true
-     and cu.customer_id % 2 > 0
+     and split_sum(cu.customer_id::text) % 2 > 0
 group by cu.customer_id, cu.first_name, cu.last_name
 having training.is_prime(count(distinct re.rental_id)::int)
 order by 4 desc, 3 desc, cu.last_name;
+
+select regexp_split_to_array('1234','');
+
+create or replace function split_sum(in_text text)
+    returns int
+    language sql
+as
+$$
+select sum(x::int)
+from regexp_split_to_table(in_text, '') as x;
+$$;
+
+select split_sum(10023::text);
+
+select c.customer_id,
+       first_name || ' ' || last_name as customer_name,
+       count(distinct rental_id)      as all_rentals,
+       round(sum(amount), 2)::numeric as total_payments
+from customer c
+         join rental using (customer_id)
+         join payment using (rental_id)
+group by c.customer_id, first_name, last_name
+having mod((select sum(d::int) from regexp_split_to_table(c.customer_id::text, '') d), 2) = 0
+   and not exists (select 1
+                   from generate_series(2, sqrt(count(distinct rental_id))::int) d
+                   where mod(count(distinct rental_id), d) = 0)
+order by total_payments desc, all_rentals desc, last_name;
+
+
+select mod((select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d), 2)
+select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d
