@@ -1928,24 +1928,26 @@ COMMENT ON COLUMN occ_data.occ_matched_trade_record.matching_type IS 'type of ma
 
 -- DROP FUNCTION occ_data.matching_occ_trade_transfer_v3(int4, bool);
 
-CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, is_rematch boolean DEFAULT false)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                   is_rematch boolean DEFAULT false)
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS
+$function$
     -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
     -- SO 20251209 https://dashfinancial.atlassian.net/browse/DS-10830
     -- SO 20251216 the second version of the script with the different order of matching
     -- SO 20251221 the third version of the script with the different order of matching
 declare
-    l_load_id                int;
-    l_step_id                int;
-    l_bundle_cnt             int4 := 0;
-    l_row_by_row_cnt         int4 := 0;
-    l_notional_cnt           int4 := 0;
-    l_notional_tolerance_cnt int4 := 0;
-    l_account_cnt            int4 := 0;
-    l_account_tolerance_cnt  int4 := 0;
-    l_start_cnt              int4 := 0;
+    l_load_id                 int;
+    l_step_id                 int;
+    l_account_many_to_one_cnt int4 := 0;
+    l_row_by_row_cnt          int4 := 0;
+    l_notional_cnt            int4 := 0;
+    l_notional_tolerance_cnt  int4 := 0;
+    l_account_cnt             int4 := 0;
+    l_account_tolerance_cnt   int4 := 0;
+    l_start_cnt               int4 := 0;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -2050,6 +2052,60 @@ begin
     into l_step_id;
 
 
+    -- Account (many to one):
+-- bundle of OCC trades related to one Account vs one transfer on the same qty and almost the same notional value (the tolerance level is 0.01%)
+
+    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
+                                                   matching_type)
+    with trd as (select tb.date_id                    as date_id,
+                        tb.instrument_id              as instrument_id,
+                        array_agg(tb.trade_id)        as trades,
+                        sum(tb.last_qty)              as sum_qty,
+                        sum(tb.last_qty * tb.last_px) as sum_px,
+                        tb.side                       as side,
+                        tb.account_id                 as account_id,
+                        max(tb.pg_db_create_time)     as pg_db_create_time,
+                        tb.trade_type
+                 from t_base tb
+                          left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+                 where true
+                   and omt.trade_id is null
+                   and tb.trade_type = '0'
+                 group by tb.date_id, tb.instrument_id, tb.side, tb.account_id, tb.trade_type)
+       , grp as (select trd.trades || tf.trade_id                              as trades,
+                        nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
+                 from trd
+                          join lateral (select tf.trade_id
+                                        from t_base tf
+                                                 left join occ_data.occ_matched_trade_record omt on omt.trade_id = tf.trade_id
+                                        where true
+                                          and omt.trade_id is null
+                                          and tf.instrument_id = trd.instrument_id
+                                          and tf.trade_type = '3'
+                                          and tf.side <> trd.side
+                                          and abs(tf.last_qty - trd.sum_qty) ::numeric / trd.sum_qty < 0.0001
+                                          and tf.last_px = trd.sum_px
+                                          and tf.pg_db_create_time >= trd.pg_db_create_time
+                                          and tf.account_id is not distinct from trd.account_id
+                                        limit 1
+                     ) tf on true
+                 where trd.trade_type = '0')
+    select unnest(trades),
+           in_date_id,
+           match_id,
+           l_load_id,
+           '2'
+    from grp;
+    get diagnostics l_account_many_to_one_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'matching_occ_trade_transfer for ' || in_date_id::text ||
+                           ' account many_to_one completed',
+                           l_account_many_to_one_cnt,
+                           'O')
+    into l_step_id;
+
+
 --     Match OTrades grouped by Account with one OTransfer (on the same notional value) with non zero tolerance:
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
@@ -2088,7 +2144,7 @@ begin
            in_date_id,
            match_id,
            l_load_id,
-           '2'
+           '3'
     from grp;
     get diagnostics l_account_tolerance_cnt = row_count;
 
@@ -2140,7 +2196,7 @@ begin
            in_date_id,
            match_id,
            l_load_id,
-           '3'
+           '4'
     from trd_grp;
     get diagnostics l_notional_cnt = row_count;
 
@@ -2175,7 +2231,7 @@ begin
            in_date_id,
            match_id,
            l_load_id,
-           '4'
+           '5'
     from trd_grp;
     get diagnostics l_notional_tolerance_cnt = row_count;
 
@@ -2194,8 +2250,8 @@ begin
      and the same last_qty: one-by-one
      */
 
-    drop table if exists t_second;
-    create temp table t_second as
+    drop table if exists t_row_by_row;
+    create temp table t_row_by_row as
     select tb.trade_id,
            tb.date_id,
            tb.instrument_id,
@@ -2208,16 +2264,16 @@ begin
     from t_base tb
              left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
     where omt.trade_id is null;
-    create index on t_second (date_id, trade_type, instrument_id, last_px, side, rn);
+    create index on t_row_by_row (date_id, trade_type, instrument_id, last_px, side, rn);
 
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
     with pre as (select array [b1.trade_id, b4.trade_id]                       as trades,
                         nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
-                 from t_second b1
+                 from t_row_by_row b1
                           join lateral (
                      select b4.trade_id
-                     from t_second b4
+                     from t_row_by_row b4
                      where true
                        and b4.date_id = b1.date_id
                        and b4.instrument_id = b1.instrument_id
@@ -2233,7 +2289,7 @@ begin
            in_date_id,
            match_id,
            l_load_id,
-           '5'
+           '6'
     from pre;
 
     get diagnostics l_row_by_row_cnt = row_count;
@@ -2244,71 +2300,19 @@ begin
                            'O')
     into l_step_id;
 
-
-    -- 2. bundle groupping
-    /*
-     groupping by date_id, instrument_id and last_px depending on trade_type and side into 4 groups
-     all trades inside the groups get occ_transfer_to_trade_match_id if the groups 1 and 4 or 2 and 3 have the same qty (> 0)
-     */
-    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
-                                                   matching_type)
-    with first_try as
-        (select tb.date_id,
-                tb.instrument_id,
-                sum(case when tb.trade_type = '0' and tb.side = '1' then tb.last_qty else 0 end) as b1,
-                sum(case
-                        when tb.trade_type = '0' and tb.side = '2' then tb.last_qty
-                        else 0 end)                                                              as b2,
-                sum(case
-                        when tb.trade_type = '3' and tb.side = '1' then tb.last_qty
-                        else 0 end)                                                              as b3,
-                sum(case
-                        when tb.trade_type = '3' and tb.side = '2' then tb.last_qty
-                        else 0 end)                                                              as b4,
-                array_remove(array_agg(case when tb.trade_type = '0' and tb.side = '1' then tb.trade_id end),
-                             null)                                                               as t1,
-                array_remove(array_agg(case when tb.trade_type = '0' and tb.side = '2' then tb.trade_id end),
-                             null)                                                               as t2,
-                array_remove(array_agg(case when tb.trade_type = '3' and tb.side = '1' then tb.trade_id end),
-                             null)                                                               as t3,
-                array_remove(array_agg(case when tb.trade_type = '3' and tb.side = '2' then tb.trade_id end),
-                             null)                                                               as t4
-         from t_base tb
-                  left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
-         where true
-           and omt.trade_id is null
-         group by tb.date_id,
-                  tb.instrument_id)
-       , all_matched as (select nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id,
---                          case when b1 <> 0 and b1 = b4 then t1 || t4 end as grp14,
---                          case when b2 <> 0 and b2 = b3 then t2 || t3 end as grp23,
-                                t1 || t4 || t2 || t3                                   as all_trades
-                         from first_try
-                         where true
-                           and ((b1 > 0 and b1 = b4) or (b2 > 0 and b2 = b3)))
-    select unnest(all_trades), in_date_id, match_id, l_load_id,
-           '6'
-    from all_matched;
-    get diagnostics l_bundle_cnt = row_count;
-
-    select public.load_log(l_load_id, l_step_id,
-                           'matching_occ_trade_transfer for ' || in_date_id::text || ' bundle groupping completed',
-                           l_bundle_cnt,
-                           'O')
-    into l_step_id;
-
-
     return jsonb_build_object('date_id', in_date_id,
-                              'bundle groupped', l_bundle_cnt,
+                              'account many-to-one groupped', l_account_many_to_one_cnt,
                               'row_by_row groupped', l_row_by_row_cnt,
                               'total notional groupped', l_notional_cnt,
                               'total notional with non zero tolerance', l_notional_tolerance_cnt,
                               'account groupping', l_account_cnt,
                               'account groupping with non zero tolerance', l_account_tolerance_cnt,
                               'count to match', l_start_cnt,
-                              'unmatched', l_start_cnt -
-                                           (l_bundle_cnt + l_row_by_row_cnt + l_notional_cnt +
-                                            l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt));
+                              'unmatched', 0
+                              l_start_cnt -
+                              (l_account_many_to_one_cnt + l_row_by_row_cnt + l_notional_cnt +
+                               l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt)
+           );
 end;
 $function$
 ;

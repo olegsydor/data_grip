@@ -609,10 +609,13 @@ from training.sums s1
           join lateral (select * from training.sums s2 where s2.qty = s1.qty and s2.side = 2 limit 1) s2 on true
 where s1.side = 1;
 
+alter table training.sums add column db_create_time timestamp
+
 with s1 as (
     select *, row_number() over (partition by qty order by id) as rn
     from training.sums
     where side = 1
+
 ),
 s2 as (
     select *, row_number() over (partition by qty order by id) as rn
@@ -800,4 +803,6 @@ order by total_payments desc, all_rentals desc, last_name;
 
 
 select mod((select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d), 2)
-select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d
+select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d;
+
+
