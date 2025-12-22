@@ -696,17 +696,22 @@ create or replace function training.is_prime(in_numb int4)
 as
 $$
 declare
-    sq int4 := sqrt(in_numb)::int4;
+    sq int4;
     x  record;
 begin
     if in_numb < 4 then
         return true;
     end if;
 
+    if right(in_numb::text, 1) in ('0', '2', '4', '6', '8') then
+        return false;
+    end if;
+
     if in_numb % 6 in (2, 3, 4, 6) then
         return false;
     end if;
 
+    sq:= sqrt(in_numb)::int4;
     for x in (select * from generate_series(2, sq) as each)
         loop
             if in_numb % x.each = 0 then
@@ -719,7 +724,7 @@ $$;
 
 create temp table t_os as
 with al as (select nmb
-            from generate_series(1, 100000) as nmb)
+            from generate_series(1, 1000000) as nmb)
 select nmb, is_prime(nmb), sqrt(nmb)::int4
 from al;
 
