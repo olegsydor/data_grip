@@ -703,9 +703,9 @@ begin
         return true;
     end if;
 
---     if right(in_numb::text, 1) in ('0', '2', '4', '6', '8') then
---         return false;
---     end if;
+    if right(in_numb::text, 1) in ('0', '2', '4', '6', '8') then
+        return false;
+    end if;
 
     if in_numb % 6 in (2, 3, 4, 6) then
         return false;
@@ -759,4 +759,14 @@ create table training.payment
 );
 select * from training.payment;
 
-select cu.customer_id, concat_ws(' ', first_name, last_name) from customer cu
+select cu.customer_id, concat_ws(' ', cu.first_name, cu.last_name) as customer_name,
+count(distinct re.rental_id) as all_rentals,
+sum(pa.amount) as total_payments
+from customer cu
+    join rental re on re.customer_id = cu.customer_id
+join payment pa on pa.rental_id = re.rental_id
+where true
+     and cu.customer_id % 2 > 0
+group by cu.customer_id, cu.first_name, cu.last_name
+having training.is_prime(count(distinct re.rental_id)::int)
+order by 4 desc, 3 desc, cu.last_name;
