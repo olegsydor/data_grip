@@ -2052,7 +2052,7 @@ begin
     into l_step_id;
 
 
-    -- Account (many to one):
+    -- 2. Account (many to one):
 -- bundle of OCC trades related to one Account vs one transfer on the same qty and almost the same notional value (the tolerance level is 0.01%)
 
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
@@ -2106,7 +2106,8 @@ begin
     into l_step_id;
 
 
---     Match OTrades grouped by Account with one OTransfer (on the same notional value) with non zero tolerance:
+    -- 3. Account (approx):
+-- bundle of OCC trades related to one Account vs bundle of all OCC transfers on the same qty and almost the same notional value (the tolerance level is 0.01%)
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
     with base as (select tb.date_id                    as date_id,
@@ -2156,7 +2157,8 @@ begin
     into l_step_id;
 
 
---    Match Bundles on the same Total Notional:
+    -- 4. Total Notional (exact):
+-- bundle of OCC trades vs bundle of OCC transfers on the same qty and notional value
     drop table if exists t_third;
     create temp table t_third as
     select tb.date_id                    as date_id,
@@ -2207,7 +2209,8 @@ begin
                            'O')
     into l_step_id;
 
-    --  Notional with not zero tolerance
+    -- 5. Total Notional (approx):
+    -- bundle of OCC trades vs bundle of OCC transfers on the same qty and almost the same notional value (the tolerance level is 0.01%)
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
                                                    matching_type)
     with trd_grp as (select g1.trades || g4.trades                                 as trades,
@@ -2243,12 +2246,8 @@ begin
                            'O')
     into l_step_id;
 
-    -- 3 one-by-one groupping
-    /*
-     It needs to match the trade with specific date_id, instrument_id, last_px and type=0 side=1|2 to the trade
-     with the same date_id, instrument_id, last_px but type=3 and opposite side=2|1
-     and the same last_qty: one-by-one
-     */
+    -- 6. Individual:
+-- bundle of OCC trades vs bundle of OCC transfers on the same qty and notional value
 
     drop table if exists t_row_by_row;
     create temp table t_row_by_row as
@@ -2308,8 +2307,7 @@ begin
                               'account groupping', l_account_cnt,
                               'account groupping with non zero tolerance', l_account_tolerance_cnt,
                               'count to match', l_start_cnt,
-                              'unmatched', 0
-                              l_start_cnt -
+                              'unmatched', l_start_cnt -
                               (l_account_many_to_one_cnt + l_row_by_row_cnt + l_notional_cnt +
                                l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt)
            );
