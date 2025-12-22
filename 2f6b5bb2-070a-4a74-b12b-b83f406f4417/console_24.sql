@@ -703,9 +703,9 @@ begin
         return true;
     end if;
 
-    if right(in_numb::text, 1) in ('0', '2', '4', '6', '8') then
-        return false;
-    end if;
+--     if right(in_numb::text, 1) in ('0', '2', '4', '6', '8') then
+--         return false;
+--     end if;
 
     if in_numb % 6 in (2, 3, 4, 6) then
         return false;
@@ -722,11 +722,41 @@ begin
 end;
 $$;
 
-create temp table t_os as
-with al as (select nmb
-            from generate_series(1, 1000000) as nmb)
-select nmb, is_prime(nmb), sqrt(nmb)::int4
-from al;
+-- create table training.primes as
+insert into training.primes
+    with al as (select nmb
+            from generate_series(5000001, 10000000, 2) as nmb)
+select nmb
+     from al
+        join lateral(select is_prime(nmb) as is_prime) pr on pr.is_prime
+;
+comment on table training.primes is 'aggregated prime numbers';
 
-select * from t_os
-where is_prime
+select max(nmb) from primes
+
+
+create table training.customer
+(
+    customer_id integer not null,
+    first_name  text    not null,
+    last_name   text    not null
+);
+
+select * from training.customer;
+
+create table training.rental
+(
+    rental_id   integer not null,
+    customer_id integer not null
+);
+select * from training.rental
+
+create table training.payment
+(
+    payment_id integer not null,
+    rental_id  integer not null,
+    amount     numeric not null
+);
+select * from training.payment;
+
+select cu.customer_id, concat_ws(' ', first_name, last_name) from customer cu
