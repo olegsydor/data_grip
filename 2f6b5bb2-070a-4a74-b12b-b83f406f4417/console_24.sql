@@ -827,8 +827,8 @@ with base as (select mt.id,
                      mt.side,
                      mt.qty,
                      mt.create_time,
-                     sum(case when side = 1 then mt.qty else -mt.qty end)
-                     over (partition by null order by mt.create_time rows between unbounded preceding and current row ) as sm
+                     case when sum(case when side = 1 then mt.qty else -mt.qty end)
+                     over (partition by null order by mt.create_time rows between unbounded preceding and current row ) < 0 then 'R' end as to_remove
               from training.matching mt)
 select *,
        sum(case when sm > 0 and side = 1 then qty when sm > 0 and side = 2 then -qty else 0 end) over (partition by null order by create_time rows between unbounded preceding and current row) as sm
