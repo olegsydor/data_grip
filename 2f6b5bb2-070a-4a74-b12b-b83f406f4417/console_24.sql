@@ -806,3 +806,30 @@ select mod((select sum(d::int) from regexp_split_to_table(:customer_id::text, ''
 select sum(d::int) from regexp_split_to_table(:customer_id::text, '') d;
 
 
+create table training.matching
+(
+    id          serial,
+    side        int,
+    qty         int,
+    trade_type  int,
+    create_time timestamp
+);
+insert into training.matching (side, qty, trade_type, create_time)
+values (1, 50, 0, '2025-12-23 00:01'),
+       (2, 25, 0, '2025-12-23 00:02'),
+       (1, 10, 0, '2025-12-23 00:03'),
+       (2, 50, 0, '2025-12-23 00:04'),
+       (2, 50, 0, '2025-12-23 00:05'),
+       (2, 30, 0, '2025-12-23 00:06'),
+       (1, 5, 0, '2025-12-23 00:07');
+
+with base as (select mt.id,
+                     mt.side,
+                     mt.qty,
+                     mt.create_time,
+                     sum(case when side = 1 then mt.qty else -mt.qty end)
+                     over (partition by null order by mt.create_time rows between unbounded preceding and current row ) as sm
+              from training.matching mt)
+select *,
+       sum(case when sm > 0 and side = 1 then qty when sm > 0 and side = 2 then -qty else 0 end) over (partition by null order by create_time rows between unbounded preceding and current row) as sm
+from base
