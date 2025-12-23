@@ -38,7 +38,7 @@ begin
                f.tcce_transaction_fee_amount,
                f.tcce_trade_processing_fee_amount,
                f.tcce_royalty_fee_amount,
-               (select max_trade_record_id > f.trade_record_id
+               (select max_trade_record_id >= f.trade_record_id
                 from staging.incrementalbilling
                 where table_name = 'MIRA_to_GENESIS2_inc') as is_exchange_fee_computed
         --                 ,
