@@ -832,4 +832,30 @@ with base as (select mt.id,
               from training.matching mt)
 select *,
        sum(case when sm > 0 and side = 1 then qty when sm > 0 and side = 2 then -qty else 0 end) over (partition by null order by create_time rows between unbounded preceding and current row) as sm
-from base
+from base;
+
+
+do
+$$
+    declare
+        rc record;
+    begin
+drop table if exists t_matching;
+        create temp table t_matching (id1 int4, id2 int4);
+
+for rc in (select *
+
+        from training.matching tm1
+        where side = 1
+        ) loop
+            begin
+                insert into t_matching (id1, id2)
+            select rc.id, tm2.id from training.matching tm2
+                where side = 2
+                a
+            end;
+
+            end loop;
+
+    end;
+$$
