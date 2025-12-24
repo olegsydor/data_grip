@@ -837,25 +837,80 @@ from base;
 
 do
 $$
-    declare
-        rc record;
-    begin
-drop table if exists t_matching;
-        create temp table t_matching (id1 int4, id2 int4);
+declare
+    r           record;
+    l_balance   int := 0;
+begin
+    for r in
+        select *
+        from trash.matching
+        order by create_time
+    loop
+raise notice 'r - %', r;
+        if r.side = 1 then
+            l_balance := l_balance + r.qty;
 
-for rc in (select *
+            insert into trash.matching_accepted
+            values (r.id, r.side, r.qty, r.trade_type, r.create_time);
 
-        from training.matching tm1
-        where side = 1
-        ) loop
-            begin
-                insert into t_matching (id1, id2)
-            select rc.id, tm2.id from training.matching tm2
-                where side = 2
-                a
-            end;
+        elsif r.side = 2 and l_balance >= r.qty then
+            l_balance := l_balance - r.qty;
 
-            end loop;
+            insert into trash.matching_accepted
+            values (r.id, r.side, r.qty, r.trade_type, r.create_time);
+        end if;
+    end loop;
+end;
+$$;
 
-    end;
+
+create or replace function trash.matching_valid_rows()
+returns table
+(
+    id          int,
+    side        int,
+    qty         int,
+    trade_type  int,
+    create_time timestamp,
+    balance     int
+)
+language plpgsql
+as
 $$
+declare
+    r           record;
+    l_balance   int := 0;
+begin
+    for r in
+        select *
+        from trash.matching
+        order by create_time
+    loop
+        if r.side = 1 then
+            l_balance := l_balance + r.qty;
+
+            id := r.id;
+            side := r.side;
+            qty := r.qty;
+            trade_type := r.trade_type;
+            create_time := r.create_time;
+            balance := l_balance;
+            return next;
+
+        elsif r.side = 2 and l_balance >= r.qty then
+            l_balance := l_balance - r.qty;
+
+            id := r.id;
+            side := r.side;
+            qty := r.qty;
+            trade_type := r.trade_type;
+            create_time := r.create_time;
+            balance := l_balance;
+            return next;
+        end if;
+        -- інакше: просто ігноруємо рядок
+    end loop;
+
+    return;
+end;
+$$;
