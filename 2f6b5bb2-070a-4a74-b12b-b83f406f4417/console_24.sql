@@ -914,3 +914,14 @@ begin
     return;
 end;
 $$;
+
+
+set search_path to 'training';
+select * from training.customer;
+select * from training.rental;
+
+select concat_ws(' ', cu.first_name, cu.last_name),
+       re.rental_date::date                                                            as date,
+       lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
+from training.rental re
+         join training.customer cu using (customer_id);
