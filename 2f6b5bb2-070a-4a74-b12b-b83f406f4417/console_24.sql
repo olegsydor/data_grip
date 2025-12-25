@@ -922,6 +922,38 @@ select * from training.rental;
 
 select concat_ws(' ', cu.first_name, cu.last_name),
        re.rental_date::date                                                            as date,
-       lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
+       lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date,
+       case
+           when lead(re.rental_date::date) over (partition by customer_id order by rental_date) - re.rental_date::date =
+                1 then true
+           else false end                                                              as is_conseq
 from training.rental re
          join training.customer cu using (customer_id);
+
+with min_cte as (select customer_id,
+                        min(rental_date)::date as min_date
+                 from rental
+                 group by customer_id)
+select name,
+       coalesce(lag(next_date) over (partition by x.name order by x.date), min_cte.min_date)            as date_rental_occurred,
+       1 + date - coalesce(lag(next_date) over (partition by x.name order by x.date),
+                           min_cte.min_date)                                                            as consecutive_days
+from (select customer_id,
+             concat_ws(' ', cu.first_name, cu.last_name)                                     as name,
+             re.rental_date::date                                                            as date,
+             lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
+      from rental re
+               join customer cu using (customer_id)) x
+         join min_cte using (customer_id)
+where true
+  and ((next_date - date > 1)
+    or (next_date is null));
+
+select coalesce(lag(nxt) over (order by id),
+                (select min(id) from training.sequence_series)),
+       id
+from (select id,
+             lead(id) over (order by id) as nxt
+      from training.sequence_series) x
+where ((nxt - id > 1)
+    or (nxt is null));
