@@ -918,7 +918,28 @@ $$;
 
 set search_path to 'training';
 select * from training.customer;
-select * from training.rental;
+select ctid, * from training.rental;
+
+insert into training.rental (rental_id, customer_id, inventory_id, rental_date)
+values (9, 3, 1, '2025-05-25'),
+       (10, 3, 1, '2025-05-28'),
+       (11, 3, 1, '2025-06-15'),
+       (12, 3, 1, '2025-06-16'),
+       (13, 3, 1, '2025-06-18'),
+       (14, 3, 1, '2025-06-21'),
+       (15, 3, 1, '2025-07-08'),
+       (16, 3, 1, '2025-07-09'),
+       (17, 3, 1, '2025-07-11'),
+       (18, 3, 1, '2025-07-27'),
+       (19, 3, 1, '2025-07-28'),
+       (20, 3, 1, '2025-07-29'),
+       (21, 3, 1, '2025-07-31'),
+       (22, 3, 1, '2025-08-01'),
+       (23, 3, 1, '2025-08-02'),
+       (24, 3, 1, '2025-08-17'),
+       (25, 3, 1, '2025-08-18'),
+       (26, 3, 1, '2025-08-19');
+
 
 select concat_ws(' ', cu.first_name, cu.last_name),
        re.rental_date::date                                                            as date,
@@ -935,15 +956,17 @@ with min_cte as (select customer_id,
                  from rental
                  group by customer_id)
 select name,
-       coalesce(lag(next_date) over (partition by x.name order by x.date), min_cte.min_date)            as date_rental_occurred,
+       coalesce(lag(next_date) over (partition by x.name order by x.date), min_cte.min_date) as date_rental_occurred,
+       date                                                                                  as final_date,
        1 + date - coalesce(lag(next_date) over (partition by x.name order by x.date),
-                           min_cte.min_date)                                                            as consecutive_days
+                           min_cte.min_date)                                                 as consecutive_days
 from (select customer_id,
              concat_ws(' ', cu.first_name, cu.last_name)                                     as name,
              re.rental_date::date                                                            as date,
              lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
       from rental re
-               join customer cu using (customer_id)) x
+               join customer cu using (customer_id)
+      where customer_id = 3) x
          join min_cte using (customer_id)
 where true
   and ((next_date - date > 1)
