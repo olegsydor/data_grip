@@ -990,15 +990,19 @@ with part as (select p.relid::regclass::text as partition_name,
               from pg_partition_tree('historic_order_details_storage'::regclass) p
                        join pg_class c on c.oid = p.relid
               where p.isleaf),
-     last_val as (select to_char(current_date - (retention_period || ' ' || cleanup_schedule)::interval, 'YYYYMMDD')
+     last_val as (select to_char(current_date - (retention_period || ' ' || cleanup_schedule)::interval,
+                                 'YYYYMMDD')::int as till_date_id
                   from db_management.table_retention
                   where table_name = 'historic_order_details_storage'
                     and schema_name = 'dwh'
                     and retention_type = 'M'
                     and is_active)
 select partition_name,
-       (times)[1]::bigint as from_value,
-       (times)[2]::bigint as to_value
-from part s
-where to_value < 20240529
-;
+       times[1]::int                                                as begin_date_id,
+       to_char(times[2]::date - '1 day'::interval, 'YYYYMMDD')::int as end_date_id,
+       times[2]::int                                                as last_date_id
+from part s,
+     last_val
+where times[2]::bigint < last_val.till_date_id
+  and partition_name not like '%tail2_stb%'
+order by partition_name
