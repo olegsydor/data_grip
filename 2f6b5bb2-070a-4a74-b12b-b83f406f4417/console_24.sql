@@ -982,3 +982,23 @@ where ((nxt - id > 1)
     or (nxt is null));
 
 
+with part as (select p.relid::regclass::text as partition_name,
+                     regexp_matches(
+                             pg_get_expr(c.relpartbound, c.oid),
+                             'FROM\s*\(([^)]+)\)\s*TO\s*\(([^)]+)\)'
+                     )                       as times
+              from pg_partition_tree('historic_order_details_storage'::regclass) p
+                       join pg_class c on c.oid = p.relid
+              where p.isleaf),
+     last_val as (select to_char(current_date - (retention_period || ' ' || cleanup_schedule)::interval, 'YYYYMMDD')
+                  from db_management.table_retention
+                  where table_name = 'historic_order_details_storage'
+                    and schema_name = 'dwh'
+                    and retention_type = 'M'
+                    and is_active)
+select partition_name,
+       (times)[1]::bigint as from_value,
+       (times)[2]::bigint as to_value
+from part s
+where to_value < 20240529
+;
