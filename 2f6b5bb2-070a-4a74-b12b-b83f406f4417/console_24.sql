@@ -980,3 +980,5 @@ from (select id,
       from training.sequence_series) x
 where ((nxt - id > 1)
     or (nxt is null));
+
+
