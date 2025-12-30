@@ -955,54 +955,36 @@ with min_cte as (select customer_id,
                         min(rental_date)::date as min_date
                  from rental
                  group by customer_id)
-select name,
-       coalesce(lag(next_date) over (partition by x.name order by x.date), min_cte.min_date) as date_rental_occurred,
-       date                                                                                  as final_date,
-       1 + date - coalesce(lag(next_date) over (partition by x.name order by x.date),
-                           min_cte.min_date)                                                 as consecutive_days
-from (select customer_id,
+, nxt as (select name,
+                 x.customer_id,
+                 coalesce(lag(next_date) over (partition by x.name order by x.date),
+                          min_cte.min_date)            as date_rental_occurred,
+                 date                                  as final_date,
+                 1 + date - coalesce(lag(next_date) over (partition by x.name order by x.date),
+                                     min_cte.min_date) as consecutive_days
+          from (select customer_id,
+                       concat_ws(' ', cu.first_name, cu.last_name)          as name,
+                       re.rental_date::date                                 as date,
+                       lead(re.rental_date::date)
+                       over (partition by customer_id order by rental_date) as next_date
+                from rental re
+                         join customer cu using (customer_id)
+                where customer_id = 1) x
+                   join min_cte using (customer_id)
+          where true
+            and ((next_date - date > 1)
+              or (next_date is null)))
+select distinct on (rental_date::date) nxt.name, rental_date::date as date_rental_occurred, nxt.consecutive_days
+from rental re
+join lateral (select name, consecutive_days
+    from nxt
+    where nxt.customer_id = re.customer_id
+    and re.rental_date::date between date_rental_occurred and final_date
+    limit 1) nxt on true
+where re.customer_id = 1
+order by 2
+
+select customer_id,
              concat_ws(' ', cu.first_name, cu.last_name)                                     as name,
              re.rental_date::date                                                            as date,
              lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
-      from rental re
-               join customer cu using (customer_id)
-      where customer_id = 3) x
-         join min_cte using (customer_id)
-where true
-  and ((next_date - date > 1)
-    or (next_date is null));
-
-select coalesce(lag(nxt) over (order by id),
-                (select min(id) from training.sequence_series)),
-       id
-from (select id,
-             lead(id) over (order by id) as nxt
-      from training.sequence_series) x
-where ((nxt - id > 1)
-    or (nxt is null));
-
-
-with part as (select p.relid::regclass::text as partition_name,
-                     regexp_matches(
-                             pg_get_expr(c.relpartbound, c.oid),
-                             'FROM\s*\(([^)]+)\)\s*TO\s*\(([^)]+)\)'
-                     )                       as times
-              from pg_partition_tree('historic_order_details_storage'::regclass) p
-                       join pg_class c on c.oid = p.relid
-              where p.isleaf),
-     last_val as (select to_char(current_date - (retention_period || ' ' || cleanup_schedule)::interval,
-                                 'YYYYMMDD')::int as till_date_id
-                  from db_management.table_retention
-                  where table_name = 'historic_order_details_storage'
-                    and schema_name = 'dwh'
-                    and retention_type = 'M'
-                    and is_active)
-select partition_name,
-       times[1]::int                                                as begin_date_id,
-       to_char(times[2]::date - '1 day'::interval, 'YYYYMMDD')::int as end_date_id,
-       times[2]::int                                                as last_date_id
-from part s,
-     last_val
-where times[2]::bigint < last_val.till_date_id
-  and partition_name not like '%tail2_stb%'
-order by partition_name
