@@ -982,9 +982,56 @@ join lateral (select name, consecutive_days
     and re.rental_date::date between date_rental_occurred and final_date
     limit 1) nxt on true
 where re.customer_id = 1
-order by 2
+order by 2;
+
+
+select name,
+       dates as date_rental_occurred,
+       count(ranked_dates) over(partition by ranked_dates) as consecutive_days
+from (select name,
+             dates,
+             dense_rank() over(partition by name order by dates) as dr,
+             row_number() over (partition by name order by dates) as dr1,
+             dates - (dense_rank() over(partition by name order by dates))::int as ranked_dates1,
+             dates - (row_number() over(partition by name order by dates))::int as ranked_dates
+      from (select distinct rental_date::date as dates,
+                   (first_name || ' ' || last_name) as name
+            from rental r join customer c on r.customer_id = c.customer_id
+            where c.customer_id = 3) a
+      ) b
+order by dates;
 
 select customer_id,
              concat_ws(' ', cu.first_name, cu.last_name)                                     as name,
              re.rental_date::date                                                            as date,
              lead(re.rental_date::date) over (partition by customer_id order by rental_date) as next_date
+
+with base as (select rental_date::date as date,
+                     (rental_date::date -
+                      '1 day'::interval *
+                      (dense_rank() over (partition by customer_id order by rental_date)))::date as grp
+              from training.rental
+              where customer_id = 3)
+select row_number() over () as rn,
+       array_agg(base.date) as dates
+from base
+group by grp
+
+
+create table training.seq (
+    id serial,
+    numb int
+);
+
+insert into training.seq (numb)
+select round(random() * 1000)
+from generate_series(1, 1000) s(i);
+
+select row_number() over () as rn, array_agg(numb)
+from (
+    select distinct on (numb) numb, numb - dense_rank() over (partition by null order by numb) as grp
+    from training.seq
+    ) x
+group by grp;
+
+select * from training.seq
