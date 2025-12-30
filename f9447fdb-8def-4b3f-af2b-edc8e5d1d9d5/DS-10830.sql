@@ -1928,12 +1928,10 @@ COMMENT ON COLUMN occ_data.occ_matched_trade_record.matching_type IS 'type of ma
 
 -- DROP FUNCTION occ_data.matching_occ_trade_transfer_v3(int4, bool);
 
-CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
-                                                                   is_rematch boolean DEFAULT false)
-    RETURNS jsonb
-    LANGUAGE plpgsql
-AS
-$function$
+CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, is_rematch boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
     -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
     -- SO 20251209 https://dashfinancial.atlassian.net/browse/DS-10830
     -- SO 20251216 the second version of the script with the different order of matching
@@ -1999,6 +1997,8 @@ begin
                            'O')
     into l_step_id;
 
+    --  0. Transfer to Transfer:
+    --  Transfer vs Transfer on the same date_id, instrument_id,  qty, and avg_px, and the opposite side
 
     -- Account (exact):
     -- bundle of OCC trades related to one Account vs bundle of all OCC transfers on the same qty and notional value:
