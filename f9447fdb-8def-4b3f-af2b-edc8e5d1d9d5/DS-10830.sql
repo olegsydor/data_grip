@@ -1928,10 +1928,12 @@ COMMENT ON COLUMN occ_data.occ_matched_trade_record.matching_type IS 'type of ma
 
 -- DROP FUNCTION occ_data.matching_occ_trade_transfer_v3(int4, bool);
 
-CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer, is_rematch boolean DEFAULT false)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION occ_data.matching_occ_trade_transfer_v3(in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                   is_rematch boolean DEFAULT false)
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS
+$function$
     -- SO 20251126 https://dashfinancial.atlassian.net/browse/DS-10753
     -- SO 20251209 https://dashfinancial.atlassian.net/browse/DS-10830
     -- SO 20251216 the second version of the script with the different order of matching
@@ -1946,6 +1948,7 @@ declare
     l_account_cnt             int4 := 0;
     l_account_tolerance_cnt   int4 := 0;
     l_start_cnt               int4 := 0;
+    l_transfer_to_transfer    int4 := 0;
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -2000,6 +2003,58 @@ begin
     --  0. Transfer to Transfer:
     --  Transfer vs Transfer on the same date_id, instrument_id,  qty, and avg_px, and the opposite side
 
+    drop table if exists t_row_by_row;
+    create temp table t_row_by_row as
+    select tb.trade_id,
+           tb.date_id,
+           tb.instrument_id,
+           tb.last_px,
+           tb.last_qty,
+           tb.trade_type,
+           tb.side,
+           row_number()
+           over (partition by tb.date_id, tb.instrument_id, tb.last_px, tb.last_qty, tb.side order by tb.pg_db_create_time) as rn
+    from t_base tb
+             left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+    where omt.trade_id is null
+      and tb.trade_type = '0';
+    create index on t_row_by_row (date_id, trade_type, instrument_id, last_px, side, rn);
+
+    insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
+                                                   matching_type)
+    with pre as (select array [b1.trade_id, b4.trade_id]                       as trades,
+                        nextval('occ_data.occ_transfer_to_trade_match_id_seq') as match_id
+                 from t_row_by_row b1
+                          join lateral (
+                     select b4.trade_id
+                     from t_row_by_row b4
+                     where true
+                       and b4.date_id = b1.date_id
+                       and b4.instrument_id = b1.instrument_id
+                       and b4.last_px = b1.last_px
+                       and b4.last_qty = b1.last_qty
+                       and b4.side != b1.side
+                       and b4.rn = b1.rn
+                     limit 1
+                     ) b4 on true
+                 where true)
+    select unnest(trades) as trade_id,
+           in_date_id,
+           match_id,
+           l_load_id,
+           '0'
+    from pre;
+
+    get diagnostics l_transfer_to_transfer = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'matching_occ_trade_transfer for ' || in_date_id::text ||
+                           ' transfer_to-transfer matching completed',
+                           l_transfer_to_transfer,
+                           'O')
+    into l_step_id;
+
+
     -- Account (exact):
     -- bundle of OCC trades related to one Account vs bundle of all OCC transfers on the same qty and notional value:
     insert into occ_data.occ_matched_trade_record (trade_id, date_id, occ_transfer_to_trade_match_id, load_batch_id,
@@ -2014,9 +2069,9 @@ begin
                          max(tb.pg_db_create_time)     as pg_db_create_time,
                          tb.trade_type
                   from t_base tb
---                           left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
+                           left join occ_data.occ_matched_trade_record omt on omt.trade_id = tb.trade_id
                   where true
---                    and omt.trade_id is null
+                    and omt.trade_id is null
                     and tb.trade_type in ('0', '3')
                   group by tb.date_id, tb.instrument_id, tb.side, tb.account_id, tb.trade_type)
        , grp as (select base.trades || tf.trades                               as trades,
@@ -2024,7 +2079,7 @@ begin
                  from base
                           join lateral (select tf.trades
                                         from base tf
---                                                 left join occ_data.occ_matched_trade_record omt on omt.trade_id = tf.trade_id
+                                                 left join occ_data.occ_matched_trade_record omt on omt.trade_id = tf.trade_id
                                         where tf.instrument_id = base.instrument_id
                                           and tf.trade_type = '3'
                                           and tf.side <> base.side
@@ -2300,17 +2355,21 @@ begin
     into l_step_id;
 
     return jsonb_build_object('date_id', in_date_id,
-                              'account many-to-one groupped', l_account_many_to_one_cnt,
-                              'row_by_row groupped', l_row_by_row_cnt,
-                              'total notional groupped', l_notional_cnt,
+                              'transfer_to-transfer', l_transfer_to_transfer,
+                              'account many-to-one', l_account_many_to_one_cnt,
+                              'row_by_row', l_row_by_row_cnt,
+                              'total notional', l_notional_cnt,
                               'total notional with non zero tolerance', l_notional_tolerance_cnt,
                               'account groupping', l_account_cnt,
                               'account groupping with non zero tolerance', l_account_tolerance_cnt,
                               'count to match', l_start_cnt,
                               'unmatched', l_start_cnt -
-                              (l_account_many_to_one_cnt + l_row_by_row_cnt + l_notional_cnt +
-                               l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt)
+                                           (l_account_many_to_one_cnt + l_row_by_row_cnt + l_notional_cnt +
+                                            l_notional_tolerance_cnt + l_account_cnt + l_account_tolerance_cnt +
+                                            l_transfer_to_transfer)
            );
 end;
 $function$
 ;
+
+select * from occ_data.matching_occ_trade_transfer_v3(20251229, true)
