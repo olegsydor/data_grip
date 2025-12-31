@@ -39,7 +39,13 @@ select n,
        (power(-1, n) * (4 * power(n, 2) + n * 10 + 5) - 1) / 4 as res
 from training.piano;
 
-
+select sum(greatest(0, extract(epoch from e - b)::int)) / 60 as total_minutes
+from (
+  select greatest(avail_start, max(avail_end) over w) as b, avail_end as e
+  from availability
+  where user_id = 777
+  window w as (order by avail_start rows unbounded preceding exclude current row)
+) be;
 
 create table training.customer
 (
@@ -1028,10 +1034,10 @@ select round(random() * 1000)
 from generate_series(1, 1000) s(i);
 
 select row_number() over () as rn, array_agg(numb)
-from (
-    select distinct on (numb) numb, numb - dense_rank() over (partition by null order by numb) as grp
-    from training.seq
-    ) x
-group by grp;
+from (select distinct on (numb) numb, numb - dense_rank() over (partition by null order by numb) as grp
+      from training.seq) x
+group by grp
+order by 2;
 
-select * from training.seq
+select * from training.seq;
+
