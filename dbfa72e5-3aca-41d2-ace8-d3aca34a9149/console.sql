@@ -15,3 +15,4 @@ from base
          join film fm on fm.film_id = any (base.film_ids)
 where cnt_film = 1
 order by 3;
+

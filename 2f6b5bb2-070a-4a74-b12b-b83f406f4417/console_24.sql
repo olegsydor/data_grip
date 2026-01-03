@@ -1041,3 +1041,29 @@ order by 2;
 
 select * from training.seq;
 
+
+create table training.posts
+(
+    id         serial,
+    created_at timestamp
+);
+
+insert into training.posts(created_at)
+select '2025-01-01'::timestamp + interval '1 minute' * round(random()::numeric * 525600, 0)
+from generate_series(1, 3000) as id;
+
+with base as (select extract(year from created_at) || '-' ||
+                     extract(months from created_at) || '-01' as                   dt,
+                     count(*)                                 as                   cnt,
+                     lag(count(*)) over (order by extract(months from created_at)) nxt_cnt
+              from training.posts
+              group by extract(year from created_at), extract(months from created_at))
+select to_date(dt, 'YYYY-MM-DD')                                                  as date,
+       cnt                                                                        as count,
+       case
+           when nxt_cnt > cnt then '-1' || to_char(round(100 * (1 - cnt::numeric / nxt_cnt), 1), 'FM990.0%')
+           when nxt_cnt is null then null
+           else to_char(round(100 * (cnt::numeric / nxt_cnt - 1), 1), 'FM990.0%') end as percent_growth
+from base;
+
+select 100.0 * (1 - 313 / 381::numeric)
