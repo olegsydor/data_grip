@@ -1066,4 +1066,7 @@ select to_date(dt, 'YYYY-MM-DD')                                                
            else to_char(round(100 * (cnt::numeric / nxt_cnt - 1), 1), 'FM990.0%') end as percent_growth
 from base;
 
-select 100.0 * (1 - 313 / 381::numeric)
+select 100.0 * (1 - 313 / 381::numeric);
+
+
+select '01' in (select x from regexp_split_to_array($$'01', '02', '03', '01,02,03,04'$$, ', ')::text[] x)
