@@ -1068,5 +1068,10 @@ from base;
 
 select 100.0 * (1 - 313 / 381::numeric);
 
+select x from regexp_split_to_array(:in_val, '\s+') as x
 
-select '01' in (select x from regexp_split_to_array($$'01', '02', '03', '01,02,03,04'$$, ', ')::text[] x)
+         select '01,02,03,04' = any(array(slect x from string_to_array(:in_val, ' ') as x));
+
+select '01' = any(:in_arr)
+
+select '01,02,03,04' = any(string_to_array(:in_val, ' '));
