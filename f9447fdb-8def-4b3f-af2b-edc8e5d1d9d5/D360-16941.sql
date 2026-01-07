@@ -1,6 +1,7 @@
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
 -- D360-16941
-CREATE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+select * from trash.allocations_snapshot(in_date_id := 20260106);
+CREATE or replace FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                         in_reported_status character DEFAULT NULL::character(1))
     RETURNS TABLE
@@ -37,7 +38,7 @@ CREATE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}
                 db_create_time             timestamp without time zone,
                 drop_message_status        character,
                 drop_message_reject_reason text,
-                client_commission_amount integer
+                client_commission_amount   numeric(20,8)
 
             )
     LANGUAGE plpgsql
@@ -81,8 +82,8 @@ begin
                i.display_instrument_id,
                i.last_trade_date::date,
                i.instrument_type_id,
-               null                                                        as alloc_instr_id,
-               null                                                        as alloc_time,
+               null::integer                                               as alloc_instr_id,
+               null::timestamp                                             as alloc_time,
                false                                                       as is_allocated,
                false                                                       as is_bundle,
                tr.cmta,
@@ -121,7 +122,8 @@ begin
                case when tr.is_billed = 'R' then true end                  as is_prev_reported,
                msg.db_create_time                                          as db_create_time,
                msg.drop_message_status                                     as alloc_drop_msg_status,
-               msg.drop_message_reject_reason                              as alloc_drop_msg_reject_reason
+               msg.drop_message_reject_reason                              as alloc_drop_msg_reject_reason,
+               CCRU.amount                                                 as client_commission_amount
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join genesis2.account acc on acc.account_id = tr.account_id
@@ -146,10 +148,11 @@ begin
                                       and bas.date_id = allocated_trades.date_id
                                       and 1 = 2
                                     limit 1) bas on true
-                 left join lateral (select L1.rate
+                 left join lateral (select L1.rate, l1.amount
                                     from (SELECT row_number()
                                                  over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
-                                                 tl.rate
+                                                 tl.rate,
+                                                 tl.amount
                                           FROM genesis2.trade_level_book_record tl
                                                    inner join genesis2.book_record_creator cr
                                                               on tl.book_record_creator_id = cr.book_record_creator_id
@@ -170,7 +173,9 @@ begin
                   when in_reported_status = 'R' then rep.to_report = 'R'
                   when in_reported_status = 'U' then rep.to_report in ('U', 'C')
                   when in_reported_status is null then true end
+
         union all
+
         select ai.date_id,
                null::int8                     as trade_record_id,
                ai.account_id::int4,
@@ -209,7 +214,8 @@ begin
                null::boolean                  as is_prev_reported,
                msg.db_create_time             as db_create_time,
                msg.drop_message_status        as alloc_drop_msg_status,
-               msg.drop_message_reject_reason as alloc_drop_msg_reject_reason
+               msg.drop_message_reject_reason as alloc_drop_msg_reject_reason,
+               ccr.amount                     as client_commission_amount
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join lateral (select case
@@ -239,11 +245,13 @@ begin
                                                when count(distinct tr.blaze_account_alias) > 1 then '-'
                                                else null
                                                end                                                  as blaze_account_alias,
-                                           string_agg(distinct tr.exec_broker, ', ')                as exec_broker
+                                           string_agg(distinct tr.exec_broker, ', ')                as exec_broker,
+                                           sum(amount) as amount
                                     from genesis2.alloc_instr2trade_record alt
                                              inner join genesis2.trade_record tr
                                                         on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
                                              left join lateral (select rate,
+                                                                       tl.amount,
                                                                        row_number()
                                                                        over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
                                                                 from genesis2.trade_level_book_record tl
@@ -274,4 +282,3 @@ end ;
 $function$
 ;
 
-COMMENT ON FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar) IS 'The report allocations_snapshot temp nsme with the prefix os_ until it is tested';
