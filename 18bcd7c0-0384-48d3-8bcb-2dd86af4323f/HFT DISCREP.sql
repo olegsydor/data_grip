@@ -1,4 +1,4 @@
-select 545224212-451773872;
+select (529426119-529607691)/529426119.0*100;
 -- 93450340
 
 with base_inc as (
@@ -19,7 +19,10 @@ from base_inc
 left join base_eod using(fn)
 where base_inc.loaded_row = base_eod.loaded_row;
 
-create index on partitions.hft_fix_message_event_20251118_eod (load_batch_id);
+
+
+
+create index on partitions.hft_fix_message_event_20260105_eod (load_batch_id);
 
 with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
@@ -28,8 +31,8 @@ from partitions.hft_fix_message_event_20251118_eod
 where load_batch_id = any ('{674476}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
-from partitions.hft_fix_message_event_20251118
-where load_batch_id = any ('{673854,674077,674095,674113,674336,674318,674205,674238,674126,673873,673887,673914,674014,673775,674286,674301,674045,674188,673811,673931,673967,674223,673793,674054,674254,674272,674157,673900,673977,674175,673827,674066,674030,674001,673989,673840,674350,674365,674139,674383,674397,674410,674425,674442}')
+from partitions.hft_fix_message_event_20260105
+where load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
 )
 insert into trash.so_20251118_diff
 select *, '{674476}'::int4[] as load_batch_id_eod
@@ -75,7 +78,7 @@ from trash.diff_20251111
 group by account_name;
 
 select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
-                        'US/Eastern')::time, * from trash.diff_20251111
+                        'US/Eastern')::time, * from trash.so_disc_20260105
 where true
 --     and cl_ord_id = 'HFAHNS8649'
 order by fix_date
@@ -116,3 +119,220 @@ and cl_ord_id = 'EBAA0078-20251117'
 select * from partitions.hft_fix_message_event_new_--partitions.hft_fix_message_event_reload_node2
 where date_id = 20251117
 and cl_ord_id = 'EBAA0078-20251117'
+----
+create table trash.so_disc_20260105 as
+select *--orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
+from partitions.hft_fix_message_event_20260105 inc
+where load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+  and not exists (select null
+                  from partitions.hft_fix_message_event_20260105_eod eod
+                  where load_batch_id = any ('{701369}')
+                    and eod.orig_cl_ord_id is not distinct from inc.orig_cl_ord_id
+                    and eod.msg_type = inc.msg_type
+                    and eod.date_id = inc.date_id
+                    and eod.cl_ord_id = inc.cl_ord_id
+                    and eod.parent_cl_ord_id is not distinct from inc.parent_cl_ord_id
+                    and eod.fix_date = inc.fix_date
+                    and eod.leg_ref_id is not distinct from inc.leg_ref_id
+);
+select * from trash.so_disc_20260105;
+
+create table trash.so_disc_20260105 as
+select eod.*--orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
+from partitions.hft_fix_message_event_20260105_eod eod
+where load_batch_id = any ('{701369}')
+  and not exists (select null
+                  from partitions.hft_fix_message_event_20260105 inc
+                  where load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+                    and eod.orig_cl_ord_id is not distinct from inc.orig_cl_ord_id
+                    and eod.msg_type = inc.msg_type
+                    and eod.date_id = inc.date_id
+                    and eod.cl_ord_id = inc.cl_ord_id
+                    and eod.parent_cl_ord_id is not distinct from inc.parent_cl_ord_id
+                    and eod.fix_date = inc.fix_date
+                    and eod.leg_ref_id is not distinct from inc.leg_ref_id
+);
+
+
+
+select inc.cl_ord_id,
+        eod.cl_ord_id,
+       inc.*--orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
+from partitions.hft_fix_message_event_20260105 inc
+         left join partitions.hft_fix_message_event_20260105_eod eod
+                   on true and eod.orig_cl_ord_id is not distinct from inc.orig_cl_ord_id
+                       and eod.msg_type = inc.msg_type
+                       and eod.date_id = inc.date_id
+                       and eod.cl_ord_id = inc.cl_ord_id
+                       and eod.parent_cl_ord_id is not distinct from inc.parent_cl_ord_id
+                       and eod.fix_date = inc.fix_date
+                       and eod.leg_ref_id is not distinct from inc.leg_ref_id
+                       and eod.sec_exch_exec_id is not distinct from  inc.sec_exch_exec_id
+where inc.load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+   and eod.load_batch_id = any ('{701369}')
+and inc.cl_ord_id = '390043863081847';
+
+
+select 'inc',
+       *
+--        orig_cl_ord_id,
+--        msg_type,
+--        date_id,
+--        cl_ord_id,
+--        parent_cl_ord_id,
+--        fix_date,
+--        leg_ref_id,
+--        sec_exch_exec_id
+from partitions.hft_fix_message_event_20260105 inc
+where inc.load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+  and inc.cl_ord_id = '390043863081847'
+union all
+select 'eod',
+       *
+--        orig_cl_ord_id,
+--        msg_type,
+--        date_id,
+--        cl_ord_id,
+--        parent_cl_ord_id,
+--        fix_date,
+--        leg_ref_id,
+--        sec_exch_exec_id
+from partitions.hft_fix_message_event_20260105_eod eod
+where eod.cl_ord_id = '390043863081847'
+  and eod.load_batch_id = any ('{701369}')
+
+select inc.*--orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
+from partitions.hft_fix_message_event_20260105 inc
+where load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+  and exists (select null
+                  from partitions.hft_fix_message_event_20260105_eod eod
+                  where load_batch_id = any ('{701369}')
+                    and eod.orig_cl_ord_id is not distinct from inc.orig_cl_ord_id
+                    and eod.msg_type = inc.msg_type
+                    and eod.date_id = inc.date_id
+                    and eod.cl_ord_id = inc.cl_ord_id
+                    and eod.parent_cl_ord_id is not distinct from inc.parent_cl_ord_id
+                    and eod.fix_date = inc.fix_date
+                    and eod.leg_ref_id = inc.leg_ref_id
+)
+and inc.cl_ord_id = '390043863081847';
+
+    call trash.check_discrepancy(20260105);
+
+create or replace procedure trash.check_discrepancy(in_date_id int4)
+    language plpgsql
+as
+$$
+declare
+    rc record;
+begin
+    for rc in (with base_inc
+        as (select split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) - 1), '.', 1) as fn,
+                   sum(processed_rows)                                                         as loaded_row,
+                   array_agg(load_batch_id)                                                    as batchs
+            from inc_hft.hft_incremental_files
+            where date_id = in_date_id
+              and is_active = 'Y'
+            group by split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) - 1), '.', 1))
+                  , base_eod
+            as (SELECT split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) - 1), '.', 1) as fn,
+                       sum(x.loaded_row)                                                               as loaded_row,
+                       array_agg(load_batch_id)                                                        as batchs
+                FROM public.load_hft_log x
+                WHERE date_id = in_date_id
+                group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) - 1), '.', 1))
+               select base_inc.fn,
+                      base_inc.loaded_row                       as sum_inc,
+                      base_inc.batchs                           as batch_inc,
+                      base_eod.loaded_row                       as sum_eod,
+                      base_eod.loaded_row - base_inc.loaded_row as diff,
+                      base_eod.batchs                           as batch_eod
+               from base_eod
+                        left join base_inc using (fn)
+               where base_inc.loaded_row != base_eod.loaded_row)
+        loop
+            begin
+                insert into trash.so_diff_20250105
+                select table_name, date_id, cn, count_cl_ord_id, count_parent_cl_ord, count_exec_type
+                from (SELECT rc.fn || 'inc'             AS table_name,
+                             in_date_id::NUMERIC        AS date_id,
+                             count(ne.cl_ord_id)        AS cn,
+                             null::int8                       AS count_cl_ord_id,
+                             count(ne.parent_cl_ord_id) AS count_parent_cl_ord,
+                             count(ne.exec_type)        AS count_exec_type
+                      FROM partitions.hft_fix_message_event_20260105 AS ne
+                      where msg_type not in ('1', '5')
+                        and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                             'US/Eastern')::time <= '16:30'::time
+                        and load_batch_id = any (rc.batch_inc)
+                      union all
+                      SELECT rc.fn || 'eod'             AS table_name,
+                             in_date_id::NUMERIC        AS date_id,
+                             count(ne.cl_ord_id)        AS cn,
+                             null                       AS count_cl_ord_id,
+                             count(ne.parent_cl_ord_id) AS count_parent_cl_ord,
+                             count(ne.exec_type)        AS count_exec_type
+                      FROM partitions.hft_fix_message_event_20260105_eod AS ne
+                      where msg_type not in ('1', '5')
+                        and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                             'US/Eastern')::time <= '16:30'::time
+                        and load_batch_id = any (rc.batch_eod)) x;
+                raise notice '%: printed - %', to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS'), rc.fn;
+            end;
+        end loop;
+end;
+$$;
+
+select * from trash.so_diff_20250105;
+
+create table trash.so_diff_20250105 as
+SELECT
+		'CAT_HFT'::TEXT						AS table_name,
+		:p_date_id::NUMERIC					AS date_id,
+--		count(ne.date_id) 					AS cn,
+		count(ne.cl_ord_id) 				AS cn,
+		count(ne.cl_ord_id) 				AS count_cl_ord_id,
+		count(ne.parent_cl_ord_id) 			AS count_parent_cl_ord,
+		count(ne.exec_type) 				AS count_exec_type
+	FROM partitions.hft_fix_message_event_20260105 AS ne
+	where msg_type not in('1', '5')
+	        and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                        'US/Eastern')::time <= '16:30'::time
+and load_batch_id = any ('{700712}')
+union all
+SELECT
+		'CAT_HFT'::TEXT						AS table_name,
+		:p_date_id::NUMERIC					AS date_id,
+--		count(ne.date_id) 					AS cn,
+		count(ne.cl_ord_id) 				AS cn,
+		count(ne.cl_ord_id) 				AS count_cl_ord_id,
+		count(ne.parent_cl_ord_id) 			AS count_parent_cl_ord,
+		count(ne.exec_type) 				AS count_exec_type
+	FROM partitions.hft_fix_message_event_20260105_eod AS ne
+	where msg_type not in('1', '5')
+	        and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                        'US/Eastern')::time <= '16:30'::time
+and load_batch_id = any ('{701367}')
+
+
+select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                        'US/Eastern')::time, * from partitions.hft_fix_message_event_20260105
+where load_batch_id = 701304
+and msg_type not in('1', '5')
+	        and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+                        'US/Eastern')::time <= '16:30'::time;
+
+
+select *
+           from inc_hft.hft_incremental_files
+where date_id = 20260105
+and load_batch_id = 701304;
+
+
+SELECT cl_ord_id, load_batch_id, *
+FROM partitions.hft_fix_message_event_20260105 AS ne
+where msg_type not in ('1', '5')
+  and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
+       'US/Eastern')::time <= '16:30'::time
+  and load_batch_id = any ('{701303, 701304}')
+order by cl_ord_id, load_batch_id
