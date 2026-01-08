@@ -6,11 +6,13 @@ and liquidity_indicator_type_id = 2;
 
 select *
 from trash.so_equity_non_marketable_data_print(in_start_date_id := 20260107, in_end_date_id := 20260107,
-                                               in_account_ids := '{68289,72390,68847}', in_row_type := 'Child',
+--                                                 in_account_ids := '{}',
+                                               in_row_type := 'Child',
                                                in_sub_strategy_id := 0,
                                                in_exchange_id := '{ARCAE,MEMX,NSDQE,BATS,EDGX,EPRL}',
-                                               in_liq_ind_type_id := '{2}')
-select * from trash.so_equity_non_marketable_data_print(20260107, 20260107, '{68289,72390,68847}', 'Child'), 0, '{ARCAE,MEMX,NSDQE,BATS,EDGX,EPRL}'::varchar(6)[], '{2}')
+                                               in_liq_ind_type_id := '{2}');
+
+
 CREATE OR REPLACE FUNCTION trash.so_equity_non_marketable_data_print(in_start_date_id integer, in_end_date_id integer,
                                                                      in_account_ids integer[] default '{}',
                                                                      in_row_type text default null, -- 'Parent', 'Child', or NULL
@@ -67,6 +69,7 @@ begin
                                  WHERE E.ORDER_ID = str.ORDER_ID
                                    --  AND e.exec_date_id = str.create_date_id
                                    and e.exec_date_id = str.status_date_id -- SY: 20211216
+                                   and e.exec_date_id between in_start_date_id and in_end_date_id
                                    AND E.ORDER_STATUS <> '3') ex on (ex.rn = 1)
         --
              join dwh.d_exchange exc on exc.exchange_id = str.exchange_id and exc.is_active = true
@@ -74,12 +77,12 @@ begin
                                                     lin.trade_liquidity_indicator = ex.trade_liquidity_indicator)
 
     where str.status_date_id between in_start_date_id and in_end_date_id
-      and str.account_id = any (in_account_ids)
+      and case when in_account_ids = '{}' then true else str.account_id = any (in_account_ids) end
       and str.parent_order_id is not null
       and case
               when in_liq_ind_type_id is null then true
               else lin.liquidity_indicator_type_id != all (in_liq_ind_type_id) end
-    and case when in_exchange_id = '{}' then true else str.exchange_id = any (in_exchange_id) end;;
+      and case when in_exchange_id = '{}' then true else str.exchange_id = any (in_exchange_id) end;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
@@ -156,3 +159,5 @@ begin
 end;
 $function$
 ;
+
+select * from trash.so_equity_non_marketable
