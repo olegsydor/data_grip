@@ -1,16 +1,27 @@
 -- DROP FUNCTION trash.so_equity_non_marketable_data(int4, int4, _int4);
 select * from dwh.d_liquidity_indicator--.liquidity_indicator_type_id
 where is_active
-and liquidity_indicator_type_id = 2
-CREATE OR REPLACE FUNCTION trash.so_equity_non_marketable_data_print(in_start_date_id integer, in_end_date_id integer, in_account_ids integer[],
-in_row_type text default null, -- 'Parent', 'Child', or NULL
-in_sub_strategy_id int4 default null,
-in_exchange_id varchar(6)[] default '{}',
-in_liq_ind_type_id int4 default null--: see d_liquidity_indicator.liquidity_indicator_type_id
+and liquidity_indicator_type_id = 2;
+
+
+select *
+from trash.so_equity_non_marketable_data_print(in_start_date_id := 20260107, in_end_date_id := 20260107,
+                                               in_account_ids := '{68289,72390,68847}', in_row_type := 'Child',
+                                               in_sub_strategy_id := 0,
+                                               in_exchange_id := '{ARCAE,MEMX,NSDQE,BATS,EDGX,EPRL}',
+                                               in_liq_ind_type_id := '{2}')
+select * from trash.so_equity_non_marketable_data_print(20260107, 20260107, '{68289,72390,68847}', 'Child'), 0, '{ARCAE,MEMX,NSDQE,BATS,EDGX,EPRL}'::varchar(6)[], '{2}')
+CREATE OR REPLACE FUNCTION trash.so_equity_non_marketable_data_print(in_start_date_id integer, in_end_date_id integer,
+                                                                     in_account_ids integer[] default '{}',
+                                                                     in_row_type text default null, -- 'Parent', 'Child', or NULL
+                                                                     in_sub_strategy_id int4 default null,
+                                                                     in_exchange_id varchar(6)[] default '{}',
+                                                                     in_liq_ind_type_id int4[] default null--: see d_liquidity_indicator.liquidity_indicator_type_id
 )
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
+    RETURNS integer
+    LANGUAGE plpgsql
+AS
+$function$
 declare
     l_load_id int;
     l_step_id int;
@@ -28,18 +39,15 @@ begin
     create temp table t_yc as
     select *
     from data_marts.f_yield_capture yc
-
     where yc.status_date_id between in_start_date_id and in_end_date_id
-      and yc.account_id = any (in_account_ids)
+      and case when in_account_ids = '{}' then true else yc.account_id = any (in_account_ids) end
       and yc.multileg_reporting_type in ('1', '2')
       and yc.is_marketable = 'N'
       and yc.order_price >= 1
       and yc.parent_order_id is null
       and yc.instrument_type_id = 'E'
-    and case when in_sub_strategy_id is null then true else yc.sub_strategy_id = in_sub_strategy_id end
-    and case when in_exchange_id = '{}' then true else yc.exchange_id = any(in_exchange_id) end
+      and case when in_sub_strategy_id is null then true else yc.sub_strategy_id = in_sub_strategy_id end;
 
-    ;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
@@ -51,22 +59,28 @@ begin
     select str.*
     from t_yc as par
              join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
-            inner join lateral (SELECT --e.exec_date_id, E.CUM_QTY, e.exec_time, e.order_status,
-                                       e.trade_liquidity_indicator
-                                 , row_number () over (partition by order_id order by exec_type = 'F' desc, exec_time desc, exec_id desc) as rn
-                   			FROM EXECUTION E
-                  			WHERE     E.ORDER_ID = str.ORDER_ID
-                        		--  AND e.exec_date_id = str.create_date_id
-                  			      and  e.exec_date_id = str.status_date_id -- SY: 20211216
-                          		  AND E.ORDER_STATUS <> '3') ex on (ex.rn=1)
-    --
-     join dwh.d_exchange exc on exc.exchange_id = str.exchange_id and exc.is_active = true
-       join dwh.d_liquidity_indicator lin on (lin.exchange_id = exc.real_exchange_id and lin.trade_liquidity_indicator = ex.trade_liquidity_indicator)
-    join 
+             inner join lateral (SELECT --e.exec_date_id, E.CUM_QTY, e.exec_time, e.order_status,
+                                     e.trade_liquidity_indicator
+                                      , row_number()
+                                        over (partition by order_id order by exec_type = 'F' desc, exec_time desc, exec_id desc) as rn
+                                 FROM EXECUTION E
+                                 WHERE E.ORDER_ID = str.ORDER_ID
+                                   --  AND e.exec_date_id = str.create_date_id
+                                   and e.exec_date_id = str.status_date_id -- SY: 20211216
+                                   AND E.ORDER_STATUS <> '3') ex on (ex.rn = 1)
+        --
+             join dwh.d_exchange exc on exc.exchange_id = str.exchange_id and exc.is_active = true
+             join dwh.d_liquidity_indicator lin on (lin.exchange_id = exc.real_exchange_id and
+                                                    lin.trade_liquidity_indicator = ex.trade_liquidity_indicator)
+
     where str.status_date_id between in_start_date_id and in_end_date_id
       and str.account_id = any (in_account_ids)
       and str.parent_order_id is not null
-    and case when in_liq_ind_type_id is null then true else lin.tr;
+      and case
+              when in_liq_ind_type_id is null then true
+              else lin.liquidity_indicator_type_id != all (in_liq_ind_type_id) end
+    and case when in_exchange_id = '{}' then true else str.exchange_id = any (in_exchange_id) end;;
+
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
                            'so_equity_non_marketable_data for ' || in_start_date_id::text ||
@@ -127,7 +141,11 @@ begin
         order by ex.exec_id desc
         limit 1
         ) lst_ex on true
-    where true;
+    where true
+      and case
+              when in_row_type is null then true
+              when in_row_type = 'Parent' then yc.parent_order_id is null
+              when in_row_type = 'Child' then yc.parent_order_id is not null end;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id,
                            'so_equity_non_marketable_data for ' || in_start_date_id::text ||
