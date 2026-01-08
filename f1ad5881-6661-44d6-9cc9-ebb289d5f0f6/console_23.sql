@@ -271,4 +271,5 @@ $function$
 ;
 
 select client_commission_rate, * from dwh.flat_trade_record
-where date_id = 20260106
+where date_id = 20260107
+and trade_record_id in (2347786401, 2347786457, 2347786458)

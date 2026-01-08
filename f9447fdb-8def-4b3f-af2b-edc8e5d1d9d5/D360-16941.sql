@@ -1,6 +1,8 @@
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
 -- D360-16941
-select * from trash.allocations_snapshot(in_date_id := 20260106);
+select *
+from trash.allocations_snapshot(in_date_id := 20260107, in_account_ids := '{257077}');
+
 CREATE or replace FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                         in_reported_status character DEFAULT NULL::character(1))
