@@ -1,8 +1,9 @@
+DROP FUNCTION dash360.executions_blotter_child_executions
 
 -- DROP FUNCTION dash360.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
 
 select *
-from trash.executions_blotter_child_executions(account_ids := '{257077}',
+from dash360.executions_blotter_child_executions(account_ids := '{257077}',
                                                start_status_date_id := 20260107,
                                                end_status_date_id := 20260107)
 

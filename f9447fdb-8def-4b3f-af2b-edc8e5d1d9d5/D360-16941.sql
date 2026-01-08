@@ -1,3 +1,5 @@
+DROP FUNCTION dash360.executions_blotter_child_executions
+
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar);
 -- D360-16941
 select *
