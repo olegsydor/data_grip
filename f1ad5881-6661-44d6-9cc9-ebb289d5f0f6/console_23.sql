@@ -1,12 +1,12 @@
 
--- DROP FUNCTION trash.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
+-- DROP FUNCTION dash360.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
 
 select *
 from trash.executions_blotter_child_executions(account_ids := '{257077}',
                                                start_status_date_id := 20260107,
                                                end_status_date_id := 20260107)
 
-CREATE or replace FUNCTION trash.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[],
+CREATE or replace FUNCTION dash360.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[],
                                                           start_status_date_id integer DEFAULT NULL::integer,
                                                           end_status_date_id integer DEFAULT NULL::integer,
                                                           start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone,
