@@ -1,7 +1,12 @@
 
--- DROP FUNCTION dash360.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
+-- DROP FUNCTION trash.executions_blotter_child_executions(_int8, int4, int4, timestamp, timestamp, varchar, bpchar, int4);
 
-CREATE FUNCTION trash.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[],
+select *
+from trash.executions_blotter_child_executions(account_ids := '{257077}',
+                                               start_status_date_id := 20260107,
+                                               end_status_date_id := 20260107)
+
+CREATE or replace FUNCTION trash.executions_blotter_child_executions(account_ids bigint[] DEFAULT '{}'::bigint[],
                                                           start_status_date_id integer DEFAULT NULL::integer,
                                                           end_status_date_id integer DEFAULT NULL::integer,
                                                           start_status_date timestamp without time zone DEFAULT NULL::timestamp without time zone,
@@ -234,7 +239,8 @@ select
     COALESCE(fmj.fix_message_jsonb ->> ''10710'', fmj.fix_message_jsonb ->> ''9769'') AS chain_exec_id,
     fmj2.fix_message_jsonb ->> ''10701'' AS soc_gen_sub_account,
     fmj2.fix_message_jsonb ->> ''10711'' AS soc_gen_contributor_id,
-    fmj.fix_message_jsonb ->> ''9483'' AS pillar_deal_id
+    fmj.fix_message_jsonb ->> ''9483'' AS pillar_deal_id,
+    tr.client_commission_rate * tr.last_qty as client_commission_amount
     from dwh.flat_trade_record tr
     --inner join dwh.d_instrument i on i.instrument_id = tr.instrument_id
     inner join lateral(select * from dwh.d_instrument i where i.instrument_id = tr.instrument_id limit 1)i on true
@@ -270,6 +276,6 @@ end;
 $function$
 ;
 
-select client_commission_rate, * from dwh.flat_trade_record
+select client_commission_rate, last_qty, * from dwh.flat_trade_record
 where date_id = 20260107
 and trade_record_id in (2347786401, 2347786457, 2347786458)
