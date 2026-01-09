@@ -79,9 +79,7 @@ begin
     where str.status_date_id between in_start_date_id and in_end_date_id
       and case when in_account_ids = '{}' then true else str.account_id = any (in_account_ids) end
       and str.parent_order_id is not null
-      and case
-              when in_liq_ind_type_id is null then true
-              else lin.liquidity_indicator_type_id != all (in_liq_ind_type_id) end
+      and case when in_liq_ind_type_id = '{}' then true else lin.liquidity_indicator_type_id = any(in_liq_ind_type_id) end
       and case when in_exchange_id = '{}' then true else str.exchange_id = any (in_exchange_id) end;
 
     get diagnostics l_row_cnt = row_count;
