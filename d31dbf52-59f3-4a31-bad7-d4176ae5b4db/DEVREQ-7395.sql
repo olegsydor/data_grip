@@ -39,7 +39,7 @@ begin
     drop table if exists t_yc;
 
     create temp table t_yc as
-    select *
+    select *, null::varchar(256) as trade_liquidity_indicator, null::varchar(256) as liq_ind_description
     from data_marts.f_yield_capture yc
     where yc.status_date_id between in_start_date_id and in_end_date_id
       and case when in_account_ids = '{}' then true else yc.account_id = any (in_account_ids) end
@@ -58,7 +58,7 @@ begin
     into l_step_id;
 
     insert into t_yc
-    select str.*
+    select str.*, lin.trade_liquidity_indicator, lin.description as liq_ind_description
     from t_yc as par
              join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
              inner join lateral (SELECT --e.exec_date_id, E.CUM_QTY, e.exec_time, e.order_status,
@@ -119,6 +119,9 @@ begin
            round(yc.avg_px, 6)                                                 as "Avg Px",
            yc.day_leaves_qty                                                   as "Lvs Qty",
            ex.exchange_name                                                    as "Exchange Name",
+           'N'                                                                 as "Is Marketable?",
+           trade_liquidity_indicator                                           as "Liq Indicator",
+           liq_ind_description                                                 as "Liq Ind Description",
            yc.nbbo_bid_price                                                   as "NBBO Bid Px",
            yc.nbbo_bid_quantity                                                as "NBBO Bid Qty",
            yc.nbbo_ask_price                                                   as "NBBO Ask Px",
@@ -161,3 +164,8 @@ $function$
 ;
 
 select * from trash.so_equity_non_marketable
+
+
+select * from dwh.d_account
+where account_id in (18595,18596,18597,18598,18599)
+order by case when account_id = 18597 then 18595.5 else account_id end
