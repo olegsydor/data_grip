@@ -483,7 +483,7 @@ from t_report
 where rec is null
 
 
-
+select * from (
  select
      cl.multileg_reporting_type,
 ac.broker_dealer_mpid,
@@ -749,6 +749,7 @@ ac.broker_dealer_mpid,
       and case
               when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end
-      and case when :in_exclude_blaze then cl.ex_destination not ilike 'blaze' else true end
+      and case when :in_exclude_blaze then cl.ex_destination not ilike 'blaze' else true end) x
+    where rec is null
  and cl.client_order_id = '00208522430ESNY1';
 
