@@ -421,8 +421,8 @@ drop table if exists t_report;
     return query
         select case
                    when record_type = 'H' then rec || '|' ||
-                                               in_start_date_id::text || 'T' || min_time || '|' || --Starting Event
-                                               in_end_date_id::text || 'T' || max_time || '|' || --Ending Event
+                                               :in_start_date_id::text || 'T' || min_time || '|' || --Starting Event
+                                               :in_end_date_id::text || 'T' || max_time || '|' || --Ending Event
                                                'DFIN' || '|' ||
 --                                                'DAIN' || '|' ||
                                                (select coalesce(cat_imid, '')
@@ -430,8 +430,8 @@ drop table if exists t_report;
                                                          join dwh.d_trading_firm using (trading_firm_id)
                                                 where true
                                                   and case
-                                                          when l_account_ids = '{}' then true
-                                                          else account_id = any (l_account_ids) end
+                                                          when :l_account_ids = '{}' then true
+                                                          else account_id = any (:l_account_ids) end
                                                   and cat_imid is not null
                                                 limit 1) || '|' ||
                                                'dashtradedesk@iongroup.com' || '|' ||
@@ -463,7 +463,7 @@ from dash360.report_rps_s3(in_start_date_id := :date_id, in_end_date_id := :date
 
 insert into trash.check_s3_socgen
 select ret_row, 'new', :date_id
-       from trash.report_rps_s3(in_start_date_id := :date_id, in_end_date_id := :date_id, in_is_multi_leg := 'N', in_trading_firm_ids := '{LPTF286,socgenpsc,socgen01}', in_exclude_blaze := true);
+       from trash.report_rps_s3(in_start_date_id := :date_id, in_end_date_id := :date_id, in_is_multi_leg := 'Y', in_trading_firm_ids := '{LPTF286,socgenpsc,socgen01}', in_exclude_blaze := true);
 
 
 select report, date_id, count(*)
@@ -471,6 +471,10 @@ from trash.check_s3_socgen
 group by report, date_id
 order by date_id, report desc;
 
+select * from trash.check_s3_socgen
+where date_id = :date_id
+and report = 'new'
+and ret_row is null
 
 
 select record_type,
@@ -747,3 +751,4 @@ ac.broker_dealer_mpid,
               else cl.multileg_reporting_type = '1' end
       and case when :in_exclude_blaze then cl.ex_destination not ilike 'blaze' else true end
  and cl.client_order_id = '00208522430ESNY1';
+
