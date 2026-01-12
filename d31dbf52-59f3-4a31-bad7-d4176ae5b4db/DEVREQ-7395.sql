@@ -3,15 +3,17 @@ select * from dwh.d_liquidity_indicator--.liquidity_indicator_type_id
 where is_active
 and liquidity_indicator_type_id = 2;
 
-
+--48333
+create temp table t_os as
 select *
-from trash.so_equity_non_marketable_data_print(in_start_date_id := 20260107, in_end_date_id := 20260107,
+from trash.so_equity_non_marketable_data_print(in_start_date_id := 20260108, in_end_date_id := 20260108,
 --                                                 in_account_ids := '{}',
                                                in_row_type := 'Child',
                                                in_sub_strategy_id := 0,
                                                in_exchange_id := '{ARCAE,MEMX,NSDQE,BATS,EDGX,EPRL}',
                                                in_liq_ind_type_id := '{2}');
 
+select * from t_os
 
 CREATE OR REPLACE FUNCTION trash.so_equity_non_marketable_data_print(in_start_date_id integer, in_end_date_id integer,
                                                                      in_account_ids integer[] default '{}',
@@ -77,6 +79,7 @@ begin
                                                     lin.trade_liquidity_indicator = ex.trade_liquidity_indicator)
 
     where str.status_date_id between in_start_date_id and in_end_date_id
+      and str.is_marketable = 'N'
       and case when in_account_ids = '{}' then true else str.account_id = any (in_account_ids) end
       and str.parent_order_id is not null
       and case when in_liq_ind_type_id = '{}' then true else lin.liquidity_indicator_type_id = any(in_liq_ind_type_id) end
@@ -162,6 +165,7 @@ $function$
 ;
 
 select * from trash.so_equity_non_marketable
+where "Order ID" = 409446830194307337
 
 
 select * from dwh.d_account
