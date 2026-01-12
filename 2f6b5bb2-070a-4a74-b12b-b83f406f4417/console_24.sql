@@ -1075,3 +1075,6 @@ select x from regexp_split_to_array(:in_val, '\s+') as x
 select '01' = any(:in_arr)
 
 select '01,02,03,04' = any(string_to_array(:in_val, ' '));
+
+
+select 123456789 % 100000000 = 23456789
