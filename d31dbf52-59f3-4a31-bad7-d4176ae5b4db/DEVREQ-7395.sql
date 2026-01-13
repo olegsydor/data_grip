@@ -14,6 +14,7 @@ from trash.so_equity_non_marketable_data_print(in_start_date_id := 20260108, in_
                                                in_liq_ind_type_id := '{2}');
 
 select * from t_os
+where
 
 CREATE OR REPLACE FUNCTION trash.so_equity_non_marketable_data_print(in_start_date_id integer, in_end_date_id integer,
                                                                      in_account_ids integer[] default '{}',
@@ -76,7 +77,8 @@ begin
         --
              join dwh.d_exchange exc on exc.exchange_id = str.exchange_id and exc.is_active = true
              join dwh.d_liquidity_indicator lin on (lin.exchange_id = exc.real_exchange_id and
-                                                    lin.trade_liquidity_indicator = ex.trade_liquidity_indicator)
+                                                    lin.trade_liquidity_indicator = ex.trade_liquidity_indicator
+                 and lin.is_active)
 
     where str.status_date_id between in_start_date_id and in_end_date_id
       and str.is_marketable = 'N'
@@ -171,3 +173,66 @@ where "Order ID" = 409446830194307337
 select * from dwh.d_account
 where account_id in (18595,18596,18597,18598,18599)
 order by case when account_id = 18597 then 18595.5 else account_id end
+
+
+select *
+from trash.so_equity_non_marketable enm
+where enm."Parent Order ID" = 409446125767232541;
+
+select *
+from data_marts.f_yield_capture yc
+where yc.status_date_id = 20260108
+ and yc.parent_order_id = 409446125767232541;
+
+create temp table t_yc as
+    select *, null::varchar(256) as trade_liquidity_indicator, null::varchar(256) as liq_ind_description
+    from data_marts.f_yield_capture yc
+    where yc.status_date_id between :in_start_date_id and :in_end_date_id
+--       and case when in_account_ids = '{}' then true else yc.account_id = any (in_account_ids) end
+      and yc.multileg_reporting_type in ('1', '2')
+      and yc.is_marketable = 'N'
+      and yc.order_price >= 1
+      and yc.parent_order_id is null
+      and yc.instrument_type_id = 'E'
+--       and case when in_sub_strategy_id is null then true else yc.sub_strategy_id = in_sub_strategy_id end
+and order_id = 409446125767232541;
+
+select * from t_yc;
+
+
+    select str.*
+         , lin.trade_liquidity_indicator, lin.description as liq_ind_description
+    , exc.real_exchange_id
+    ,ex.trade_liquidity_indicator
+    from t_yc as par
+             join data_marts.f_yield_capture str on (str.parent_order_id = par.order_id)
+             inner join lateral (SELECT
+                                     e.trade_liquidity_indicator
+                                 FROM EXECUTION E
+                                 WHERE E.ORDER_ID = str.ORDER_ID
+                                   --  AND e.exec_date_id = str.create_date_id
+                                   and e.exec_date_id = str.status_date_id -- SY: 20211216
+                                   and e.exec_date_id between :in_start_date_id and :in_end_date_id
+                                   AND E.ORDER_STATUS <> '3'
+                                  and exec_type = 'F'
+                 order by exec_time desc, exec_id desc
+                 limit 1) ex on true
+             join dwh.d_exchange exc on exc.exchange_id = str.exchange_id and exc.is_active = true
+             join dwh.d_liquidity_indicator lin on (lin.exchange_id = exc.real_exchange_id and
+                                                    lin.trade_liquidity_indicator = ex.trade_liquidity_indicator
+                 and lin.is_active)
+
+    where str.status_date_id between :in_start_date_id and :in_end_date_id
+      and str.is_marketable = 'N'
+--       and case when in_account_ids = '{}' then true else str.account_id = any (in_account_ids) end
+      and str.parent_order_id is not null
+       and case when :in_liq_ind_type_id = '{}' then true else lin.liquidity_indicator_type_id = any(:in_liq_ind_type_id) end
+       and case when :in_exchange_id = '{}' then true else str.exchange_id = any (:in_exchange_id) end
+    and par.order_id = 409446125767232541;
+
+
+select *
+from dwh.d_liquidity_indicator lin
+where lin.exchange_id = 'ARCAE'
+           and
+                                                     lin.trade_liquidity_indicator = 'RBD'
