@@ -91,4 +91,16 @@ end;
 $function$
 ;
 
-
+with ts as (select x,
+                   lead(x) over (order by x) as y
+            from generate_series('2026-01-13 00:00'::timestamp, '2026-01-14 00:00'::timestamp, '2 minutes'::interval) as x)
+select date_id, array_agg(load_batch_id) ids
+from (select date_id, x, y, load_batch_id
+      from public.etl_subscriptions,
+           ts
+      where source_table_name = 'execution'
+        and subscription_name = 'f_parent_order'
+        and subscribe_time >= ts.x
+        and subscribe_time < ts.y
+      order by load_batch_id) l
+group by date_id, x, y

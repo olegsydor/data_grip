@@ -1053,20 +1053,21 @@ select '2025-01-01'::timestamp + interval '1 minute' * round(random()::numeric *
 from generate_series(1, 3000) as id;
 
 with base as (select extract(year from created_at) || '-' ||
-                     extract(months from created_at) || '-01' as                   dt,
-                     count(*)                                 as                   cnt,
-                     lag(count(*)) over (order by extract(months from created_at)) nxt_cnt
+                     extract(months from created_at) || '-01' as                                    dt,
+                     count(*)                                 as                                    cnt,
+                     lag(count(*))
+                     over (order by extract(year from created_at), extract(months from created_at)) prv_cnt
               from training.posts
               group by extract(year from created_at), extract(months from created_at))
-select to_date(dt, 'YYYY-MM-DD')                                                  as date,
-       cnt                                                                        as count,
+select to_date(dt, 'YYYY-MM-DD') as date,
+       cnt                       as count,
        case
-           when nxt_cnt > cnt then '-1' || to_char(round(100 * (1 - cnt::numeric / nxt_cnt), 1), 'FM990.0%')
-           when nxt_cnt is null then null
-           else to_char(round(100 * (cnt::numeric / nxt_cnt - 1), 1), 'FM990.0%') end as percent_growth
-from base;
+           when cnt < prv_cnt then to_char(100 * (-1 * (1 - cnt::numeric / prv_cnt::numeric)), 'FM990.0%')
+           else to_char(100 * (cnt::numeric / prv_cnt::numeric - 1), 'FM990.0%') end
+from base
+order by 1;
 
-select 100.0 * (1 - 313 / 381::numeric);
+select 1 - 295 / 345::numeric;
 
 select x from regexp_split_to_array(:in_val, '\s+') as x
 
@@ -1077,4 +1078,21 @@ select '01' = any(:in_arr)
 select '01,02,03,04' = any(string_to_array(:in_val, ' '));
 
 
-select 123456789 % 100000000 = 23456789
+select * from training.posts
+
+select date_trunc('month', created_at)::date as date,
+     count(*)                              as count,
+    round(((100.0 / (lag(count(*)) over (order by date_trunc('month', created_at)::date asc))) * count(*)) - 100, 1) ||
+    '%'                                      as percent_growth
+from training.posts
+group by date
+order by date asc
+
+
+
+with base as (select to_char(x, 'YYYYMMDD') as x, to_char(lead(x) over (order by 1), 'YYYYMMDD') as y
+              from generate_series('2025-10-01', '2025-12-01', '1 day'::interval) as x
+              where extract(isodow from x::date) < 6)
+select 'CREATE TABLE partitions.strategy_transaction_output_' || base.x ||
+       ' PARTITION OF dwh.strategy_transaction_output_tail2 FOR VALUES FROM (' || base.x || ') TO (' || base.y || ');'
+from base

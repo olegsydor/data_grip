@@ -2,9 +2,9 @@ with base as (select error_text, monitoring.clean_text(error_text) as jsn, *
               from monitoring.error_tracking
               where true
 --     and regexp_replace(error_text, '\\', '') ilike '%bigdatatail2%'
---          and regexp_replace(error_text, '\\', '') ilike '%l1_snapshot%'
-                and db_host = 'pgbigdata1.dashops.net'
-                and db_create_time::date = '2025-11-17'
+          and regexp_replace(error_text, '\\', '') ilike '%load_trade_record_inc_dmp%'
+--                 and db_host = 'pgbigdata1.dashops.net'
+                and db_create_time::date = '2026-01-15'
                and db_type = 'PROD'
 --                 and error_text ilike '%37003769%'
               )
