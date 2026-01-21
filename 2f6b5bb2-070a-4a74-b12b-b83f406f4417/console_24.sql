@@ -1095,4 +1095,39 @@ with base as (select to_char(x, 'YYYYMMDD') as x, to_char(lead(x) over (order by
               where extract(isodow from x::date) < 6)
 select 'CREATE TABLE partitions.strategy_transaction_output_' || base.x ||
        ' PARTITION OF dwh.strategy_transaction_output_tail2 FOR VALUES FROM (' || base.x || ') TO (' || base.y || ');'
-from base
+from base;
+
+create table training.prospects
+(
+    full_name    text,
+    credit_limit float
+);
+
+create table training.customers
+(
+    id           int,
+    first_name   text,
+    last_name    text,
+    credit_limit float
+);
+
+insert into training.prospects (full_name, credit_limit)
+values ('Oleh Sydor', 10000000),
+       ('Roksolana Bobynets', 100000),
+       ('Vasyl Sydor', 2000000);
+
+insert into training.customers (id, first_name, last_name, credit_limit)
+values (1, 'Oleh', 'Sydor', 1000),
+       (2, 'Roksolana', 'Bobynets''', 2000),
+       (3, 'Vasyl', 'Sydor', '20000000');
+
+with base as (select regexp_split_to_table(full_name, ' ') as inst,
+                     credit_limit
+              from training.prospects)
+select * from training.customers cu
+left join base fn on fn.inst = cu.first_name
+left join base sn on sn.inst = cu.last_name
+
+
+select * from training.customers;
+
