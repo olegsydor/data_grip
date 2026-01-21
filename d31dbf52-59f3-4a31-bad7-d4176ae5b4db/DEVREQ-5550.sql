@@ -159,3 +159,40 @@ END;
 $function$
 ;
 
+    select array_agg(account_id)
+
+    from dwh.d_account
+    where true
+      and trading_firm_id = 'OFP0055';
+
+
+select co.time_in_force_id, co.expire_time, *
+from dwh.gtc_order_status gtc
+                 join dwh.client_order co on gtc.order_id = co.order_id and gtc.create_date_id = co.create_date_id
+                 join dwh.d_instrument di on co.instrument_id = di.instrument_id
+                 join dwh.d_order_type ot on (co.order_type_id = ot.order_type_id)
+                 left join dwh.d_option_contract oc on di.instrument_id = oc.instrument_id
+
+                 left join lateral (select ex.leaves_qty
+                                    from dwh.execution ex
+                                    where gtc.order_id = ex.order_id
+                                      and ex.order_status <> '3'
+                                      and ex.exec_date_id >= gtc.create_date_id
+                                      and ex.exec_date_id <= :in_end_date_id
+                                    order by ex.exec_id desc
+                                    limit 1) ex on true
+
+                 left join dwh.d_time_in_force tif
+                           on co.time_in_force_id = tif.tif_id
+        where true
+          and gtc.create_date_id <= :in_start_date_id
+          and co.parent_order_id is null
+          and gtc.account_id = any ('{69350,69405,68911}')
+          and di.instrument_type_id = 'O'
+          and (gtc.close_date_id is null
+-- the code below has been added to provide the same performance in the case we use the report for CURRENT date
+            or (case
+                    when :l_is_current_date then false
+                    else gtc.close_date_id is not null and close_date_id >= :in_end_date_id end))
+          -- end of
+          and co.multileg_reporting_type <> '3';
