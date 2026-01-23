@@ -1,14 +1,43 @@
 -- DROP FUNCTION dash360.allocations_instruction_trades(int4);
 
 CREATE OR REPLACE FUNCTION dash360.allocations_instruction_trades(in_alloc_instr_id integer)
- RETURNS TABLE(date_id integer, trade_record_id bigint, account_id integer, instrument_id bigint, side character, open_close character, avg_px numeric, exec_qty integer, display_instrument_id character varying, last_trade_date date, instrument_type_id character, cmta character varying, exec_broker character varying, principal_amount numeric, client_commission_rate numeric, blaze_account_alias character varying, street_exec_time timestamp without time zone, expiration_date timestamp without time zone, opt_customer_firm character, reported_status character, reported_time timestamp without time zone, claimed_by integer, claim_status character, is_prev_reported boolean)
- LANGUAGE plpgsql
- COST 1
-AS $function$
+    RETURNS TABLE
+            (
+                date_id                  integer,
+                trade_record_id          bigint,
+                account_id               integer,
+                instrument_id            bigint,
+                side                     character,
+                open_close               character,
+                avg_px                   numeric,
+                exec_qty                 integer,
+                display_instrument_id    character varying,
+                last_trade_date          date,
+                instrument_type_id       character,
+                cmta                     character varying,
+                exec_broker              character varying,
+                principal_amount         numeric,
+                client_commission_rate   numeric,
+                blaze_account_alias      character varying,
+                street_exec_time         timestamp without time zone,
+                expiration_date          timestamp without time zone,
+                opt_customer_firm        character,
+                reported_status          character,
+                reported_time            timestamp without time zone,
+                claimed_by               integer,
+                claim_status             character,
+                is_prev_reported         boolean,
+                client_commission_amount numeric(20, 8)
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
     --l_date_id := in_date_id;
     --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
     -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 changes in report_time using is_billed in trade_record
+    -- OS 20260123 no ticket yet added client_commission_amount
 declare
     l_date_id integer;
 begin
@@ -101,3 +130,30 @@ begin
 end;
 $function$
 ;
+select a.alloc_instr_id
+from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
+                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select to_report, bar.db_create_time
+                                    from dash_reporting.bofa_allocation_report bar
+                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bar.date_id = ai2tr.date_id
+                                    limit 1) bar on true
+--                  left join lateral (select bas.claimed_by, bas.claim_status
+--                                     from dash_reporting.bofa_allocation_instruction_status bas
+--                                     where bas.alloc_instr_id = ai2tr.alloc_instr_id
+--                                       and bas.date_id = ai2tr.date_id
+--                                     limit 1) bas on true
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+
+        where tr.is_busted = 'N'
+          and tr.date_id = :l_date_id
+          and a.alloc_instr_id = in_alloc_instr_id;
+select * from dash360.allocations_instruction_trades(in_alloc_instr_id := -107724)
