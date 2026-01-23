@@ -353,3 +353,25 @@ $$
 
 
 select * from trash.old_gtc_base_modif
+
+select * from dwh.execution
+where order_id = 741271580
+and exec_date_id >= 20180102
+
+
+select *--create_date_id, count(*)
+from trash.old_gtc_order_status gtc
+left join lateral (select iex.exec_time,
+                                       iex.order_status
+                                from dwh.execution iex
+                                where true
+                                  and iex.order_id = gtc.order_id
+                                  and iex.order_status in ('2', '4', '8')
+--	                                  and exec_date_id >= l_start_date_id
+                                  and exec_date_id between :l_start_date_id and :l_end_date_id
+                                order by exec_id desc
+                                limit 1) ex on true
+where true
+    and close_date_id is null
+-- and create_date_id <= 20180501
+and gtc.order_id = 1129878350
