@@ -1,6 +1,6 @@
 -- DROP FUNCTION genesis2.lp_load_missed_trades_blaze7(int8, int4, int4);
 
-CREATE OR REPLACE FUNCTION genesis2.lp_load_missed_trades_blaze7(in_load_batch_id bigint DEFAULT NULL::bigint, in_start_date integer DEFAULT get_dateid(CURRENT_DATE), in_end_date integer DEFAULT get_dateid(CURRENT_DATE))
+CREATE OR REPLACE FUNCTION genesis2.lp_load_missed_trades_blaze7_00000(in_load_batch_id bigint DEFAULT NULL::bigint, in_start_date integer DEFAULT get_dateid(CURRENT_DATE), in_end_date integer DEFAULT get_dateid(CURRENT_DATE))
  RETURNS integer
  LANGUAGE plpgsql
 AS $function$
@@ -796,7 +796,8 @@ select distinct trade_record_time
                                                       EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
                                                       EXCLUDED.client_order_id || ')'),
                            EXCLUDED.date_id)
-	returning trade_record_id;
+	returning trade_record_id
+	;
 
 	--update staging.trade_record_missed_lp trml
     update staging.trade_record_blaze7 trml
