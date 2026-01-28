@@ -793,12 +793,14 @@ select distinct trade_record_time
                                                       EXCLUDED.client_order_id || ')'),
                            EXCLUDED.date_id);
 
+		GET DIAGNOSTICS row_cnt = ROW_COUNT;
+		   total_cn:=total_cn+row_cnt;
 
---     insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
-    select genesis2.(        'big_data.flat_trade_record', 'TRADE_RECORD.AWAY_TRADES', trade_record_id, date_id -- new subscription name)
+    select genesis2.etl_subscribe(in_load_batch_id := trade_record_id, in_row_cnt := row_cnt,
+                                  in_subscription_name := 'big_data.flat_trade_record',
+                                  in_source_table_name := 'TRADE_RECORD.AWAY_TRADES', in_date_id := date_id)
     FROM genesis2.trade_record
-        where load_batch_id = l_load_id;
-
+    where load_batch_id = l_load_id;
 
 	--update staging.trade_record_missed_lp trml
     update staging.trade_record_blaze7 trml
