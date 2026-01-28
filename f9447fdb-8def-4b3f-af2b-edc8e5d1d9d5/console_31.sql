@@ -31,7 +31,7 @@ declare
  l_time timestamp;
  l_step_id	int;
  l_load_id	int;
-
+l_subscr_trade_record_id int8[];
 
 begin
 	total_cn:=0;
@@ -605,9 +605,6 @@ begin
 	             into l_step_id;
 
 
-		  select load_log(l_load_id, l_step_id, 'missed_trades_blaze7 Matching COMPLETED ===', 0, 'E')
-	      into l_step_id;
-
 
 	--- >>>
 	  INSERT INTO genesis2.trade_record
@@ -779,7 +776,6 @@ select distinct trade_record_time
     and trml.load_batch_id <= l_load_id
     and last_qty<=order_qty
     and coalesce(trml.is_busted,'N') ='N'
-
     on conflict (date_id,
     COALESCE(exch_exec_id, (exec_id)::character varying),
     client_order_id, (
@@ -795,9 +791,14 @@ select distinct trade_record_time
                                                       '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
                                                       EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
                                                       EXCLUDED.client_order_id || ')'),
-                           EXCLUDED.date_id)
-	returning trade_record_id
-	;
+                           EXCLUDED.date_id);
+
+
+    insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
+    Select 'big_data.flat_trade_record', 'TRADE_RECORD.AWAY_TRADES', trade_record_id, date_id
+    FROM genesis2.trade_record
+        where load_batch_id = l_load_id;
+
 
 	--update staging.trade_record_missed_lp trml
     update staging.trade_record_blaze7 trml
@@ -815,8 +816,11 @@ select distinct trade_record_time
 
   	GET DIAGNOSTICS row_cnt = ROW_COUNT;
 
-	select public.load_log(l_load_id, l_step_id, 'AWAY TRADES INSERT INSERTED load_batch_id='||l_load_id, row_cnt, 'I')
+	select load_log(l_load_id, l_step_id, 'missed_trades_blaze7 Matching COMPLETED ===', 0, 'E')
 	into l_step_id;
+
+
+	-- subscription
 
 	--- <<<
 
@@ -835,5 +839,6 @@ select distinct trade_record_time
 	  PERFORM load_error_log('genesis2.lp_load_missed_trades_blaze7',  'I', REPLACE(sqlerrm, ''::text, ''::text), l_load_id);
 		return -1; --RAISE;
 
-end;$function$
+end;
+    $function$
 ;

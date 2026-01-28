@@ -375,3 +375,58 @@ where true
     and close_date_id is null
 -- and create_date_id <= 20180501
 and gtc.order_id = 1129878350
+
+
+with base as (select gos.order_id, ex.*
+              from trash.old_gtc_order_status gos
+                       join lateral (select public.get_gth_date_id_by_instrument(iex.exec_time,
+                                                                                 gos.instrument_id) as close_date_id,
+                                            iex.order_status
+                                     from dwh.execution iex
+                                     where iex.order_id = gos.order_id
+                                       and exec_date_id between 20180102 and 20190809
+                                     order by exec_id desc
+                                     limit 1) ex on true
+              where gos.close_date_id is null)
+update trash.old_gtc_order_status gtc
+set close_date_id  = base.close_date_id,
+    closing_reason = 'X'
+from base
+where gtc.order_id = base.order_id
+  and gtc.close_date_id is null;
+
+
+
+update trash.old_gtc_order_status gos
+set close_date_id = (select public.get_gth_date_id_by_instrument(iex.exec_time, gos.instrument_id)
+                     from dwh.execution iex
+                     where iex.order_id = gos.order_id
+                       and exec_date_id between 20180102 and 20190809
+                     order by exec_id desc
+                     limit 1)
+where gos.close_date_id is null;
+
+
+select gtc.order_id,
+           iex_par.close_date_id as close_date_id,
+           iex_par.order_status  as order_status,
+           'P'                   as closing_reason,
+           gtc.client_order_id,
+           gtc.multileg_reporting_type
+    from trash.old_gtc_order_status gtc
+             join dwh.client_order str
+                  on (str.order_id = gtc.order_id and str.create_date_id = gtc.create_date_id and
+                      str.create_date_id >= 20100102)
+             join lateral (select
+                                  -- to_char(iex.exec_time, 'YYYYMMDD')::int4 as close_date_id,
+                                  public.get_gth_date_id_by_instrument(iex.exec_time, gtc.instrument_id) as close_date_id,
+                                  iex.order_status
+                           from dwh.execution iex
+                           where true
+                             and iex.order_id = str.parent_order_id
+--                              and iex.order_status in ('2', '4', '8')
+                             and exec_date_id between 20180102 and 20200809
+                           order by exec_id desc
+                           limit 1) iex_par on true
+    where gtc.close_date_id is null
+      and str.parent_order_id is not null
