@@ -794,8 +794,8 @@ select distinct trade_record_time
                            EXCLUDED.date_id);
 
 
-    insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
-    Select 'big_data.flat_trade_record', 'TRADE_RECORD.AWAY_TRADES', trade_record_id, date_id
+--     insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
+    select genesis2.(        'big_data.flat_trade_record', 'TRADE_RECORD.AWAY_TRADES', trade_record_id, date_id -- new subscription name)
     FROM genesis2.trade_record
         where load_batch_id = l_load_id;
 
