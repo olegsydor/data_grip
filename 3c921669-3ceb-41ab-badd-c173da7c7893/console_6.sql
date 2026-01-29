@@ -102,4 +102,35 @@ BEGIN
     RETURN VAR;
 END;
     commit
-select get_shp_data() from dual
+select get_shp_data() from dual;
+
+
+SELECT * FROM GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM WHERE USER_ID=9503;
+
+SELECT                 ui.user_id,
+                       ui.user_role
+--        ,
+--                        fc.fix_comp_id
+
+    FROM GENESIS2_QA_20100601.USER_IDENTIFIER ui
+         JOIN GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM ptf
+           ON ptf.USER_ID = ui.USER_ID
+--          JOIN GENESIS2_QA_20100601.PORTAL_USER ps
+--            ON ps.USER_ID = ui.USER_ID
+--          JOIN GENESIS2_QA_20100601.TRADING_FIRM tf
+--            ON tf.TRADING_FIRM_ID = ptf.TRADING_FIRM_ID
+--          JOIN GENESIS2_QA_20100601.ACCOUNT_SET acs
+--            ON acs.ACCOUNT_SET_ID = ps.ACCOUNT_SET_ID
+--          JOIN GENESIS2_QA_20100601.ACCOUNT_SET2ACCOUNT asta
+--            ON asta.ACCOUNT_SET_ID = acs.ACCOUNT_SET_ID
+--          JOIN GENESIS2_QA_20100601.ACCOUNT ac
+--            ON ac.ACCOUNT_ID = asta.ACCOUNT_ID
+--           AND ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
+--          JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc
+--            ON tfcc.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
+--          JOIN GENESIS2_QA_20100601.FIX_CONNECTION fc
+--            ON fc.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
+    WHERE 1=1
+--     and fc.IS_DELETED <> 'Y'
+      AND ui.USER_ROLE IN ('P', 'T')
+    and ui.USER_ID = 9503

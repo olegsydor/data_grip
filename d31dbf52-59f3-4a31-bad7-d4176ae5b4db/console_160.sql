@@ -1,14 +1,21 @@
--- DROP FUNCTION dash360.report_beta_open_order_recon(_int4);
+-- DROP FUNCTION dash360.report_beta_open_order_recon;
 
-CREATE OR REPLACE FUNCTION dash360.report_beta_open_order_recon(in_account_id integer[], in_fix_comp_ids default '{}')
- RETURNS TABLE(rec text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION dash360.report_beta_open_order_recon(in_account_id integer[],
+                                                                in_fix_comp_ids varchar(30)[] default '{}'::varchar(30)[],
+                                                                in_start_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
+                                                                in_end_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
+    RETURNS TABLE
+            (
+                rec text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 20260129 SO https://dashfinancial.atlassian.net/browse/DS-11031
 declare
     l_load_id int;
     l_step_id int;
-
+l_is_current_date bool := false;
 begin
      select nextval('public.load_timing_seq') into l_load_id;
      l_step_id := 1;
@@ -16,6 +23,10 @@ begin
      select public.load_log(l_load_id, l_step_id,
                             'report_beta_open_order_recon for ' || in_account_id::text || 'STARTED ====', 0, 'O')
      into l_step_id;
+
+         if in_start_date_id = in_end_date_id and in_start_date_id = to_char(current_date, 'YYYYMMDD')::int4 then
+        l_is_current_date = true;
+    end if;
 
      return query
         SELECT "EXCH-FIRM-NO" ||
@@ -116,7 +127,9 @@ begin
                                      order by ex.exec_time desc
                                      limit 1) ex on true
                        INNER JOIN dwh.d_ORDER_STATUS ORS ON ORS.ORDER_STATUS = EX.ORDER_STATUS
+
                        inner join dwh.d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id
+
                        LEFT JOIN dwh.d_OPTION_CONTRACT OC on (OC.INSTRUMENT_ID = CL.INSTRUMENT_ID)
                        LEFT JOIN dwh.d_OPTION_SERIES OS on (OC.OPTION_SERIES_ID = OS.OPTION_SERIES_ID)
                        LEFT JOIN dwh.d_EX_DESTINATION_CODE EDC
@@ -124,13 +137,17 @@ begin
 
                        LEFT JOIN dwh.d_TIME_IN_FORCE TIF ON (TIF.TIF_ID = CL.TIME_IN_FORCE_id)
               WHERE true
-                and gtc.close_date_id is null
-                and gtc.account_id = any(in_account_id)
+                and (gtc.close_date_id is null
+                  -- the code below has been added to provide the same performance in the case we use the report for CURRENT date
+                  or (case
+                          when l_is_current_date then false
+                          else gtc.close_date_id is not null and close_date_id > in_end_date_id end))
+                and gtc.account_id = any (in_account_id)
                 AND CL.PARENT_ORDER_ID IS NULL
                 AND CL.TRANS_TYPE IN ('D', 'G')
                 AND CL.TIME_IN_FORCE_ID in ('1', '6')
                 AND CL.MULTILEG_REPORTING_TYPE in ('1', '2')
-               and case when in_fix_comp_ids = '{}' then true else fc.fix_comp_id = any(in_fix_comp_ids) end
+                and case when in_fix_comp_ids = '{}' then true else fc.fix_comp_id = any (in_fix_comp_ids) end
               ORDER BY CL.CREATE_TIME::date, CL.CLIENT_ORDER_ID, CL.SIDE) x;
 
      select public.load_log(l_load_id, l_step_id,
@@ -141,3 +158,50 @@ $function$
 ;
 
 select * from dwh.d_fix_connection
+where fix_comp_id ilike '%AMPRSEOFP1%'
+
+select * from dwh.client_order
+where create_date_id = 20260129
+and fix_connection_id is null;
+
+select gtc.account_id, fix_comp_id
+FROM dwh.gtc_order_status gtc
+                       join dwh.CLIENT_ORDER CL using (create_date_id, order_id)
+                       INNER JOIN dwh.d_INSTRUMENT I ON I.INSTRUMENT_ID = CL.INSTRUMENT_ID
+                       INNER JOIN dwh.d_ACCOUNT AC ON (CL.ACCOUNT_ID = AC.ACCOUNT_ID)
+                       join lateral (select ex.exec_id as exec_id,
+                                            ex.avg_px,
+                                            ex.leaves_qty,
+                                            ex.order_status
+                                     from dwh.execution ex
+                                     where gtc.order_id = ex.order_id
+                                       and ex.order_status <> '3'
+                                       and ex.exec_date_id >= gtc.create_date_id
+                                     order by ex.exec_time desc
+                                     limit 1) ex on true
+                       INNER JOIN dwh.d_ORDER_STATUS ORS ON ORS.ORDER_STATUS = EX.ORDER_STATUS
+
+                       inner join dwh.d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id
+
+                       LEFT JOIN dwh.d_OPTION_CONTRACT OC on (OC.INSTRUMENT_ID = CL.INSTRUMENT_ID)
+                       LEFT JOIN dwh.d_OPTION_SERIES OS on (OC.OPTION_SERIES_ID = OS.OPTION_SERIES_ID)
+                       LEFT JOIN dwh.d_EX_DESTINATION_CODE EDC
+                                 on (CL.ex_destination = EDC.ex_destination_CODE and EDC.is_active)
+
+                       LEFT JOIN dwh.d_TIME_IN_FORCE TIF ON (TIF.TIF_ID = CL.TIME_IN_FORCE_id)
+              WHERE true
+and (gtc.close_date_id is null
+        -- the code below has been added to provide the same performance in the case we use the report for CURRENT date
+        or (case
+                when l_is_current_date then false
+                else gtc.close_date_id is not null and close_date_id > in_end_date_id end))
+                AND CL.PARENT_ORDER_ID IS NULL
+                AND CL.TRANS_TYPE IN ('D', 'G')
+                AND CL.TIME_IN_FORCE_ID in ('1', '6')
+                AND CL.MULTILEG_REPORTING_TYPE in ('1', '2')
+
+select * from dash360.report_beta_open_order_recon('{14765,30150,19250}', 20260104, 20260105,'{VWTRDOFP1}');
+select * from dash360.report_beta_open_order_recon('{14765,30150,19250}', 20260104, 20260105,'{VWTRDOFP1}');
+select * from dash360.report_beta_open_order_recon('{14765,30150,19250}', '{VWTRDOFP1}', 20260104, 20260105);
+select * from dash360.report_beta_open_order_recon('{14765,30150,19250}', '{VWTRDOFP1}');
+select * from dash360.report_beta_open_order_recon('{14765,30150,19250}');
