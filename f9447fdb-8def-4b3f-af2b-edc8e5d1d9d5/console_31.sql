@@ -844,3 +844,1086 @@ select distinct trade_record_time
 end;
     $function$
 ;
+
+
+
+-- DROP FUNCTION genesis2.load_trade_record_inc_dmp(int8, int8, bpchar);
+
+CREATE OR REPLACE FUNCTION genesis2.load_trade_record_inc_dmp_00000(in_dataset_id bigint DEFAULT NULL::numeric, in_orig_trade_record_id bigint DEFAULT NULL::bigint, in_trade_record_reason character DEFAULT NULL::character(1))
+ RETURNS integer
+ LANGUAGE plpgsql
+ SET application_name TO 'ETL_FAST: TRADE_RECORD incremental'
+AS $function$
+-- AK: 20210322 added "NULLIF" for street_client_order_id field at 559 line
+-- SY: 20220217 https://dashfinancial.atlassian.net/browse/DS-4834 Added condition to do not load flex trades. It fixes issue with multyleg when one lag is fex abother not
+-- SY: 20220909 https://dashfinancial.atlassian.net/browse/DS-5623 Added immediate  match of Away trade
+-- SY: 20220909 Disbale part related to Oracle Billing
+-- SY: 20221121 https://dashfinancial.atlassian.net/browse/DS-5997 . Force oracle_fdw disconnect has been added to close serializable session of oracle side
+-- SY: 20230125 https://dashfinancial.atlassian.net/browse/DS-6085 processing of Away trades from Dash360 has been added
+-- SY: 20230420 https://dashfinancial.atlassian.net/browse/DS-6649. blaze_account_alias field has been introduced on staging.trade_record_v side
+-- PD: 20230509 https://dashfinancial.atlassian.net/browse/DS-6421. Commented is_flex_order condition for away trades
+-- SY: 20230614 https://dashfinancial.atlassian.net/browse/DS-6846 OMS_EDW trades processing has been blocked (temporary) but correct processing implemented
+-- SY: 20230619 https://dashfinancial.atlassian.net/browse/DS-6846 OMS_EDW trades processing has been allowed
+-- SY: 20230621 https://dashfinancial.atlassian.net/browse/DS-6846 OMS_EDW trades processing has been disabled for electronic fills
+-- SY: 20230623 https://dashfinancial.atlassian.net/browse/DS-6921 Trade_liquidity_indicator needs to be converted to correct value due to Java-2329
+-- SY: 20230707 https://dashfinancial.atlassian.net/browse/DS-6988 Equity processing as part of OMS_EDW flow has been disabled
+-- SY: 20230821 https://dashfinancial.atlassian.net/browse/DS-7137 blaze_account_alias fix for crosses
+-- SY: 20240410 https://dashfinancial.atlassian.net/browse/DS-8193 logic to handle  subscription_name = 'missed_fix_trade' and source_table_name = 'orcl_execution' has been added
+-- OS: 20240429 https://dashfinancial.atlassian.net/browse/DS-8134 init
+-- OK: 20240911 https://dashfinancial.atlassian.net/browse/DS-8869 changed from incremental value for dataset_id to etl_subsctiptions
+-- SO: 20241114 https://dashfinancial.atlassian.net/browse/DS-9091 Added on conflict (moved from the old trigger)
+-- SY: 20241216 https://dashfinancial.atlassian.net/browse/DS-9283 street_exec_broker logic reverted to use client_order table instead of function
+-- SY: 20241223 https://dashfinancial.atlassian.net/browse/DS-9338 check_environment has been introduced
+-- OK: 20250102 https://dashfinancial.atlassian.net/browse/DS-9285 each date is processed separately in a loop and there is a disctinct query for multidays
+-- SY: 20250116 https://dashfinancial.atlassian.net/browse/DS-9438 Allocation bofa reporting flag has been added. The is_billed field  has been reused
+-- SY: 20250416 https://dashfinancial.atlassian.net/browse/DS-9877 Away trade logic has been fixed to use 20 mapping logic in correct way
+--																   is_busted field has been corrcted due to now away trade flow rules
+-- AK: 20250714 https://dashfinancial.atlassian.net/browse/DS-10203 v.co_client_leg_ref_id removed from input paremetr of  public.get_message_tag_string_cross_multileg function
+-- SY: 20251209 https://dashfinancial.atlassian.net/browse/DS-10410 street_account_name logic has been moved to big_data side
+-- OS 20260126 https://dashfinancial.atlassian.net/browse/DS-10962 move logic that inserts Blaze7 Away trades from load_trade_record_inc to lp_load_missed_trades_blaze7
+DECLARE
+--    l_max_exec_id bigint;
+   l_ret	int;
+   some_var     varchar;
+   l_step_id	int;
+   l_load_id	int;
+--    l_foreign_max_exec_id bigint; -- max exiscting id
+   l_status_message varchar;
+   l_scr record;
+   l_cnt int;
+   l_date_id int;
+--   l_date_ids int[];
+   l_away_load_batch int;
+   l_max_dataset_id         int8; -- dataset_id that is present in the table
+   l_foreign_max_dataset_id int8; -- max dataset_id we should load
+   l_foreign_dataset_ids_mday int8[]; -- dataset_ids used for trade_record_v_historical_mday
+   l_pg_session_id int4;
+   l_batch_size int4;
+   l_date_total_trade_count int4;
+   l_date_mday_trade_count int4;
+   l_date_trade_count int4;
+   l_minimal_create_date_id int4;
+
+
+
+BEGIN
+   l_date_id:=to_char(current_date - interval '5 days' ,'YYYYMMDD')::int ;
+   l_batch_size:=100;
+
+   if in_dataset_id is null
+ then
+	select nextval('load_timing_seq') into l_load_id;
+--	select nextval('public.load_timing_seq') into l_load_id;
+	l_step_id:=1;
+	--l_foreign_max_exec_id:=0;
+
+	l_status_message:='Trade_Record_inc STARTED===';
+	select public.load_log(l_load_id, l_step_id, l_status_message, 0, 'O')
+	into l_step_id;
+
+	select pg_backend_pid()::text
+	into l_pg_session_id;
+
+	select public.load_log(l_load_id, l_step_id, 'load_trade_record_inc session id:' || l_pg_session_id::varchar, 0, 'S')
+	into l_step_id;
+
+
+ else l_foreign_max_dataset_id:=in_dataset_id ;
+	 l_max_dataset_id := in_dataset_id - 1;
+end if;
+
+--if public.check_environment() in ('DEV', 'UAT')  -- genesis2.dimension_etl is being called directly from Airflow prior to calling this function
+--	then 	select genesis2.dimension_etl() into some_var;
+--    else 	select genesis2.dimension_etl(true) into some_var;
+--   end if;
+--
+--
+--   l_status_message:='dimension_etl';
+--	select genesis2.load_log(l_load_id, l_step_id, l_status_message, 0, 'O')
+--	into l_step_id;
+ perform public.oracle_close_connections();
+
+   for l_scr in (select load_batch_id, subscription_id
+                 from genesis2.etl_subscriptions
+                 where subscription_name = 'missed_fix_trade'
+                   and source_table_name = 'orcl_execution'
+                   and  not is_processed
+                 ) loop
+    l_status_message:= 'FIX TRADE GAP processing: '||l_scr.load_batch_id;
+
+	select public.load_log(l_load_id, l_step_id, l_status_message, 1, 'O')
+	into l_step_id;
+
+     --SY !! perform genesis2.load_trade_record_inc_dmp(l_scr.load_batch_id);
+
+	      update genesis2.etl_subscriptions
+     set is_processed = true,
+         process_time = clock_timestamp()
+     where subscription_id = l_scr.subscription_id;
+    end loop;
+
+
+--IF l_foreign_max_dataset_id > l_max_dataset_id /* 1=1*/ THEN
+--if cardinality(l_foreign_max_dataset_ids)>0 THEN
+
+--set enable_hashjoin=off;
+--set enable_mergejoin=off;
+
+-- foreach l_loop_date_id in array l_date_ids loop
+ for l_scr in (select date_id, array_agg(load_batch_id) as foreign_max_dataset_ids, array_agg(subscription_id) as subs_ids
+                 from (select date_id, load_batch_id, subscription_id
+		                 from staging.etl_subscriptions
+		                 where subscription_name = 'genesis2.trade_record'
+							and source_table_name = 'dmp.execution'
+		                   	and  not is_processed
+		                   	and subscribe_time < now() - interval '10 seconds'
+		                    limit l_batch_size
+						)
+		                  group by date_id
+                 ) loop
+
+l_status_message:='date_id='||l_scr.date_id::text||': load_batch_ids size: ';
+
+select public.load_log(l_load_id, l_step_id, l_status_message, cardinality(l_scr.foreign_max_dataset_ids), 'S')
+    into l_step_id;
+
+select count(1), count(case when time_in_force_id in ('1', '6') then 1 else null end), count(case when time_in_force_id not in ('1', '6') then 1 else null end)
+     ,  array_agg(distinct case when time_in_force_id  in ('1', '6') then a.ds_id else 0 end)
+into l_date_total_trade_count, l_date_mday_trade_count, l_date_trade_count, l_foreign_dataset_ids_mday
+from (select unnest(l_scr.foreign_max_dataset_ids) as ds_id) a
+inner join lateral (select time_in_force_id
+                    from  staging.execution ex
+                    where a.ds_id = ex.dataset_id and ex.exec_date_id = l_scr.date_id
+ 					and is_parent_level
+                    and exec_type='F'
+                    and ex.is_busted='N'
+                    limit 10050000 ) E on true;
+
+
+l_status_message:='l_date_total_trade_count: ';
+
+select public.load_log(l_load_id, l_step_id, l_status_message, l_date_total_trade_count, 'S')
+    into l_step_id;
+--
+--l_status_message:='l_date_trade_count: ';
+--
+--select public.load_log(l_load_id, l_step_id, l_status_message, l_date_trade_count, 'S')
+--    into l_step_id;
+--
+--l_status_message:='l_foreign_dataset_ids_mday count: ';
+--
+--select public.load_log(l_load_id, l_step_id, l_status_message, cardinality(l_foreign_dataset_ids_mday), 'S')
+--    into l_step_id;
+
+--   l_status_message:='============FIX TRADE GAP =======';
+
+--if l_date_trade_count>0 THEN
+
+	insert into genesis2.trade_record (trade_record_time, db_create_time, date_id,
+		    is_busted, orig_trade_record_id, trade_record_trans_type, trade_record_reason,
+		    subsystem_id, user_id, account_id, client_order_id, instrument_id ,
+		    side, open_close, fix_connection_id, exec_id, exchange_id, trade_liquidity_indicator,
+		    secondary_order_id, exch_exec_id, secondary_exch_exec_id, last_mkt,
+		    last_qty, last_px, ex_destination, sub_strategy, street_order_id,
+		    order_id, street_order_qty, order_qty, multileg_reporting_type,
+		    is_largest_leg, street_max_floor, exec_broker, cmta,
+		    street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
+		    is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator,
+		    street_cross_is_originator, contra_account, contra_broker, trade_exec_broker,
+		    order_fix_message_id, trade_fix_message_id,  street_order_fix_message_id, client_id,
+		    street_transaction_id, transaction_id, order_price, street_order_price, order_process_time ,
+		    street_client_order_id, fix_comp_id, LEAVES_QTY, street_exec_inst, fee_sensitivity,
+		    strategy_decision_reason_code, compliance_id, floor_broker_id, AUCTION_ID,
+		    street_opt_customer_firm, clearing_account_number, sub_account,  multileg_order_id,
+		    INTERNAL_COMPONENT_TYPE, street_trade_fix_message_id, pt_basket_id, pt_order_id, Street_Client_Sender_CompID,
+		    street_account_name, street_exec_broker, trade_text, branch_sequence_number, frequent_trader_id, time_in_force, int_liq_source_type,
+		    market_participant_id, ALTERNATIVE_COMPLIANCE_ID, street_trade_record_time, street_order_process_time,leg_ref_id, blaze_account_alias
+		    )
+	select TRADE_RECORD_TIME
+	, now() as db_create_time
+	, DATE_ID
+	, 'N' as IS_BUSTED
+	, IN_ORIG_TRADE_RECORD_ID
+	, TRADE_RECORD_TRANS_TYPE
+	, coalesce(in_trade_record_reason,TRADE_RECORD_REASON::char ) as TRADE_RECORD_REASON
+	, COALESCE(SUB_SYSTEM_ID,'PG_DASH') as SUB_SYSTEM_ID
+	, null as USER_ID  -- SO hotfix
+	, ACCOUNT_ID
+	, CLIENT_ORDER_ID
+	, v.INSTRUMENT_ID
+	, SIDE
+	, OPEN_CLOSE
+	, FIX_CONNECTION_ID
+	, EXEC_ID
+	, CASE WHEN exchange_id in ('C2OXFX','CBOEFX') then substring(exchange_id, 1, length(exchange_id)-2) else exchange_id end as exchange_id
+	, staging.get_trade_liquidity_indicator(TRADE_LIQUIDITY_INDICATOR) as TRADE_LIQUIDITY_INDICATOR
+	, SECONDARY_ORDER_ID
+	, EXCH_EXEC_ID
+	, SECONDARY_EXCH_EXEC_ID
+	, LAST_MKT
+	, LAST_QTY
+	, LAST_PX
+	, EX_DESTINATION
+-- 	, SUB_STRATEGY
+    , sub_strategy_desc
+	, STREET_ORDER_ID
+	, ORDER_ID
+	, STREET_ORDER_QTY
+	, ORDER_QTY
+	, MULTILEG_REPORTING_TYPE
+	, IS_LARGEST_LEG
+	, STREET_MAX_FLOOR
+	, EXEC_BROKER
+	, left(CMTA,3)
+	, STREET_TIME_IN_FORCE
+	, STREET_ORDER_TYPE
+	, OPT_CUSTOMER_FIRM
+	, STREET_MPID
+	, IS_CROSS_ORDER
+	, STREET_IS_CROSS_ORDER
+	, STREET_CROSS_TYPE
+	, CROSS_IS_ORIGINATOR
+	, STREET_CROSS_IS_ORIGINATOR
+	, CONTRA_ACCOUNT
+	, CONTRA_BROKER
+	, TRADE_EXEC_BROKER
+	, order_fix_message_id
+	, trade_fix_message_id
+	, street_order_fix_message_id
+	, client_id
+	, street_transaction_id
+	, transaction_id
+	, order_price
+	, street_order_price
+	, order_process_time
+	, street_client_order_id
+	, fix_comp_id
+    , LEAVES_QTY
+    , street_exec_inst
+    , fee_sensitivity::int2
+    , strategy_decision_reason_code
+    , compliance_id
+    , floor_broker_id
+    , AUCTION_ID
+    , STR_OPT_CUSTOMER_FIRM
+	, clearing_account
+    , left(sub_account,30) as sub_account
+    ,  multileg_order_id
+    , INTERNAL_COMPONENT_TYPE
+    , str_trade_fix_message_id
+    , pt_basket_id
+    , pt_order_id
+    , str_cls_comp_ID
+    , street_account_name
+    , v.street_exec_broker
+    , trade_text
+    , branch_seq_num
+    , left (frequent_trader_id,6) as frequent_trader_id
+    , time_in_force
+    , is_ats_or_cons
+    , mpid
+    , ALTERNATIVE_COMPLIANCE_ID
+    , street_trade_record_time
+    , street_order_process_time
+    , co_client_leg_ref_id as leg_ref_id
+    , v.blaze_account_alias
+--	, case when v.is_cross_order='Y'
+--             then  public.get_message_tag_string_cross_multileg(v.order_fix_message_id, 10445, v.date_id::int,v.client_order_id, NULL,null/*v.co_client_leg_ref_id*/, v.is_cross_order::boolean)
+--             else v.blaze_account_alias
+--      end
+    from staging.trade_record_v_historical v
+	where dataset_id = any(l_scr.foreign_max_dataset_ids)
+	and v.date_id = l_scr.date_id
+--    and v.exec_id not in (344679071267219235, 344679101331990358)
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (CASE
+				        WHEN (orig_trade_record_id IS NOT NULL)
+				            THEN trade_record_id
+				        ELSE 1
+				        END)
+				    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id)
+;
+
+
+GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+select public.load_log(l_load_id, l_step_id, l_scr.date_id::varchar|| ': insert into genesis2.trade_record', l_cnt, 'I')
+into l_step_id;
+--end if;
+
+--l_status_message:='l_date_mday_trade_count: ';
+--
+--select public.load_log(l_load_id, l_step_id, l_status_message, l_date_mday_trade_count, 'S')
+--    into l_step_id;
+
+if l_date_mday_trade_count>0 then
+
+select order_create_date_id
+into l_minimal_create_date_id
+from (select unnest(l_scr.foreign_max_dataset_ids) as ds_id) a
+join lateral (select min(order_create_date_id) as order_create_date_id
+              from staging.execution ex
+              where a.ds_id = ex.dataset_id
+              and  is_parent_level
+              and ex.time_in_force_id in ('1', '6')
+              and ex.exec_date_id = l_scr.date_id
+              limit 1) on true
+ order by order_create_date_id
+ limit 1;
+
+l_status_message:='l_minimal_create_date_id: ';
+
+select public.load_log(l_load_id, l_step_id, l_status_message, l_minimal_create_date_id, 'S')
+    into l_step_id;
+
+--raise notice '%', l_foreign_dataset_ids_mday; --debug
+
+insert into genesis2.trade_record (trade_record_time, db_create_time, date_id,
+		    is_busted, orig_trade_record_id, trade_record_trans_type, trade_record_reason,
+		    subsystem_id, user_id, account_id, client_order_id, instrument_id ,
+		    side, open_close, fix_connection_id, exec_id, exchange_id, trade_liquidity_indicator,
+		    secondary_order_id, exch_exec_id, secondary_exch_exec_id, last_mkt,
+		    last_qty, last_px, ex_destination, sub_strategy, street_order_id,
+		    order_id, street_order_qty, order_qty, multileg_reporting_type,
+		    is_largest_leg, street_max_floor, exec_broker, cmta,
+		    street_time_in_force, street_order_type, opt_customer_firm, street_mpid,
+		    is_cross_order, street_is_cross_order, street_cross_type, cross_is_originator,
+		    street_cross_is_originator, contra_account, contra_broker, trade_exec_broker,
+		    order_fix_message_id, trade_fix_message_id,  street_order_fix_message_id, client_id,
+		    street_transaction_id, transaction_id, order_price, street_order_price, order_process_time ,
+		    street_client_order_id, fix_comp_id, LEAVES_QTY, street_exec_inst, fee_sensitivity,
+		    strategy_decision_reason_code, compliance_id, floor_broker_id, AUCTION_ID,
+		    street_opt_customer_firm, clearing_account_number, sub_account,  multileg_order_id,
+		    INTERNAL_COMPONENT_TYPE, street_trade_fix_message_id, pt_basket_id, pt_order_id, Street_Client_Sender_CompID,
+		    street_account_name, street_exec_broker, trade_text, branch_sequence_number, frequent_trader_id, time_in_force, int_liq_source_type,
+		    market_participant_id, ALTERNATIVE_COMPLIANCE_ID, street_trade_record_time, street_order_process_time,leg_ref_id, blaze_account_alias
+		    )
+	select TRADE_RECORD_TIME
+	, now()
+	, DATE_ID
+	, 'N' as IS_BUSTED
+	, IN_ORIG_TRADE_RECORD_ID
+	, TRADE_RECORD_TRANS_TYPE
+	, coalesce(in_trade_record_reason,TRADE_RECORD_REASON::char ) as TRADE_RECORD_REASON
+	, COALESCE(SUB_SYSTEM_ID,'PG_DASH') as SUB_SYSTEM_ID
+	, null as USER_ID  -- SO hotfix
+	, ACCOUNT_ID
+	, CLIENT_ORDER_ID
+	, v.INSTRUMENT_ID
+	, SIDE
+	, OPEN_CLOSE
+	, FIX_CONNECTION_ID
+	, EXEC_ID
+	, CASE WHEN exchange_id in ('C2OXFX','CBOEFX') then substring(exchange_id, 1, length(exchange_id)-2) else exchange_id end as exchange_id
+	, staging.get_trade_liquidity_indicator(TRADE_LIQUIDITY_INDICATOR) as TRADE_LIQUIDITY_INDICATOR
+	, SECONDARY_ORDER_ID
+	, EXCH_EXEC_ID
+	, SECONDARY_EXCH_EXEC_ID
+	, LAST_MKT
+	, LAST_QTY
+	, LAST_PX
+	, EX_DESTINATION
+-- 	, SUB_STRATEGY
+    , sub_strategy_desc
+	, STREET_ORDER_ID
+	, ORDER_ID
+	, STREET_ORDER_QTY
+	, ORDER_QTY
+	, MULTILEG_REPORTING_TYPE
+	, IS_LARGEST_LEG
+	, STREET_MAX_FLOOR
+	, EXEC_BROKER
+	, left(CMTA,3)
+	, STREET_TIME_IN_FORCE
+	, STREET_ORDER_TYPE
+	, OPT_CUSTOMER_FIRM
+	, STREET_MPID
+	, IS_CROSS_ORDER
+	, STREET_IS_CROSS_ORDER
+	, STREET_CROSS_TYPE
+	, CROSS_IS_ORIGINATOR
+	, STREET_CROSS_IS_ORIGINATOR
+	, CONTRA_ACCOUNT
+	, CONTRA_BROKER
+	, TRADE_EXEC_BROKER
+	, order_fix_message_id
+	, trade_fix_message_id
+	, street_order_fix_message_id
+	, client_id
+	, street_transaction_id
+	, transaction_id
+	, order_price
+	, street_order_price
+	, order_process_time
+	, street_client_order_id
+	, fix_comp_id
+    , LEAVES_QTY
+    , street_exec_inst
+    , fee_sensitivity::int2
+    , strategy_decision_reason_code
+    , compliance_id
+    , floor_broker_id
+    , AUCTION_ID
+    , STR_OPT_CUSTOMER_FIRM
+	, clearing_account
+    , left(sub_account,30) as sub_account
+    ,  multileg_order_id
+    , INTERNAL_COMPONENT_TYPE
+    , str_trade_fix_message_id
+    , pt_basket_id
+    , pt_order_id
+    , str_cls_comp_ID
+    , street_account_name
+    , v.street_exec_broker
+    , trade_text
+    , branch_seq_num
+    , left (frequent_trader_id,6) as frequent_trader_id
+    , time_in_force
+    , is_ats_or_cons
+    , mpid
+    , ALTERNATIVE_COMPLIANCE_ID
+    , street_trade_record_time
+    , street_order_process_time
+    , co_client_leg_ref_id as leg_ref_id
+    , v.blaze_account_alias
+--	, case when v.is_cross_order='Y'
+--             then  public.get_message_tag_string_cross_multileg(v.order_fix_message_id, 10445, v.date_id::int,v.client_order_id, NULL, v.co_client_leg_ref_id, v.is_cross_order::boolean)
+--             else v.blaze_account_alias
+--      end
+    from staging.trade_record_v_historical_mday v
+
+	where dataset_id = any(l_foreign_dataset_ids_mday)
+	and v.date_id = l_scr.date_id
+ --   and v.exec_id not in (344679071267219235, 344679101331990358)
+	--and v.create_date_id >= l_minimal_create_date_id
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id)
+;
+
+GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+select public.load_log(l_load_id, l_step_id, l_scr.date_id::varchar|| ': insert multidays into genesis2.trade_record', l_cnt, 'I')
+into l_step_id;
+end if;
+
+update staging.etl_subscriptions
+set is_processed = true,
+process_time = clock_timestamp()
+where subscription_id = any(l_scr.subs_ids);
+
+end loop;
+
+
+set enable_hashjoin=On;
+set enable_mergejoin=On;
+
+
+ if in_dataset_id is null
+  then
+   /* replicate busted trades without recalculation.
+     1. Must be inside in_exec_id is null
+     2. MUST be before recalculated */
+
+
+ /*update trade_record tr
+ set is_busted = 'Y'
+ where tr.exec_id in (select exec_id from staging.psql_execution psq where psq.is_busted='Y')
+   and tr.is_busted='N';*/
+
+ /*======================*/
+
+ -- DISASTER
+     with upd as (update staging.etl_subscriptions s
+        set is_processed = true,
+            process_time = clock_timestamp()
+        where is_processed = false
+            and subscription_name = 'genesis2.busted_trade'
+            and source_table_name = 'dwh.execution'
+--            and exists (select null from genesis2.trade_record ft where ft.exec_id=s.load_batch_id  and ft.date_id = s.date_id ) /* We need to be sure trade to bust already there */
+                        RETURNING  load_batch_id,  date_id  /*it  contains  exec_id  for  that  specific  source  'dwh.execution'*/),
+    tr_upd as (update genesis2.trade_record
+        set is_busted = 'Y'
+        where (exec_id, date_id) in (select load_batch_id, date_id from upd)
+        and is_busted = 'N'
+        returning trade_record_id, date_id)
+    insert into genesis2.etl_subscriptions (subscription_name, source_table_name, load_batch_id, date_id)
+	Select 'big_data.flat_trade_record', 'TRADE_RECORD.BUSTED_TRADES', trade_record_id, date_id FROM tr_upd;
+
+
+    select public.load_log(l_load_id, l_step_id, 'Busted trades updated ', 0 , 'U')
+    into l_step_id;
+
+end if;
+
+/* =============================================================================================================== */
+/* ========================================= AWAY TRADE=========================================================== */
+/* =============================================================================================================== */
+
+if in_dataset_id is null
+ then
+     /* SO 20260129
+	select public.load_log(l_load_id, l_step_id, 'AWAY TRADES processing started', 0, 'I')
+	into l_step_id;
+
+   l_date_id:=to_char(current_date ,'YYYYMMDD')::int ;
+
+/* We take into account last but one completed Missed trade job
+ * Missed job has delay 12 minutes to be sure we are not ahead Oracle traffic
+ * We can't use last completed ID bacuse aftre completion we have matching process. It update all load_batchIds to -1 to avoid picking up trade too early
+ * */
+
+--  select max(load_batch_id)
+--	  into l_away_load_batch
+--	from genesis2.etl_load_batch
+--	where file_name ='Load_Missed_Trades_MSSQL'
+--	and process_end_date_time < now()
+--	and status ='C';
+
+
+
+select max(load_timing_id)
+	  into l_away_load_batch
+  from public.load_timing lt2
+  where table_name = 'missed_trades_blaze7 Matching COMPLETED ==='
+	and lt2.log_date < now();
+
+
+  INSERT INTO genesis2.trade_record
+	(trade_record_time
+			,date_id
+			,is_busted
+--			,orig_trade_record_id
+			,trade_record_trans_type
+			,trade_record_reason
+			,subsystem_id
+			,user_id
+			,account_id
+			,client_order_id
+			,instrument_id
+			,side
+			,open_close
+			,fix_connection_id
+			,exec_id
+			,exchange_id
+			,trade_liquidity_indicator
+			,secondary_order_id
+			,exch_exec_id
+			,secondary_exch_exec_id
+			,last_mkt
+			,last_qty
+			,last_px
+			,ex_destination
+			,sub_strategy
+			,street_order_id
+			,order_id
+			,street_order_qty
+			,order_qty
+			,multileg_reporting_type
+			,is_largest_leg
+			,street_max_floor
+			,exec_broker
+			,cmta
+			,street_time_in_force
+			,street_order_type
+			,opt_customer_firm
+			,street_mpid
+			,is_cross_order
+			,street_is_cross_order
+			,street_cross_type
+			,cross_is_originator
+			,street_cross_is_originator
+			,contra_account
+			,contra_broker
+			,trade_exec_broker
+			,order_fix_message_id
+			,trade_fix_message_id
+			,street_order_fix_message_id
+			,client_id
+			,street_transaction_id
+			,transaction_id
+			,order_price
+			,order_process_time
+			,clearing_account_number
+			,sub_account
+			,remarks
+			,optional_data
+			,street_client_order_id
+			,fix_comp_id
+			,leaves_qty
+			,is_billed
+			,street_exec_inst
+			,fee_sensitivity
+			,street_order_price
+			,leg_ref_id
+			,load_batch_id
+			,strategy_decision_reason_code
+			,compliance_id
+			,floor_broker_id
+			,blaze_account_alias )
+
+select distinct trade_record_time
+			,date_id
+			,coalesce(is_busted,'N') as is_busted
+--			,null::bigint as orig_trade_record_id --SY
+			,null as trade_record_trans_type -- SY
+			,'A' as trade_record_reason
+--			,subsystem_id
+			,case when (generation>0  or (is_sor_routed and num_firms>1 and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ))
+			            and subsystem_id = 'LPEDW'
+				  then 'LPEDW_DUPE'
+			 else subsystem_id
+			 end as subsystem_id
+			,user_id
+			,account_id
+			,client_order_id
+			,instrument_id
+			,side
+			,open_close
+			,fix_connection_id
+			,exec_id
+			,e.exchange_id
+			,trade_liquidity_indicator
+			,secondary_order_id
+			,exch_exec_id
+			,secondary_exch_exec_id
+			,e.last_mkt
+			,last_qty
+			,last_px
+			,ex_destination
+			,sub_strategy
+			,street_order_id
+			,order_id
+			,street_order_qty
+			,order_qty
+			,multileg_reporting_type
+			,is_largest_leg
+			,street_max_floor
+			,exec_broker
+			,nullif(left(cmta,3), '') as cmta
+			,street_time_in_force
+			,street_order_type
+			,opt_customer_firm
+			,street_mpid
+			,is_cross_order
+			,street_is_cross_order
+			,street_cross_type
+			,cross_is_originator
+			,street_cross_is_originator
+			,contra_account
+			,contra_broker
+			,trade_exec_broker
+			,order_fix_message_id
+			,trade_fix_message_id
+			,street_order_fix_message_id
+			,client_id
+			,street_transaction_id
+			,transaction_id
+			,order_price
+			,order_process_time
+			,clearing_account_number
+			,sub_account
+			,remarks
+			,optional_data
+			,nullif(street_client_order_id,'') as street_client_order_id
+			,fix_comp_id
+			,leaves_qty
+			,is_billed
+			,street_exec_inst
+			,fee_sensitivity::int2
+			,street_order_price
+			,leg_ref_id::varchar
+			,l_load_id
+			,strategy_decision_reason_code
+			,compliance_id
+			,floor_broker_id
+			,blaze_account_alias
+	--from staging.trade_record_missed_lp trml
+   from staging.trade_record_blaze7 trml
+	join genesis2.exchange e on  e.exchange_id=trml.exchange_id
+					and e.is_deleted='N'
+					and e.exchange_id=e.real_exchange_id
+    where trade_record_id is null
+    and instrument_id is not null
+    --and 1=2
+--    and subsystem_id not in ('OMS_EDW')
+    and (  (subsystem_id not in ('OMS_EDW') and  generation = 0 and not is_sor_routed )/* ordinar case non sor routed trades */
+		    or (subsystem_id not in ('OMS_EDW') and  generation = 0 and is_sor_routed and num_firms>1 and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ) /* routed to sor with company name changes*/
+		    or (subsystem_id not in ('OMS_EDW') and  generation>0 and is_company_name_changed =1 and not is_sor_routed and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' ) /* non-routed to SOR company name chaned in firther generation*/
+		    or (subsystem_id not in ('OMS_EDW') and generation>0 and is_company_name_changed =1 and is_sor_routed and mx_gen>generation and coalesce(nullif(secondary_exch_exec_id,''), 'Manual Report') <> 'Manual Report' )
+		    or (subsystem_id in ('OMS_EDW') and generation=0 and secondary_exch_exec_id = 'Manual Report' and not is_sor_routed and trml.instrument_type_id not in ('E') )
+		)
+    and date_id = l_date_id
+    and trml.load_batch_id <> -1
+    and trml.load_batch_id <= l_away_load_batch
+    and last_qty<=order_qty
+    and coalesce(trml.is_busted,'N') ='N'
+	on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id);
+
+	--update staging.trade_record_missed_lp trml
+    update staging.trade_record_blaze7 trml
+	set trade_record_id = tr.trade_record_id ,
+		mapping_logic = 20
+	from genesis2.trade_record tr
+	where tr.date_id = l_date_id
+	 and tr.load_batch_id = l_load_id
+	 and tr.subsystem_id in ('LPEDW', 'LPEDW_DUPE', 'OMS_EDW')
+	 and trml.trade_record_id is null
+	 and trml.date_id =tr.date_id
+	 and trml.exec_id = tr.exec_id
+	 and trml.load_batch_id <> -1
+	 and trml.load_batch_id <= l_away_load_batch;
+
+  	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select public.load_log(l_load_id, l_step_id, 'AWAY TRADES INSERT INSERTED load_batch_id='||l_load_id, l_cnt, 'I')
+	into l_step_id;
+	SO 20260129
+      */
+/*^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^*/
+/*^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   AWAY TRADES ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^*/
+/*^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^*/
+
+
+/*********************************** MANUAL TRADE *********************************************/
+	/* SO 20260129
+     for l_scr in (select date_id, array_agg(es.load_batch_id) as ids_to_process
+					from genesis2.etl_subscriptions es
+						where subscription_name = 'trade_record_away_trade'
+						and source_table_name='trade_desk'
+						and not is_processed
+                  group by date_id) loop
+
+  INSERT INTO genesis2.trade_record
+	(trade_record_time
+			,date_id
+			,is_busted
+			,orig_trade_record_id
+			,trade_record_trans_type
+			,trade_record_reason
+			,subsystem_id
+			,user_id
+			,account_id
+			,client_order_id
+			,instrument_id
+			,side
+			,open_close
+			,fix_connection_id
+			,exec_id
+			,exchange_id
+			,trade_liquidity_indicator
+			,secondary_order_id
+			,exch_exec_id
+			,secondary_exch_exec_id
+			,last_mkt
+			,last_qty
+			,last_px
+			,ex_destination
+			,sub_strategy
+			,street_order_id
+			,order_id
+			,street_order_qty
+			,order_qty
+			,multileg_reporting_type
+			,is_largest_leg
+			,street_max_floor
+			,exec_broker
+			,cmta
+			,street_time_in_force
+			,street_order_type
+			,opt_customer_firm
+			,street_mpid
+			,is_cross_order
+			,street_is_cross_order
+			,street_cross_type
+			,cross_is_originator
+			,street_cross_is_originator
+			,contra_account
+			,contra_broker
+			,trade_exec_broker
+			,order_fix_message_id
+			,trade_fix_message_id
+			,street_order_fix_message_id
+			,client_id
+			,street_transaction_id
+			,transaction_id
+			,order_price
+			,order_process_time
+			,clearing_account_number
+			,sub_account
+			,remarks
+			,optional_data
+			,street_client_order_id
+			,fix_comp_id
+			,leaves_qty
+			,is_billed
+			,street_exec_inst
+			,fee_sensitivity
+			,street_order_price
+			,leg_ref_id
+			,load_batch_id
+			,strategy_decision_reason_code
+			,compliance_id
+			,floor_broker_id
+			,blaze_account_alias )
+
+select trade_record_time
+			,date_id
+			,is_busted
+			,orig_trade_record_id
+			,trade_record_trans_type
+			,'A' as trade_record_reason -- To confirm
+			,subsystem_id
+			,user_id
+			,account_id
+			,client_order_id
+			,instrument_id
+			,side
+			,open_close
+			,fix_connection_id
+			,exec_id
+			,exchange_id
+			,trade_liquidity_indicator
+			,secondary_order_id
+			,exch_exec_id
+			,secondary_exch_exec_id
+			,last_mkt
+			,last_qty
+			,last_px
+			,ex_destination
+			,sub_strategy
+			,street_order_id
+			,order_id
+			,street_order_qty
+			,order_qty
+			,multileg_reporting_type
+			,is_largest_leg
+			,street_max_floor
+			,exec_broker
+			,nullif(left(cmta,3), '') as cmta
+			,street_time_in_force
+			,street_order_type
+			,opt_customer_firm
+			,street_mpid
+			,is_cross_order
+			,street_is_cross_order
+			,street_cross_type
+			,cross_is_originator
+			,street_cross_is_originator
+			,contra_account
+			,contra_broker
+			,trade_exec_broker
+			,order_fix_message_id
+			,trade_fix_message_id
+			,street_order_fix_message_id
+			,client_id
+			,street_transaction_id
+			,transaction_id
+			,order_price
+			,order_process_time
+			,clearing_account_number
+			,sub_account
+			,remarks
+			,optional_data
+			,nullif(street_client_order_id,'') as street_client_order_id
+			,fix_comp_id
+			,leaves_qty
+			,is_billed
+			,street_exec_inst
+			,fee_sensitivity
+			,street_order_price
+			,leg_ref_id::varchar
+			,l_load_id
+			,strategy_decision_reason_code
+			,compliance_id
+			,floor_broker_id
+			,blaze_account_alias
+	from staging.trade_record_missed_lp trml
+     where trml.load_batch_id = any (l_scr.ids_to_process)
+       and date_id = l_scr.date_id
+on conflict (date_id,
+    COALESCE(exch_exec_id, (exec_id)::character varying),
+    client_order_id, (
+    CASE
+        WHEN (orig_trade_record_id IS NOT NULL)
+            THEN trade_record_id
+        ELSE 1
+        END)
+    )
+    do update
+    set date_id = coalesce(public.f_insert_etl_reject('trade_record_inc',
+                                                      'trade_record_' || substring(excluded.DATE_ID::TEXT, 1, 6) || '_nk',
+                                                      '(date_id = ' || EXCLUDED.date_id::text || ' exch_exec_id=' ||
+                                                      EXCLUDED.exch_exec_id::text || ', client_order_id = ' ||
+                                                      EXCLUDED.client_order_id || ')'),
+                           EXCLUDED.date_id);
+
+   	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select public.load_log(l_load_id, l_step_id, 'MANUAL TRADES INSERTED load_batch_id='||l_load_id, l_cnt, 'I')
+	into l_step_id;
+
+ update genesis2.etl_subscriptions
+	set is_processed = true ,
+        process_time = clock_timestamp()
+   where subscription_name = 'trade_record_away_trade'
+	and source_table_name='trade_desk'
+	and load_batch_id =  any (l_scr.ids_to_process)
+    and date_id = l_scr.date_id;
+
+  	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select public.load_log(l_load_id, l_step_id, 'trade_record_away_trade subscriptions closed', l_cnt, 'U')
+	into l_step_id;
+
+	update staging.trade_record_missed_lp trml
+	set trade_record_id = tr.trade_record_id ,
+		mapping_logic = 20
+	from genesis2.trade_record tr
+	where tr.date_id = l_scr.date_id
+	 and tr.load_batch_id = l_load_id
+	 and tr.subsystem_id in ('PG_DASH')
+	 and trml.trade_record_id is null
+	 and trml.date_id =tr.date_id
+	 and trml.exec_id = tr.exec_id
+	 and trml.load_batch_id =  any (l_scr.ids_to_process) ;
+
+  	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select public.load_log(l_load_id, l_step_id, 'MANUAL TRADES Matched with logic 20', l_cnt, 'U')
+	into l_step_id;
+
+
+end loop;
+     SO 20260129
+	 */
+/*********************************** MANUAL TRADE *********************************************/
+
+/*=================================================== BOFA Allocation reporting  =================  */
+  for l_scr in (select load_batch_id, subscription_id , date_id
+                 from genesis2.etl_subscriptions
+                 where subscription_name = 'trade_record'
+                   and source_table_name = 'bofa_allocation_report'
+                   and  not is_processed
+                 ) loop
+
+	with cte as materialized (select distinct trade_record_id
+								from dash_reporting.bofa_allocation_report alr
+								   join genesis2.alloc_instr2trade_record aitr on aitr.date_id = alr.date_id and aitr.alloc_instr_id = alr.alloc_instr_id
+								where alr.to_report = 'R'
+								  and alr.date_id = l_scr.date_id
+								  and alr.dataset = l_scr.load_batch_id )
+  update genesis2.trade_record tr
+  set is_billed = 'R'
+  from cte
+  where tr.date_id = l_scr.date_id
+   and tr.trade_record_id = cte.trade_record_id
+   /*and tr.is_busted='N'*/;
+
+  	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select genesis2.load_log(l_load_id, l_step_id, 'bofa_allocation_report load_batch_id='||l_scr.load_batch_id, l_cnt, 'U')
+	into l_step_id;
+
+    update genesis2.etl_subscriptions
+    set is_processed=true,
+ 		process_time = clock_timestamp()
+    where subscription_id = l_scr.subscription_id;
+
+ end loop ;
+
+/*=================================================== BOFA trade_reporting    =================  */
+  for l_scr in (select load_batch_id, subscription_id , date_id
+                 from genesis2.etl_subscriptions
+                 where subscription_name = 'trade_record'
+                   and source_table_name = 'bofa_trade_record'
+                   and  not is_processed
+                 ) loop
+	with cte as materialized (select distinct trade_record_id
+								from dash_reporting.bofa_trade_record btr
+								where btr.date_id = l_scr.date_id
+								  and btr.dataset = l_scr.load_batch_id )
+  update genesis2.trade_record tr
+  set is_billed = 'R'
+  from cte
+  where tr.date_id = l_scr.date_id
+   and tr.trade_record_id = cte.trade_record_id
+   /*and tr.is_busted='N'*/;
+
+  	GET DIAGNOSTICS l_cnt = ROW_COUNT;
+
+	select genesis2.load_log(l_load_id, l_step_id, 'bofa_trade_record load_batch_id='||l_scr.load_batch_id, l_cnt, 'U')
+	into l_step_id;
+
+    update genesis2.etl_subscriptions
+    set is_processed=true,
+ 		process_time = clock_timestamp()
+    where subscription_id = l_scr.subscription_id;
+
+ end loop ;
+
+
+end if;  -- in_exec_id is null
+
+
+
+
+select public.load_log(l_load_id, l_step_id, 'Trade_Record_inc COMPLETED ===', 0, 'O')
+into l_step_id;
+
+ l_ret:=1;
+
+ return l_ret;
+
+ exception when others then
+   select public.load_log(l_load_id, l_step_id, left(sqlstate||': '||REPLACE(sqlerrm, ''::text, ''::text),250), 0, 'E')
+  into l_step_id;
+  RAISE notice '% %', sqlstate, sqlerrm;
+
+  select public.load_log(l_load_id, l_step_id, 'Trade_Record_inc COMPLETED ===', 0, 'O')
+  into l_step_id;
+
+  PERFORM public.load_error_log('trade_record',  'I', REPLACE(sqlerrm, ''::text, ''::text), l_load_id);
+  RAISE;
+
+
+
+END;
+$function$
+;
