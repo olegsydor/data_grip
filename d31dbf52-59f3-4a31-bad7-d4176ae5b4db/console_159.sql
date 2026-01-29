@@ -269,7 +269,7 @@ from trash.get_active_child_gtc_orders(in_start_date_id := 20260128, in_end_date
 except
 select *
 from dash360.get_active_child_gtc_orders(in_start_date_id := 20260128, in_end_date_id := 20260129,
-                                         in_trading_firm_ids :=  '{hudson02,ingalls01,lightsp01}')
+                                         in_trading_firm_ids :=  '{hudson02,ingalls01,lightsp01}');
 
 
 select * from t_os
