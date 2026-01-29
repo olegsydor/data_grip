@@ -109,28 +109,53 @@ SELECT * FROM GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM WHERE USER_ID=9503;
 
 SELECT                 ui.user_id,
                        ui.user_role
---        ,
---                        fc.fix_comp_id
+       ,
+                       fc.fix_comp_id
 
     FROM GENESIS2_QA_20100601.USER_IDENTIFIER ui
          JOIN GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM ptf
            ON ptf.USER_ID = ui.USER_ID
---          JOIN GENESIS2_QA_20100601.PORTAL_USER ps
---            ON ps.USER_ID = ui.USER_ID
---          JOIN GENESIS2_QA_20100601.TRADING_FIRM tf
---            ON tf.TRADING_FIRM_ID = ptf.TRADING_FIRM_ID
---          JOIN GENESIS2_QA_20100601.ACCOUNT_SET acs
---            ON acs.ACCOUNT_SET_ID = ps.ACCOUNT_SET_ID
---          JOIN GENESIS2_QA_20100601.ACCOUNT_SET2ACCOUNT asta
---            ON asta.ACCOUNT_SET_ID = acs.ACCOUNT_SET_ID
---          JOIN GENESIS2_QA_20100601.ACCOUNT ac
---            ON ac.ACCOUNT_ID = asta.ACCOUNT_ID
---           AND ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
---          JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc
---            ON tfcc.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
---          JOIN GENESIS2_QA_20100601.FIX_CONNECTION fc
---            ON fc.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
+         JOIN GENESIS2_QA_20100601.PORTAL_USER ps
+           ON ps.USER_ID = ui.USER_ID
+         JOIN GENESIS2_QA_20100601.TRADING_FIRM tf
+           ON tf.TRADING_FIRM_ID = ptf.TRADING_FIRM_ID
+         JOIN GENESIS2_QA_20100601.ACCOUNT_SET acs
+           ON acs.ACCOUNT_SET_ID = ps.ACCOUNT_SET_ID
+         JOIN GENESIS2_QA_20100601.ACCOUNT_SET2ACCOUNT asta
+           ON asta.ACCOUNT_SET_ID = acs.ACCOUNT_SET_ID
+         JOIN GENESIS2_QA_20100601.ACCOUNT ac
+           ON ac.ACCOUNT_ID = asta.ACCOUNT_ID
+          AND ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
+         JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc
+           ON tfcc.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
+         JOIN GENESIS2_QA_20100601.FIX_CONNECTION fc
+           ON fc.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
     WHERE 1=1
 --     and fc.IS_DELETED <> 'Y'
       AND ui.USER_ROLE IN ('P', 'T')
-    and ui.USER_ID = 9503
+    and ui.USER_ID = 9503;
+
+
+
+-- user 1
+SELECT ui.user_id,
+       ui.user_role,
+       taf.TRADING_FIRM_ID,
+       tfcc.FIX_CONNECTION_ID
+from GENESIS2_QA_20100601.USER_IDENTIFIER ui
+         JOIN GENESIS2_QA_20100601.TRADING_FIRM_ADMIN2FIRM taf ON taf.USER_ID = ui.USER_ID
+         JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc ON tfcc.TRADING_FIRM_ID = taf.TRADING_FIRM_ID
+--          JOIN GENESIS2_QA_20100601.FIX_CONNECTION fc
+--            ON fc.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
+where ui.user_id = 9505
+  and not exists (select null
+                  from GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION t
+                  where t.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
+                    and t.TRADING_FIRM_ID not in ('360ba01', '360sga')
+                  );
+
+
+select * from GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc
+where 1=1
+--     and TRADING_FIRM_ID in ('360ba01', '360sga')
+and FIX_CONNECTION_ID = 40
