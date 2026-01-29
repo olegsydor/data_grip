@@ -157,3 +157,63 @@ from genesis2.trade_record tr
           and tr.date_id = :l_date_id
           and a.alloc_instr_id = in_alloc_instr_id;
 select * from dash360.allocations_instruction_trades(in_alloc_instr_id := -107724)
+
+
+-- compare 2 PROD
+-- DROP FUNCTION dash360.trade_record_update_ccru(int4, int4, int8, numeric, numeric, int4);
+
+-- DROP FUNCTION dash360.trade_record_update_ccru(int4, int4, int8, numeric, numeric, int4, varchar);
+
+CREATE OR REPLACE FUNCTION dash360.trade_record_update_ccru(in_user_id integer, in_date_id integer,
+                                                            in_trade_record_id bigint, in_rate numeric,
+                                                            in_amount numeric,
+                                                            in_load_batch_id integer DEFAULT NULL::integer,
+                                                            in_book_record_creator_id character varying DEFAULT 'MAN'::character varying)
+    RETURNS integer
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    -- SY DS-2914 On conflich has been implemented due to miration to native parititoning
+-- AK DS-10934 Add new parameter to procedure dash360.trade_record_update_ccru to add new param to se book_record_creator_id (SGDD or other)
+declare
+    l_cnt           int;
+    l_date_id       int;
+    l_load_batch_id int;
+begin
+
+    l_date_id := in_date_id;
+    if in_load_batch_id is null
+    then
+        select nextval('load_batch_load_batch_id_seq'::regclass) into l_load_batch_id;
+    else
+        l_load_batch_id := in_load_batch_id;
+    end if;
+
+
+    insert into trade_level_book_record (trade_record_id, book_record_type_id, amount, book_record_creator_id, date_id,
+                                         rate, load_batch_id, user_id, create_time, billing_entity)
+    values (in_trade_record_id, 'CCRU', in_amount, in_book_record_creator_id, l_date_id, in_rate, l_load_batch_id,
+            in_user_id, clock_timestamp(), '-1')
+    on conflict (trade_record_id, book_record_type_id, book_record_creator_id, billing_entity, date_id)
+        do update set amount        = EXCLUDED.amount,
+                      rate          = EXCLUDED.rate,
+                      load_batch_id = EXCLUDED.load_batch_id,
+                      user_id       = EXCLUDED.user_id,
+                      create_time   = EXCLUDED.create_time;
+
+    perform genesis2.etl_subscribe(in_load_batch_id => l_load_batch_id, in_row_cnt => 1,
+                                   in_subscription_name => 'big_data.flat_trade_record',
+                                   in_source_table_name => 'trade_level_book_record', in_date_id => l_date_id);
+
+    return l_load_batch_id;
+
+
+exception
+    when others then
+        RAISE notice '% %', sqlstate, sqlerrm;
+        raise;
+        return -2;
+end;
+$function$
+;
