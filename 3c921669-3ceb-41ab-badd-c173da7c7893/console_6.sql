@@ -537,4 +537,60 @@ FROM user_identifier ui
                               ON ac.account_id = asta.account_id
                          JOIN trading_firm2client_connection tfc
                               ON tfc.trading_firm_id = ac.trading_firm_id
-                WHERE ui.user_role = 'P'
+                WHERE ui.user_role = 'P';
+
+
+    WITH tf AS (SELECT  u.user_id,
+                       ptf.trading_firm_id,
+                       tfc.fix_connection_id
+                FROM user_identifier u
+                         JOIN portal_user2trading_firm ptf
+                              ON ptf.user_id = u.user_id
+                         JOIN trading_firm2client_connection tfc
+                              ON tfc.trading_firm_id = ptf.trading_firm_id
+                WHERE u.user_role = 'P')
+-- ,    popal AS (
+    SELECT tf.user_id,
+           tf.trading_firm_id,
+           tf.fix_connection_id,
+           'P' AS user_role
+    FROM tf
+    where 1 = 1
+      and tf.user_id IN (9503, 9504, 9505)
+      AND NOT EXISTS (SELECT 1
+                      FROM trading_firm2client_connection x
+                      WHERE x.fix_connection_id = tf.fix_connection_id
+                        AND x.trading_firm_id NOT IN (SELECT tfi.trading_firm_id
+                                                      FROM tf tfi
+                                                      WHERE tfi.user_id = tf.user_id));
+
+
+WITH tf_u AS (SELECT u.user_id,
+                     ptf.trading_firm_id,
+                     tfc.fix_connection_id
+              FROM user_identifier u
+                       JOIN portal_user2trading_firm ptf
+                            ON ptf.user_id = u.user_id
+                       JOIN trading_firm2client_connection tfc
+                            ON tfc.trading_firm_id = ptf.trading_firm_id
+              WHERE u.user_role = 'P'
+                AND u.is_deleted = 'N'
+                AND u.is_locked = 'N'
+--      AND u.user_id IN (9503, 9504, 9505)
+)
+SELECT tf_u.user_id,
+       tf_u.trading_firm_id,
+       tf_u.fix_connection_id,
+       'P' AS user_role
+FROM tf_u
+where not exists
+          (SELECT null
+           FROM trading_firm2client_connection x
+                    LEFT JOIN tf_u ok ON (ok.user_id = tf_u.user_id
+               AND ok.fix_connection_id = tf_u.fix_connection_id
+               AND ok.trading_firm_id = x.trading_firm_id
+                        and x.user_id = tf_u.user_id)
+           WHERE ok.trading_firm_id IS null
+             and x.fix_connection_id = tf_u.fix_connection_id
+
+             and t.fix_connection_id = tf_u.fix_connection_id)
