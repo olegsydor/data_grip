@@ -671,7 +671,7 @@ create index utfmv_TRADING_FIRM_ID_idx on GENESIS2_QA_20100601.user2trading_firm
 create index utfmv_FIX_CONNECTION_ID_idx on GENESIS2_QA_20100601.user2trading_firm_mv (FIX_CONNECTION_ID)
 create index utfmv_tp_idx on GENESIS2_QA_20100601.user2trading_firm_mv (tp);
 
-select * from GENESIS2_QA_20100601.user2trading_firm_v
+select * from GENESIS2_QA_20100601.user2trading_firm_mv
 where user_id = 9164
 
 refresh materialized view GENESIS2_QA_20100601.user2trading_firm_mv
