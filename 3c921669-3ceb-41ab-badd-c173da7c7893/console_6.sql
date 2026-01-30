@@ -201,7 +201,8 @@ with tf as (select u.USER_ID, tf.TRADING_FIRM_ID, FIX_CONNECTION_ID
             where u.USER_ROLE = 'T')
 SELECT tf.user_id,
        tf.TRADING_FIRM_ID,
-       listagg(tf.FIX_CONNECTION_ID, ',') within group ( order by tf.FIX_CONNECTION_ID )
+       tf.FIX_CONNECTION_ID,
+       'T'
 from tf
 where 1 = 1
    and tf.user_Id = 9505
@@ -210,25 +211,314 @@ where 1 = 1
                   where t.FIX_CONNECTION_ID = tf.FIX_CONNECTION_ID
                     and t.TRADING_FIRM_ID not in (SELECT tf.TRADING_FIRM_ID
                                                   from tf tfi
-                                                  where tfi.user_id = tf.USER_ID))
-group by tf.user_id, tf.TRADING_FIRM_ID;
-
+                                                  where tfi.user_id = tf.USER_ID));
 -- P
+select ui.USER_ID,
+       tf.TRADING_FIRM_ID,
+       tf.FIX_CONNECTION_ID,
+       'P' as "ROLE"
   FROM GENESIS2_QA_20100601.USER_IDENTIFIER ui
-         JOIN GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM ptf
-           ON ptf.USER_ID = ui.USER_ID
+         JOIN GENESIS2_QA_20100601.PORTAL_USER2TRADING_FIRM ptf ON ptf.USER_ID = ui.USER_ID
+JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tf
+                          ON tf.TRADING_FIRM_ID = ptf.TRADING_FIRM_ID
+where ui.USER_ID in (9503, 9504)
+union
+  select ui.USER_ID,
+       tf.TRADING_FIRM_ID,
+       tf.FIX_CONNECTION_ID,
+       'P' as "ROLE"
+  FROM GENESIS2_QA_20100601.USER_IDENTIFIER ui
          JOIN GENESIS2_QA_20100601.PORTAL_USER ps
            ON ps.USER_ID = ui.USER_ID
-         JOIN GENESIS2_QA_20100601.TRADING_FIRM tf
-           ON tf.TRADING_FIRM_ID = ptf.TRADING_FIRM_ID
          JOIN GENESIS2_QA_20100601.ACCOUNT_SET acs
            ON acs.ACCOUNT_SET_ID = ps.ACCOUNT_SET_ID
          JOIN GENESIS2_QA_20100601.ACCOUNT_SET2ACCOUNT asta
            ON asta.ACCOUNT_SET_ID = acs.ACCOUNT_SET_ID
          JOIN GENESIS2_QA_20100601.ACCOUNT ac
            ON ac.ACCOUNT_ID = asta.ACCOUNT_ID
-          AND ac.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
-         JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tfcc
-           ON tfcc.TRADING_FIRM_ID = tf.TRADING_FIRM_ID
-         JOIN GENESIS2_QA_20100601.FIX_CONNECTION fc
-           ON fc.FIX_CONNECTION_ID = tfcc.FIX_CONNECTION_ID
+  JOIN GENESIS2_QA_20100601.TRADING_FIRM2CLIENT_CONNECTION tf
+                          ON tf.TRADING_FIRM_ID = ac.TRADING_FIRM_ID
+  where ui.USER_ROLE = 'P'
+    and ui.user_ID in (9503, 9504);
+
+CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_user_fix_comp_id_2
+    RETURN GENESIS2_QA_20100601.type_user_fix_comp_id
+AS
+    l_result GENESIS2_QA_20100601.type_user_fix_comp_id;
+BEGIN
+    WITH tf AS (
+        SELECT u.user_id,
+               ta.trading_firm_id,
+               tfc.fix_connection_id
+        FROM GENESIS2_QA_20100601.user_identifier u
+             JOIN GENESIS2_QA_20100601.trading_firm_admin2firm ta
+               ON ta.user_id = u.user_id
+             JOIN GENESIS2_QA_20100601.trading_firm2client_connection tfc
+               ON tfc.trading_firm_id = ta.trading_firm_id
+        WHERE u.user_role = 'T'
+    ),
+    p AS (
+        SELECT ui.user_id,
+               tfc.trading_firm_id,
+               tfc.fix_connection_id,
+               'P' AS user_role
+        FROM GENESIS2_QA_20100601.user_identifier ui
+             JOIN GENESIS2_QA_20100601.portal_user2trading_firm ptf
+               ON ptf.user_id = ui.user_id
+             JOIN GENESIS2_QA_20100601.trading_firm2client_connection tfc
+               ON tfc.trading_firm_id = ptf.trading_firm_id
+        WHERE ui.user_id IN (9503, 9504)
+
+        UNION
+
+        SELECT ui.user_id,
+               tfc.trading_firm_id,
+               tfc.fix_connection_id,
+               'P' AS user_role
+        FROM GENESIS2_QA_20100601.user_identifier ui
+             JOIN GENESIS2_QA_20100601.portal_user ps
+               ON ps.user_id = ui.user_id
+             JOIN GENESIS2_QA_20100601.account_set acs
+               ON acs.account_set_id = ps.account_set_id
+             JOIN GENESIS2_QA_20100601.account_set2account asta
+               ON asta.account_set_id = acs.account_set_id
+             JOIN GENESIS2_QA_20100601.account ac
+               ON ac.account_id = asta.account_id
+             JOIN GENESIS2_QA_20100601.trading_firm2client_connection tfc
+               ON tfc.trading_firm_id = ac.trading_firm_id
+        WHERE ui.user_role = 'P'
+          AND ui.user_id IN (9503, 9504)
+    ),
+    t AS (
+        SELECT tf.user_id,
+               tf.trading_firm_id,
+               tf.fix_connection_id,
+               'T' AS user_role
+        FROM tf
+        WHERE tf.user_id = 9505
+          AND NOT EXISTS (
+              SELECT 1
+              FROM GENESIS2_QA_20100601.trading_firm2client_connection x
+              WHERE x.fix_connection_id = tf.fix_connection_id
+                AND x.trading_firm_id NOT IN (
+                    SELECT tfi.trading_firm_id
+                    FROM tf tfi
+                    WHERE tfi.user_id = tf.user_id
+                )
+          )
+    ),
+    total AS (
+        SELECT * FROM p
+        UNION ALL
+        SELECT * FROM t
+    )
+    SELECT CAST(
+               COLLECT(
+                   GENESIS2_QA_20100601.user_fix_comp_id(
+                       total.user_id,
+                       total.user_role,
+                       LISTAGG(fc.fix_comp_id, ', ')
+                           WITHIN GROUP (ORDER BY fc.fix_comp_id)
+                   )
+               )
+               AS GENESIS2_QA_20100601.type_user_fix_comp_id
+           )
+    INTO l_result
+    FROM total
+         JOIN GENESIS2_QA_20100601.fix_connection fc
+           ON fc.fix_connection_id = total.fix_connection_id
+    GROUP BY total.user_id, total.user_role;
+
+    RETURN l_result;
+END;
+/
+drop FUNCTION GENESIS2_QA_20100601.get_user_fix_comp_id_2;
+CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.get_user_fix_comp_id_2
+    RETURN GENESIS2_QA_20100601.type_user_fix_comp_id
+    PIPELINED
+AS
+BEGIN
+    FOR r IN (
+        WITH tf AS (
+            SELECT u.user_id,
+                   ta.trading_firm_id,
+                   tfc.fix_connection_id
+            FROM user_identifier u
+                 JOIN trading_firm_admin2firm ta
+                   ON ta.user_id = u.user_id
+                 JOIN trading_firm2client_connection tfc
+                   ON tfc.trading_firm_id = ta.trading_firm_id
+            WHERE u.user_role = 'T'
+        ),
+        p AS (
+            SELECT ui.user_id,
+                   tfc.trading_firm_id,
+                   tfc.fix_connection_id,
+                   'P' AS user_role
+            FROM user_identifier ui
+                 JOIN portal_user2trading_firm ptf
+                   ON ptf.user_id = ui.user_id
+                 JOIN trading_firm2client_connection tfc
+                   ON tfc.trading_firm_id = ptf.trading_firm_id
+            WHERE ui.user_role = 'P'
+--                 and ui.user_id IN (9503, 9504)
+
+            UNION
+
+            SELECT ui.user_id,
+                   tfc.trading_firm_id,
+                   tfc.fix_connection_id,
+                   'P' AS user_role
+            FROM user_identifier ui
+                 JOIN portal_user ps
+                   ON ps.user_id = ui.user_id
+                 JOIN account_set acs
+                   ON acs.account_set_id = ps.account_set_id
+                 JOIN account_set2account asta
+                   ON asta.account_set_id = acs.account_set_id
+                 JOIN account ac
+                   ON ac.account_id = asta.account_id
+                 JOIN trading_firm2client_connection tfc
+                   ON tfc.trading_firm_id = ac.trading_firm_id
+            WHERE ui.user_role = 'P'
+--               AND ui.user_id IN (9503, 9504)
+        ),
+        t AS (
+            SELECT tf.user_id,
+                   tf.trading_firm_id,
+                   tf.fix_connection_id,
+                   'T' AS user_role
+            FROM tf
+            WHERE 1=1
+--                 and tf.user_id = 9505
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM trading_firm2client_connection x
+                  WHERE x.fix_connection_id = tf.fix_connection_id
+                    AND x.trading_firm_id NOT IN (
+                        SELECT tfi.trading_firm_id
+                        FROM tf tfi
+                        WHERE tfi.user_id = tf.user_id
+                    )
+              )
+        ),
+        total AS (
+            SELECT * FROM p
+            UNION ALL
+            SELECT * FROM t
+        )
+        SELECT total.user_id,
+               total.user_role,
+               LISTAGG(fc.fix_comp_id, ', ')
+                   WITHIN GROUP (ORDER BY fc.fix_comp_id) AS fix_comp_id
+        FROM total
+             JOIN fix_connection fc
+               ON fc.fix_connection_id = total.fix_connection_id
+        GROUP BY total.user_id, total.user_role
+    )
+    LOOP
+        PIPE ROW (
+            GENESIS2_QA_20100601.user_fix_comp_id(
+                r.user_id,
+                r.user_role,
+                r.fix_comp_id
+            )
+        );
+    END LOOP;
+
+    RETURN;
+END;
+/
+commit;
+
+
+
+drop FUNCTION GENESIS2_QA_20100601.get_user_fix_comp_id_3;
+CREATE OR REPLACE procedure GENESIS2_QA_20100601.get_user_fix_comp_id_3
+AS
+BEGIN
+
+EXECUTE IMMEDIATE
+        'TRUNCATE TABLE GENESIS2_QA_20100601.user_fix_comp_ids';
+
+insert into GENESIS2_QA_20100601.user_fix_comp_ids(user_id, user_role, fix_comp_id)
+WITH tf AS (SELECT u.user_id,
+                   ta.trading_firm_id,
+                   tfc.fix_connection_id
+            FROM user_identifier u
+                     JOIN trading_firm_admin2firm ta
+                          ON ta.user_id = u.user_id
+                     JOIN trading_firm2client_connection tfc
+                          ON tfc.trading_firm_id = ta.trading_firm_id
+            WHERE u.user_role = 'T')
+        ,
+     total AS (SELECT tf.user_id,
+                      tf.trading_firm_id,
+                      tf.fix_connection_id,
+                      'T' AS user_role
+               FROM tf
+               WHERE 1 = 1
+--                 and tf.user_id = 9505
+                 AND NOT EXISTS (SELECT 1
+                                 FROM trading_firm2client_connection x
+                                 WHERE x.fix_connection_id = tf.fix_connection_id
+                                   AND x.trading_firm_id NOT IN (SELECT tfi.trading_firm_id
+                                                                 FROM tf tfi
+                                                                 WHERE tfi.user_id = tf.user_id)))
+SELECT total.user_id,
+       total.user_role,
+       fc.fix_comp_id
+FROM total
+         JOIN fix_connection fc
+              ON fc.fix_connection_id = total.fix_connection_id;
+
+
+insert into GENESIS2_QA_20100601.user_fix_comp_ids(user_id, user_role, fix_comp_id)
+with popal AS (SELECT ui.user_id,
+                      tfc.trading_firm_id,
+                      tfc.fix_connection_id,
+                      'P' AS user_role
+               FROM user_identifier ui
+                        JOIN portal_user2trading_firm ptf
+                             ON ptf.user_id = ui.user_id
+                        JOIN trading_firm2client_connection tfc
+                             ON tfc.trading_firm_id = ptf.trading_firm_id
+               WHERE ui.user_role = 'P'
+--                 and ui.user_id IN (9503, 9504)
+
+               UNION
+
+               SELECT ui.user_id,
+                      tfc.trading_firm_id,
+                      tfc.fix_connection_id,
+                      'P' AS user_role
+               FROM user_identifier ui
+                        JOIN portal_user ps
+                             ON ps.user_id = ui.user_id
+                        JOIN account_set acs
+                             ON acs.account_set_id = ps.account_set_id
+                        JOIN account_set2account asta
+                             ON asta.account_set_id = acs.account_set_id
+                        JOIN account ac
+                             ON ac.account_id = asta.account_id
+                        JOIN trading_firm2client_connection tfc
+                             ON tfc.trading_firm_id = ac.trading_firm_id
+               WHERE ui.user_role = 'P'
+--               AND ui.user_id IN (9503, 9504)
+)
+SELECT popal.user_id,
+       popal.user_role,
+       fc.fix_comp_id
+FROM popal
+         JOIN fix_connection fc
+              ON fc.fix_connection_id = popal.fix_connection_id;
+
+END;
+/
+commit
+
+create table GENESIS2_QA_20100601.user_fix_comp_ids (
+    user_id number(13),
+    user_role char,
+    fix_comp_id varchar(4000)
+)

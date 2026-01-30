@@ -17,7 +17,7 @@ group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ),
 select base_inc.fn, base_inc.loaded_row as sum_inc, base_inc.batchs, base_eod.loaded_row as sum_eod, base_eod.loaded_row - base_inc.loaded_row as diff, base_eod.batchs
 from base_inc
 left join base_eod using(fn)
-where base_inc.loaded_row = base_eod.loaded_row;
+where base_inc.loaded_row != base_eod.loaded_row;
 
 
 
