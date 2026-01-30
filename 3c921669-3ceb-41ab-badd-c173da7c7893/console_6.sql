@@ -433,7 +433,7 @@ BEGIN
                          JOIN trading_firm2client_connection tfc
                               ON tfc.trading_firm_id = ta.trading_firm_id
                 WHERE u.user_role = 'T'
-                and u.user_id IN (9503, 9504, 9505)
+--                 and u.user_id IN (9503, 9504, 9505)
                 )
             ,
          total AS (SELECT tf.user_id,
@@ -458,7 +458,7 @@ BEGIN
 
 
 --     insert into GENESIS2_QA_20100601.user_fix_comp_ids(user_id, user_role, fix_comp_id)
-    WITH tf AS (SELECT u.user_id,
+    WITH tf AS (SELECT  u.user_id,
                        ptf.trading_firm_id,
                        tfc.fix_connection_id
                 FROM user_identifier u
@@ -482,29 +482,32 @@ BEGIN
                                                       FROM tf tfi
                                                       WHERE tfi.user_id = tf.user_id));
 
-    with tf as (SELECT ui.user_id,
-                       tfc.trading_firm_id,
-                       tfc.fix_connection_id,
-                       'P' AS user_role
+    with tf as (SELECT
+                    /* materialize */
+                    distinct ui.user_id,
+                             tfc.trading_firm_id,
+                             tfc.fix_connection_id,
+                             'P' AS user_role
                 FROM user_identifier ui
                          JOIN portal_user ps
                               ON ps.user_id = ui.user_id
-                         JOIN account_set acs
-                              ON acs.account_set_id = ps.account_set_id
                          JOIN account_set2account asta
-                              ON asta.account_set_id = acs.account_set_id
+                              ON asta.account_set_id = ps.account_set_id
                          JOIN account ac
                               ON ac.account_id = asta.account_id
                          JOIN trading_firm2client_connection tfc
                               ON tfc.trading_firm_id = ac.trading_firm_id
-                WHERE ui.user_role = 'P')
+                WHERE ui.user_role = 'P'
+                  and ui.IS_DELETED = 'N'
+                  and ui.IS_LOCKED = 'N'
+                order by trading_firm_id)
     SELECT tf.user_id,
            tf.trading_firm_id,
            tf.fix_connection_id,
            'P' AS user_role
     FROM tf
     where 1 = 1
-      AND tf.user_id IN (9503, 9504, 9505)
+--       AND tf.user_id IN (9503, 9504, 9505)
       AND NOT EXISTS (SELECT 1
                       FROM trading_firm2client_connection x
                       WHERE x.fix_connection_id = tf.fix_connection_id
@@ -521,3 +524,17 @@ create table GENESIS2_QA_20100601.user_fix_comp_ids
     user_role   char,
     fix_comp_id varchar(4000)
 )
+
+select count(*)
+FROM user_identifier ui
+                         JOIN portal_user ps
+                              ON ps.user_id = ui.user_id
+                         JOIN account_set acs
+                              ON acs.account_set_id = ps.account_set_id
+                         JOIN account_set2account asta
+                              ON asta.account_set_id = acs.account_set_id
+                         JOIN account ac
+                              ON ac.account_id = asta.account_id
+                         JOIN trading_firm2client_connection tfc
+                              ON tfc.trading_firm_id = ac.trading_firm_id
+                WHERE ui.user_role = 'P'
