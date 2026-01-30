@@ -616,7 +616,7 @@ SELECT ui.user_id,
 
 
 
-
+drop materialized view GENESIS2_QA_20100601.user2trading_firm_mv;
 create materialized view GENESIS2_QA_20100601.user2trading_firm_mv as
 SELECT ui.user_id,
        ac.trading_firm_id,
@@ -666,11 +666,25 @@ where u.USER_ROLE = 'T'
   AND u.is_locked = 'N';
 commit;
 
-create index utfmv_tp_idx on GENESIS2_QA_20100601.user2trading_firm_mv (tp)
+create index utfmv_USER_ID_idx on GENESIS2_QA_20100601.user2trading_firm_mv (USER_ID)
+create index utfmv_TRADING_FIRM_ID_idx on GENESIS2_QA_20100601.user2trading_firm_mv (TRADING_FIRM_ID)
+create index utfmv_FIX_CONNECTION_ID_idx on GENESIS2_QA_20100601.user2trading_firm_mv (FIX_CONNECTION_ID)
+create index utfmv_tp_idx on GENESIS2_QA_20100601.user2trading_firm_mv (tp);
 
 select * from GENESIS2_QA_20100601.user2trading_firm_v
 where user_id = 9164
 
+refresh materialized view GENESIS2_QA_20100601.user2trading_firm_mv
+
+EXEC DBMS_MVIEW.REFRESH('user2trading_firm_mv', 'C');
+
+BEGIN
+DBMS_SNAPSHOT.REFRESH('user2trading_firm_mv');
+END;
+
+BEGIN
+DBMS_SNAPSHOT.REFRESH( 'user2trading_firm_mv','c');
+END;
 
 create view ptuser2fixcompid_v as
 SELECT u.user_id,
