@@ -125,3 +125,4 @@ FROM tf_u u
                        AND b.fix_connection_id = u.fix_connection_id
                        and b.tp = u.tp
 WHERE b.user_id IS NULL;
+

@@ -36,3 +36,4 @@ where application_id = 'orders'  and section_id = 'todays-blotter-section' and l
  select * from dash360.user_layout_settings
 
  select * from dash360.allocations_snapshot(in_date_id := 20260127)
+
