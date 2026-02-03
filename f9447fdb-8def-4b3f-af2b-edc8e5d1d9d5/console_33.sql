@@ -48,3 +48,4 @@ set deleted_time = delete_time,
 from dl
 where eai.id = dl.del_id
   and is_deleted = false
+
