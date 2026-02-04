@@ -1,3 +1,0 @@
-insert into d_client_customer_or_firm (customer_or_firm_id, customer_or_firm_name, client_customer_or_firm_id, client_customer_or_firm_name, trading_firm_unq_id, trading_firm_id, date_start, is_active)
-select customer_or_firm_id, customer_or_firm_name, client_customer_or_firm_id, client_customer_or_firm_name, trading_firm_unq_id, trading_firm_id, date_start, true
-from d_client_customer_or_firm

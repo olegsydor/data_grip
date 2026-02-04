@@ -43,3 +43,6 @@ FROM tf_u u
                    ON b.user_id = u.user_id
                        AND b.fix_connection_id = u.fix_connection_id
 WHERE b.user_id IS NULL;
+
+
+select * from "GENESIS2_QA_20100601"."SG_CLIENT_CUSTOMER_OR_FIRM"
