@@ -1,4 +1,6 @@
-CREATE OR REPLACE FUNCTION dash360.so_bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
+-- DROP FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4);
+
+CREATE OR REPLACE FUNCTION dash360.bofa_allocation_report(in_start_date_id integer, in_end_date_id integer, in_exec_broker text, in_is_eod boolean DEFAULT false, in_removed_account_ids integer[] DEFAULT '{62939,263022,62810,62887,62923,63787,67949}'::integer[])
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
 AS $function$
@@ -14,6 +16,7 @@ AS $function$
     -- 20250722 SO https://dashfinancial.atlassian.net/browse/DS-10237 saving the reported data into the table to avoid missing report
     -- 20250725 SO hot fix creating account_ids list
     -- 20260203 SY Ad hock performance tuning during late hour support
+    -- 20260204 SY\SO https://dashfinancial.atlassian.net/browse/DS-11052
 
 declare
     l_load_id                 int;
@@ -368,7 +371,7 @@ begin
                        --                                 where rp.trade_record_id = any
 --                                       (staging.all_orig_trade_record_id_today(ftr.trade_record_id, ftr.date_id)))
                        then 'D' end  as to_del
-        FROM genesis2.trade_record ftr
+        FROM pre_ftr ftr
                  join lateral (select * from genesis2.account accc where accc.account_id = ftr.account_id limit 1 ) acc
                       on true
                  left join t_trade_record_to_exclude tex on
@@ -504,8 +507,8 @@ begin
 
 
 end;
-$function$;
-
+$function$
+;
 
 COMMENT ON FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4) IS 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
