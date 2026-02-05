@@ -513,3 +513,137 @@ $function$
 COMMENT ON FUNCTION dash360.bofa_allocation_report(int4, int4, text, bool, _int4) IS 'The main function based on dash360.report_rps_ml_options_cmta for aggregating data intraday only (if in_is_eod = false)
 and both intraday and EOD (if in_is_eod = true) and saving data into the dash_reporting.bofa_allocation_report for intraday
 and dash_reporting.bofa_trade_record for EOD';
+-------------------------
+
+  select alin.alloc_instr_id,
+                   alin.side,
+                   alin.avg_px,
+                   alin.date_id,
+                   alin.open_close,
+                   ae.alloc_qty,
+                   acc.opt_is_fix_clfirm_processed,
+                   ftr.cmta,                 -- ftr_cmta,
+                   ca.cmta,                  -- ca_cmta,
+                   acc.opt_is_fix_custfirm_processed,
+                   ftr.opt_customer_firm,
+                   acc.opt_customer_or_firm,
+                   ae.occ_actionable_id,     -- occ_actionable_id,
+--                    l_load_id,                -- dataset,
+                   alin.instrument_id,
+                   acc.opt_penny_commission, -- numeric(12, 4)
+                   acc.opt_nickel_commission,-- numeric(12, 4)
+                   os.root_symbol,
+                   os.min_tick_increment,
+                   oc.put_call,
+                   oc.maturity_year,
+                   oc.maturity_month,
+                   oc.maturity_day,
+                   oc.strike_price,
+                   case
+                       when ar.date_id is not null then 'C' --'skip - current alloc_instr_id'
+                       when or_ai.alloc_instr_ids && :l_alloc_instr_id_reported
+                           then 'U' -- 'unable to report - alloc_instr_id has been reported before'
+                       else 'R' end as to_report
+            from genesis2.allocation_instruction_entry ae
+                     join genesis2.allocation_instruction alin
+                          on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+                     left join lateral (select alloc_instr_ids
+                                        from staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id,
+                                                                                     alin.date_id) as x(alloc_instr_ids)
+                                        limit 1) or_ai on true
+                     inner join lateral (select tr.cmta,
+                                                tr.opt_customer_firm
+                                         from genesis2.alloc_instr2trade_record aitr
+                                                  inner join genesis2.trade_record tr
+                                                             on aitr.trade_record_id = tr.trade_record_id
+                                                                 and aitr.date_id = tr.date_id
+                                                                 and tr.is_busted = 'N'
+                                                                 and tr.exec_broker = :in_exec_broker
+                                                                 and tr.exec_broker is not null
+                                         where aitr.alloc_instr_id = alin.alloc_instr_id
+                                           and aitr.date_id = alin.date_id
+                                         limit 1
+                ) ftr on true
+                     join genesis2.clearing_account ca
+                          on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
+                              and ca.clearing_account_type = '1' and ca.market_type = 'O')
+                     join genesis2.account acc ON (acc.account_id = ca.account_id
+--                                                       and acc.is_deleted <> 'Y'
+--                 and acc.opt_report_to_mpid = 'MLCB'
+--                 and acc.trading_firm_id <> 'cantor'
+                and case when :in_is_eod then true else acc.account_id != all (:in_removed_account_ids) end
+                )
+                     join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+                     join genesis2.option_series os on os.option_series_id = oc.option_series_id
+                     join genesis2.instrument i on i.instrument_id = alin.instrument_id
+                     left join lateral (select ar.date_id
+                                        from dash_reporting.bofa_allocation_report ar
+                                        where ar.alloc_instr_id = ae.alloc_instr_id
+                                          and to_report = 'R'
+                                        limit 1) ar on true
+            where alin.date_id between :in_start_date_id and :in_end_date_id
+              and ca.account_id = any (:l_account_ids)
+              and not exists (select null
+                              from dash_reporting.bofa_allocation_report ar
+                              where ar.alloc_instr_id = ae.alloc_instr_id
+                                and ar.side = alin.side
+                                and ar.date_id = alin.date_id);
+
+select ca.*, ae.*, alin.*
+from genesis2.allocation_instruction_entry ae
+                     join genesis2.allocation_instruction alin
+                          on alin.alloc_instr_id = ae.alloc_instr_id and alin.is_deleted <> 'Y'
+                     left join lateral (select alloc_instr_ids
+                                        from staging.get_all_alloc_instr_id_for_orig(alin.alloc_instr_id,
+                                                                                     alin.date_id) as x(alloc_instr_ids)
+                                        limit 1) or_ai on true
+                     inner join lateral (select tr.cmta,
+                                                tr.opt_customer_firm
+                                         from genesis2.alloc_instr2trade_record aitr
+                                                  inner join genesis2.trade_record tr
+                                                             on aitr.trade_record_id = tr.trade_record_id
+                                                                 and aitr.date_id = tr.date_id
+                                                                 and tr.is_busted = 'N'
+                                                                 and tr.exec_broker = :in_exec_broker
+                                                                 and tr.exec_broker is not null
+                                         where aitr.alloc_instr_id = alin.alloc_instr_id
+                                           and aitr.date_id = alin.date_id
+                                         limit 1
+                ) ftr on true
+                     join genesis2.clearing_account ca
+                          on (ca.clearing_account_id = ae.clearing_account_id /*AND ca.is_deleted <> 'Y'*/
+                              and ca.clearing_account_type = '1' and ca.market_type = 'O')
+                     join genesis2.account acc ON (acc.account_id = ca.account_id
+--                                                       and acc.is_deleted <> 'Y'
+--                 and acc.opt_report_to_mpid = 'MLCB'
+--                 and acc.trading_firm_id <> 'cantor'
+                and case when :in_is_eod then true else acc.account_id != all (:in_removed_account_ids) end
+                )
+                     join genesis2.option_contract oc on oc.instrument_id = alin.instrument_id
+                     join genesis2.option_series os on os.option_series_id = oc.option_series_id
+                     join genesis2.instrument i on i.instrument_id = alin.instrument_id
+                     left join lateral (select ar.date_id
+                                        from dash_reporting.bofa_allocation_report ar
+                                        where ar.alloc_instr_id = ae.alloc_instr_id
+                                          and to_report = 'R'
+                                        limit 1) ar on true
+            where alin.date_id between :in_start_date_id and :in_end_date_id
+              and ca.account_id = any (:l_account_ids)
+              and not exists (select null
+                              from dash_reporting.bofa_allocation_report ar
+                              where ar.alloc_instr_id = ae.alloc_instr_id
+                                and ar.side = alin.side
+                                and ar.date_id = alin.date_id)
+and ae.alloc_instr_id = -317689550;
+
+
+select tr.*
+                                         from genesis2.alloc_instr2trade_record aitr
+                                                  inner join genesis2.trade_record tr
+                                                             on aitr.trade_record_id = tr.trade_record_id
+                                                                 and aitr.date_id = tr.date_id
+                                                                 and tr.is_busted = 'N'
+                                                                 and tr.exec_broker = :in_exec_broker
+                                                                 and tr.exec_broker is not null
+                                         where aitr.alloc_instr_id = -317689550
+                                           and aitr.date_id = 20260204
