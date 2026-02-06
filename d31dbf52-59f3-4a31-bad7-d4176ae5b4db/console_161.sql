@@ -183,4 +183,87 @@ from (select order_id
 
 
 select * from t_gtc
-    where order_id in (100000025246467247,100000025246471898,100000025246476613)
+    where order_id in (100000025246467247,100000025246471898,100000025246476613);
+
+select cl.order_id,
+           ac.account_name                                                                  as "Account",
+           cl.create_time::date                                                             as "Creation Date",
+           case di.instrument_type_id when 'E' then 'Equity' when 'O' then 'Option' end     as "Sec Type",
+           case cl.side
+               when '1' then 'Buy'
+               when '2' then 'Sell'
+               when '5' then 'Sell Short'
+               when '6' then 'Sell Short' end                                               as "Side",
+           cl.order_qty                                                                     as "Ord Qty",
+           di.symbol                                                                        as "Symbol",
+           oc.strike_price                                                                  as "Strike Px",
+           case oc.put_call when '1' then 'C' when '2' then 'P' end                         as "Put Call",
+           to_char(to_date(lpad(oc.maturity_year::text, 4, '0') || lpad(oc.maturity_month::text, 2, '0') ||
+                           lpad(oc.maturity_day::text, 2, '0'), 'YYYYMMDD'), 'DD Mon YYYY') as "Exp Date",
+           dex.ex_destination_code_name                                                     as "Ex Dest",
+           ot.order_type_name                                                               as "Ord Type",
+           cl.price                                                                         as "Price",
+           exl.ex_qty                                                                       as "Ex Qty",
+           ex.avg_px                                                                        as "Avg Px",
+           ex.leaves_qty                                                                    as "Lvs Qty",
+           case
+               when cl.multileg_reporting_type = '1' then 'N'
+               when cl.multileg_reporting_type = '2'
+                   then 'Y' end                                                             as "Is Mleg",
+           cl.co_client_leg_ref_id                                                          as "Leg ID",
+           cl.open_close                                                                    as "Open/Close",
+           oc.opra_symbol                                                                   as "OSI Symbol",
+           cl.client_order_id                                                               as "Cl Ord ID",
+           cl.client_id_text                                                                as "Client ID",
+           fc.fix_comp_id                                                                   as "Sender Comp ID"
+    from dwh.gtc_order_status gtc
+             join dwh.client_order cl on cl.order_id = gtc.order_id and cl.create_date_id = gtc.create_date_id
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id
+             inner join dwh.d_account ac on (cl.account_id = ac.account_id)
+             join lateral (select ex.exec_id as exec_id,
+                                  ex.avg_px,
+                                  ex.leaves_qty,
+                                  ex.order_status
+                           from dwh.execution ex
+                           where gtc.order_id = ex.order_id
+                             and ex.order_status <> '3'
+                             and ex.exec_date_id >= gtc.create_date_id
+                             and ex.exec_date_id <= :in_end_date_id
+                           order by ex.exec_time desc
+                           limit 1) ex on true
+             inner join dwh.d_order_status ors on ors.order_status = ex.order_status
+             left join lateral (select sum(ex.last_qty) as ex_qty
+                                from dwh.execution ex
+                                where ex.exec_date_id >= gtc.create_date_id
+                                  and ex.exec_date_id <= :in_end_date_id
+                                  and ex.order_id = cl.order_id
+                                  and ex.exec_type in ('F', 'G')
+                                  and ex.is_busted = 'N'
+                                limit 1) exl on true
+             left join dwh.d_option_contract oc on oc.instrument_id = cl.instrument_id
+             left join dwh.d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id
+             left join dwh.d_ex_destination_code dex on dex.ex_destination_code = cl.ex_destination and dex.is_active
+             left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+
+    where cl.parent_order_id is null
+      and gtc.create_date_id <= :in_start_date_id
+--       and (gtc.close_date_id is null
+--         or (case
+--                 when :l_is_current_date then false
+--                 else gtc.close_date_id is not null and close_date_id > :in_end_date_id end))
+      and cl.trans_type in ('D', 'G')
+      and cl.time_in_force_id in ('1', '6')
+      and cl.multileg_reporting_type in ('1', '2')
+
+
+          select * from dwh.client_order gtc
+                   join execution using (order_id)
+              where true
+--                   and order_id = 100000025246467247
+--       and gtc.order_id in (100000025246467247,100000025246471898,100000025246476613,100000025246470489,100000025246472795,100000025246481619,100000025246481620)
+and client_order_id = '777696407-2xnt0xp-87';
+415151736523403739
+100000025246467247
+
+
+select * from dash360.report_rps_ofp0016_gtc()
