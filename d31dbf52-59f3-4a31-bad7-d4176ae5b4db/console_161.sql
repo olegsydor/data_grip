@@ -256,14 +256,12 @@ select cl.order_id,
       and cl.multileg_reporting_type in ('1', '2')
 
 
-          select * from dwh.client_order gtc
-                   join execution using (order_id)
-              where true
---                   and order_id = 100000025246467247
---       and gtc.order_id in (100000025246467247,100000025246471898,100000025246476613,100000025246470489,100000025246472795,100000025246481619,100000025246481620)
-and client_order_id = '777696407-2xnt0xp-87';
+select *
+from dwh.client_order
+where true
+  and client_order_id = '777696407-2xnt0xp-87';
 415151736523403739
 100000025246467247
 
 
-select * from dash360.report_rps_ofp0016_gtc()
+select * from dash360.report_rps_ofp0011_gtd(20260101, 20260101)
