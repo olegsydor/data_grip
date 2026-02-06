@@ -22,17 +22,14 @@ AS $function$
 -- OS 20260126 https://dashfinancial.atlassian.net/browse/DS-10962 move logic that inserts Blaze7 Away trades from load_trade_record_inc to lp_load_missed_trades_blaze7
 
 declare
- row_cnt int;
- total_cn int;
- inserted_cnt int=0;
- conflict_count int;
- scr tid;
- date_cursor record;
- l_time timestamp;
- l_step_id	int;
- l_load_id	int;
-l_subscr_trade_record_id int8[];
-       l_scr record;
+    row_cnt                  int;
+    total_cn                 int;
+    inserted_cnt             int=0;
+    conflict_count           int;
+    l_time                   timestamp;
+    l_step_id                int;
+    l_load_id                int;
+    l_scr                    record;
 
 begin
 	total_cn:=0;
@@ -60,8 +57,8 @@ begin
 	create temp table instr --on commit drop
 	as
 		select *
-			from dwh.d_instrument i
-				where i.is_active
+			from genesis2.instrument i
+				where i.is_deleted='N'
 					--and instrument_type_id='O'
 				;
 	select public.load_log(l_load_id, l_step_id, 'instr temp table created ', 0, 'U')
@@ -100,7 +97,7 @@ begin
 	from instr i--genesis2.instrument i
 	where date_id between in_start_date and in_end_date
 		and trml.display_instrument_id=i.display_instrument_id2
-		and is_active
+		and is_deleted='N'
 		and trml.instrument_type_id='E'
 		and trml.instrument_type_id = i.instrument_type_id
 		and trml.instrument_id is null;
@@ -817,9 +814,7 @@ on conflict (date_id,
 
 
 end loop;
-
-
-	--- >>> AWAY 2 from trade_record_blaze7
+	--- >>>
 	  INSERT INTO genesis2.trade_record
 	(trade_record_time
 			,date_id
@@ -971,8 +966,8 @@ select distinct trade_record_time
 			,blaze_account_alias
 	--from staging.trade_record_missed_lp trml
    from staging.trade_record_blaze7 trml
-	join dwh.d_exchange e on  e.exchange_id=trml.exchange_id
-					and e.is_active
+	join genesis2.exchange e on  e.exchange_id=trml.exchange_id
+					and e.is_deleted='N'
 					and e.exchange_id=e.real_exchange_id
     where trade_record_id is null
     and instrument_id is not null
@@ -1009,11 +1004,19 @@ select distinct trade_record_time
 		GET DIAGNOSTICS row_cnt = ROW_COUNT;
 		   total_cn:=total_cn+row_cnt;
 
-    select genesis2.etl_subscribe(in_load_batch_id := trade_record_id, in_row_cnt := row_cnt,
-                                  in_subscription_name := 'big_data.flat_trade_record',
-                                  in_source_table_name := 'TRADE_RECORD.AWAY_TRADES', in_date_id := date_id)
-    FROM genesis2.trade_record
-    where load_batch_id = l_load_id;
+    select count(*)
+    into row_cnt
+    from (select genesis2.etl_subscribe(in_load_batch_id := trade_record_id,
+                                        in_row_cnt := row_cnt,
+                                        in_subscription_name := 'big_data.flat_trade_record',
+                                        in_source_table_name := 'TRADE_RECORD.AWAY_TRADES',
+                                        in_date_id := date_id)
+          FROM genesis2.trade_record
+          where load_batch_id = l_load_id) x;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'etl_subscribe load_batch_id TRADE_RECORD.AWAY_TRADES:' || (in_load_batch_id::text), 1, 'O')
+    into l_step_id;
 
 	--update staging.trade_record_missed_lp trml
     update staging.trade_record_blaze7 trml
@@ -1035,10 +1038,12 @@ select distinct trade_record_time
 	into l_step_id;
 
 
+	-- subscription
+
 	--- <<<
 
 	     return total_cn;
-
+/*
 		exception when others then
 
 		select load_log(l_load_id, l_step_id, left(sqlstate||': '||REPLACE(sqlerrm, ''::text, ''::text),250), 0, 'E')
@@ -1050,7 +1055,7 @@ select distinct trade_record_time
 
 	  PERFORM load_error_log('genesis2.lp_load_missed_trades_blaze7',  'I', REPLACE(sqlerrm, ''::text, ''::text), l_load_id);
 		return -1; --RAISE;
-
+*/
 end;
     $function$
 ;
