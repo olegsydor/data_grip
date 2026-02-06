@@ -60,8 +60,8 @@ begin
 	create temp table instr --on commit drop
 	as
 		select *
-			from genesis2.instrument i
-				where i.is_deleted='N'
+			from dwh.d_instrument i
+				where i.is_active
 					--and instrument_type_id='O'
 				;
 	select public.load_log(l_load_id, l_step_id, 'instr temp table created ', 0, 'U')
@@ -100,7 +100,7 @@ begin
 	from instr i--genesis2.instrument i
 	where date_id between in_start_date and in_end_date
 		and trml.display_instrument_id=i.display_instrument_id2
-		and is_deleted='N'
+		and is_active
 		and trml.instrument_type_id='E'
 		and trml.instrument_type_id = i.instrument_type_id
 		and trml.instrument_id is null;
@@ -117,7 +117,7 @@ begin
 	from instr i--genesis2.instrument i
 	where date_id between in_start_date and in_end_date
 		and trml.activ_symbol=i.activ_symbol
-		and is_deleted='N'
+		and is_active
 		and trml.instrument_type_id='E'
 		and trml.instrument_type_id = i.instrument_type_id
 		and trml.instrument_id is null;
@@ -304,8 +304,8 @@ begin
 
 	   select count(1)
 	   from staging.trade_record_blaze7 trml
-		join genesis2.exchange e on  e.exchange_id=trml.exchange_id
-						and e.is_deleted='N'
+		join dwh.d_exchange e on  e.exchange_id=trml.exchange_id
+						and e.is_active
 						and e.exchange_id=e.real_exchange_id
 	    where trade_record_id is null
 	    and instrument_id is not null
@@ -486,7 +486,7 @@ begin
 				)
 		select count(1) into row_cnt
 	 	from(
-	 		select genesis2.etl_subscribe(in_load_batch_id=> trade_record_id, in_row_cnt => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'trade_record_away_lvl_info', in_date_id => date_id)
+	 		select public.etl_subscribe(in_load_batch_id=> trade_record_id, in_row_count => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'trade_record_away_lvl_info', in_date_id => date_id)
 			     from upd_blaze_account_alias
 		     ) subsc_creation
 		;
@@ -538,12 +538,12 @@ begin
 	        and mapping_logic <> 99
     returning tr.trade_record_id as trade_record_id, tr.date_id as date_id, tr.is_busted as is_busted,tr.blaze_account_alias as blaze_account_alias)
 	 	select count(1) into row_cnt
-	 	from( 	select genesis2.etl_subscribe(in_load_batch_id => trade_record_id, in_row_cnt => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'TRADE_RECORD.BUSTED_TRADES', in_date_id => date_id)
+	 	from( 	select public.etl_subscribe(in_load_batch_id => trade_record_id, in_row_cnt => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'TRADE_RECORD.BUSTED_TRADES', in_date_id => date_id)
 				from upd_busted
 				where is_busted = 'Y'
 				/* SY second UNION added as part of https://dashfinancial.atlassian.net/browse/DS-1961 */
 			     UNION ALL
-			     select genesis2.etl_subscribe(in_load_batch_id=> trade_record_id, in_row_cnt => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'trade_record_away_lvl_info', in_date_id => date_id)
+			     select public.etl_subscribe(in_load_batch_id=> trade_record_id, in_row_cnt => 1, in_subscription_name => 'big_data.flat_trade_record', in_source_table_name => 'trade_record_away_lvl_info', in_date_id => date_id)
 			     from upd_busted
 			     where is_busted = 'N'
 		     ) upd_busted_y;
@@ -594,7 +594,7 @@ begin
 
 
 	  select count(1) into row_cnt
-	  from (select  genesis2.etl_subscribe( load_batch_id, row_cnt, 'big_data.flat_trade_record'::varchar , 'trade_level_book_record'::varchar, date_id)
+	  from (select  public.etl_subscribe( load_batch_id, row_cnt, 'big_data.flat_trade_record'::varchar , 'trade_level_book_record'::varchar, date_id)
 	        from (select distinct load_batch_id, date_id
 				     from genesis2.trade_level_book_record
 				        where date_id between  in_start_date and in_end_date
@@ -607,10 +607,9 @@ begin
 	             into l_step_id;
 
 
-	--- << AWAY 1
-
+	--- << AWAY 1 from trade_record_missed_lp
 		for l_scr in (select date_id, array_agg(es.load_batch_id) as ids_to_process
-					from genesis2.etl_subscriptions es
+					from public.etl_subscriptions es
 						where subscription_name = 'trade_record_away_trade'
 						and source_table_name='trade_desk'
 						and not is_processed
@@ -820,8 +819,7 @@ on conflict (date_id,
 end loop;
 
 
-
-	--- >>> AWAY 2
+	--- >>> AWAY 2 from trade_record_blaze7
 	  INSERT INTO genesis2.trade_record
 	(trade_record_time
 			,date_id
@@ -973,7 +971,7 @@ select distinct trade_record_time
 			,blaze_account_alias
 	--from staging.trade_record_missed_lp trml
    from staging.trade_record_blaze7 trml
-	join dwh.d_.exchange e on  e.exchange_id=trml.exchange_id
+	join dwh.d_exchange e on  e.exchange_id=trml.exchange_id
 					and e.is_active
 					and e.exchange_id=e.real_exchange_id
     where trade_record_id is null
@@ -1011,7 +1009,7 @@ select distinct trade_record_time
 		GET DIAGNOSTICS row_cnt = ROW_COUNT;
 		   total_cn:=total_cn+row_cnt;
 
-    select genesis2.etl_subscribe(in_load_batch_id := trade_record_id, in_row_cnt := row_cnt,
+    select public.etl_subscribe(in_load_batch_id := trade_record_id, in_row_cnt := row_cnt,
                                   in_subscription_name := 'big_data.flat_trade_record',
                                   in_source_table_name := 'TRADE_RECORD.AWAY_TRADES', in_date_id := date_id)
     FROM genesis2.trade_record
