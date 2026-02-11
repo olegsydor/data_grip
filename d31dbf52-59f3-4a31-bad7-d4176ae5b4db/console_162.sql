@@ -126,7 +126,4 @@ select * from t_base_ext
              left join data_marts.f_parent_order fp
                        on fp.parent_order_id = tp.parent_order_id and fp.status_date_id = :l_date_id
 
-    --
-
-    -- DROP FUNCTION data_marts.load_parent_order_inc(_int8, int4, _int8);
 
