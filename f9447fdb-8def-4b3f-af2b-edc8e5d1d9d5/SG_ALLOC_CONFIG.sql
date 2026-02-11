@@ -446,3 +446,6 @@ begin
 end;
 $function$
 ;
+
+-- DROP FUNCTION data_marts.load_parent_order_inc(_int8, int4, _int8);
+
