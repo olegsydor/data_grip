@@ -686,9 +686,18 @@ begin
                sender_type::varchar                                          as "Sender Type",
 
                -- Execution Details
-               last_mkt                                                      as "Last Mkt",
-               mic_code                                                      as "MIC Code",
-               trade_liquidity_indicator                                     as "Liquidity Indicator",
+--                last_mkt                                                      as "Last Mkt",
+               case
+                   when event_type = 'New Order' then ''
+                   else last_mkt end                                         as "Last Mkt",
+--                mic_code                                                      as "MIC Code",
+               case
+                   when mic_code = 'New Order' then ''
+                   else last_mkt end                                         as "MIC Code",
+--                trade_liquidity_indicator                                     as "Liquidity Indicator",
+               case
+                   when event_type = 'New Order' then ''
+                   else trade_liquidity_indicator end                        as "Liquidity Indicator",
                exec_id                                                       as "ExecutionID",
                'DFIN'::varchar                                               as "CAT Reporting Firm IMID",
                to_char(case
@@ -726,8 +735,8 @@ $function$
 
 
 select *
-from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_include_routes := 'N',
-                                                    in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
+from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_include_routes := 'N', in_include_acks := 'N',
+                                                    in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}');
 
 select *
 from dash360.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_include_routes := 'N',
