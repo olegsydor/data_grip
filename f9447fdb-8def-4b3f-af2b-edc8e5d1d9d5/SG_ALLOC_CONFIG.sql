@@ -77,7 +77,7 @@ begin
                   else sg_parent_account_id = any (in_parent_account_id) end
           and case
                   when in_sg_alloc_config_id is null then true
-                  else sg_allocation_configuration.sg_alloc_config_id = any (in_sg_alloc_config_id) end
+                  else sg_alloc_config_id = any (in_sg_alloc_config_id) end
           and case
                   when coalesce(in_include_deleted, true) then true
                   when not in_include_deleted then is_deleted = 'N' end;
