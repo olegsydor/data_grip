@@ -96,7 +96,7 @@ $fx$
 declare
     l_sg_alloc_config_id int4;
     l_new_json           jsonb := in_json::jsonb;
-    l_old_json           jsonb;
+--     l_old_json           jsonb;
     oblig_arr            text[];
     error_string         text;
     l_row_count          int4;
@@ -132,10 +132,10 @@ begin
         end if;
 
 
-        select row_to_json(t)
-        into l_old_json
-        from genesis2.sg_allocation_configuration t
-        where t.sg_alloc_config_id = in_sg_alloc_config_id;
+--         select row_to_json(t)
+--         into l_old_json
+--         from genesis2.sg_allocation_configuration t
+--         where t.sg_alloc_config_id = in_sg_alloc_config_id;
 
     end if;
 
@@ -155,8 +155,7 @@ begin
            sg_equity_brid,
            in_user_id,
            in_sg_alloc_config_id
-    from jsonb_populate_record(null::genesis2.sg_allocation_configuration,
-                               coalesce(l_old_json, '{}'::jsonb) || l_new_json)
+    from jsonb_populate_record(null::genesis2.sg_allocation_configuration, l_new_json)
     returning sg_alloc_config_id into l_sg_alloc_config_id;
 
     return query
