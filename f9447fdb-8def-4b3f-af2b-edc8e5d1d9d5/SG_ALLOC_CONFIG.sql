@@ -45,36 +45,42 @@ drop function if exists dash360.get_sg_alloc_config;
 select *
 from dash360.get_sg_alloc_config(in_parent_account_id := '{1}', in_sg_alloc_config_id := '{2, 3, 4}');
 
+drop function if exists dash360.get_sg_alloc_config;
 create or replace function dash360.get_sg_alloc_config(in_parent_account_id int8[] default null::int4[],
-                                                       in_sg_alloc_config_id int4[] default null::int4[])
+                                                       in_sg_alloc_config_id int4[] default null::int4[],
+                                                       in_include_deleted bool default false)
     returns setof genesis2.tp_sg_allocation_configuration
     language plpgsql
 as
 $fx$
 declare
-
+-- SO 20260208 https://dashfinancial.atlassian.net/browse/DS-11067 init
+-- SO 20260212 https://dashfinancial.atlassian.net/browse/DS-11090 add in_include_deleted
 begin
     return query
-        select sg_alloc_config_id,
-               sg_parent_account_id,
-               sg_alloc_config_nickname,
-               market_type,
-               clearing_firm,
-               occ_actionable_id,
-               sg_sub_account_name,
-               sg_mint_account,
-               sg_bdr,
-               sg_opt_brid,
-               sg_equity_brid,
-               orig_sg_alloc_config_id
-        from genesis2.sg_allocation_configuration
+        select sac.sg_alloc_config_id,
+               sac.sg_parent_account_id,
+               sac.sg_alloc_config_nickname,
+               sac.market_type,
+               sac.clearing_firm,
+               sac.occ_actionable_id,
+               sac.sg_sub_account_name,
+               sac.sg_mint_account,
+               sac.sg_bdr,
+               sac.sg_opt_brid,
+               sac.sg_equity_brid,
+               sac.orig_sg_alloc_config_id
+        from genesis2.sg_allocation_configuration sac
         where true
           and case
                   when in_parent_account_id is null then true
                   else sg_parent_account_id = any (in_parent_account_id) end
           and case
                   when in_sg_alloc_config_id is null then true
-                  else sg_allocation_configuration.sg_alloc_config_id = any(in_sg_alloc_config_id) end;
+                  else sg_allocation_configuration.sg_alloc_config_id = any (in_sg_alloc_config_id) end
+          and case
+                  when coalesce(in_include_deleted, true) then true
+                  when not in_include_deleted then is_deleted = 'N' end;
 end;
 $fx$;
 comment on function dash360.get_sg_alloc_config is 'Returns SG Allocation Config by provided filter';
