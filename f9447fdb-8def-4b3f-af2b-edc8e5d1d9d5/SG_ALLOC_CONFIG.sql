@@ -36,7 +36,10 @@ create type genesis2.tp_sg_allocation_configuration as
     sg_bdr                   varchar,
     sg_opt_brid              varchar,
     sg_equity_brid           varchar,
-    orig_sg_alloc_config_id  int4
+    orig_sg_alloc_config_id  int4,
+    sg_sales_trader          varchar,
+    sg_fund_id               varchar,
+    sg_portfolio_id          varchar
 );
 comment on type genesis2.tp_sg_allocation_configuration is 'type for functions outup';
 
@@ -69,7 +72,10 @@ begin
                sac.sg_bdr,
                sac.sg_opt_brid,
                sac.sg_equity_brid,
-               sac.orig_sg_alloc_config_id
+               sac.orig_sg_alloc_config_id,
+               sac.sg_sales_trader,
+               sac.sg_fund_id,
+               sac.sg_portfolio_id
         from genesis2.sg_allocation_configuration sac
         where true
           and case
@@ -132,7 +138,7 @@ begin
         end if;
 
 
---         select row_to_json(t)
+        --         select row_to_json(t)
 --         into l_old_json
 --         from genesis2.sg_allocation_configuration t
 --         where t.sg_alloc_config_id = in_sg_alloc_config_id;
@@ -142,7 +148,8 @@ begin
     insert
     into genesis2.sg_allocation_configuration(sg_parent_account_id, sg_alloc_config_nickname, market_type,
                                               clearing_firm, occ_actionable_id, sg_sub_account_name, sg_mint_account,
-                                              sg_bdr, sg_opt_brid, sg_equity_brid, user_id, orig_sg_alloc_config_id)
+                                              sg_bdr, sg_opt_brid, sg_equity_brid, user_id, orig_sg_alloc_config_id,
+                                              sg_sales_trader, sg_fund_id, sg_portfolio_id)
     select sg_parent_account_id,
            sg_alloc_config_nickname,
            market_type,
@@ -154,7 +161,10 @@ begin
            sg_opt_brid,
            sg_equity_brid,
            in_user_id,
-           in_sg_alloc_config_id
+           in_sg_alloc_config_id,
+           sg_sales_trader,
+           sg_fund_id,
+           sg_portfolio_id
     from jsonb_populate_record(null::genesis2.sg_allocation_configuration, l_new_json)
     returning sg_alloc_config_id into l_sg_alloc_config_id;
 
@@ -170,7 +180,10 @@ begin
                sg_bdr,
                sg_opt_brid,
                sg_equity_brid,
-               orig_sg_alloc_config_id
+               orig_sg_alloc_config_id,
+               sg_sales_trader,
+               sg_fund_id,
+               sg_portfolio_id
         from genesis2.sg_allocation_configuration
         where sg_alloc_config_id = l_sg_alloc_config_id;
 end
@@ -454,3 +467,8 @@ $function$
 
 -- DROP FUNCTION data_marts.load_parent_order_inc(_int8, int4, _int8);
 
+alter table genesis2.sg_allocation_configuration add column if not exists sg_sales_trader VARCHAR(20) NULL;
+
+alter table genesis2.sg_allocation_configuration add column if not exists sg_fund_id VARCHAR(16) NULL;
+
+alter table genesis2.sg_allocation_configuration add column if not exists sg_portfolio_id VARCHAR(16) NULL;
