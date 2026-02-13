@@ -743,6 +743,25 @@ from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, 
                                                   in_include_routes := 'N', in_include_acks := 'N',
                                                   in_client_order_ids := '{"STS58450000425"}');
 
+select *
+from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                                  in_include_routes := 'Y', in_include_acks := 'Y',
+                                                  in_client_order_ids := '{"STS58450000425"}');
+
+select *
+from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                                  in_include_routes := 'Y', in_include_acks := 'N',
+                                                  in_client_order_ids := '{"STS58450000425"}');
+
+select *
+from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                                  in_include_routes := 'N', in_include_acks := 'Y',
+                                                  in_client_order_ids := '{"STS58450000425"}');
+
+
+
+
+STS58450000425
 
 select *
 from dash360.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_include_routes := 'N',
