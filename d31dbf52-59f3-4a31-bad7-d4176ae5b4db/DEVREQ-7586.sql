@@ -763,6 +763,8 @@ from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, 
 
 STS58450000425
 
+
+
 select *
 from dash360.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_include_routes := 'N',
                                                     in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
