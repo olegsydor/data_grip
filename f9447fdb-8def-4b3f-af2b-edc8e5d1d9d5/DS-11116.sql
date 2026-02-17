@@ -115,9 +115,10 @@ comment on FUNCTION dash360.get_data_for_allocation_drop_v2 is 'The same get_dat
 DROP FUNCTION if exists dash360.get_data_for_allocation_drop_sg(int8, int4);
 
 create or replace function dash360.get_data_for_allocation_drop_sg(in_alloc_instr_id bigint, in_date_id integer default null::integer)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS
+$function$
     -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
     -- 20251119 SO https://dashfinancial.atlassian.net/browse/DS-10739
     -- 20251205 SO https://dashfinancial.atlassian.net/browse/DS-10739 New atrributes in the result json were added
@@ -160,18 +161,19 @@ begin
                                                                'clrFirm', ca.clearing_firm,
                                                                'actionableId', aie.occ_actionable_id,
                                                                'EquityBRID', ca.sg_equity_brid,
-                                      'OptionBRID', ca.sg_opt_brid,
+                                                               'OptionBRID', ca.sg_opt_brid,
                                                                'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
+                                                               'salesTrader', ca.sg_sales_trader,
                                                                'sgMintAccount', ca.sg_mint_account,
                                                                'AllocEntryCCRURate', ccr.rate,
-                                                               'AllocEntryCCRUTotalAmount', ccr.amount * 1.0 * aie.alloc_qty / total_qty
+                                                               'AllocEntryCCRUTotalAmount',
+                                                               ccr.amount * 1.0 * aie.alloc_qty / total_qty
                                             ))
                                            as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.sg_allocation_configuration ca
-                                              on (ca.clearing_account_id = aie.clearing_account_id
-                                                  )
+                                              on (ca.sg_alloc_config_id = aie.sg_alloc_config_id)
                                     join genesis2.account ac on ac.account_id = ai.account_id
                            where aie.alloc_instr_id = ai.alloc_instr_id
                              and aie.date_id = ai.date_id
@@ -186,4 +188,9 @@ end ;
 $function$
 ;
 
-select * from genesis2.sg_allocation_configuration
+select * from genesis2.sg_allocation_configuration;
+select * from genesis2.allocation_instruction_entry
+where sg_allocation_configuration is not null;
+
+
+

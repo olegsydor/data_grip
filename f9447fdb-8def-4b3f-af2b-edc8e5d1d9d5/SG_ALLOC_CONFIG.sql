@@ -252,9 +252,9 @@ from dash360.get_sg_alloc_config(in_parent_account_id := '{264452}');
 
 -----------------------------------------
 
-alter table genesis2.allocation_instruction_entry add column if not exists sg_allocation_configuration int4 null;
+alter table genesis2.allocation_instruction_entry add column if not exists sg_alloc_config_id int4 null;
 alter table genesis2.allocation_instruction_entry
-    add constraint allocation_instruction_entry_sg_allocation_configuration_fk foreign key (sg_allocation_configuration) references genesis2.sg_allocation_configuration;
+    add constraint allocation_instruction_entry_sg_allocation_configuration_fk foreign key (sg_alloc_config_id) references genesis2.sg_allocation_configuration;
 set search_path to 'genesis2';
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
 
