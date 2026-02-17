@@ -278,7 +278,7 @@ declare
  l_load_batch_id bigint;
  l_step_id int;
  l_row_cnt int;
- l_sg_allocation_configuration int4;
+ l_sg_alloc_config_id int4;
 
 
 begin
@@ -291,7 +291,7 @@ begin
 
 
  l_change_vector:=in_change_vector::jsonb;
-  l_sg_allocation_configuration := (l_change_vector->> 'alloc_config_id')::int4;
+  l_sg_alloc_config_id := (l_change_vector->> 'alloc_config_id')::int4;
 
   select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_change_vector converted to jsonb', 1, 'I'::char)
   into l_step_id;
@@ -338,8 +338,8 @@ begin
                  from tr
                  group by clearing_account_id, street_account_name, account_nickname
 )
- ,      aie as( INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty, allocation_instruction_entry_id, sg_allocation_configuration)
-			   select l_alloc_instr, in_date_id, clearing_account_id, street_account_name, account_nickname,  last_qty, alloc_instr_entry_id, l_sg_allocation_configuration
+ ,      aie as( INSERT INTO allocation_instruction_entry (alloc_instr_id, date_id, clearing_account_id, occ_actionable_id, account_nickname, alloc_qty, allocation_instruction_entry_id, sg_alloc_config_id)
+			   select l_alloc_instr, in_date_id, clearing_account_id, street_account_name, account_nickname,  last_qty, alloc_instr_entry_id, l_sg_alloc_config_id
 			   from pre_aie
                returning *),
         a2tr as (INSERT INTO alloc_instr2trade_record (trade_record_id, alloc_instr_id, date_id, dataset_id, allocation_instruction_entry_id)
@@ -426,7 +426,7 @@ create or replace function dash360.allocations_instruction_entries(in_alloc_inst
                 sg_brid                     character varying,
                 sg_sub_account_name         character varying,
                 sg_mint_account             character varying,
-                sg_allocation_configuration integer
+                sg_alloc_config_id          integer
             )
     LANGUAGE plpgsql
     COST 1
@@ -451,7 +451,7 @@ begin
                ca.sg_brid,
                ca.sg_sub_account_name,
                ca.sg_mint_account,
-               e.sg_allocation_configuration
+               e.sg_alloc_config_id
         from genesis2.allocation_instruction_entry e
                  inner join genesis2.allocation_instruction a
                             on a.alloc_instr_id = e.alloc_instr_id and a.is_deleted = 'N' and a.date_id = in_date_id
