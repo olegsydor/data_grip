@@ -36,13 +36,14 @@ from entity;
 select * from way.event;
 
 
-select pv.short_name, cv.short_name, e.when_year, e.when_month, e.when_day
+select e.event_id, pv.short_name, cv.short_name, e.when_year, e.when_month, e.when_day
 from way.event e
          join way.entity pv on pv.entity_id = e.parent_entity_id
-         join way.entity cv on cv.entity_id = e.child_entity_id;
+         join way.entity cv on cv.entity_id = e.child_entity_id
+order by 1;
 
 -- insert into way.entity(type_id, short_name)
 -- select 1, (unnest('{Наталя (приватизація),Міша (Косів), Юля Пастушенко, Юля Гудкова, Анна Сотнік, Наташа Большакова, Оля Любуська, Лариса Тиришкіна, Віталій Йосифович, Олександр Широков, Скабєлкін, Наташа (Росія), Іржи Паті, Роман Кнаус, Сергій Слюнько, Таня Лисяк, Паша Щербіюк, Алена Чирикова,Валя, Володя Сенюк, "Паучок", Надя Гайда,Володимир Ващишин, Міша Веселовський, Олександр Козловський, Вадим Черних, Ольга Черних, Ольга Козловська, Олександр Корицький, Олексій Ячменев, Олексій (айті), Мирослав Михальчук, Юрій Михальчук, Андо, Чіно, Роберт Мастерд, Джо Тамбу, Віра, Петя Мочернюк, Костя (сальса),Олег Прокуда,Юля Дика, Наташа Карпова,Давид, Олександра Коваль, Макс, Бурт, Мич, Му, Роксолана, Мар''яна Гаврилів, Руслан Зайц, Рома Новіков, Ксенія Гаврилейченко, Назар Юзвишин, Володимир Строгуш, Альона Косоротова, Саша (Анна Вагнер), Христина Качмар, Марта Качмар, Скотт, Анфіса, Юля Сербіна, Наташа Безбородкіна, Оксана Тимо, Яша, Игорь,ерман Антонов, Уляна Колодій, Любомир Футорський, Сергій Плюснін (Козловський), Сергій Іванов, Ігор Верхола,Давид (taskdrive)}'::text[]));
 
 insert into way.event(parent_entity_id, child_entity_id, when_year, when_month, when_day, is_exact_date)
-select 214, generate_series(56,60), 1989, 6, null, false
+select 78, generate_series(70,76), 1991, null, null, false

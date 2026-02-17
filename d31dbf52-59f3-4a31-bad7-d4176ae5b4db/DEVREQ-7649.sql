@@ -1,4 +1,4 @@
-DROP FUNCTION trash.report_fintech_adh_order_xls(int4, int4, bpchar, _int4, text, _varchar);
+DROP FUNCTION dash360.report_fintech_adh_order_xls(int4, int4, bpchar, _int4, text, _varchar);
 
 select * from trash.report_fintech_adh_order_xls(in_start_date_id:=20260213, in_end_date_id:=20260213, in_account_ids := '{63706,63887}');
 select * from dash360.report_fintech_adh_order_xls(in_start_date_id:=20260213, in_end_date_id:=20260213, in_account_ids := '{63706,63887}');
@@ -7,7 +7,7 @@ select * from trash.report_fintech_adh_order_xls(in_start_date_id:=20260213, in_
 select * from dash360.report_fintech_adh_order_xls(in_start_date_id:=20260213, in_end_date_id:=20260213);
 
 
-CREATE or replace FUNCTION trash.report_fintech_adh_order_xls(in_start_date_id integer DEFAULT get_dateid(CURRENT_DATE),
+CREATE or replace FUNCTION dash360.report_fintech_adh_order_xls(in_start_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                               in_end_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                               in_instrument_type character DEFAULT NULL::bpchar,
                                                               in_account_ids integer[] DEFAULT '{}'::integer[],
