@@ -1,9 +1,9 @@
--- DROP FUNCTION dash360.get_data_for_allocation_drop(int8, int4);
-
-CREATE OR REPLACE FUNCTION dash360.get_data_for_allocation_drop(in_alloc_instr_id bigint, in_date_id integer DEFAULT NULL::integer)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+DROP FUNCTION if exists dash360.get_data_for_allocation_drop_v2(int8, int4);
+CREATE FUNCTION dash360.get_data_for_allocation_drop_v2(in_alloc_instr_id bigint, in_date_id integer DEFAULT NULL::integer)
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS
+$function$
     -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
     -- 20251119 SO https://dashfinancial.atlassian.net/browse/DS-10739
     -- 20251205 SO https://dashfinancial.atlassian.net/browse/DS-10739 New atrributes in the result json were added
@@ -15,11 +15,19 @@ begin
                                                   'processTime', ai.create_time,
                                                   'side', ai.side,
                                                   'symbol', di.symbol,
-                                                  'secType', case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
-                                                  'putOrCall', case when di.instrument_type_id = 'O' then oc.put_call end,
-                                                  'strikePx', case when di.instrument_type_id = 'O' then oc.strike_price end,
-                                                  'maturityDay', case when di.instrument_type_id = 'O' then to_char(oc.maturity_day, 'FM00') end,
-                                                  'maturityMonthYear', case when di.instrument_type_id = 'O' then to_char(oc.maturity_year, 'FM0000') || to_char(oc.maturity_month, 'FM00') end,
+                                                  'secType',
+                                                  case when di.instrument_type_id = 'O' then 'OPT' else 'ES' end,
+                                                  'putOrCall',
+                                                  case when di.instrument_type_id = 'O' then oc.put_call end,
+                                                  'strikePx',
+                                                  case when di.instrument_type_id = 'O' then oc.strike_price end,
+                                                  'maturityDay', case
+                                                                     when di.instrument_type_id = 'O'
+                                                                         then to_char(oc.maturity_day, 'FM00') end,
+                                                  'maturityMonthYear', case
+                                                                           when di.instrument_type_id = 'O' then
+                                                                               to_char(oc.maturity_year, 'FM0000') ||
+                                                                               to_char(oc.maturity_month, 'FM00') end,
                                                   'totalQty', ai.total_qty,
                                                   'avgPx', ai.avg_px,
                                                   'noExecs', aitr.trade_cnt,
@@ -27,7 +35,8 @@ begin
                                                   'noAllocs', aie.alloc_cnt,
                                                   'allocationEntries', aie.entries,
                                                   'CCRURate', ccr.rate,
-                                                  'CCRUTotalAmount', ccr.amount
+                                                  'CCRUTotalAmount', ccr.amount,
+                                                  'AllocInstrId', ai.alloc_instr_id
                                )
     from genesis2.allocation_instruction ai
              join genesis2.instrument di on di.instrument_id = ai.instrument_id
@@ -57,19 +66,15 @@ begin
                                                                'allocQty', aie.alloc_qty,
                                                                'clrFirm', ca.clearing_account_number,
                                                                'actionableId', aie.occ_actionable_id,
-                                                               'brid', ca.sg_brid,
-                                                               'subAccount', ca.sg_sub_account_name,
                                                                'individualAllocID', aie.allocation_instruction_entry_id,
-                                                               'sgMintAccount', ca.sg_mint_account,
                                                                'AllocEntryCCRURate', ccr.rate,
-                                            'AllocEntryCCRUTotalAmount', ccr.amount * 1.0 * aie.alloc_qty / total_qty
+                                                               'AllocEntryCCRUTotalAmount',
+                                                               ccr.amount * 1.0 * aie.alloc_qty / total_qty
                                             ))
                                            as entries
                            from genesis2.allocation_instruction_entry aie
                                     left join genesis2.clearing_account ca
                                               on (ca.clearing_account_id = aie.clearing_account_id
---                                                  and ca.clearing_account_type = '1'
---                                                  and ca.market_type = di.instrument_type_id
                                                   )
                                     join genesis2.account ac on ac.account_id = ai.account_id
                            where aie.alloc_instr_id = ai.alloc_instr_id
@@ -104,3 +109,81 @@ begin
 end ;
 $function$
 ;
+comment on FUNCTION dash360.get_data_for_allocation_drop_v2 is 'The same get_data_for_allocation_drop but without SG attributes';
+
+
+DROP FUNCTION if exists dash360.get_data_for_allocation_drop_sg(int8, int4);
+
+create or replace function dash360.get_data_for_allocation_drop_sg(in_alloc_instr_id bigint, in_date_id integer default null::integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
+    -- 20251027 SO https://dashfinancial.atlassian.net/browse/DS-10634
+    -- 20251119 SO https://dashfinancial.atlassian.net/browse/DS-10739
+    -- 20251205 SO https://dashfinancial.atlassian.net/browse/DS-10739 New atrributes in the result json were added
+    -- 20260217 SO https://dashfinancial.atlassian.net/browse/DS-11116 version for SG
+declare
+    l_return_jsonb jsonb;
+begin
+    select into l_return_jsonb jsonb_build_object('tradeDate', ai.date_id,
+                                                  'processTime', ai.create_time,
+                                                  'noAllocs', aie.alloc_cnt,
+                                                  'allocationEntries', aie.entries,
+                                                  'AllocInstrId', ai.alloc_instr_id
+                               )
+    from genesis2.allocation_instruction ai
+             join genesis2.instrument di on di.instrument_id = ai.instrument_id
+             left join lateral (select sum(l1.rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as rate,
+                                       sum(amount)                                              as amount
+                                from genesis2.alloc_instr2trade_record alt
+                                         inner join genesis2.trade_record tr
+                                                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+                                         left join lateral (select tl.rate,
+                                                                   tl.amount,
+                                                                   row_number()
+                                                                   over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+                                                            from genesis2.trade_level_book_record tl
+                                                                     inner join genesis2.book_record_creator cr
+                                                                                on tl.book_record_creator_id = cr.book_record_creator_id
+                                                            where tl.date_id = in_date_id
+                                                              AND tl.book_record_type_id = 'CCRU'
+                                                              and tl.trade_record_id = alt.trade_record_id) l1
+                                                   on true
+                                where alt.alloc_instr_id = ai.alloc_instr_id
+                                  and tr.is_busted = 'N'
+                                  and (l1.rn = 1 or l1.rn is null)
+        ) ccr on true
+
+             join lateral (select count(*) as alloc_cnt,
+                                  jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
+                                                               'allocQty', aie.alloc_qty,
+                                                               'clrFirm', ca.clearing_firm,
+                                                               'actionableId', aie.occ_actionable_id,
+                                                               'EquityBRID', ca.sg_equity_brid,
+                                      'OptionBRID', ca.sg_opt_brid,
+                                                               'subAccount', ca.sg_sub_account_name,
+                                                               'individualAllocID', aie.allocation_instruction_entry_id,
+                                                               'sgMintAccount', ca.sg_mint_account,
+                                                               'AllocEntryCCRURate', ccr.rate,
+                                                               'AllocEntryCCRUTotalAmount', ccr.amount * 1.0 * aie.alloc_qty / total_qty
+                                            ))
+                                           as entries
+                           from genesis2.allocation_instruction_entry aie
+                                    left join genesis2.sg_allocation_configuration ca
+                                              on (ca.clearing_account_id = aie.clearing_account_id
+                                                  )
+                                    join genesis2.account ac on ac.account_id = ai.account_id
+                           where aie.alloc_instr_id = ai.alloc_instr_id
+                             and aie.date_id = ai.date_id
+                           limit 1) aie on true
+             left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
+             left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+    where true
+      and ai.alloc_instr_id = in_alloc_instr_id
+      and case when in_date_id is null then true else ai.date_id = in_date_id end;
+    return l_return_jsonb;
+end ;
+$function$
+;
+
+select * from genesis2.sg_allocation_configuration
