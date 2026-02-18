@@ -767,9 +767,10 @@ STS58450000425
 
 select * from dash360.report_obo_generic(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_parent_order_ids := '{408796829814996486}')
 
-select * from dwh.client_order
+select ex.* from dwh.client_order cl
+         join execution ex using (order_id)
 where true
 --     and client_order_id = '20260106WEBUL467862'
-    and parent_order_id = 408796572093899682
+    and order_id = 408796829814996486
 
 select * from dwh.d_exec_type
