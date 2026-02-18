@@ -1,4 +1,4 @@
-select (638333907-638355181)/638333907.0*100;
+select (638333907-638355181)/638333907.0*100; --EOD left vs INC right
 -- -21274
 
 with base_inc as (
@@ -15,8 +15,8 @@ WHERE date_id = :p_date_id
 group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ), '.', 1)
 )
 select base_inc.fn, base_inc.loaded_row as sum_inc, base_inc.batchs, base_eod.loaded_row as sum_eod, base_eod.loaded_row - base_inc.loaded_row as diff, base_eod.batchs
-from base_inc
-left join base_eod using(fn)
+from base_eod
+left join base_inc using(fn)
 where base_inc.loaded_row != base_eod.loaded_row;
 
 
@@ -27,16 +27,16 @@ create index on partitions.hft_fix_message_event_20260217_eod (load_batch_id);
 with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
 --from partitions.hft_fix_message_event_reload
-from partitions.hft_fix_message_event_20251118_eod
-where load_batch_id = any ('{674476}')
+from partitions.hft_fix_message_event_20260217_eod
+where load_batch_id = any ('{724497,724525,724502,724486,724501,724498,724487,724488,724494}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
-from partitions.hft_fix_message_event_20260105
-where load_batch_id = any ('{700717,700780,700663,700848,700912,700975,701034,701091,701154,701216,701279}')
+from partitions.hft_fix_message_event_20260217
+where load_batch_id = any ('{723882,723823,723957,724029,724092,724155,724218,724281,724342,724406,724458}')
 )
-insert into trash.so_20251118_diff
-select *, '{674476}'::int4[] as load_batch_id_eod
---into table trash.so_20251118_diff
+-- insert into trash.so_20260217_diff
+select *, '{724497,724525,724502,724486,724501,724498,724487,724488,724494}'::int4[] as load_batch_id_eod
+into table trash.so_20260217_diff
 from base;
 
 select *
