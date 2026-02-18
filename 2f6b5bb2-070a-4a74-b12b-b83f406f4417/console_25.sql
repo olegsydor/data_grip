@@ -105,5 +105,5 @@ end;
 $$;
 
 select *
-from way.add_connection(in_parent_entity_id := 100::int4, in_child_entity_ids := '{111,112,113}'::int4[], in_year := 1997::int2, in_month := null::int2,
+from way.add_connection(in_parent_entity_id := 85::int4, in_child_entity_ids := '{121,122,123,124,125}'::int4[], in_year := 1999::int2, in_month := null::int2,
                         in_day := null::int2, in_is_exact_date := false);

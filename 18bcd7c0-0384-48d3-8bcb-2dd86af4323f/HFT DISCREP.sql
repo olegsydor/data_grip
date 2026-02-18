@@ -28,15 +28,15 @@ with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
 --from partitions.hft_fix_message_event_reload
 from partitions.hft_fix_message_event_20260217_eod
-where load_batch_id = any ('{724497,724525,724502,724486,724501,724498,724487,724488,724494}')
+where load_batch_id = any ('{724466,724472,724467,724468}')
 except
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
 from partitions.hft_fix_message_event_20260217
-where load_batch_id = any ('{723882,723823,723957,724029,724092,724155,724218,724281,724342,724406,724458}')
+where load_batch_id = any ('{723822,723851,723869,723892,723904,723834,723933,723951,723961,723972,723883,723983,723997,724015,724030,723917,724041,724054,724070,724088,724099,724112,724127,724146,724159,724170,724185,724203,724219,724229,724243,724260,724277,724288,724301,724318,724337,724348,724361,724376,724394,724408,724419,724435}')
 )
--- insert into trash.so_20260217_diff
-select *, '{724497,724525,724502,724486,724501,724498,724487,724488,724494}'::int4[] as load_batch_id_eod
-into table trash.so_20260217_diff
+insert into trash.so_20260217_diff
+select *, '{724466,724472,724467,724468}'::int4[] as load_batch_id_eod
+-- into table trash.so_20260217_diff
 from base;
 
 select *
