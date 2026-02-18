@@ -246,7 +246,6 @@ begin
            oc.strike_price,
            ac.is_affiliate,
            case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                            as solicitation-- if 'Y' - Y otherwise N
-
     from dwh.client_order cl
              left join lateral (select *
                                 from dwh.client_order orig
@@ -321,7 +320,8 @@ begin
 
     drop table if exists t_exs;
     create temp table t_exs as
-    select b.first_order_id,
+    select
+        b.first_order_id,
            b.order_id                                                                              as parent_order_id,
            -----
            b.orig_client_order_id,
@@ -335,6 +335,7 @@ begin
            b.tf_cat_imid                                                                           as tf_cat_imid,
 --                     b.cat_crd,
            b.tf_cat_crd                                                                            as tf_cat_crd,
+--            ex.exec_type,
            case
                when ex.exec_type in ('A', '0', '5') then 'Order Ack'
                when ex.exec_type = '4' then 'Cancelled'
@@ -422,11 +423,11 @@ begin
            b.is_affiliate,
            null                                                                                    as solicitation
     from t_base b
-             left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
-             left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
-             left join dwh.execution ex
+              join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
+              join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
+              join dwh.execution ex
                        on ex.order_id = b.order_id and ex.exec_date_id >= b.create_date_id
-                           and ex.exec_type not in ('a', 'A', 'S', '0')
+--                            and ex.exec_type not in ('a', 'A', 'S', '0')
              left join lateral (select fmj.fix_message ->> '10061'          as tag_10061,
                                        coalesce(fmj.fix_message ->> '5050',
                                                 fmj.fix_message ->> '5051') as tag_5050,
@@ -575,7 +576,7 @@ begin
                    then b.solicitation end                        as solicitation
     from t_base b
              join ord_type ot
-                  on ot.trans_type = b.trans_type and case when in_include_routes = 'Y' then true else ot.rn = 1 end
+                  on ot.trans_type = b.trans_type and case when :in_include_routes = 'Y' then true else ot.rn = 1 end
              left join lateral
         ( select ex.exec_id,
                  ex.order_status,
@@ -719,7 +720,7 @@ begin
 -- into trash.so_obo
               from t_exs
               where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
-                and case when in_include_acks = 'Y' then true else event_type not ilike all(array['%Ack%']) end
+                and case when :in_include_acks = 'Y' then true else event_type not ilike all(array['%Ack%']) end
               order by 1, 2 nulls first, 3, rn, event_ts) x;
     get diagnostics l_row_count = row_count;
 
@@ -764,4 +765,11 @@ from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, 
 STS58450000425
 
 
-select * from t_exs
+select * from dash360.report_obo_generic(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_parent_order_ids := '{408796829814996486}')
+
+select * from dwh.client_order
+where true
+--     and client_order_id = '20260106WEBUL467862'
+    and parent_order_id = 408796572093899682
+
+select * from dwh.d_exec_type
