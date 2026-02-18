@@ -109,3 +109,5 @@ from way.add_connection(in_parent_entity_id := 221::int4,
                         in_child_entity_ids := '{92}'::int4[],
                         in_year := 2009::int2, in_month := 05::int2, in_day := null::int2,
                         in_is_exact_date := false);
+
+alter table way.event add constraint parent_entity_id_child_entity_id_unq unique (parent_entity_id,child_entity_id);
