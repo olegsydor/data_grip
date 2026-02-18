@@ -1,5 +1,5 @@
-select (529426119-529607691)/529426119.0*100;
--- 93450340
+select (638333907-638355181)/638333907.0*100;
+-- -21274
 
 with base_inc as (
 select split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) -1 ), '.', 1) as fn, sum(processed_rows) as loaded_row, array_agg(load_batch_id) as batchs
@@ -22,7 +22,7 @@ where base_inc.loaded_row != base_eod.loaded_row;
 
 
 
-create index on partitions.hft_fix_message_event_20260105_eod (load_batch_id);
+create index on partitions.hft_fix_message_event_20260217_eod (load_batch_id);
 
 with base as (
 select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
