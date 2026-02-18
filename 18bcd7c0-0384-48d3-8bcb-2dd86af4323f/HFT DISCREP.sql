@@ -30,28 +30,29 @@ where load_batch_id = any ('{723821,723880,723950,724024,724089,724152,724215,72
 create index on partitions.hft_fix_message_event_20260217_eod (load_batch_id);
 
 with base as (select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
---from partitions.hft_fix_message_event_reload
               from partitions.hft_fix_message_event_20260217_eod
-              where load_batch_id = any ('{724527}')
+              where true
+--                 and load_batch_id = any ('{724527}')
                 and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                      'US/Eastern')::time <= '16:30'::time
               except
               select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
               from partitions.hft_fix_message_event_20260217
-              where
-                  load_batch_id = any ('{723842,723914,723989,724053,724117,724180,724242,724304,724365,724428,724464}')
+              where true
+--                 and load_batch_id = any ('{723842,723914,723989,724053,724117,724180,724242,724304,724365,724428,724464}')
                 and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                      'US/Eastern')::time <= '16:30'::time
-              except
+/*              except
               select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
---from partitions.hft_fix_message_event_reload
+
               from partitions.hft_fix_message_event_20260217_eod
               where load_batch_id = any ('{724527}')
                 and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                      'US/Eastern')::time <= '16:30'::time
+ */
 )
--- insert into trash.so_20260217_diff
-select *, '{724497,724525,724502,724486,724501,724498,724487,724488,724494}'::int4[] as load_batch_id_eod
+insert into trash.so_20260217_diff
+select *, '{0}'::int4[] as load_batch_id_eod
 -- into table trash.so_20260217_diff
 from base;
 
