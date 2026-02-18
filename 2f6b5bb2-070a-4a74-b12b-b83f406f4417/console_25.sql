@@ -36,7 +36,14 @@ from entity;
 select * from way.event;
 
 
-select e.event_id, pv.short_name, cv.short_name, e.when_year, e.when_month, e.when_day
+select e.event_id,
+       pv.entity_id,
+       pv.short_name,
+       cv.entity_id,
+       cv.short_name,
+       e.when_year,
+       e.when_month,
+       e.when_day
 from way.event e
          join way.entity pv on pv.entity_id = e.parent_entity_id
          join way.entity cv on cv.entity_id = e.child_entity_id
@@ -46,4 +53,57 @@ order by 1;
 -- select 1, (unnest('{Наталя (приватизація),Міша (Косів), Юля Пастушенко, Юля Гудкова, Анна Сотнік, Наташа Большакова, Оля Любуська, Лариса Тиришкіна, Віталій Йосифович, Олександр Широков, Скабєлкін, Наташа (Росія), Іржи Паті, Роман Кнаус, Сергій Слюнько, Таня Лисяк, Паша Щербіюк, Алена Чирикова,Валя, Володя Сенюк, "Паучок", Надя Гайда,Володимир Ващишин, Міша Веселовський, Олександр Козловський, Вадим Черних, Ольга Черних, Ольга Козловська, Олександр Корицький, Олексій Ячменев, Олексій (айті), Мирослав Михальчук, Юрій Михальчук, Андо, Чіно, Роберт Мастерд, Джо Тамбу, Віра, Петя Мочернюк, Костя (сальса),Олег Прокуда,Юля Дика, Наташа Карпова,Давид, Олександра Коваль, Макс, Бурт, Мич, Му, Роксолана, Мар''яна Гаврилів, Руслан Зайц, Рома Новіков, Ксенія Гаврилейченко, Назар Юзвишин, Володимир Строгуш, Альона Косоротова, Саша (Анна Вагнер), Христина Качмар, Марта Качмар, Скотт, Анфіса, Юля Сербіна, Наташа Безбородкіна, Оксана Тимо, Яша, Игорь,ерман Антонов, Уляна Колодій, Любомир Футорський, Сергій Плюснін (Козловський), Сергій Іванов, Ігор Верхола,Давид (taskdrive)}'::text[]));
 
 insert into way.event(parent_entity_id, child_entity_id, when_year, when_month, when_day, is_exact_date)
-select 78, generate_series(70,76), 1991, null, null, false
+select 78, generate_series(70,76), 1991, null, null, false;
+
+
+create or replace function way.add_connection(in_parent_entity_id int4, in_child_entity_ids int4[],
+                                              in_year int2 default null,
+                                              in_month int2 default null, in_day int2 default null,
+                                              in_is_exact_date bool default false)
+    returns table
+            (
+                event_id          int4,
+                parent_entity_id  int4,
+                parent_short_name text,
+                child_entity_id   int4,
+                child_short_name  text,
+                when_year         int2,
+                when_month        int2,
+                when_day          int2
+            )
+    language plpgsql
+as
+$$
+declare
+    f_event_id int4[];
+begin
+    with ins as (insert into way.event (parent_entity_id, child_entity_id, when_year, when_month, when_day,
+                                        is_exact_date)
+        select in_parent_entity_id, unnest(in_child_entity_ids), in_year, in_month, in_day, in_is_exact_date
+        returning event.event_id)
+    select array_agg(ins.event_id)
+    into f_event_id
+    from ins;
+
+    return query
+        select e.event_id,
+               pv.entity_id,
+               pv.short_name,
+               cv.entity_id,
+               cv.short_name,
+               e.when_year,
+               e.when_month,
+               e.when_day
+        from way.event e
+                 join way.entity pv on pv.entity_id = e.parent_entity_id
+                 join way.entity cv on cv.entity_id = e.child_entity_id
+        where e.event_id = any (f_event_id)
+        order by 1;
+
+end;
+
+$$;
+
+select *
+from way.add_connection(in_parent_entity_id := 100::int4, in_child_entity_ids := '{111,112,113}'::int4[], in_year := 1997::int2, in_month := null::int2,
+                        in_day := null::int2, in_is_exact_date := false);
