@@ -737,7 +737,7 @@ $function$
 select *
 from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                                   in_include_routes := 'Y', in_include_acks := 'Y',
-                                                  in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}');
+                                                  in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
 
 select *
 from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
@@ -747,7 +747,7 @@ from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, 
 select *
 from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                                   in_include_routes := 'Y', in_include_acks := 'Y',
-                                                  in_client_order_ids := '{"STS58450000425"}');
+                                                  in_client_order_ids := '{"STS58450000425","STS58450000430"}');
 
 select *
 from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
@@ -767,10 +767,10 @@ STS58450000425
 
 select * from dash360.report_obo_generic(in_date_begin_id := 20260106, in_date_end_id := 20260106, in_parent_order_ids := '{408796829814996486}')
 
-select ex.* from dwh.client_order cl
+select cl.* from dwh.client_order cl
          join execution ex using (order_id)
 where true
---     and client_order_id = '20260106WEBUL467862'
-    and order_id = 408796829814996486
+--      and client_order_id = 'STS58450000425'
+    and orig_order_id = 408796829814996486
 
 select * from dwh.d_exec_type
