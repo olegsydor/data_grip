@@ -27,11 +27,15 @@ SELECT da.account_id,
        cl_acc.is_visible_for_manual_allocation,
        i.instrument_types,
        CASE
-           when SG_PARENT_ACCOUNT_ID is null then 'Y'
            WHEN da.opt_report_to_mpid::text = 'MLCB'::text THEN 'Y'::text
            WHEN da.eq_report_to_mpid::text = 'MLCB'::text
                AND (COALESCE(cl_acc.eq_clearing_account_number, 'null alternative'::text) <> ALL
                     (ARRAY ['3Q800806'::text, '3Q800797'::text, '3Q800809'::text])) THEN 'Y'::text
+           when exists (select null
+                        from dwh.d_sg_account sg
+                        where sg.account_id = da.account_id
+                          and sg.is_active
+                          and sg_parent_account_id is null) then 'Y'
            ELSE 'N'::text
            END AS is_pta_configured
 FROM d_account da
