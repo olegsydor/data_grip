@@ -115,3 +115,8 @@ alter table way.event
 
 
 
+select format($$
+ curl -X POST "http://localhost:8000/nodes/" \
+-H "Content-Type: application/json" \
+-d '{"node_id": %s,"node_type":1,"display_name":"%s","properties":{}}'
+ $$, entity_id::text, entity.short_name) from way.entity
