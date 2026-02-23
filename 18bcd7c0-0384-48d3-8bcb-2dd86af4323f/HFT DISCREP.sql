@@ -353,3 +353,5 @@ where msg_type not in ('1', '5')
        'US/Eastern')::time <= '16:30'::time
   and load_batch_id = any ('{701303, 701304}')
 order by cl_ord_id, load_batch_id
+
+;

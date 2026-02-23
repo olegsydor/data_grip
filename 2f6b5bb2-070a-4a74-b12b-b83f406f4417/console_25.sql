@@ -130,3 +130,9 @@ create table users
     password_hash text not null,
     created_at    timestamptz default clock_timestamp()
 );
+
+
+insert into inc_hft.hft_incremental_files
+(date_id, filename, start_processing, start_position, end_processing, end_position, load_batch_id, is_processed,
+ file_size, processed_rows, hft_comment, last_row_hash, is_active, checked_loading, node_name)
+values (0, '', '', 0, '', 0, 0, 'S'::bpchar, 0, 0, '', '', 'Y'::bpchar, false, '');
