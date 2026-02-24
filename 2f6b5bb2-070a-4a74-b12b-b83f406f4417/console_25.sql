@@ -171,3 +171,52 @@ select '{"2347865802":[{"cmta":"792","clearing_account_number":"792","street_acc
 
 
 select '{"2347865736":[{"cmta":"792","clearing_account_number":"792","street_account_name":"opt_aid1","account_nickname":"Option Main 1","last_qty":7,"allocation_avg_price":55.1,"trade_record_reason":"L","alloc_config_id ":364},{"cmta":"352","clearing_account_number":"352","street_account_name":"OCCAID3","account_nickname":"Option 3","last_qty":5,"allocation_avg_price":55.1,"trade_record_reason":"L","alloc_config_id ":390}]}'::jsonb
+
+
+
+{
+  "2347865736": [
+    {
+      "cmta": "792",
+      "last_qty": 7,
+      "account_nickname": "Option Main 1",
+      "alloc_config_id ": 364,
+      "street_account_name": "opt_aid1",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 55.1,
+      "clearing_account_number": "792"
+    },
+    {
+      "cmta": "352",
+      "last_qty": 5,
+      "account_nickname": "Option 3",
+      "alloc_config_id ": 390,
+      "street_account_name": "OCCAID3",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 55.1,
+      "clearing_account_number": "352"
+    }
+  ],
+  "2347865737": [
+    {
+      "cmta": "792",
+      "last_qty": 7,
+      "account_nickname": "Option Main 1",
+      "alloc_config_id ": 364,
+      "street_account_name": "opt_aid1",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 55.1,
+      "clearing_account_number": "792"
+    },
+    {
+      "cmta": "352",
+      "last_qty": 5,
+      "account_nickname": "Option 3",
+      "alloc_config_id ": 390,
+      "street_account_name": "OCCAID3",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 55.1,
+      "clearing_account_number": "352"
+    }
+  ]
+}
