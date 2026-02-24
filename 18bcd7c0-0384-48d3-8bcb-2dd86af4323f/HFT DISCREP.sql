@@ -355,3 +355,6 @@ where msg_type not in ('1', '5')
 order by cl_ord_id, load_batch_id
 
 ;
+alter table inc_hft.hft_incremental_files
+    add column if not exists is_str_modif_processed bool not null default false;
+comment on column inc_hft.hft_incremental_files.is_str_modif_processed is 'Swithced into true as soon as the process of filling the very orig message 35=D';
