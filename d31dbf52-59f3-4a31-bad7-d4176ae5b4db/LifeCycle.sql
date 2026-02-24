@@ -148,6 +148,8 @@ group by ec.exec_date_id,
          di.symbol
 ;
 
+select is_broker_dealer,* from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord;
+
 drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
 create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord as
     -- explain
@@ -174,7 +176,6 @@ select po.client_order_id         as po_client_order_id
      , di.symbol_suffix
      , di.instrument_type_id
      , di.last_trade_date --, oc.opra_symbol, ui.symbol as underlying_symbol
-     , tf.is_broker_dealer
      , ac.broker_dealer_mpid
      , ac.cat_report_on_behalf_of
      , ac.crd_number
@@ -211,6 +212,7 @@ where cl.create_date_id = 20260106                                --in_date_id
   and po.client_order_id = any
       ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
 ;
+select * from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
 
 drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
 create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord as
@@ -238,7 +240,7 @@ select po.client_order_id         as po_client_order_id
      , di.symbol_suffix
      , di.instrument_type_id
      , di.last_trade_date --, oc.opra_symbol, ui.symbol as underlying_symbol
-     , tf.is_broker_dealer
+--      , tf.is_broker_dealer
      , ac.broker_dealer_mpid
      , ac.cat_report_on_behalf_of
      , ac.crd_number
@@ -272,6 +274,8 @@ where cl.create_date_id = 20260106                                --in_date_id
 and po.client_order_id = any
       ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
 ;
+select * from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
+
 
 drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status;
 create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status as
@@ -1224,7 +1228,7 @@ with ord_par_new as
         end as stop_price
       , t.max_floor::varchar as max_floor
       , case when t.max_floor > 0 then t.max_floor::varchar end as display_quantity
-      , coalesce(t.customer_or_firm_id , t.order_capacity_id , t.eq_order_capacity) as capacity
+      , coalesce(t.customer_or_firm_id , /*t.order_capacity_id ,*/ t.eq_order_capacity) as capacity
       , fxm.tag_109 as user_
       , t.account_name as account_name
       , case
@@ -1305,7 +1309,7 @@ with ord_par_new as
       , (t.order_qty - ls.max_cum_qty)::varchar as leaves_qty
       , case when t.cross_order_id is not null then 'Y' else ''::varchar end as is_idx
       , (compliance.get_sor_first_orig(in_order_id => t.order_id, in_date_id => t.create_date_id)).out_cl_ord_id
-    from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
       left join lateral
         (
           select orig.co_client_leg_ref_id
@@ -1313,8 +1317,8 @@ with ord_par_new as
             , orig.side
           from client_order orig
           where orig.order_id = t.orig_order_id
-            and orig.create_date_id > 20200717
-            and (orig.create_date_id = 20221223 or orig.time_in_force_id in ('1','6'))
+            and orig.create_date_id > 20230717
+            and (orig.create_date_id = 20260106 or orig.time_in_force_id in ('1','6'))
             and orig.parent_order_id is null
         ) orig on true
       left join lateral
@@ -1328,13 +1332,13 @@ with ord_par_new as
                 j.fix_message->>'389' as tag_389
              from fix_capture.fix_message_json j
              where j.fix_message_id  = t.fix_message_id
-             and j.date_id = 20221223 --in_date_id
+             and j.date_id = 20260106 --in_date_id
              limit 1
             ) fxm on true
       left join lateral
         (
           select ls.order_id , ls.order_status, dos.order_status_description  , ls.filled_qty , ls.last_mkt, ls.max_cum_qty
-          from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
             left join dwh.d_order_status dos
               on ls.order_status = dos.order_status and dos.is_active
           where ls.order_id = t.order_id
@@ -1365,7 +1369,7 @@ with ord_par_new as
       --
       --and (t.trading_firm_id not in ('BMO','dynamex01','Guggen','nbcanf') or t.fix_comp_id not in ('BOOKP','BOOKP2')) --???
       --
-      and t.symbol in ('PRGO')
+--       and t.symbol in ('PRGO')
       --and t.tif_short_name = 'GTD'
       --and t.time_in_force_id in ('2','7')
       --and t.exec_instruction is not null
@@ -1418,7 +1422,8 @@ with ord_par_new as
       , to_char(cl.create_time, 'HH24:MI:SS.MS')::varchar as order_creation_time
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.order_id, in_date_id => cl.create_date_id)).out_cl_ord_id, cl.client_order_id ) as out_cl_ord_id
       , case when cl.trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.order_id, in_date_id => cl.create_date_id)).out_cl_ord_id, cl.client_order_id ) else cl.client_order_id end as out_cl_ord_id
-    from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_parent_cancells cl
+
+    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_cancells cl
       inner join d_account ac on ac.account_id = cl.account_id
       inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
       inner join d_instrument i on cl.instrument_id = i.instrument_id
@@ -1437,7 +1442,7 @@ with ord_par_new as
          from client_order str
          where str.trans_type <> 'F'
          and str.parent_order_id is not null
-         and str.create_date_id = 20221223 --in_date_id
+         and str.create_date_id = 20260106 --in_date_id
          and str.parent_order_id = cl.order_id
          group by str.parent_order_id
          limit 1
@@ -1462,7 +1467,7 @@ with ord_par_new as
                       'LPEQPGTH','LPOPTPGTH','LPCROSSGTHINT','DASHOPTP')
           )
       and (cl.ex_destination <> 'LIQPT' or coalesce(so.cross_cnt,0) > 0 )
-      and cl.symbol in ('PRGO')
+--       and cl.symbol in ('PRGO')
   )
   , trade as
   (
@@ -1530,7 +1535,7 @@ with ord_par_new as
           select cl.*
           from dwh.client_order cl
           where cl.order_id = tr.order_id
-            and cl.create_date_id between to_char(tr.order_process_time, 'YYYYMMDD')::integer and 20221223
+            and cl.create_date_id between to_char(tr.order_process_time, 'YYYYMMDD')::integer and 20260106
           limit 1
         ) cl on true
       inner join d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
@@ -1541,7 +1546,7 @@ with ord_par_new as
          from client_order str
          where str.trans_type <> 'F'
          and str.parent_order_id is not null
-         and str.create_date_id = 20221223 --in_date_id
+         and str.create_date_id = 20260106 --in_date_id
          and str.parent_order_id = cl.order_id
          group by str.parent_order_id
          limit 1
@@ -1554,11 +1559,11 @@ with ord_par_new as
           where cl.multileg_reporting_type = '2'
             and ml.order_id = cl.multileg_order_id
             and ml.multileg_reporting_type = '3'
-            and ml.create_date_id = 20221223
+            and ml.create_date_id = 20260106
           limit 1
         ) ml on true
       left join d_exchange dex on tr.exchange_id = dex.exchange_id and dex.is_active = true
-    where tr.date_id = 20221223
+    where tr.date_id = 20260106
       and tr.is_busted = 'N'
       and ac.is_active = true
       and tf.is_active = true
@@ -1577,8 +1582,9 @@ with ord_par_new as
                       'LPEQPGTH','LPOPTPGTH','LPCROSSGTHINT','DASHOPTP')
           )
       and (cl.ex_destination <> 'LIQPT' or coalesce(so.cross_cnt,0) > 0 )
+    and tr.cl_order_id = any('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
       --
-      and i.symbol in ('PRGO') --,'AAPL','GOOG','MSFT','NVDA','SPY','TSLA')
+--       and i.symbol in ('PRGO') --,'AAPL','GOOG','MSFT','NVDA','SPY','TSLA')
   )
   , ord_str_new as
   (
@@ -1767,12 +1773,12 @@ with ord_par_new as
       , case when cl.cross_order_id is not null then 'Y' else ''::varchar end as is_cross
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) as out_cl_ord_id
       , case when cl.po_trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) else cl.po_client_order_id end as out_cl_ord_id
-    from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
+    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
       left join lateral
             (select j.fix_message->>'9602' as tag_9602
              from fix_capture.fix_message_json j
              where j.fix_message_id  = cl.po_fix_message_id
-             and j.date_id = 20221223
+             and j.date_id = 20260106
              limit 1
             ) fxp on true
       left join d_option_contract oc on oc.instrument_id = cl.instrument_id
@@ -1788,7 +1794,7 @@ with ord_par_new as
             (select j.fix_message_id, j.fix_message--, j.fix_message->>'9281' as tag_9281,j.fix_message->>'22017' as tag_22017
              from fix_capture.fix_message_json j
              where j.fix_message_id  = cl.fix_message_id
-             and j.date_id = 20221223 --in_date_id
+             and j.date_id = 20260106 --in_date_id
              limit 1
             ) fxm on true
       left join lateral
@@ -1824,7 +1830,7 @@ with ord_par_new as
              count(*) other_cnt
              from execution ex
                  where ex.order_id = cl.order_id
-                 and ex.exec_date_id = 20221223 --in_date_id
+                 and ex.exec_date_id = 20260106 --in_date_id
                  and ex.is_parent_level = false
                  and ex.exec_type in ('0','4','5','8','F')
              group by ex.order_id
@@ -1835,7 +1841,7 @@ with ord_par_new as
              from fix_capture.fix_message_json j
              where j.fix_message_id  = er.fix_message_id
               --(select min(ex.fix_message_id) from execution ex where ex.order_id = cl.order_id and ex.exec_date_id = in_date_id and ex.is_parent_level = false and ex.exec_type in ('0','4','8','F') limit 1)
-             and j.date_id = 20221223 --in_date_id
+             and j.date_id = 20260106 --in_date_id
              limit 1
             ) fxc on true
       left join lateral
@@ -1853,13 +1859,13 @@ with ord_par_new as
           where cl.multileg_reporting_type = '2'
             and ml.order_id = cl.multileg_order_id
             and ml.multileg_reporting_type = '3'
-            and ml.create_date_id = 20221223
+            and ml.create_date_id = 20260106
           limit 1
         ) ml on true
       left join lateral
         (
           select ls.order_id , ls.order_status , ls.filled_qty , ls.last_mkt --, dos.order_status_description
-          from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
           where ls.order_id = cl.order_id
           limit 1
         ) ls on true
@@ -2068,13 +2074,13 @@ with ord_par_new as
       , (cl.order_qty - ls.max_cum_qty)::varchar as leaves_qty
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) as out_cl_ord_id
       , case when cl.po_trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) else cl.po_client_order_id end as out_cl_ord_id
-    from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
+    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
       inner join client_order orig on cl.orig_order_id = orig.order_id
       left join lateral
             (select j.fix_message->>'9602' as tag_9602
              from fix_capture.fix_message_json j
              where j.fix_message_id  = cl.po_fix_message_id
-             and j.date_id = 20221223
+             and j.date_id = 20260106
              limit 1
             ) fxp on true
       left join d_option_contract oc on oc.instrument_id = cl.instrument_id
@@ -2090,7 +2096,7 @@ with ord_par_new as
             (select j.fix_message--, j.fix_message->>'9281' as tag_9281,j.fix_message->>'22017' as tag_22017
              from fix_capture.fix_message_json j
              where j.fix_message_id  = cl.fix_message_id
-             and j.date_id = 20221223 --in_date_id
+             and j.date_id = 20260106 --in_date_id
              limit 1
             ) fxm on true
       left join lateral
@@ -2126,7 +2132,7 @@ with ord_par_new as
              count(*) other_cnt
              from execution ex
                  where ex.order_id = cl.order_id
-                 and ex.exec_date_id = 20221223 --in_date_id
+                 and ex.exec_date_id = 20260106 --in_date_id
                  and ex.is_parent_level = false
                  and ex.exec_type in ('0','4','5','8','F')
              group by ex.order_id
@@ -2137,7 +2143,7 @@ with ord_par_new as
              from fix_capture.fix_message_json j
              where j.fix_message_id  = er.fix_message_id
               --(select min(ex.fix_message_id) from execution ex where ex.order_id = cl.order_id and ex.exec_date_id = in_date_id and ex.is_parent_level = false and ex.exec_type in ('0','4','8','F') limit 1)
-             and j.date_id = 20221223 --in_date_id
+             and j.date_id = 20260106 --in_date_id
              limit 1
             ) fxc on true
       left join lateral
@@ -2155,21 +2161,21 @@ with ord_par_new as
           where cl.multileg_reporting_type = '2'
             and ml.order_id = cl.multileg_order_id
             and ml.multileg_reporting_type = '3'
-            and ml.create_date_id = 20221223
+            and ml.create_date_id = 20260106
           limit 1
         ) ml on true
       left join lateral
         (
           select ls.order_id , ls.order_status , ls.filled_qty , ls.last_mkt, ls.max_cum_qty --, dos.order_status_description
-          from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
           where ls.order_id = cl.order_id
           limit 1
         ) ls on true
       left join dwh.d_order_status dos
         on ls.order_status = dos.order_status and dos.is_active
     where 1=1
-      and orig.create_date_id > 20200717
-      and (orig.create_date_id = 20221223 or orig.time_in_force_id in ('1','6'))
+      and orig.create_date_id > 20230717
+      and (orig.create_date_id = 20260106 or orig.time_in_force_id in ('1','6'))
       and orig.parent_order_id is not null
       --
       and cl.trans_type = 'G' -- will be a separate route modification
@@ -2267,7 +2273,7 @@ with ord_par_new as
       , fxm.tag_115::varchar as street_on_behalf_of_comp_id
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => po.order_id, in_date_id => po.create_date_id)).out_cl_ord_id, po.client_order_id ) as out_cl_ord_id
       , case when po.trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => po.order_id, in_date_id => po.create_date_id)).out_cl_ord_id, po.client_order_id ) else po.client_order_id end as out_cl_ord_id
-    from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_street_cancells cl
+    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_cancells cl
       inner join d_account ac on ac.account_id = cl.account_id
       inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
       left join lateral
@@ -2278,8 +2284,8 @@ with ord_par_new as
             , po.trans_type
           from client_order po
           where cl.parent_order_id = po.order_id
-            and po.create_date_id <= 20221223
-            and po.create_date_id > 20200717
+            and po.create_date_id <= 20260106
+            and po.create_date_id > 20230717
           limit 1
         ) po on true
       left join d_fix_connection fc on fc.fix_connection_id = po.fix_connection_id and fc.is_active = true
@@ -2288,7 +2294,7 @@ with ord_par_new as
          from fix_capture.fix_message_json j
          where j.fix_message_id  = po.fix_message_id
          and j.date_id > 20200717 -- this approach is more correct
-         and j.date_id between po.create_date_id and 20221223
+         and j.date_id between po.create_date_id and 20260106
          limit 1
         ) fxp on true
       left join lateral
@@ -2297,8 +2303,8 @@ with ord_par_new as
             , orig.fix_message_id
           from client_order orig
           where cl.orig_order_id = orig.order_id
-            and orig.create_date_id <= 20221223
-            and orig.create_date_id > 20200717
+            and orig.create_date_id <= 20260106
+            and orig.create_date_id > 20230717
           limit 1
         ) orig on true
       left join lateral
@@ -2312,7 +2318,7 @@ with ord_par_new as
         (select j.fix_message,j.fix_message->>'128' as tag_128,j.fix_message->>'115' as tag_115
          from fix_capture.fix_message_json j
          where j.fix_message_id  = cl.fix_message_id
-         and j.date_id = 20221223
+         and j.date_id = 20260106
          limit 1
         ) fxm on true
       left join d_exchange dex on cl.exchange_id = dex.exchange_id and dex.is_active = true
@@ -2321,7 +2327,7 @@ with ord_par_new as
          from fix_capture.fix_message_json j
          where j.fix_message_id = cl.ex_fix_message_id
           --(select max(ex.fix_message_id) from execution ex where ex.order_id = cl.order_id and ex.exec_date_id = in_date_id and ex.is_parent_level = false and ex.exec_type = '0' limit 1)
-         and j.date_id = 20221223
+         and j.date_id = 20260106
          limit 1
         ) fxc on true
       left join d_fix_connection sfc on sfc.fix_connection_id::varchar = fxc.tag_10099 and sfc.is_active = true
