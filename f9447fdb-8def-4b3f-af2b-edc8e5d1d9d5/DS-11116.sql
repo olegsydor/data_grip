@@ -156,7 +156,10 @@ begin
         ) ccr on true
 
              join lateral (select count(*) as alloc_cnt,
-                                  jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
+                                  jsonb_agg(jsonb_build_object('allocAccount', case
+                                                                                   when di.instrument_type_id = 'O'
+                                                                                       then ac.opt_occ_id
+                                                                                   else ca.occ_actionable_id end,
                                                                'allocQty', aie.alloc_qty,
                                                                'clrFirm', ca.clearing_firm,
                                                                'actionableId', aie.occ_actionable_id,
@@ -193,4 +196,8 @@ select * from genesis2.allocation_instruction_entry
 where sg_allocation_configuration is not null;
 
 
+genesis2.sg_allocation_configuration
+select dash360.get_data_for_allocation_drop_sg(in_alloc_instr_id := -113865, in_date_id := 20260224);
 
+
+select * from sg_account

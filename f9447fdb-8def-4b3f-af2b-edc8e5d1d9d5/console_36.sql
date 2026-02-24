@@ -344,3 +344,16 @@ exception
 end;
 $function$
 ;
+
+select instrument_id, ac.opt_occ_id, ca.occ_actionable_id, aie.occ_actionable_id, ac.*, *
+ from
+     genesis2.allocation_instruction ai
+     join genesis2.allocation_instruction_entry aie on aie.alloc_instr_id = ai.alloc_instr_id
+                                    left join genesis2.sg_allocation_configuration ca
+                                              on (ca.sg_alloc_config_id = aie.sg_alloc_config_id)
+                                    join genesis2.account ac on ac.account_id = ai.account_id
+                           where aie.alloc_instr_id = -113865
+                             and aie.date_id = 20260224;
+
+select * from instrument
+where instrument_id = 181832091
