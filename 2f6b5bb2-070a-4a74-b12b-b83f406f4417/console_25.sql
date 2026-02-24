@@ -136,3 +136,38 @@ insert into inc_hft.hft_incremental_files
 (date_id, filename, start_processing, start_position, end_processing, end_position, load_batch_id, is_processed,
  file_size, processed_rows, hft_comment, last_row_hash, is_active, checked_loading, node_name)
 values (0, '', '', 0, '', 0, 0, 'S'::bpchar, 0, 0, '', '', 'Y'::bpchar, false, '');
+
+
+select min(val->>'alloc_config_id') from (select jsonb_array_elements(value) as val
+                                          from jsonb_each(:in_change_vector::jsonb)) x;
+
+select '{"2347865802":[{"cmta":"792","clearing_account_number":"792","street_account_name":"opt_aid1","account_nickname":"Option Main 1","last_qty":8,"allocation_avg_price":2.2,"trade_record_reason":"L","alloc_config_id":364}]}'::jsonb
+
+
+{
+  "2347865802": [
+    {
+      "cmta": "792",
+      "last_qty": 8,
+      "alloc_config_id": 364,
+      "account_nickname": "Option Main 1",
+      "street_account_name": "opt_aid1",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 2.2,
+      "clearing_account_number": "792"
+    },
+    {
+      "cmta": "792",
+      "last_qty": 8,
+      "alloc_config_id": 365,
+      "account_nickname": "Option Main 1",
+      "street_account_name": "opt_aid1",
+      "trade_record_reason": "L",
+      "allocation_avg_price": 2.2,
+      "clearing_account_number": "792"
+    }
+  ]
+};
+
+
+select '{"2347865736":[{"cmta":"792","clearing_account_number":"792","street_account_name":"opt_aid1","account_nickname":"Option Main 1","last_qty":7,"allocation_avg_price":55.1,"trade_record_reason":"L","alloc_config_id ":364},{"cmta":"352","clearing_account_number":"352","street_account_name":"OCCAID3","account_nickname":"Option 3","last_qty":5,"allocation_avg_price":55.1,"trade_record_reason":"L","alloc_config_id ":390}]}'::jsonb
