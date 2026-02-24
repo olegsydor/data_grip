@@ -2,9 +2,10 @@ select *
 from trash.report_obo_compliance_xls_with_clordid(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                                   in_include_routes := 'Y', in_include_acks := 'Y',
                                                   in_client_order_ids := '{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
+------------------------------------------------------------
 
-drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord;
-create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord as
+drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord;
+create temp table t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord as
 select di.symbol
      , di.symbol_suffix
      , di.instrument_type_id
@@ -77,11 +78,11 @@ where cl.create_date_id = 20260106
       ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
 
 
-drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_cancells;
-create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_cancells as
+drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_cancells;
+create temp table t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_cancells as
 select ec.exec_date_id,
-       min(ec.exec_time) exec_time,
-       min(ec.cum_qty)   cum_qty,
+       min(ec.exec_time) as exec_time,
+       min(ec.cum_qty)   as cum_qty,
        ec.order_id,
        ec.account_id,
        cl.fix_connection_id,
@@ -148,10 +149,102 @@ group by ec.exec_date_id,
          di.symbol
 ;
 
-select is_broker_dealer,* from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord;
+select is_broker_dealer,* from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord;
 
-drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
-create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord as
+
+drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_cancells;
+create table t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_cancells as
+select ec.exec_date_id,
+       min(ec.exec_time)      as exec_time,
+       min(ec.fix_message_id) as ex_fix_message_id,
+       min(ec.cum_qty)        as cum_qty,
+       ec.order_id,
+       ec.account_id,
+       cl.fix_connection_id,
+       cl.fix_message_id,
+       cl.exchange_id,
+       cl.instrument_id,
+       cl.order_qty,
+       cl.client_order_id,
+       cl.parent_order_id,
+       cl.process_time,
+       cl.side,
+       cl.market_participant_id,
+       cl.sub_strategy_desc,
+       cl.co_client_leg_ref_id,
+       cl.create_time,
+       cl.ex_destination,
+       cl.create_date_id,
+       cl.multileg_reporting_type,
+       cl.trans_type,
+       cl.orig_order_id,
+       cl.ratio_qty,
+       ml.no_legs,
+       di.symbol,
+       di.instrument_type_id,
+       di.symbol_suffix,
+       di.last_trade_date
+from execution ec
+         inner join client_order cl on ec.order_id = cl.order_id
+         left join dwh.d_instrument di on cl.instrument_id = di.instrument_id
+         left join lateral
+    (
+    select ml.order_id
+         , ml.client_order_id
+         , ml.fix_message_id
+         , ml.no_legs
+    from client_order ml
+    where cl.multileg_reporting_type = '2'
+      and ml.order_id = cl.multileg_order_id
+      and ml.multileg_reporting_type = '3'
+      and ml.create_date_id = 20260106
+    limit 1
+    ) ml on true
+where ec.exec_date_id = 20260106
+  and ec.is_parent_level = false
+  and (ec.exec_type = '4' or ec.order_status = '4')
+  and cl.create_date_id > 20230619                                --l_gtc_date_id
+  and (cl.create_date_id = 20260106 or cl.time_in_force_id in ('1', '6'))
+  and cl.parent_order_id is not null
+  and cl.trans_type in ('D', 'G')
+  and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
+  and cl.client_order_id = any
+      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
+  and cl.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE') --suppression
+  --and cl.exchange_id not in ('JSEB','PHLXFB','SQHT','TRAFX','WEEDN','WEEDNE','CTDLHT')--collapsion
+  and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
+group by ec.exec_date_id,
+         ec.order_id,
+         ec.account_id,
+         cl.fix_connection_id,
+         cl.fix_message_id,
+         cl.exchange_id,
+         cl.instrument_id,
+         cl.order_qty,
+         cl.client_order_id,
+         cl.parent_order_id,
+         cl.process_time,
+         cl.side,
+         cl.market_participant_id,
+         cl.sub_strategy_desc,
+         cl.co_client_leg_ref_id,
+         cl.create_time,
+         cl.ex_destination,
+         cl.create_date_id,
+         cl.multileg_reporting_type,
+         cl.trans_type,
+         cl.orig_order_id,
+         cl.ratio_qty,
+         ml.no_legs,
+         di.symbol,
+         di.instrument_type_id,
+         di.symbol_suffix,
+         di.last_trade_date
+;
+
+
+drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord;
+create table t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord as
     -- explain
 select po.client_order_id         as po_client_order_id
      , po.create_date_id          as po_create_date_id
@@ -169,26 +262,21 @@ select po.client_order_id         as po_client_order_id
      , ac.trading_firm_id         as ac_trading_firm_id
      , ac.account_name
      , fc.fix_comp_id             as fc_fix_comp_id
-     , tf.is_broker_dealer        as is_broker_dealer
+     , tf.is_broker_dealer        as tf_is_broker_dealer
      , tf.cat_imid                as tf_cat_imid
-     , tf.cat_crd
      , di.symbol
      , di.symbol_suffix
      , di.instrument_type_id
      , di.last_trade_date --, oc.opra_symbol, ui.symbol as underlying_symbol
-     , ac.broker_dealer_mpid
-     , ac.cat_report_on_behalf_of
-     , ac.crd_number
      , cl.*
 from client_order cl
          inner join d_account ac on ac.account_id = cl.account_id and ac.is_active = true
          inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
          inner join client_order po
-                    on cl.parent_order_id = po.order_id -- and po.create_date_id between 20200619 and 20221223 - dup condition
+                    on cl.parent_order_id = po.order_id -- and po.create_date_id between 20200619 and 20260106 - dup condition
          inner join d_fix_connection fc on fc.fix_connection_id = po.fix_connection_id and fc.is_active = true
-    --    inner join d_exchange dex on cl.exchange_id = dex.exchange_id and dex.is_active = true
-    --left join compliance.crd_number_list dcn on (dex.cat_exchange_id = dcn.cat_imid and (dcn.crd_amount = 1 or dcn.is_default = 'Y'))
          left join dwh.d_instrument di on cl.instrument_id = di.instrument_id
+
 where cl.create_date_id = 20260106                                --in_date_id
   and po.create_date_id > 20230717
   and (po.create_date_id between 20260101 and 20260106 or po.time_in_force_id in ('1', '6'))
@@ -207,78 +295,16 @@ where cl.create_date_id = 20260106                                --in_date_id
        po.fix_connection_id not in (6116, 6200, 6320, 8225, 6985, 9485, 636, 958, 1043,
                                     1607, 1461, 1462, 1465)
     )
---     and cl.order_id not in (select order_id from compliance.aggregated_street_cross)
---     and di.symbol in ('PRGO','AAPL','GOOG','MSFT','NVDA','SPY','TSLA')
+  --and cl.order_id not in (select order_id from compliance.aggregated_street_cross)
+--   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
   and po.client_order_id = any
       ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
 ;
-select * from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
-
-drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
-create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord as
-    -- explain
-select po.client_order_id         as po_client_order_id
-     , po.create_date_id          as po_create_date_id
-     , po.order_id                as po_order_id
-     , po.fix_connection_id       as po_fix_connection_id
-     , po.multileg_reporting_type as po_multileg_reporting_type
-     , po.co_client_leg_ref_id    as po_co_client_leg_ref_id
-     , po.sub_strategy_desc       as po_sub_strategy_desc
-     , po.ex_destination          as po_ex_destination
-     , po.process_time            as po_process_time
-     , po.fix_message_id          as po_fix_message_id
-     , po.trans_type              as po_trans_type
-     , po.time_in_force_id        as po_time_in_force_id
-     , po.orig_order_id           as po_orig_order_id
-     , ac.trading_firm_id         as ac_trading_firm_id
-     , ac.account_name
-     , fc.fix_comp_id             as fc_fix_comp_id
-     , tf.is_broker_dealer        as is_broker_dealer
-     , tf.cat_imid                as tf_cat_imid
-     , tf.cat_crd
-     , di.symbol
-     , di.symbol_suffix
-     , di.instrument_type_id
-     , di.last_trade_date --, oc.opra_symbol, ui.symbol as underlying_symbol
---      , tf.is_broker_dealer
-     , ac.broker_dealer_mpid
-     , ac.cat_report_on_behalf_of
-     , ac.crd_number
-     , cl.*
-from client_order cl
-         inner join d_account ac on ac.account_id = cl.account_id and ac.is_active = true
-         inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
-         inner join client_order po
-                    on cl.parent_order_id = po.order_id -- and po.create_date_id between 20200619 and 20221223 - dup condition
-         inner join d_fix_connection fc on fc.fix_connection_id = po.fix_connection_id and fc.is_active = true
-         left join dwh.d_instrument di on cl.instrument_id = di.instrument_id
-
-where cl.create_date_id = 20260106                                --in_date_id
-  and po.create_date_id > 20230717
-  and (po.create_date_id between 20260101 and 20260106 or po.time_in_force_id in ('1', '6'))
-  and cl.parent_order_id is not null
-  and cl.trans_type in ('D', 'G')
-  and cl.multileg_reporting_type in ('1', '2')
-  --and (cl.multileg_reporting_type = '1' or (cl.exchange_id in ('BOX','PHLX') and cl.cross_order_Id is not null))
-  and coalesce(tf.cat_suppress, 'N') <> 'Y'
-  and coalesce(ac.cat_suppress, 'N') <> 'Y'
-  and cl.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE') --suppression
-  --and cl.exchange_id not in ('JSEB','PHLXFB','SQHT','TRAFX','WEEDN','WEEDNE','CTDLHT') --collapsion. there is nothing here.
-  and (cl.exchange_id not in ('C1PAR')
-    or
-       po.fix_connection_id not in (6116, 6200, 6320, 8225, 6985, 9485, 636, 958, 1043,
-                                    1607, 1461, 1462, 1465)
-    )
-  --and cl.order_id not in (select order_id from compliance.aggregated_street_cross)
---   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
-and po.client_order_id = any
-      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
-;
-select * from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord;
+select * from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord;
 
 
-drop table if exists t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status;
-create temp table t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status as
+drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status;
+create temp table t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status as
     -- explain
 select cl.*
      , le.order_status
@@ -292,11 +318,11 @@ select cl.*
 from (
          -- 1047654
          select t.order_id, t.parent_order_id, t.create_date_id, t.time_in_force_id, t.symbol, t.order_qty
-         from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+         from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord t
          union all
          -- 1724736
          select t.order_id, t.parent_order_id, t.create_date_id, t.time_in_force_id, t.symbol, t.order_qty
-         from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord t
+         from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord t
          --limit 1000
      ) cl
          left join lateral
@@ -332,9 +358,7 @@ from (
 --order by cl.order_id, le.exec_time
 ;
 
-select * from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status;
-
-
+select * from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status;
 
 --------------
 
@@ -543,7 +567,7 @@ with ord_par_new as
            , case when t.cross_order_id is not null then 'Y' else ''::varchar end                      as is_idx
            , t.client_order_id                                                                         as out_cl_ord_id
 
-      from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+      from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord t
                left join lateral
           (select j.fix_message,
                   j.fix_message ->> '9281'  as tag_9281,
@@ -562,7 +586,7 @@ with ord_par_new as
                left join lateral
           (
           select ls.order_id, ls.order_status, ls.filled_qty, ls.last_mkt
-          from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
           where ls.order_id = t.order_id
           limit 1
           ) ls on true
@@ -792,7 +816,7 @@ with ord_par_new as
           end                                                                                          as routed_as_received
            , case when t.cross_order_id is not null then 'Y' else ''::varchar end                      as is_idx
            , t.client_order_id                                                                         as out_cl_ord_id
-      from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+      from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord t
                left join lateral
           (select j.fix_message,
                   j.fix_message ->> '9281'  as tag_9281,
@@ -811,7 +835,7 @@ with ord_par_new as
                left join lateral
           (
           select ls.order_id, ls.order_status, dos.order_status_description, ls.filled_qty, ls.last_mkt
-          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
                    left join dwh.d_order_status dos
                              on ls.order_status = dos.order_status and dos.is_active
           where ls.order_id = t.order_id
@@ -1057,7 +1081,7 @@ with ord_par_new as
            , (t.order_qty - ls.max_cum_qty)::varchar                                                   as leaves_qty
            , case when t.cross_order_id is not null then 'Y' else ''::varchar end                      as is_idx
            , (compliance.get_sor_first_orig(in_order_id => t.order_id, in_date_id => t.create_date_id)).out_cl_ord_id
-      from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+      from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord t
                left join lateral
           (
           select orig.co_client_leg_ref_id
@@ -1087,7 +1111,7 @@ with ord_par_new as
                left join lateral
           (
           select ls.order_id, ls.order_status, dos.order_status_description, ls.filled_qty, ls.last_mkt, ls.max_cum_qty
-          from trash.sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
                    left join dwh.d_order_status dos
                              on ls.order_status = dos.order_status and dos.is_active
           where ls.order_id = t.order_id
@@ -1309,7 +1333,7 @@ with ord_par_new as
       , (t.order_qty - ls.max_cum_qty)::varchar as leaves_qty
       , case when t.cross_order_id is not null then 'Y' else ''::varchar end as is_idx
       , (compliance.get_sor_first_orig(in_order_id => t.order_id, in_date_id => t.create_date_id)).out_cl_ord_id
-    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_ord t
+    from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_ord t
       left join lateral
         (
           select orig.co_client_leg_ref_id
@@ -1338,7 +1362,7 @@ with ord_par_new as
       left join lateral
         (
           select ls.order_id , ls.order_status, dos.order_status_description  , ls.filled_qty , ls.last_mkt, ls.max_cum_qty
-          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
             left join dwh.d_order_status dos
               on ls.order_status = dos.order_status and dos.is_active
           where ls.order_id = t.order_id
@@ -1423,7 +1447,7 @@ with ord_par_new as
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.order_id, in_date_id => cl.create_date_id)).out_cl_ord_id, cl.client_order_id ) as out_cl_ord_id
       , case when cl.trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.order_id, in_date_id => cl.create_date_id)).out_cl_ord_id, cl.client_order_id ) else cl.client_order_id end as out_cl_ord_id
 
-    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_parent_cancells cl
+    from t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_cancells cl
       inner join d_account ac on ac.account_id = cl.account_id
       inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
       inner join d_instrument i on cl.instrument_id = i.instrument_id
@@ -1582,26 +1606,27 @@ with ord_par_new as
                       'LPEQPGTH','LPOPTPGTH','LPCROSSGTHINT','DASHOPTP')
           )
       and (cl.ex_destination <> 'LIQPT' or coalesce(so.cross_cnt,0) > 0 )
-    and tr.cl_order_id = any('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
+    and tr.client_order_id = any('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
       --
 --       and i.symbol in ('PRGO') --,'AAPL','GOOG','MSFT','NVDA','SPY','TSLA')
   )
   , ord_str_new as
-  (
-    select --t.parent_cl_ord_id
-        case
-          when cl.trading_firm_id = 'ctctrad01' then
-            replace(cl.po_client_order_id,'|','-')||'_'||cl.fc_fix_comp_id
-          when cl.po_sub_strategy_desc = 'VEGA'
-            then replace(cl.po_client_order_id,'|','-')||'_'||coalesce(cl.po_co_client_leg_ref_id,'0')
-          when cl.po_ex_destination = 'LIQPT' then cl.po_client_order_id||'_'||cl.side::varchar
-          when cl.trading_firm_id in ('imc01','cutler') and cl.po_fix_connection_id = 7345 then cl.po_client_order_id||'_'||cl.order_id::varchar
-          when cl.po_fix_connection_id in (503,8785) --fc.fix_comp_id in ('BOOKP','BOOKP2')
-            and cl.trading_firm_id in ('BMO','dynamex01','Guggen','nbcanf') then
-            --coalesce((select fxp.fix_message->>'5583' from fix_capture.fix_message_json fxp where fxp.fix_message_id  = po.fix_message_id and fxp.date_id = in_date_id limit 1),po.client_order_id)
-            coalesce(left(fxp.tag_9602,strpos(fxp.tag_9602,'-')-1)||right(fxp.tag_9602,strpos(reverse(fxp.tag_9602),'-')), cl.po_client_order_id)
-          else replace(cl.po_client_order_id,'|','-')
-        end as orderID
+  (select                                                                                        --t.parent_cl_ord_id
+       case
+           when cl.trading_firm_id = 'ctctrad01' then
+               replace(cl.po_client_order_id, '|', '-') || '_' || cl.fc_fix_comp_id
+           when cl.po_sub_strategy_desc = 'VEGA'
+               then replace(cl.po_client_order_id, '|', '-') || '_' || coalesce(cl.po_co_client_leg_ref_id, '0')
+           when cl.po_ex_destination = 'LIQPT' then cl.po_client_order_id || '_' || cl.side::varchar
+           when cl.trading_firm_id in ('imc01', 'cutler') and cl.po_fix_connection_id = 7345
+               then cl.po_client_order_id || '_' || cl.order_id::varchar
+           when cl.po_fix_connection_id in (503, 8785) --fc.fix_comp_id in ('BOOKP','BOOKP2')
+               and cl.trading_firm_id in ('BMO', 'dynamex01', 'Guggen', 'nbcanf') then
+               --coalesce((select fxp.fix_message->>'5583' from fix_capture.fix_message_json fxp where fxp.fix_message_id  = po.fix_message_id and fxp.date_id = in_date_id limit 1),po.client_order_id)
+               coalesce(left(fxp.tag_9602, strpos(fxp.tag_9602, '-') - 1) ||
+                        right(fxp.tag_9602, strpos(reverse(fxp.tag_9602), '-')), cl.po_client_order_id)
+           else replace(cl.po_client_order_id, '|', '-')
+           end                                                                  as orderID
 --        case
 --            when tf.trading_firm_id = 'ctctrad01' then
 --            replace(cl.client_order_id,'|','-')||'_'||fc.fix_comp_id
@@ -1609,40 +1634,40 @@ with ord_par_new as
 --            then replace(cl.client_order_id,'|','-')||'_'||coalesce(cl.co_client_leg_ref_id,'0')
 --          else replace(cl.client_order_id,'|','-')
 --        end as orderID
-      , 'Order Route' as event_type
-      , to_char(cl.process_time,'YYYYMMDD') as event_date
-      , to_char(cl.process_time,'HH24:MI:SS.US') as event_time
-      , null::varchar as orig_cl_ord_id
-      , coalesce(cl.order_qty,0) as event_qty
-      , case
-            when cl.order_type_id in ('2','4') then to_char((coalesce(cl.price,0)), 'FM9999999990.09999999')
-          else ''
-        end as event_price
-      , case when cl.multileg_reporting_type = '2' then 'Y' else 'N' end as multi_leg_indicator
-      , ml.no_legs as number_of_legs
-      , cl.co_client_leg_ref_id as leg_order_id
-      , cl.ratio_qty::varchar as leg_ratio
-      , dos.order_status_description as order_status   --  ???????????? status
-      , oc.opra_symbol as osi_symbol
-      , cl.symbol as base_symbol
-      , cl.symbol||coalesce(' '||cl.symbol_suffix,'') as symbol
-      , cl.instrument_type_id as security_type                                           -- missed in EOS
-      , ui.symbol as underlying_symbol
-      , case oc.put_call
-          when '0' then 'P'
-          when '1' then 'C'
-          else 'S'
-        end as put_call_stock
-      , to_char(cl.last_trade_date, 'YYYYMMDD') as expiration_date
-      , case
-          when cl.side in ('1','3') then 'B'
-          when cl.instrument_type_id = 'O' and cl.side not in ('1','3') then 'S'
-          when cl.side = '2' then 'SL'
-          when cl.side = '5' then 'SS'
-          when cl.side = '6' then 'SX'
-          else 'B'
-        end as side
-      , cl.client_order_id as cl_ord_id  -- maybe also 11011 for arca/amex ?
+        , 'Order Route'                                                         as event_type
+        , to_char(cl.process_time, 'YYYYMMDD')                                  as event_date
+        , to_char(cl.process_time, 'HH24:MI:SS.US')                             as event_time
+        , null::varchar                                                         as orig_cl_ord_id
+        , coalesce(cl.order_qty, 0)                                             as event_qty
+        , case
+              when cl.order_type_id in ('2', '4') then to_char((coalesce(cl.price, 0)), 'FM9999999990.09999999')
+              else ''
+          end                                                                   as event_price
+        , case when cl.multileg_reporting_type = '2' then 'Y' else 'N' end      as multi_leg_indicator
+        , ml.no_legs                                                            as number_of_legs
+        , cl.co_client_leg_ref_id                                               as leg_order_id
+        , cl.ratio_qty::varchar                                                 as leg_ratio
+        , dos.order_status_description                                          as order_status  --  ???????????? status
+        , oc.opra_symbol                                                        as osi_symbol
+        , cl.symbol                                                             as base_symbol
+        , cl.symbol || coalesce(' ' || cl.symbol_suffix, '')                    as symbol
+        , cl.instrument_type_id                                                 as security_type -- missed in EOS
+        , ui.symbol                                                             as underlying_symbol
+        , case oc.put_call
+              when '0' then 'P'
+              when '1' then 'C'
+              else 'S'
+          end                                                                   as put_call_stock
+        , to_char(cl.last_trade_date, 'YYYYMMDD')                               as expiration_date
+        , case
+              when cl.side in ('1', '3') then 'B'
+              when cl.instrument_type_id = 'O' and cl.side not in ('1', '3') then 'S'
+              when cl.side = '2' then 'SL'
+              when cl.side = '5' then 'SS'
+              when cl.side = '6' then 'SX'
+              else 'B'
+          end                                                                   as side
+        , cl.client_order_id                                                    as cl_ord_id     -- maybe also 11011 for arca/amex ?
 --      , case
 --          when cl.exchange_id = 'XCHI' and cl.instrument_type_id = 'E' then
 --            case cl.side
@@ -1651,233 +1676,254 @@ with ord_par_new as
 --            end
 --          else cl.client_order_id
 --        end as routed_order_id - street_cl_ord_id???
-      , ''::varchar as executed_timestamp
-      --!, coalesce(nullif(r.filled_qty, 0)::varchar, '') as filled_qty
-      , ls.filled_qty::varchar as filled_qty
-      , to_char(cl.algo_start_time, 'YYYYMMDD HH24:MI:SS.US') as algo_start_time
-      , to_char(cl.algo_end_time, 'YYYYMMDD HH24:MI:SS.US') as algo_end_time
-      , case when cl.instrument_type_id = 'E'
-               then compliance.get_eq_sor_trading_session(cl.order_id, cl.create_date_id)
-             else
-              case
-                --when fxm.tag_9281 in ('A','D','G') or fxm.tag_22017 = 'A' then 'ALL'
-                --when fxm.tag_9281 in ('F','C') or fxm.tag_22017 = 'B' then 'REGPOST'
-                when fxm.fix_message->>'9281' in ('A','D','G') or fxm.fix_message->>'22017' = 'A' then 'ALL'
-                when fxm.fix_message->>'9281' in ('F','C') or fxm.fix_message->>'22017' = 'B' then 'REGPOST'
-                else 'REG'
-              end
-        end as trading_session_id
-      , (fxm.fix_message->>'9281')::varchar as tag_9281
-      , (fxm.fix_message ->> '22017')::varchar as tag_22017
-      , case
-          when cl.exec_instruction ~ '(1)' then 'NH'
-          when cl.exec_instruction  ~ '(5)' then 'H'
-          when (fxm.fix_message ->> '9291')::varchar = 'Y' then 'H' -- is held
-          when (fxm.fix_message ->> '20012')::varchar = 'Y' then 'H'
+        , ''::varchar                                                           as executed_timestamp
+        --!, coalesce(nullif(r.filled_qty, 0)::varchar, '') as filled_qty
+        , ls.filled_qty::varchar                                                as filled_qty
+        , to_char(cl.algo_start_time, 'YYYYMMDD HH24:MI:SS.US')                 as algo_start_time
+        , to_char(cl.algo_end_time, 'YYYYMMDD HH24:MI:SS.US')                   as algo_end_time
+        , case
+              when cl.instrument_type_id = 'E'
+                  then compliance.get_eq_sor_trading_session(cl.order_id, cl.create_date_id)
+              else
+                  case
+                      --when fxm.tag_9281 in ('A','D','G') or fxm.tag_22017 = 'A' then 'ALL'
+                      --when fxm.tag_9281 in ('F','C') or fxm.tag_22017 = 'B' then 'REGPOST'
+                      when fxm.fix_message ->> '9281' in ('A', 'D', 'G') or fxm.fix_message ->> '22017' = 'A' then 'ALL'
+                      when fxm.fix_message ->> '9281' in ('F', 'C') or fxm.fix_message ->> '22017' = 'B' then 'REGPOST'
+                      else 'REG'
+                      end
+          end                                                                   as trading_session_id
+        , (fxm.fix_message ->> '9281')::varchar                                 as tag_9281
+        , (fxm.fix_message ->> '22017')::varchar                                as tag_22017
+        , case
+              when cl.exec_instruction ~ '(1)' then 'NH'
+              when cl.exec_instruction ~ '(5)' then 'H'
+              when (fxm.fix_message ->> '9291')::varchar = 'Y' then 'H' -- is held
+              when (fxm.fix_message ->> '20012')::varchar = 'Y' then 'H'
           --else 'NH'
-        end as is_held
+          end                                                                   as is_held
         --, (t.fix_msg_json ->> '9291')::varchar as t_9291
         --, (t.fix_msg_json ->> '20012')::varchar as t_20012
-      , case when cl.is_broker_dealer = 'N' and cl.po_sub_strategy_desc = 'DMA'
-             then 'Y'
-        end as is_directed
-      , case when cl.is_broker_dealer = 'Y' and cl.po_sub_strategy_desc = 'DMA'
-             then 'Y'
-        end as routed_as_received
-      , case
-          when cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null
-            then --sent to Floor broker
-              (select min(crd_number) from compliance.crd_number_list where cat_imid = (fxm.fix_message ->> '128'))||':'||(fxm.fix_message ->> '128')
-          when cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null
-            then
-              coalesce((select crd_number from compliance.crd_number_list where cat_imid = (fxm.fix_message ->> '115') and (crd_amount = 1 or is_default = 'Y'))||':'||(fxm.fix_message ->> '115'),
-                  coalesce(coalesce(dcn.crd_number||':','')||dex.cat_exchange_id,''))
-          when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
-            then
-            coalesce(dex.cat_exchange_id,'')
-          else
-            case when cl.instrument_type_id = 'E'
-              then coalesce(coalesce(dcn.crd_number||':','')||dex.cat_exchange_id,'')
-              else coalesce(coalesce(dex.cat_crd||':','')||dex.cat_exchange_id,'')
-            end
-        end as ex_destination
-      , case
-          when cl.instrument_type_id = 'E' and cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null
-            then 'F' --sent to Floor Broker
-          when cl.instrument_type_id = 'E' and cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null
-            then 'F'
-          when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
-            then 'E'
-          else 'F'
-        end as destination_type
+        , case
+              when cl.tf_is_broker_dealer = 'N' and cl.po_sub_strategy_desc = 'DMA'
+                  then 'Y'
+          end                                                                   as is_directed
+        , case
+              when cl.tf_is_broker_dealer = 'Y' and cl.po_sub_strategy_desc = 'DMA'
+                  then 'Y'
+          end                                                                   as routed_as_received
+        , case
+              when cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null
+                  then --sent to Floor broker
+                  (select min(crd_number)
+                   from compliance.crd_number_list
+                   where cat_imid = (fxm.fix_message ->> '128')) || ':' || (fxm.fix_message ->> '128')
+              when cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null
+                  then
+                  coalesce((select crd_number
+                            from compliance.crd_number_list
+                            where cat_imid = (fxm.fix_message ->> '115')
+                              and (crd_amount = 1 or is_default = 'Y')) || ':' || (fxm.fix_message ->> '115'),
+                           coalesce(coalesce(dcn.crd_number || ':', '') || dex.cat_exchange_id, ''))
+              when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
+                  then
+                  coalesce(dex.cat_exchange_id, '')
+              else
+                  case
+                      when cl.instrument_type_id = 'E'
+                          then coalesce(coalesce(dcn.crd_number || ':', '') || dex.cat_exchange_id, '')
+                      else coalesce(coalesce(dex.cat_crd || ':', '') || dex.cat_exchange_id, '')
+                      end
+          end                                                                   as ex_destination
+        , case
+              when cl.instrument_type_id = 'E' and cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null
+                  then 'F' --sent to Floor Broker
+              when cl.instrument_type_id = 'E' and cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null
+                  then 'F'
+              when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
+                  then 'E'
+              else 'F'
+          end                                                                   as destination_type
 --      , (fxm.fix_message ->> '49')::varchar as sender_comp_id
 --      , r.max_last_mkt as last_mkt -- from trade? yes, from the last execution !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      , ''::varchar as last_mkt --  ???????????? status ls.last_mkt
-      , ''::varchar as mic_code -- from exchange? dex.mic_code
-      , (fxm.fix_message ->> '50')::varchar as sender_sub_id
-      , (fxm.fix_message ->> '109')::varchar as street_client_id
-      , (fxm.fix_message ->> '439')::varchar as clearing_firm
-      , (fxm.fix_message ->> '115')::varchar as street_on_behalf_of_comp_id
-      , (fxm.fix_message ->> '7933')::varchar as routing_firm_id
-      , coalesce((fxm.fix_message ->> '440')::varchar, cl.clearing_account) as clearing_account
-      , (fxm.fix_message ->> '76')::varchar as exec_broker
-      , (fxm.fix_message ->> '7906')::varchar as combined_ord_type
-      , (fxm.fix_message ->> '9016')::varchar as tag_9016
-      , (fxm.fix_message ->> '9140')::varchar as tag_9140
-      , (fxm.fix_message ->> '9152')::varchar as tag_9152
-      , (fxm.fix_message ->> '9183')::varchar as tag_9183
-      , (fxm.fix_message ->> '9303')::varchar as routing_inst
-      , (fxm.fix_message ->> '9355')::varchar as tag_9355
-      , (fxm.fix_message ->> '9416')::varchar as tag_9416
-      , case
-            when cl.instrument_type_id = 'E' and cl.multileg_reporting_type = '2'  then 'MKT' -- ???
-            when cl.order_type_id in ('2','4') and fxm.fix_message->>'423' = '0' then 'CAB'
-            when cl.order_type_id in ('2','4') then 'LMT'
-            when fxm.fix_message->>'423' = '0' then 'CAB'
-          else 'MKT'
-        end as order_type
-      , case
-          when tif.tif_short_name in ('GTC','IOC') then tif.tif_short_name
-          when tif.tif_short_name = 'GTX' then 'GTX='||to_char(cl.process_time,'YYYYMMDD')
-          when tif.tif_short_name = 'GTD' then 'GTD='||coalesce(to_char(cl.expire_time,'YYYYMMDD'), fxm.fix_message->>'432' , to_char(cl.process_time,'YYYYMMDD'))
-          when cl.time_in_force_id in ('C','M') then 'GTC'
-          else 'DAY='||to_char(cl.process_time,'YYYYMMDD')
-        end as tif
-      , case cl.open_close
-          when 'C' then 'Close'
-          when 'O' then 'Open'
-          else ''
-        end as open_close
-      , case
-          when cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null and cl.instrument_type_id = 'E'
-            then ''
-          when cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null and cl.instrument_type_id = 'E'
-            then ''
-          when cl.exchange_id in ('CBOEDH','CBOEEH','CBOE','C2OX','BATO','BATODH','EDGO') or (cl.exchange_id in ('BATS','BATY','EDGA','EDGX') and cl.instrument_type_id = 'E')
-            then
-            coalesce(sfc.fix_comp_id||coalesce(sfc.sender_sub_id,''),ec.session_placeholder,'')
-          when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
-            then
-            coalesce(sfc.fix_comp_id,ec.session_placeholder,'')
-          else ''
-        end as session_
-      , case
-          when dex.trading_venue_class = 'E' then
-          coalesce(cl.customer_or_firm_id, cl.eq_order_capacity)
-          else ''
-        end as exch_origin_code
-      , cl.po_sub_strategy_desc as sub_strategy
-      , (case when cl.instrument_type_id = 'E' and cl.exec_instruction ~ '(f)' then 'Y'::varchar else '' end)::varchar as iso_flag
-      , cl.exec_instruction
-      , case when cl.cross_order_id is not null then 'Y' else ''::varchar end as is_idx
-      , case when cl.cross_order_id is not null then 'Y' else ''::varchar end as is_cross
-      --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) as out_cl_ord_id
-      , case when cl.po_trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) else cl.po_client_order_id end as out_cl_ord_id
-    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
-      left join lateral
-            (select j.fix_message->>'9602' as tag_9602
-             from fix_capture.fix_message_json j
-             where j.fix_message_id  = cl.po_fix_message_id
-             and j.date_id = 20260106
-             limit 1
-            ) fxp on true
-      left join d_option_contract oc on oc.instrument_id = cl.instrument_id
-      left join lateral
-        (
-          select os.option_series_id, os.underlying_instrument_id
-          from d_option_series os
-          where os.option_series_id  = oc.option_series_id::bigint
-          limit 1
-        ) os on true
-      left join dwh.d_instrument ui on os.underlying_instrument_id = ui.instrument_id
-      left join lateral
-            (select j.fix_message_id, j.fix_message--, j.fix_message->>'9281' as tag_9281,j.fix_message->>'22017' as tag_22017
-             from fix_capture.fix_message_json j
-             where j.fix_message_id  = cl.fix_message_id
-             and j.date_id = 20260106 --in_date_id
-             limit 1
-            ) fxm on true
-      left join lateral
-        (
-          select dex.exchange_id, dex.cat_exchange_id, dex.trading_venue_class, dex.cat_crd
-          from d_exchange dex
-          where cl.exchange_id = dex.exchange_id
-            and dex.is_active = true
-          limit 1
-        ) dex on true
-      left join compliance.crd_number_list dcn on (dex.cat_exchange_id = dcn.cat_imid
-                             and
-                             (dcn.crd_amount = 1 or dcn.is_default = 'Y')
-                               )
-      left join lateral
-        (
-          select tif.tif_id, tif.tif_short_name
-          from d_time_in_force tif
-          where tif.tif_id = cl.time_in_force_id::bpchar(1)
-          limit 1
-        ) tif on true
-      left join lateral
-        (
-          select ec.exchange_id, ec.session_placeholder
-          from compliance.cat_exchange_config ec
-          where ec.exchange_id = cl.exchange_id
-          limit 1
-        ) ec on true
-      left join lateral
-            (select ex.order_id,
-             min(ex.fix_message_id) as fix_message_id,
-             count(*) filter (where ex.exec_type in ('8')) rej_cnt,
-             count(*) other_cnt
-             from execution ex
-                 where ex.order_id = cl.order_id
-                 and ex.exec_date_id = 20260106 --in_date_id
-                 and ex.is_parent_level = false
-                 and ex.exec_type in ('0','4','5','8','F')
-             group by ex.order_id
-             limit 1
-            ) er on true
-      left join lateral
-            (select j.fix_message->>'10099' as tag_10099
-             from fix_capture.fix_message_json j
-             where j.fix_message_id  = er.fix_message_id
-              --(select min(ex.fix_message_id) from execution ex where ex.order_id = cl.order_id and ex.exec_date_id = in_date_id and ex.is_parent_level = false and ex.exec_type in ('0','4','8','F') limit 1)
-             and j.date_id = 20260106 --in_date_id
-             limit 1
-            ) fxc on true
-      left join lateral
-        (
-          select sfc.fix_connection_id, sfc.fix_comp_id, sfc.sender_sub_id
-          from d_fix_connection sfc
-          where sfc.fix_connection_id = (fxc.tag_10099)::smallint and sfc.is_active = true
-          limit 1
-        ) sfc on true
-      left join lateral
-        (
-          select ml.order_id , ml.client_order_id , ml.fix_message_id
+        , ''::varchar                                                           as last_mkt      --  ???????????? status ls.last_mkt
+        , ''::varchar                                                           as mic_code      -- from exchange? dex.mic_code
+        , (fxm.fix_message ->> '50')::varchar                                   as sender_sub_id
+        , (fxm.fix_message ->> '109')::varchar                                  as street_client_id
+        , (fxm.fix_message ->> '439')::varchar                                  as clearing_firm
+        , (fxm.fix_message ->> '115')::varchar                                  as street_on_behalf_of_comp_id
+        , (fxm.fix_message ->> '7933')::varchar                                 as routing_firm_id
+        , coalesce((fxm.fix_message ->> '440')::varchar, cl.clearing_account)   as clearing_account
+        , (fxm.fix_message ->> '76')::varchar                                   as exec_broker
+        , (fxm.fix_message ->> '7906')::varchar                                 as combined_ord_type
+        , (fxm.fix_message ->> '9016')::varchar                                 as tag_9016
+        , (fxm.fix_message ->> '9140')::varchar                                 as tag_9140
+        , (fxm.fix_message ->> '9152')::varchar                                 as tag_9152
+        , (fxm.fix_message ->> '9183')::varchar                                 as tag_9183
+        , (fxm.fix_message ->> '9303')::varchar                                 as routing_inst
+        , (fxm.fix_message ->> '9355')::varchar                                 as tag_9355
+        , (fxm.fix_message ->> '9416')::varchar                                 as tag_9416
+        , case
+              when cl.instrument_type_id = 'E' and cl.multileg_reporting_type = '2' then 'MKT' -- ???
+              when cl.order_type_id in ('2', '4') and fxm.fix_message ->> '423' = '0' then 'CAB'
+              when cl.order_type_id in ('2', '4') then 'LMT'
+              when fxm.fix_message ->> '423' = '0' then 'CAB'
+              else 'MKT'
+          end                                                                   as order_type
+        , case
+              when tif.tif_short_name in ('GTC', 'IOC') then tif.tif_short_name
+              when tif.tif_short_name = 'GTX' then 'GTX=' || to_char(cl.process_time, 'YYYYMMDD')
+              when tif.tif_short_name = 'GTD' then 'GTD=' || coalesce(to_char(cl.expire_time, 'YYYYMMDD'),
+                                                                      fxm.fix_message ->> '432',
+                                                                      to_char(cl.process_time, 'YYYYMMDD'))
+              when cl.time_in_force_id in ('C', 'M') then 'GTC'
+              else 'DAY=' || to_char(cl.process_time, 'YYYYMMDD')
+          end                                                                   as tif
+        , case cl.open_close
+              when 'C' then 'Close'
+              when 'O' then 'Open'
+              else ''
+          end                                                                   as open_close
+        , case
+              when cl.exchange_id = 'NYSE' and (fxm.fix_message ->> '128') is not null and cl.instrument_type_id = 'E'
+                  then ''
+              when cl.exchange_id = 'XCHI' and (fxm.fix_message ->> '115') is not null and cl.instrument_type_id = 'E'
+                  then ''
+              when cl.exchange_id in ('CBOEDH', 'CBOEEH', 'CBOE', 'C2OX', 'BATO', 'BATODH', 'EDGO') or
+                   (cl.exchange_id in ('BATS', 'BATY', 'EDGA', 'EDGX') and cl.instrument_type_id = 'E')
+                  then
+                  coalesce(sfc.fix_comp_id || coalesce(sfc.sender_sub_id, ''), ec.session_placeholder, '')
+              when dex.trading_venue_class = 'E' --or cl.exchange_id in ('XCHIML')
+                  then
+                  coalesce(sfc.fix_comp_id, ec.session_placeholder, '')
+              else ''
+          end                                                                   as session_
+        , case
+              when dex.trading_venue_class = 'E' then
+                  coalesce(cl.customer_or_firm_id, cl.eq_order_capacity)
+              else ''
+          end                                                                   as exch_origin_code
+        , cl.po_sub_strategy_desc                                               as sub_strategy
+        , (case
+               when cl.instrument_type_id = 'E' and cl.exec_instruction ~ '(f)' then 'Y'::varchar
+               else '' end)::varchar                                            as iso_flag
+        , cl.exec_instruction
+        , case when cl.cross_order_id is not null then 'Y' else ''::varchar end as is_idx
+        , case when cl.cross_order_id is not null then 'Y' else ''::varchar end as is_cross
+        --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) as out_cl_ord_id
+        , case
+              when cl.po_trans_type = 'G' then coalesce((compliance.get_sor_first_orig(in_order_id => cl.po_order_id,
+                                                                                       in_date_id => cl.po_create_date_id)).out_cl_ord_id,
+                                                        cl.po_client_order_id)
+              else cl.po_client_order_id end                                    as out_cl_ord_id
+   from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord cl
+            left join lateral
+       (select j.fix_message ->> '9602' as tag_9602
+        from fix_capture.fix_message_json j
+        where j.fix_message_id = cl.po_fix_message_id
+          and j.date_id = 20260106
+        limit 1
+       ) fxp on true
+            left join d_option_contract oc on oc.instrument_id = cl.instrument_id
+            left join lateral
+       (
+       select os.option_series_id, os.underlying_instrument_id
+       from d_option_series os
+       where os.option_series_id = oc.option_series_id::bigint
+       limit 1
+       ) os on true
+            left join dwh.d_instrument ui on os.underlying_instrument_id = ui.instrument_id
+            left join lateral
+       (select j.fix_message_id, j.fix_message--, j.fix_message->>'9281' as tag_9281,j.fix_message->>'22017' as tag_22017
+        from fix_capture.fix_message_json j
+        where j.fix_message_id = cl.fix_message_id
+          and j.date_id = 20260106 --in_date_id
+        limit 1
+       ) fxm on true
+            left join lateral
+       (
+       select dex.exchange_id, dex.cat_exchange_id, dex.trading_venue_class, dex.cat_crd
+       from d_exchange dex
+       where cl.exchange_id = dex.exchange_id
+         and dex.is_active = true
+       limit 1
+       ) dex on true
+            left join compliance.crd_number_list dcn on (dex.cat_exchange_id = dcn.cat_imid
+       and
+                                                         (dcn.crd_amount = 1 or dcn.is_default = 'Y')
+       )
+            left join lateral
+       (
+       select tif.tif_id, tif.tif_short_name
+       from d_time_in_force tif
+       where tif.tif_id = cl.time_in_force_id::bpchar(1)
+       limit 1
+       ) tif on true
+            left join lateral
+       (
+       select ec.exchange_id, ec.session_placeholder
+       from compliance.cat_exchange_config ec
+       where ec.exchange_id = cl.exchange_id
+       limit 1
+       ) ec on true
+            left join lateral
+       (select ex.order_id,
+               min(ex.fix_message_id) as                     fix_message_id,
+               count(*) filter (where ex.exec_type in ('8')) rej_cnt,
+               count(*)                                      other_cnt
+        from execution ex
+        where ex.order_id = cl.order_id
+          and ex.exec_date_id = 20260106 --in_date_id
+          and ex.is_parent_level = false
+          and ex.exec_type in ('0', '4', '5', '8', 'F')
+        group by ex.order_id
+        limit 1
+       ) er on true
+            left join lateral
+       (select j.fix_message ->> '10099' as tag_10099
+        from fix_capture.fix_message_json j
+        where j.fix_message_id = er.fix_message_id
+          --(select min(ex.fix_message_id) from execution ex where ex.order_id = cl.order_id and ex.exec_date_id = in_date_id and ex.is_parent_level = false and ex.exec_type in ('0','4','8','F') limit 1)
+          and j.date_id = 20260106 --in_date_id
+        limit 1
+       ) fxc on true
+            left join lateral
+       (
+       select sfc.fix_connection_id, sfc.fix_comp_id, sfc.sender_sub_id
+       from d_fix_connection sfc
+       where sfc.fix_connection_id = (fxc.tag_10099)::smallint
+         and sfc.is_active = true
+       limit 1
+       ) sfc on true
+            left join lateral
+       (
+       select ml.order_id
+            , ml.client_order_id
+            , ml.fix_message_id
             , ml.no_legs
-          from client_order ml
-          where cl.multileg_reporting_type = '2'
-            and ml.order_id = cl.multileg_order_id
-            and ml.multileg_reporting_type = '3'
-            and ml.create_date_id = 20260106
-          limit 1
-        ) ml on true
-      left join lateral
-        (
-          select ls.order_id , ls.order_status , ls.filled_qty , ls.last_mkt --, dos.order_status_description
-          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
-          where ls.order_id = cl.order_id
-          limit 1
-        ) ls on true
-      left join dwh.d_order_status dos
-        on ls.order_status = dos.order_status and dos.is_active
-    where 1=1
-      --and cl.order_id not in (select order_id from compliance.aggregated_street_cross) -- ????
-      and cl.trans_type = 'D' -- will be a separate route modification
-      and cl.symbol in ('PRGO')
+       from client_order ml
+       where cl.multileg_reporting_type = '2'
+         and ml.order_id = cl.multileg_order_id
+         and ml.multileg_reporting_type = '3'
+         and ml.create_date_id = 20260106
+       limit 1
+       ) ml on true
+            left join lateral
+       (
+       select ls.order_id, ls.order_status, ls.filled_qty, ls.last_mkt --, dos.order_status_description
+       from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
+       where ls.order_id = cl.order_id
+       limit 1
+       ) ls on true
+            left join dwh.d_order_status dos
+                      on ls.order_status = dos.order_status and dos.is_active
+   where 1 = 1
+     --and cl.order_id not in (select order_id from compliance.aggregated_street_cross) -- ????
+     and cl.trans_type = 'D' -- will be a separate route modification
+--       and cl.symbol in ('PRGO')
       --
       --and fxm.fix_message->>'440' is not null
-      --and cl.client_order_id  = '20221223006000000113'
+      --and cl.client_order_id  = '20260106006000000113'
   )
   , ord_str_modify as
   (
@@ -1978,10 +2024,10 @@ with ord_par_new as
         end as is_held
         --, (t.fix_msg_json ->> '9291')::varchar as t_9291
         --, (t.fix_msg_json ->> '20012')::varchar as t_20012
-      , case when cl.is_broker_dealer = 'N' and cl.po_sub_strategy_desc = 'DMA'
+      , case when cl.tf_is_broker_dealer = 'N' and cl.po_sub_strategy_desc = 'DMA'
              then 'Y'
         end as is_directed
-      , case when cl.is_broker_dealer = 'Y' and cl.po_sub_strategy_desc = 'DMA'
+      , case when cl.tf_is_broker_dealer = 'Y' and cl.po_sub_strategy_desc = 'DMA'
              then 'Y'
         end as routed_as_received
       , case
@@ -2074,7 +2120,7 @@ with ord_par_new as
       , (cl.order_qty - ls.max_cum_qty)::varchar as leaves_qty
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) as out_cl_ord_id
       , case when cl.po_trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => cl.po_order_id, in_date_id => cl.po_create_date_id)).out_cl_ord_id, cl.po_client_order_id ) else cl.po_client_order_id end as out_cl_ord_id
-    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_ord cl
+    from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord cl
       inner join client_order orig on cl.orig_order_id = orig.order_id
       left join lateral
             (select j.fix_message->>'9602' as tag_9602
@@ -2167,7 +2213,7 @@ with ord_par_new as
       left join lateral
         (
           select ls.order_id , ls.order_status , ls.filled_qty , ls.last_mkt, ls.max_cum_qty --, dos.order_status_description
-          from t_sdn_tmp_SOR_fix_message_event_20221223_exam_ord_status ls
+          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
           where ls.order_id = cl.order_id
           limit 1
         ) ls on true
@@ -2179,7 +2225,7 @@ with ord_par_new as
       and orig.parent_order_id is not null
       --
       and cl.trans_type = 'G' -- will be a separate route modification
-      and cl.symbol in ('PRGO')
+--       and cl.symbol in ('PRGO')
       --
   )
   , route_cancelled as
@@ -2273,7 +2319,7 @@ with ord_par_new as
       , fxm.tag_115::varchar as street_on_behalf_of_comp_id
       --, coalesce( (compliance.get_sor_first_orig(in_order_id => po.order_id, in_date_id => po.create_date_id)).out_cl_ord_id, po.client_order_id ) as out_cl_ord_id
       , case when po.trans_type = 'G' then coalesce( (compliance.get_sor_first_orig(in_order_id => po.order_id, in_date_id => po.create_date_id)).out_cl_ord_id, po.client_order_id ) else po.client_order_id end as out_cl_ord_id
-    from t_sdn_tmp_SOR_fix_message_event_20221223_exam_street_cancells cl
+    from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_cancells cl
       inner join d_account ac on ac.account_id = cl.account_id
       inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
       left join lateral
