@@ -244,7 +244,7 @@ group by ec.exec_date_id,
 
 
 drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord;
-create table t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord as
+create temp table t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord as
     -- explain
 select po.client_order_id         as po_client_order_id
      , po.create_date_id          as po_create_date_id
@@ -269,7 +269,7 @@ select po.client_order_id         as po_client_order_id
      , di.instrument_type_id
      , di.last_trade_date --, oc.opra_symbol, ui.symbol as underlying_symbol
      , cl.*
-from client_order cl
+from client_order cl--DUAK3206-20260106
          inner join d_account ac on ac.account_id = cl.account_id and ac.is_active = true
          inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id and tf.is_active = true
          inner join client_order po
@@ -298,7 +298,7 @@ where cl.create_date_id = 20260106                                --in_date_id
   --and cl.order_id not in (select order_id from compliance.aggregated_street_cross)
 --   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
   and po.client_order_id = any
-      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}')
+      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
 ;
 select * from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord;
 
