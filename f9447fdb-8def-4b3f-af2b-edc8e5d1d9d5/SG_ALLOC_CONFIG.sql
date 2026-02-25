@@ -1334,3 +1334,32 @@ $function$
 ;
 
 COMMENT ON FUNCTION dash360.get_data_for_allocation_drop_v2(int8, int4) IS 'The same get_data_for_allocation_drop but without SG attributes';
+
+
+-- DROP FUNCTION dash360.alloc_drop_message_status_init(int8, bpchar);
+
+CREATE OR REPLACE FUNCTION dash360.alloc_drop_message_status_init(in_alloc_instr_id bigint, in_drop_message_type character)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+declare
+    l_drop_message_status_id int4;
+begin
+    if in_drop_message_type in ('N', 'C') and not exists (select null
+                                                  from genesis2.alloc_drop_message_status
+                                                  where alloc_instr_id = in_alloc_instr_id
+                                                    and drop_message_type = in_drop_message_type) then
+        insert into genesis2.alloc_drop_message_status(alloc_instr_id, drop_message_type)
+        values (in_alloc_instr_id, in_drop_message_type)
+        returning drop_message_status_id into l_drop_message_status_id;
+    else
+        l_drop_message_status_id := -1;
+    end if;
+    return l_drop_message_status_id;
+end;
+$function$
+;
+
+COMMENT ON FUNCTION dash360.alloc_drop_message_status_init(int8, bpchar) IS 'Insert data into alloc_drop_message_status';
+
+
