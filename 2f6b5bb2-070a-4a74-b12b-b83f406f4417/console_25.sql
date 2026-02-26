@@ -421,3 +421,9 @@ exception
 end;
 $function$
 ;
+
+
+select '{"2347870236":[{"cmta":"017","clearing_account_number":"017","street_account_name":"AID5","account_nickname":"Opt 5.4","last_qty":10,"allocation_avg_price":2.2,"trade_record_reason":"L","alloc_config_id":428}]}'::jsonb
+
+
+in_user_id := 6891, in_date_id := 20260225, in_change_vector := '{"2347870240":[{"cmta":"352","clearing_account_number":"352","street_account_name":"OCCAID3","account_nickname":"Option 3","last_qty":10,"allocation_avg_price":2.2,"trade_record_reason":"L","alloc_config_id":390}]}'
