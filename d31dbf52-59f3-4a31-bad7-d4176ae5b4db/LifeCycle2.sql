@@ -28,7 +28,8 @@ where true
 -- parent orders
 drop table if exists t_base;
 create temp table t_base as
-select cl.*, di.symbol, di.symbol_suffix, di.instrument_type_id, di.last_trade_date
+select cl.*, di.symbol, di.symbol_suffix, di.instrument_type_id, di.last_trade_date,
+       ac.cat_report_on_behalf_of
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
          join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -50,11 +51,12 @@ where cl.parent_order_id is null
   and cl.multileg_reporting_type in ('1', '2')
 ;
 analyze t_base;
-select symbol from t_base;
+select * from t_base;
 
 -- street orders
 insert into t_base
-select cl.*, di.symbol, di.symbol_suffix, di.instrument_type_id, di.last_trade_date
+select cl.*, di.symbol, di.symbol_suffix, di.instrument_type_id, di.last_trade_date,
+       null as cat_report_on_behalf_of
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
          left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -155,7 +157,7 @@ select cl.fix_connection_id,
        di.symbol_suffix,
        di.last_trade_date
 from client_order cl
-    join t_base on t_base.order_id = cl.parent_order_id
+    join t_base on t_base.order_id = cl.order_id
          inner join lateral (select ex.exec_date_id,
                                     ex.exec_time,
                                     ex.cum_qty,
@@ -351,4 +353,9 @@ select * from t_base;
 select * from t_parent_cancels;
 select * from t_street_cancels;
 select * from t_ord_status;
-select * from t_trade
+select * from t_trade;
+select * from t_route;
+
+select * from t_base tb
+join t_route tr on tr.trans_type = tb.trans_type
+where tb.parent_order_id is null;
