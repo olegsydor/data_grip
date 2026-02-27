@@ -356,6 +356,16 @@ select * from t_ord_status;
 select * from t_trade;
 select * from t_route;
 
-select * from t_base tb
-join t_route tr on tr.trans_type = tb.trans_type
-where tb.parent_order_id is null;
+select * from (select tr.order_type_value, tb.*, tr.rn
+               from t_base tb
+                        join t_route tr on tr.trans_type = tb.trans_type
+               where tb.parent_order_id is null
+                 and tb.cat_report_on_behalf_of = 'N'
+               union all
+               select case when tb.cat_report_on_behalf_of != 'N' then 'New' else 'Ack' end, tb.*, 3
+               from t_base tb
+                        left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
+               where tb.parent_order_id is null
+--                  and tb.cat_report_on_behalf_of = 'N'
+               ) x
+order by order_id, rn
