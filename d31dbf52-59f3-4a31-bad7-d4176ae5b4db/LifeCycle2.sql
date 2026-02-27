@@ -56,15 +56,16 @@ select symbol from t_base;
 insert into t_base
 select cl.*, di.symbol, di.symbol_suffix, di.instrument_type_id, di.last_trade_date
 from t_base par
-         join dwh.client_order cl on cl.parent_order_id = cl.order_id
-         join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-    and cl.create_date_id between :l_date_begin_id and :l_date_end_id
-    and case
-            when coalesce(:in_account_ids, '{}') = '{}' then true
-            else cl.account_id = any (:in_account_ids) end
-    and cl.parent_order_id is not null
-    and cl.trans_type in ('D', 'G')
-    and cl.multileg_reporting_type in ('1', '2');
+         join dwh.client_order cl on cl.parent_order_id = par.order_id
+         left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+where true
+  and cl.create_date_id between :l_date_begin_id and :l_date_end_id
+  and case
+          when coalesce(:in_account_ids, '{}') = '{}' then true
+          else cl.account_id = any (:in_account_ids) end
+  and cl.parent_order_id is not null
+  and cl.trans_type in ('D', 'G')
+  and cl.multileg_reporting_type in ('1', '2');
 
 -- parent cancels
 drop table if exists t_parent_cancels;
@@ -231,3 +232,123 @@ from t_base cl
     ) tr on true
 --order by cl.order_id, le.exec_time
 ;
+
+drop table if exists t_trade;
+create temp table if not exists t_trade as
+select case
+           when tf.trading_firm_id = 'ctctrad01' then
+               replace(tr.client_order_id, '|', '-') || '_' || tr.fix_comp_id
+           when tr.sub_strategy = 'VEGA'
+               then replace(tr.client_order_id, '|', '-') || '_' || coalesce(tr.leg_ref_id, '0')
+           else replace(tr.client_order_id, '|', '-')
+    end                                                                 as orderID
+     , 'Trade'                                                          as event_type
+     , to_char(tr.trade_record_time, 'YYYYMMDD')                        as event_date
+     , to_char(tr.trade_record_time, 'HH24:MI:SS.US')                   as event_time
+     , null::varchar                                                    as orig_cl_ord_id
+     , tr.last_qty                                                      as event_qty
+     , tr.last_px                                                       as event_price
+     , case when cl.multileg_reporting_type = '2' then 'Y' else 'N' end as multi_leg_indicator
+     , ml.no_legs                                                       as number_of_legs
+     , cl.co_client_leg_ref_id                                          as leg_order_id
+     , cl.ratio_qty::varchar                                            as leg_ratio
+     , null                                                             as order_status  --  ???????????? status
+     , oc.opra_symbol                                                   as osi_symbol
+     , i.symbol                                                         as base_symbol
+     , i.symbol || coalesce(' ' || i.symbol_suffix, '')                 as symbol
+     , i.instrument_type_id                                             as security_type -- missed in EOS
+     , ui.symbol                                                        as underlying_symbol
+     , case oc.put_call
+           when '0' then 'P'
+           when '1' then 'C'
+           else 'S'
+    end                                                                 as put_call_stock
+     , to_char(i.last_trade_date, 'YYYYMMDD')                           as expiration_date
+     , case
+           when cl.side in ('1', '3') then 'B'
+           when i.instrument_type_id = 'O' and cl.side not in ('1', '3') then 'S'
+           when cl.side = '2' then 'SL'
+           when cl.side = '5' then 'SS'
+           when cl.side = '6' then 'SX'
+           else 'B'
+    end                                                                 as side
+     , tr.secondary_order_id                                            as cl_ord_id
+     , to_char(cl.create_time, 'YYYYMMDD')::varchar                     as order_creation_date
+     , to_char(cl.create_time, 'HH24:MI:SS.MS')::varchar                as order_creation_time
+     , to_char(tr.trade_record_time, 'HH24:MI:SS.US')                   as executed_timestamp
+     , tr.secondary_exch_exec_id                                        as exec_id       --coalesce(, tr.exch_exec_id)
+     , 'N/A'::varchar                                                   as tape_trade_id
+     , tr.last_mkt
+     , dex.mic_code                                                     as mic_code
+     --, coalesce( (compliance.get_sor_first_orig(in_order_id => tr.order_id, in_date_id => to_char(tr.order_process_time, 'YYYYMMDD')::integer)).out_cl_ord_id, tr.client_order_id ) as out_cl_ord_id
+     , case
+           when cl.trans_type = 'G' then coalesce((compliance.get_sor_first_orig(in_order_id => cl.order_id,
+                                                                                 in_date_id => cl.create_date_id)).out_cl_ord_id,
+                                                  cl.client_order_id)
+           else cl.client_order_id end                                  as out_cl_ord_id
+from dwh.flat_trade_record tr
+         join t_base on t_base.order_id = tr.order_id
+         left join d_account ac on ac.account_id = tr.account_id
+         inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+         inner join d_instrument i on tr.instrument_id = i.instrument_id
+         left join lateral
+    (select oc.option_series_id, oc.opra_symbol, oc.put_call
+     from d_option_contract oc
+     where oc.instrument_id = tr.instrument_id
+     limit 1) oc on true
+         left join d_option_series os on os.option_series_id = oc.option_series_id
+         left join dwh.d_instrument ui on os.underlying_instrument_id = ui.instrument_id
+         inner join lateral
+    (
+    select cl.multileg_reporting_type,
+           co_client_leg_ref_id,
+           fix_connection_id,
+           order_id,
+           multileg_order_id,
+           trans_type,
+           client_order_id,
+           side,
+           ratio_qty,
+           create_time,
+           create_date_id
+    from dwh.client_order cl
+    where cl.order_id = tr.order_id
+      and cl.create_date_id between to_char(tr.order_process_time, 'YYYYMMDD')::integer and :l_date_end_id
+    limit 1
+    ) cl on true
+         inner join d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
+         left join lateral
+    (select str.parent_order_id,
+            count(*) filter (where str.exchange_id = 'C1PAR')      cpar_cnt,
+            count(*) filter (where str.cross_order_id is not null) cross_cnt
+     from client_order str
+     where str.trans_type <> 'F'
+       and str.parent_order_id is not null
+       and str.create_date_id between :l_date_begin_id and :l_date_end_id
+       and str.parent_order_id = cl.order_id
+     group by str.parent_order_id
+     limit 1
+    ) so on true
+         left join lateral
+    (
+    select ml.order_id
+         , ml.client_order_id
+         , ml.fix_message_id
+         , ml.no_legs
+    from client_order ml
+    where cl.multileg_reporting_type = '2'
+      and ml.order_id = cl.multileg_order_id
+      and ml.multileg_reporting_type = '3'
+      and ml.create_date_id between :l_date_begin_id and :l_date_end_id
+    limit 1
+    ) ml on true
+         left join d_exchange dex on tr.exchange_id = dex.exchange_id and dex.is_active = true
+where tr.date_id between :l_date_begin_id and :l_date_end_id
+  and tr.is_busted = 'N';
+
+
+select * from t_base;
+select * from t_parent_cancels;
+select * from t_street_cancels;
+select * from t_ord_status;
+select * from t_trade
