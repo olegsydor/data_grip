@@ -244,6 +244,7 @@ select cl.order_id
     end as filled_qty
      , le.max_cum_qty
      , le.last_mkt
+     , dos.order_status_description
 from t_base cl
          left join lateral
     (
@@ -270,12 +271,16 @@ from t_base cl
     select tr.order_id, sum(tr.last_qty) as filled_qty
     from dwh.flat_trade_record tr
     where tr.date_id between :l_date_begin_id and :l_date_end_id
-    and cl.parent_order_id is null
-    and cl.order_id = tr.order_id
-    and tr.is_busted = 'N'
+      and cl.parent_order_id is null
+      and cl.order_id = tr.order_id
+      and tr.is_busted = 'N'
     group by tr.order_id
     ) tr on true
---order by cl.order_id, le.exec_time
+         left join lateral (select order_status_description
+                            from dwh.d_order_status dos
+                            where ls.order_status = dos.order_status
+                              and dos.is_active
+                            limit 1) dos on true
 ;
 
 drop table if exists t_trade;
@@ -512,31 +517,7 @@ from
           where ls.order_id = t.order_id
           limit 1
           ) ls on true
-               left join dwh.d_order_status dos
-                         on ls.order_status = dos.order_status and dos.is_active
-      where 1 = 1
-        and t.trans_type = 'D'                                                            -- new or acceptance, not modify
-        and (coalesce(t.cat_imid, 'NONE') <> 'DFIN' -- non-internal route
-          or
-             t.fix_comp_id in
-             ('TESTFASTLB1', 'TESTFASTLB3', 'TESTFASTLB4', 'TESTFASTLB5', 'TESTOFPLB1', 'TESTOFPLB2', 'TESTOFPLB3',
-              'TESTPA', 'TESTOFP', 'TESTGTHLB1')--'BLAZE7PROD2' removed
-          )
-        and t.fix_comp_id not in
-            ('IRCHNY2EQPT1INT', 'IRCHNY2EQPT2INT', 'IRCHNY2EQPT3INT', 'IRCHNY2OPTPT1INT') -- non-internal route
-        and coalesce(t.tf_cat_suppress, 'N') <> 'Y'
-        and coalesce(t.ac_cat_suppress, 'N') <> 'Y'
-        and t.is_high_frequency_trader = 'N'                                              -- non-EOS
-        and (coalesce(t.cpar_cnt, 0) = 0 -- LP to C1PAR collaption
-          or
-             t.fix_comp_id not in
-             ('LPEQP', 'LPOPTP', 'LQPNCP', 'LPOFP', 'LPOFP2', 'LPOPTB', 'LPOPTSTP', 'LPEQSTP', 'LQPNCP5INT',
-              'LQPNCPINT',
-                 --GTH
-              'LPEQPGTH', 'LPOPTPGTH', 'LPCROSSGTHINT', 'DASHOPTP')
-          )
-        and (t.ex_destination <> 'LIQPT' or coalesce(t.cross_cnt, 0) > 0)                 -- non-empty LPO responses
-        and t.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE')
+
 
     (select tr.order_type_value, tb.*, tr.rn
                from t_base tb
