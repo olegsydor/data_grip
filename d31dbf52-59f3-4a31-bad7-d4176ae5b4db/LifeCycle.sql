@@ -355,6 +355,31 @@ from (
       and tr.is_busted = 'N'
     group by tr.order_id
     ) tr on true
+left join lateral(select dos.order_status_description from dwh.d_order_status dos
+                         where le.order_status = dos.order_status and dos.is_active
+      where 1 = 1
+        and cl.trans_type = 'D'                                                            -- new or acceptance, not modify
+        and (coalesce(cl.cat_imid, 'NONE') <> 'DFIN' -- non-internal route
+          or
+             t.fix_comp_id in
+             ('TESTFASTLB1', 'TESTFASTLB3', 'TESTFASTLB4', 'TESTFASTLB5', 'TESTOFPLB1', 'TESTOFPLB2', 'TESTOFPLB3',
+              'TESTPA', 'TESTOFP', 'TESTGTHLB1')--'BLAZE7PROD2' removed
+          )
+        and t.fix_comp_id not in
+            ('IRCHNY2EQPT1INT', 'IRCHNY2EQPT2INT', 'IRCHNY2EQPT3INT', 'IRCHNY2OPTPT1INT') -- non-internal route
+        and coalesce(t.tf_cat_suppress, 'N') <> 'Y'
+        and coalesce(t.ac_cat_suppress, 'N') <> 'Y'
+        and t.is_high_frequency_trader = 'N'                                              -- non-EOS
+        and (coalesce(t.cpar_cnt, 0) = 0 -- LP to C1PAR collaption
+          or
+             t.fix_comp_id not in
+             ('LPEQP', 'LPOPTP', 'LQPNCP', 'LPOFP', 'LPOFP2', 'LPOPTB', 'LPOPTSTP', 'LPEQSTP', 'LQPNCP5INT',
+              'LQPNCPINT',
+                 --GTH
+              'LPEQPGTH', 'LPOPTPGTH', 'LPCROSSGTHINT', 'DASHOPTP')
+          )
+        and (t.ex_destination <> 'LIQPT' or coalesce(t.cross_cnt, 0) > 0)                 -- non-empty LPO responses
+        and t.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE')
 --order by cl.order_id, le.exec_time
 ;
 
@@ -590,31 +615,7 @@ with ord_par_new as
           where ls.order_id = t.order_id
           limit 1
           ) ls on true
-               left join dwh.d_order_status dos
-                         on ls.order_status = dos.order_status and dos.is_active
-      where 1 = 1
-        and t.trans_type = 'D'                                                            -- new or acceptance, not modify
-        and (coalesce(t.cat_imid, 'NONE') <> 'DFIN' -- non-internal route
-          or
-             t.fix_comp_id in
-             ('TESTFASTLB1', 'TESTFASTLB3', 'TESTFASTLB4', 'TESTFASTLB5', 'TESTOFPLB1', 'TESTOFPLB2', 'TESTOFPLB3',
-              'TESTPA', 'TESTOFP', 'TESTGTHLB1')--'BLAZE7PROD2' removed
-          )
-        and t.fix_comp_id not in
-            ('IRCHNY2EQPT1INT', 'IRCHNY2EQPT2INT', 'IRCHNY2EQPT3INT', 'IRCHNY2OPTPT1INT') -- non-internal route
-        and coalesce(t.tf_cat_suppress, 'N') <> 'Y'
-        and coalesce(t.ac_cat_suppress, 'N') <> 'Y'
-        and t.is_high_frequency_trader = 'N'                                              -- non-EOS
-        and (coalesce(t.cpar_cnt, 0) = 0 -- LP to C1PAR collaption
-          or
-             t.fix_comp_id not in
-             ('LPEQP', 'LPOPTP', 'LQPNCP', 'LPOFP', 'LPOFP2', 'LPOPTB', 'LPOPTSTP', 'LPEQSTP', 'LQPNCP5INT',
-              'LQPNCPINT',
-                 --GTH
-              'LPEQPGTH', 'LPOPTPGTH', 'LPCROSSGTHINT', 'DASHOPTP')
-          )
-        and (t.ex_destination <> 'LIQPT' or coalesce(t.cross_cnt, 0) > 0)                 -- non-empty LPO responses
-        and t.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE')
+
 
   )
   , ord_par_ir as
