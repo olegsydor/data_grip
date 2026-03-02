@@ -35,39 +35,63 @@ select cl.*,
        di.last_trade_date,
        ac.cat_report_on_behalf_of,
        tf.trading_firm_name,
-       tf.cat_imid as tf_cat_imid,
-       tf.cat_crd  as tf_cat_crd,
+       tf.cat_imid          as tf_cat_imid,
+       tf.cat_crd           as tf_cat_crd,
        orig.client_order_id as orig_client_order_id,
-       orig.price as orig_price,
-       fmj.tag_58
+       orig.price           as orig_price,
+       oc.opra_symbol,
+       oc.strike_price,
+       os.root_symbol,
+       ui.symbol            as underlying_symbol,
+       fmj.tag_58,
+       case
+           when di.instrument_type_id = 'E' then 'Stock'
+           when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
+           when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
+           end              as pcv,
+       dtif.tif_short_name  as tif,
+       dot.order_type_name,
+       case
+           when tag_9281 in ('A', 'D', 'G') then 'ALL'
+           when tag_22017 = 'A' then 'ALL'
+           when tag_9281 in ('F', 'C') then 'REGPOST'
+           when tag_22017 = 'B' then 'REGPOST'
+           else 'REG' end   as trading_session,
+    cof.customer_or_firm_name
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
          join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
          join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-                 left join lateral (select client_order_id, price
-                                from dwh.client_order orig
-                                where orig.order_id = cl.orig_order_id
-                                  and orig.create_date_id <= cl.create_date_id
-                                  and orig.create_date_id >= :l_retention_date_id
-                                limit 1) orig on cl.orig_order_id is not null
+         left join lateral (select client_order_id, price
+                            from dwh.client_order orig
+                            where orig.order_id = cl.orig_order_id
+                              and orig.create_date_id <= cl.create_date_id
+                              and orig.create_date_id >= :l_retention_date_id
+                            limit 1) orig on cl.orig_order_id is not null
+         left join dwh.d_option_contract oc on di.instrument_id = oc.instrument_id
+         left join d_option_series os on os.option_series_id = oc.option_series_id
+         left join dwh.d_instrument ui on os.underlying_instrument_id = ui.instrument_id
          left join dwh.d_fix_connection fc
                    on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
-left join lateral (select
+         left join dwh.d_time_in_force dtif on dtif.tif_id = cl.time_in_force_id
+         left join lateral (select
 --                                        fmj.fix_message ->> '5050'  as tag_5050,
 --                                        fmj.fix_message ->> '50'    as tag_50,
 --                                        fmj.fix_message ->> '109'   as tag_109,
 --                                        fmj.fix_message ->> '9000'  as tag_9000,
-                                       fmj.fix_message ->> '58'    as tag_58,
+fmj.fix_message ->> '58'    as tag_58,
 --                                        fmj.fix_message ->> '17'    as tag_17,
 --                                        fmj.fix_message ->> '52'    as tag_52,
 --                                        fmj.fix_message ->> '9291'  as tag_9291,
---                                        fmj.fix_message ->> '9281'  as tag_9281,
---                                        fmj.fix_message ->> '22017' as tag_22017,
-                                       fmj.fix_message ->> '60'    as tag_60
-                                from fix_capture.fix_message_json fmj
-                                where cl.fix_message_id = fmj.fix_message_id
-                                  and fmj.date_id >= cl.create_date_id
-                                limit 1) fmj on true
+fmj.fix_message ->> '9281'  as tag_9281,
+fmj.fix_message ->> '22017' as tag_22017,
+fmj.fix_message ->> '60'    as tag_60
+                            from fix_capture.fix_message_json fmj
+                            where cl.fix_message_id = fmj.fix_message_id
+                              and fmj.date_id >= cl.create_date_id
+                            limit 1) fmj on true
+         left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
+ left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
 where cl.parent_order_id is null
   and cl.create_date_id between :l_date_begin_id and :l_date_end_id
   and case
@@ -84,7 +108,7 @@ where cl.parent_order_id is null
   and cl.multileg_reporting_type in ('1', '2')
 ;
 analyze t_base;
-select * from t_base;
+-- select * from t_base;
 
 -- street orders
 insert into t_base
@@ -99,7 +123,16 @@ select cl.*,
        par.tf_cat_crd  as tf_cat_crd,
        par.orig_client_order_id,
        par.orig_price,
-       par.tag_58
+       par.opra_symbol,
+       par.strike_price,
+       par.root_symbol,
+       par.underlying_symbol,
+       par.tag_58,
+       par.pcv,
+       par.tif,
+       par.order_type_name,
+       par.trading_session,
+       par.customer_or_firm_name
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
          left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -278,7 +311,7 @@ from t_base cl
     ) tr on true
          left join lateral (select order_status_description
                             from dwh.d_order_status dos
-                            where ls.order_status = dos.order_status
+                            where le.order_status = dos.order_status
                               and dos.is_active
                             limit 1) dos on true
 ;
@@ -435,10 +468,10 @@ select parent_order_id                          as "OrderID",
                -- Order Detail
                order_status_description                                      as "Order Status",
                case
-                   when event_type = 'New Order' then ''
+                   when order_type_value = 'New Order' then ''
                    else orig_client_order_id end                             as "Original Client clOrderID",
                case
-                   when event_type = 'Order Route'
+                   when order_type_value = 'Order Route'
                        then orig_client_order_id end                         as "Original Street clOrderID",
                opra_symbol                                                   as "OSI Symbol",
                root_symbol                                                   as "Base symbol",
@@ -450,26 +483,28 @@ select parent_order_id                          as "OrderID",
 
                underlying_symbol                                             as "Underlying Symbol",
                pcv                                                           as "P/C/S",
-               to_char(expiration_ts, 'MM/DD/YYYY')                          as "Expiration Date",
-               to_char(expiration_ts, 'HH24:MI:SS.MS')                       as "Expiration Time",
+               to_char(last_trade_date, 'MM/DD/YYYY')                        as "Expiration Date",
+               to_char(last_trade_date, 'HH24:MI:SS.MS')                     as "Expiration Time",
                case
                    when side = '1' then 'Buy'
                    when side = '2' then 'Sell'
                    when side in ('5', '6') then 'Sell Short'
                    end                                                       as "Side",
                tif                                                           as "TIF",
-               to_char(good_till_ts, 'MM/DD/YYYY')                           as "Good Till Date",
-               to_char(good_till_ts, 'HH24:MI:SS.MS')                        as "Good Till Time",
-               event_qty                                                     as "Order Qty",
-               cum_qty                                                       as "Filled Qty",
+               to_char(coalesce(x.last_trade_date, x.expire_time), 'MM/DD/YYYY')                           as "Good Till Date",
+               to_char(coalesce(x.last_trade_date, x.expire_time), 'HH24:MI:SS.MS')                        as "Good Till Time",
+               order_qty                                                     as "Order Qty",
+               ls.filled_qty                                                 as "Filled Qty",
                order_type_name                                               as "Order Type Code",
-               to_char(event_price, 'FM99999990D0099')                       as "Order Price",
-               to_char(order_creation_ts, 'DD.MM.YYYY')                      as "Order Creation Date",
-               to_char(order_creation_ts, 'HH24:MI:SS.US')                   as "Order Creation Time",
+               to_char(price, 'FM99999990D0099')                       as "Order Price",
+               to_char(process_time, 'DD.MM.YYYY')                      as "Order Creation Date",
+               to_char(process_time, 'HH24:MI:SS.US')                   as "Order Creation Time",
                open_close                                                    as "Open/Close",
                trading_session::varchar                                      as "Trading Session",
                is_held                                                       as "Is Held",
-               is_cross                                                      as "Is Cross",
+                case
+               when x.cross_order_id is not null then 'Y'
+               else 'N' end                                                      as "Is Cross",
                fee_sensitivity                                               as "Fee Sensitivity",
                to_char(stop_price, 'FM99999990D0099')                        as "Stop Price",
                max_floor                                                     as "Max Floor",
@@ -509,16 +544,6 @@ select parent_order_id                          as "OrderID",
                is_affiliate                                                  as "Affiliated Flag",
                solicitation                                                  as "Solicitation Flag"
 from
-
-    left join lateral
-          (
-          select ls.order_id, ls.order_status, ls.filled_qty, ls.last_mkt
-          from t_sdn_tmp_SOR_fix_message_event_20260106_exam_ord_status ls
-          where ls.order_id = t.order_id
-          limit 1
-          ) ls on true
-
-
     (select tr.order_type_value, tb.*, tr.rn
                from t_base tb
                         join t_route tr on tr.trans_type = tb.trans_type
@@ -531,4 +556,12 @@ from
                where tb.parent_order_id is null
 --                  and tb.cat_report_on_behalf_of = 'N'
                ) x
+
+    left join lateral
+          (
+          select ls.order_id, ls.order_status, ls.filled_qty, ls.last_mkt, ls.order_status_description
+          from t_ord_status ls
+          where ls.order_id = x.order_id
+          limit 1
+          ) ls on true
 order by order_id, rn
