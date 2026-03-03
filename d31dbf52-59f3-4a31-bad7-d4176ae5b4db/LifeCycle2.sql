@@ -488,12 +488,10 @@ select x.order_id                                                           as "
        case
            when x.multileg_reporting_type <> '1' then 'Y'
            else 'N'
-           end, -- as "Multi Leg Indicator",
+           end                                                              as "Multi Leg Indicator",
        no_legs                                                              as "Number of legs",
        multileg_order_id                                                    as "Leg Order ID",
-       case
-           when x.rn = 1 then 'true'
-           else 'false' end                                                 as "Manual Flag",
+       'false'                                                              as "Manual Flag",
        x.tag_58                                                             as "Free Text",
        -- Order Detail
        order_status_description                                             as "Order Status",
@@ -548,7 +546,7 @@ select x.order_id                                                           as "
        account_id                                                           as "Account ID",
        account_holder_type                                                  as "Account Holder Type",
        cat_fdid                                                             as "Account FDID",
-       ac_imid::text                                                        as "Account IMID",
+       ac_imid                                                              as "Account IMID",
        ac_number                                                            as "Account CRD",
        sender_sub_id                                                        as "Sender Type",
 
@@ -603,4 +601,4 @@ from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
 
 
 select * from t_result
-order by order_id, rn
+order by order_id, rn`
