@@ -179,31 +179,16 @@ where true
 -- parent cancels
 drop table if exists t_parent_cancels;
 create temp table t_parent_cancels as
-select cl.fix_connection_id,
-       cl.sub_strategy_desc,
-       cl.co_client_leg_ref_id,
-       cl.instrument_id,
-       cl.order_qty,
-       cl.client_order_id,
-       cl.process_time,
-       cl.create_time,
-       cl.side,
-       cl.ex_destination,
-       cl.create_date_id,
-       cl.multileg_reporting_type,
-       cl.trans_type,
+select cl.*,
        ex.exec_date_id,
        ex.exec_time,
        ex.cum_qty,
-       ex.order_id,
-       ex.account_id,
-       di.symbol
+       to_timestamp(left(nxt.nxt_tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+       'UTC' as cancel_request_time
 from t_base cl
          inner join lateral (select ex.exec_date_id,
                                     ex.exec_time as exec_time,
-                                    ex.cum_qty,
-                                    ex.order_id,
-                                    ex.account_id
+                                    ex.cum_qty
                              from execution ex
                              where ex.order_id = cl.order_id
                                and ex.exec_date_id between :l_date_begin_id and :l_date_end_id
@@ -212,22 +197,18 @@ from t_base cl
                                        when ex.exec_type = '4' then true
                                        when ex.order_status = '4' then true
                                        else false end) ex on true
-         left join dwh.d_instrument di on cl.instrument_id = di.instrument_id
+         left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
+                            from dwh.client_order nxt
+                                     join fix_capture.fix_message_json fmj
+                                          on fmj.fix_message_id = nxt.fix_message_id and
+                                             fmj.date_id = nxt.create_date_id
+                            where nxt.create_date_id >= cl.create_date_id
+                              and nxt.orig_order_id = cl.order_id
+                              and nxt.create_date_id >= :l_date_begin_id
+                              and nxt.create_date_id <= :l_date_end_id
+                            limit 1) nxt on true
 where true
-  and case
-          when cl.time_in_force_id in ('1', '6') then cl.create_date_id > :l_gtc_date_id
-          else cl.create_date_id between :l_date_begin_id and :l_date_end_id end
   and cl.parent_order_id is null
-  and cl.trans_type in ('D', 'G')
-  and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
-  and coalesce(cl.time_in_force_id, '0') <> '3'
-  and case
-          when coalesce(:in_account_ids, '{}') = '{}' then true
-          else cl.account_id = any (:in_account_ids) end
-  and case
-          when coalesce(:in_client_order_ids, '{}') = '{}' then true
-          else cl.client_order_id = any (:in_client_order_ids) end
-  and case when :in_instrument_type is null then true else di.instrument_type_id = :in_instrument_type end
 ;
 select * from t_parent_cancels;
 
@@ -729,20 +710,17 @@ from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
     limit 1
     ) ls on true;
 
-
+insert into t_result
 -- Parent cancels
 select x.order_id                                                                         as "OrderID",
        trading_firm_name                                                                  as "Trading Firm Name",
        tf_cat_imid                                                                        as "Trading Firm IMID",
        tf_cat_crd                                                                         as "Trading Firm CRD",
-       order_type_value                                                                   as "Event Type",
-
-       to_char(x.process_time, 'MM/DD/YYYY')                                              as "Event Date",
-       to_char(x.process_time, 'HH24:MI:SS:US')                                           as "Event Time",
+       'Cancelled'                                                                        as "Event Type",
+       to_char(x.create_time, 'MM/DD/YYYY')                                               as "Event Date",
+       to_char(x.create_time, 'HH24:MI:SS:MS')                                            as "Event Time",
        x.client_order_id                                                                  as "Client clOrderID",
-       case
-           when x.trans_type = 'G' and rn = 1 then null
-           else x.client_order_id end                                                     as "Street clOrderID",
+       x.client_order_id                                                                  as "Street clOrderID",
        x.order_qty                                                                        as "Event Qty",
        case when order_type_id in ('2', '4') then to_char(x.price, 'FM99999990D0099') end as "Event Price",
        to_char(x.orig_price, 'FM99999990D0099')                                           as "Net Price",
@@ -756,7 +734,7 @@ select x.order_id                                                               
        x.tag_58                                                                           as "Free Text",
        -- Order Detail
        order_status_description                                                           as "Order Status",
-       orig_client_order_id                                                               as "Original Client clOrderID",
+       null                                                                               as "Original Client clOrderID",
        null                                                                               as "Original Street clOrderID",
        opra_symbol                                                                        as "OSI Symbol",
        root_symbol                                                                        as "Base symbol",
@@ -813,20 +791,17 @@ select x.order_id                                                               
        trade_liquidity_indicator                                                          as "Liquidity Indicator",
        exec_id                                                                            as "ExecutionID",
        ac_imid                                                                            as "CAT Reporting Firm IMID",
-       to_char(order_request_time, 'DD.MM.YYYY')                                          as "Request Date",
-       to_char(order_request_time, 'HH24:MI:SS.US')                                       as "Request Time",
+       to_char(cancel_request_time, 'DD.MM.YYYY')                                         as "Request Date",
+       to_char(cancel_request_time, 'HH24:MI:SS.US')                                      as "Request Time",
        to_char(strike_price, 'FM99999990D0099')                                           as "Strike Price",
-       case
-           when order_type_value = 'New Order' then order_qty
-           end
-                                                                                          as "Remaining Qty",
+       null                                                                               as "Remaining Qty",
        is_affiliate                                                                       as "Affiliated Flag",
        is_solicitation                                                                    as "Solicitation Flag",
-       'parent modify',
+       'parent cancel',
        x.order_id,
-       x.rn,
-       x.kind_of_type
-from  t_parent_cancels x
+       4,
+       'natural'
+from t_parent_cancels x
 
          left join lateral
     (
@@ -841,6 +816,123 @@ from  t_parent_cancels x
     where ls.order_id = x.order_id
     limit 1
     ) ls on true;
+
+
+insert into t_result
+-- Street 'D'
+select tb.parent_order_id                                                     as "OrderID",
+       tb.trading_firm_name                                                   as "Trading Firm Name",
+       tb.tf_cat_imid                                                         as "Trading Firm IMID",
+       tb.tf_cat_crd                                                          as "Trading Firm CRD",
+       'Order Route'                                                          as "Event Type",
+
+       to_char(tb.process_time, 'MM/DD/YYYY')                                 as "Event Date",
+       to_char(tb.process_time, 'HH24:MI:SS:US')                              as "Event Time",
+       tb.client_order_id                                                     as "Client clOrderID",
+       case
+           when tb.trans_type = 'G' and rn = 1 then null
+           else tb.client_order_id end                                        as "Street clOrderID",
+       tb.order_qty                                                           as "Event Qty",
+       to_char(tb.price, 'FM99999990D0099')                                   as "Event Price",
+       to_char(tb.orig_price, 'FM99999990D0099')                              as "Net Price",
+       case
+           when tb.multileg_reporting_type <> '1' then 'Y'
+           else 'N'
+           end                                                                as "Multi Leg Indicator",
+       tb.no_legs                                                             as "Number of legs",
+       tb.multileg_order_id                                                   as "Leg Order ID",
+       'false'                                                                as "Manual Flag",
+       tb.tag_58                                                              as "Free Text",
+       -- Order Detail
+       ls.order_status_description                                            as "Order Status",
+       null::text                                                             as "Original Client clOrderID",
+       null::text                                                             as "Original Street clOrderID",
+       tb.opra_symbol                                                         as "OSI Symbol",
+       tb.root_symbol                                                         as "Base symbol",
+       tb.symbol                                                              as "Symbol",
+       case tb.instrument_type_id
+           when 'O' then 'Option'
+           when 'E' then 'Equity'
+           else coalesce(tb.instrument_type_id, '') end                       as "Security Type",
+
+       underlying_symbol                                                      as "Underlying Symbol",
+       pcv                                                                    as "P/C/S",
+       to_char(last_trade_date, 'MM/DD/YYYY')                                 as "Expiration Date",
+       to_char(last_trade_date, 'HH24:MI:SS.MS')                              as "Expiration Time",
+       case
+           when side = '1' then 'Buy'
+           when side = '2' then 'Sell'
+           when side in ('5', '6') then 'Sell Short'
+           end                                                                as "Side",
+       tif                                                                    as "TIF",
+       to_char(coalesce(tb.last_trade_date, tb.expire_time), 'MM/DD/YYYY')    as "Good Till Date",
+       to_char(coalesce(tb.last_trade_date, tb.expire_time), 'HH24:MI:SS.MS') as "Good Till Time",
+       order_qty                                                              as "Order Qty",
+       ls.filled_qty                                                          as "Filled Qty",
+       order_type_name                                                        as "Order Type Code",
+       to_char(price, 'FM99999990D0099')                                      as "Order Price",
+       to_char(process_time, 'DD.MM.YYYY')                                    as "Order Creation Date",
+       to_char(process_time, 'HH24:MI:SS.US')                                 as "Order Creation Time",
+       open_close                                                             as "Open/Close",
+       trading_session::varchar                                               as "Trading Session",
+       is_held                                                                as "Is Held",
+       case
+           when tb.cross_order_id is not null then 'Y'
+           else 'N' end                                                       as "Is Cross",
+       fee_sensitivity                                                        as "Fee Sensitivity",
+       to_char(stop_price, 'FM99999990D0099')                                 as "Stop Price",
+       max_floor                                                              as "Max Floor",
+       customer_or_firm_name                                                  as "Capacity",
+       ex_destination                                                         as "ExDestination",
+       ratio_qty                                                              as "Leg ratio",
+       coalesce(tb.tag_50, tb.tag_109, tb.account_name)                       as "User",
+
+-- Account Details
+       account_name                                                           as "Account Name",
+       account_id                                                             as "Account ID",
+       account_holder_type                                                    as "Account Holder Type",
+       cat_fdid                                                               as "Account FDID",
+       ac_imid                                                                as "Account IMID",
+       ac_number                                                              as "Account CRD",
+       sender_sub_id                                                          as "Sender Type",
+
+       -- Execution Details
+       last_mkt                                                               as "Last Mkt",
+       null                                                                   as "MIC Code",
+       trade_liquidity_indicator                                              as "Liquidity Indicator",
+       exec_id                                                                as "ExecutionID",
+       ac_imid                                                                as "CAT Reporting Firm IMID",
+       null::text                                                             as "Request Date",
+       null::text                                                             as "Request Time",
+       to_char(strike_price, 'FM99999990D0099')                               as "Strike Price",
+       case
+           when order_type_value = 'New Order' then order_qty
+           end
+                                                                              as "Remaining Qty",
+       is_affiliate                                                           as "Affiliated Flag",
+       is_solicitation                                                        as "Solicitation Flag",
+       'parent',
+       tb.order_id,
+       5,
+       'natural'
+from t_base tb
+         left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
+         left join lateral
+    (
+    select ls.order_id,
+           ls.order_status,
+           ls.filled_qty,
+           ls.last_mkt,
+           ls.order_status_description,
+           ls.trade_liquidity_indicator,
+           ls.exec_id
+    from t_ord_status ls
+    where ls.order_id = tb.order_id
+    limit 1
+    ) ls on true
+where tb.parent_order_id is not null
+  and tb.trans_type = 'D'
+;
 
 
 select *
