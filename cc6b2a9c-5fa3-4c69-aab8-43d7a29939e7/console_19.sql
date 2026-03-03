@@ -388,3 +388,22 @@ EXCEPTION
     WHEN OTHERS THEN
         RAISE;
 END;
+
+
+INSERT INTO LIQUIDITY_INDICATOR (EXCHANGE_ID, TRADE_LIQUIDITY_INDICATOR, DESCRIPTION, LIQUIDITY_INDICATOR_TYPE_ID,
+                                 IS_GREY)
+VALUES ('24EQ', '162', 'RetailAddDisplayedPriceImprovement', 1, 'N');
+
+update LIQUIDITY_INDICATOR
+set DESCRIPTION                 = 'RetailRemovedOnEntry',
+    liquidity_indicator_type_id = 2,
+    is_grey                     = 'N'
+where exchange_id = '24EQ'
+  and trade_liquidity_indicator = '160';
+
+update LIQUIDITY_INDICATOR
+set DESCRIPTION                 = 'RetailImmediateMidpointRemoveOnEntry',
+    liquidity_indicator_type_id = 2,
+    is_grey                     = 'N'
+where exchange_id = '24EQ'
+  and trade_liquidity_indicator = '161';
