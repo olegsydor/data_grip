@@ -76,7 +76,7 @@ where cl.create_date_id = 20260106
   and cl.multileg_reporting_type in ('1', '2')
   and cl.trans_type <> 'F'
   and cl.client_order_id = any
-      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}');--,"STS58450000430"}');
+      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
 
 
 drop table if exists t_sdn_tmp_SOR_fix_message_event_20260106_exam_parent_cancells;
@@ -129,7 +129,7 @@ where ec.exec_date_id = 20260106
   and cl.ex_destination not in ('RPTR', 'SQHT', 'WEEDN', 'JSEB', 'TRAFX', 'FBMS', 'CTDH', 'DASH', 'OUTCR', 'SLXX')
 --   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
  and cl.client_order_id = any
-      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
+      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
 group by ec.exec_date_id,
          ec.order_id,
          ec.account_id,
@@ -299,7 +299,7 @@ where cl.create_date_id = 20260106                                --in_date_id
   --and cl.order_id not in (select order_id from compliance.aggregated_street_cross)
 --   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
   and po.client_order_id = any
-      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
+      ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1","STS58450000430"}');
 ;
 select * from t_sdn_tmp_SOR_fix_message_event_20260106_exam_street_ord;
 
@@ -388,7 +388,7 @@ with ord_par_new as
            , t.ml_no_legs                                                                              as number_of_legs
            , t.co_client_leg_ref_id                                                                    as leg_order_id
            , t.ratio_qty::varchar                                                                      as leg_ratio
-           , dos.order_status_description                                                              as order_status          --  ???????????? status
+--            , ls.order_status_description                                                              as order_status          --  ???????????? status
            , t.opra_symbol                                                                             as osi_symbol
            , t.symbol                                                                                  as base_symbol
            , t.symbol || coalesce(' ' || t.symbol_suffix, '')                                          as symbol
