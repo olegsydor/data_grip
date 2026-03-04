@@ -28,21 +28,22 @@ where true
 -- parent orders
 drop table if exists t_base;
 create temp table t_base as
-select cl.*,
+select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
+       cl.*,
        di.symbol,
        di.symbol_suffix,
        di.instrument_type_id,
        di.last_trade_date,
        ac.cat_report_on_behalf_of,
        tf.trading_firm_name,
-       tf.cat_imid                                                as tf_cat_imid,
-       tf.cat_crd                                                 as tf_cat_crd,
-       orig.client_order_id                                       as orig_client_order_id,
-       orig.price                                                 as orig_price,
+       tf.cat_imid                                                 as tf_cat_imid,
+       tf.cat_crd                                                  as tf_cat_crd,
+       orig.client_order_id                                        as orig_client_order_id,
+       orig.price                                                  as orig_price,
        oc.opra_symbol,
        oc.strike_price,
        os.root_symbol,
-       ui.symbol                                                  as underlying_symbol,
+       ui.symbol                                                   as underlying_symbol,
        fmj.tag_58,
        fmj.tag_50,
        fmj.tag_109,
@@ -50,15 +51,15 @@ select cl.*,
            when di.instrument_type_id = 'E' then 'Stock'
            when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
            when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
-           end                                                    as pcv,
-       dtif.tif_short_name                                        as tif,
+           end                                                     as pcv,
+       dtif.tif_short_name                                         as tif,
        dot.order_type_name,
        case
            when tag_9281 in ('A', 'D', 'G') then 'ALL'
            when tag_22017 = 'A' then 'ALL'
            when tag_9281 in ('F', 'C') then 'REGPOST'
            when tag_22017 = 'B' then 'REGPOST'
-           else 'REG' end                                         as trading_session,
+           else 'REG' end                                          as trading_session,
        cof.customer_or_firm_name,
        ac.account_name,
        ac.account_holder_type,
@@ -68,14 +69,16 @@ select cl.*,
        ac.is_affiliate,
        case
            when ac.cat_fdid like coalesce(ac.crd_number, '') || ':' || coalesce(tf.cat_imid, '')
-               then tf.cat_imid end                               as ac_imid,
+               then tf.cat_imid end                                as ac_imid,
        case
            when ac.cat_fdid like coalesce(ac.crd_number, '') || ':' || coalesce(tf.cat_imid, '')
-               then ac.crd_number end                             as ac_number,
+               then ac.crd_number end                              as ac_number,
        fc.sender_sub_id,
        to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                      as order_request_time,
-       case when cl.ex_destination = 'DASH' then 'Y' else 'N' end as is_solicitation
+       'UTC'                                                       as order_request_time,
+       case when cl.ex_destination = 'DASH' then 'Y' else 'N' end  as is_solicitation,
+       to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+       'UTC'                                                       as tag_5050
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
          join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -92,18 +95,17 @@ from dwh.client_order cl
          left join dwh.d_fix_connection fc
                    on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
          left join dwh.d_time_in_force dtif on dtif.tif_id = cl.time_in_force_id
-         left join lateral (select
-                                -- fmj.fix_message ->> '5050'  as tag_5050,
-                                fmj.fix_message ->> '50'    as tag_50,
-                                fmj.fix_message ->> '109'   as tag_109,
-                                -- fmj.fix_message ->> '9000'  as tag_9000,
-                                fmj.fix_message ->> '58'    as tag_58,
-                                -- fmj.fix_message ->> '17'    as tag_17,
-                                -- fmj.fix_message ->> '52'    as tag_52,
-                                -- fmj.fix_message ->> '9291'  as tag_9291,
-                                fmj.fix_message ->> '9281'  as tag_9281,
-                                fmj.fix_message ->> '22017' as tag_22017,
-                                fmj.fix_message ->> '60'    as tag_60
+         left join lateral (select fmj.fix_message ->> '5050'  as tag_5050,
+                                   fmj.fix_message ->> '50'    as tag_50,
+                                   fmj.fix_message ->> '109'   as tag_109,
+                                   -- fmj.fix_message ->> '9000'  as tag_9000,
+                                   fmj.fix_message ->> '58'    as tag_58,
+                                   -- fmj.fix_message ->> '17'    as tag_17,
+                                   -- fmj.fix_message ->> '52'    as tag_52,
+                                   -- fmj.fix_message ->> '9291'  as tag_9291,
+                                   fmj.fix_message ->> '9281'  as tag_9281,
+                                   fmj.fix_message ->> '22017' as tag_22017,
+                                   fmj.fix_message ->> '60'    as tag_60
                             from fix_capture.fix_message_json fmj
                             where cl.fix_message_id = fmj.fix_message_id
                               and fmj.date_id >= cl.create_date_id
@@ -130,7 +132,8 @@ analyze t_base;
 
 -- street orders
 insert into t_base
-select cl.*,
+select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
+       cl.*,
        di.symbol,
        di.symbol_suffix,
        di.instrument_type_id,
@@ -163,7 +166,8 @@ select cl.*,
        par.ac_number,
        par.sender_sub_id,
        par.order_request_time,
-       par.is_solicitation
+       par.is_solicitation,
+       par.tag_5050
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
          left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -333,116 +337,131 @@ from t_base cl
 
 drop table if exists t_trade;
 create temp table if not exists t_trade as
-select case
-           when tf.trading_firm_id = 'ctctrad01' then
-               replace(tr.client_order_id, '|', '-') || '_' || tr.fix_comp_id
-           when tr.sub_strategy = 'VEGA'
-               then replace(tr.client_order_id, '|', '-') || '_' || coalesce(tr.leg_ref_id, '0')
-           else replace(tr.client_order_id, '|', '-')
-    end                                                                 as orderID
-     , 'Trade'                                                          as event_type
-     , to_char(tr.trade_record_time, 'YYYYMMDD')                        as event_date
-     , to_char(tr.trade_record_time, 'HH24:MI:SS.US')                   as event_time
-     , null::varchar                                                    as orig_cl_ord_id
-     , tr.last_qty                                                      as event_qty
-     , tr.last_px                                                       as event_price
-     , case when cl.multileg_reporting_type = '2' then 'Y' else 'N' end as multi_leg_indicator
-     , ml.no_legs                                                       as number_of_legs
-     , cl.co_client_leg_ref_id                                          as leg_order_id
-     , cl.ratio_qty::varchar                                            as leg_ratio
-     , null                                                             as order_status  --  ???????????? status
-     , oc.opra_symbol                                                   as osi_symbol
-     , i.symbol                                                         as base_symbol
-     , i.symbol || coalesce(' ' || i.symbol_suffix, '')                 as symbol
-     , i.instrument_type_id                                             as security_type -- missed in EOS
-     , ui.symbol                                                        as underlying_symbol
-     , case oc.put_call
-           when '0' then 'P'
-           when '1' then 'C'
-           else 'S'
-    end                                                                 as put_call_stock
-     , to_char(i.last_trade_date, 'YYYYMMDD')                           as expiration_date
-     , case
-           when cl.side in ('1', '3') then 'B'
-           when i.instrument_type_id = 'O' and cl.side not in ('1', '3') then 'S'
-           when cl.side = '2' then 'SL'
-           when cl.side = '5' then 'SS'
-           when cl.side = '6' then 'SX'
-           else 'B'
-    end                                                                 as side
-     , tr.secondary_order_id                                            as cl_ord_id
-     , to_char(cl.create_time, 'YYYYMMDD')::varchar                     as order_creation_date
-     , to_char(cl.create_time, 'HH24:MI:SS.MS')::varchar                as order_creation_time
-     , to_char(tr.trade_record_time, 'HH24:MI:SS.US')                   as executed_timestamp
-     , tr.secondary_exch_exec_id                                        as exec_id       --coalesce(, tr.exch_exec_id)
-     , 'N/A'::varchar                                                   as tape_trade_id
-     , tr.last_mkt
-     , dex.mic_code                                                     as mic_code
-     --, coalesce( (compliance.get_sor_first_orig(in_order_id => tr.order_id, in_date_id => to_char(tr.order_process_time, 'YYYYMMDD')::integer)).out_cl_ord_id, tr.client_order_id ) as out_cl_ord_id
-     , case
-           when cl.trans_type = 'G' then coalesce((compliance.get_sor_first_orig(in_order_id => cl.order_id,
-                                                                                 in_date_id => cl.create_date_id)).out_cl_ord_id,
-                                                  cl.client_order_id)
-           else cl.client_order_id end                                  as out_cl_ord_id
-from dwh.flat_trade_record tr
-         join t_base on t_base.order_id = tr.order_id
-         left join d_account ac on ac.account_id = tr.account_id
-         inner join d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-         inner join d_instrument i on tr.instrument_id = i.instrument_id
-         left join lateral
-    (select oc.option_series_id, oc.opra_symbol, oc.put_call
-     from d_option_contract oc
-     where oc.instrument_id = tr.instrument_id
-     limit 1) oc on true
-         left join d_option_series os on os.option_series_id = oc.option_series_id
-         left join dwh.d_instrument ui on os.underlying_instrument_id = ui.instrument_id
-         inner join lateral
-    (
-    select cl.multileg_reporting_type,
-           co_client_leg_ref_id,
-           fix_connection_id,
-           order_id,
-           multileg_order_id,
-           trans_type,
-           client_order_id,
-           side,
-           ratio_qty,
-           create_time,
-           create_date_id
-    from dwh.client_order cl
-    where cl.order_id = tr.order_id
-      and cl.create_date_id between to_char(tr.order_process_time, 'YYYYMMDD')::integer and :l_date_end_id
-    limit 1
-    ) cl on true
-         inner join d_fix_connection fc on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
-         left join lateral
-    (select str.parent_order_id,
-            count(*) filter (where str.exchange_id = 'C1PAR')      cpar_cnt,
-            count(*) filter (where str.cross_order_id is not null) cross_cnt
-     from client_order str
-     where str.trans_type <> 'F'
-       and str.parent_order_id is not null
-       and str.create_date_id between :l_date_begin_id and :l_date_end_id
-       and str.parent_order_id = cl.order_id
-     group by str.parent_order_id
-     limit 1
-    ) so on true
-         left join lateral
-    (
-    select ml.order_id
-         , ml.client_order_id
-         , ml.fix_message_id
-         , ml.no_legs
-    from client_order ml
-    where cl.multileg_reporting_type = '2'
-      and ml.order_id = cl.multileg_order_id
-      and ml.multileg_reporting_type = '3'
-      and ml.create_date_id between :l_date_begin_id and :l_date_end_id
-    limit 1
-    ) ml on true
-         left join d_exchange dex on tr.exchange_id = dex.exchange_id and dex.is_active = true
-where tr.date_id between :l_date_begin_id and :l_date_end_id
-  and tr.is_busted = 'N';
+select b.first_order_id,
+       b.order_id                                                                              as parent_order_id,
+       -----
+       b.orig_client_order_id,
+       3                                                                                       as rn,
+--                             b.leg_cl_ord_id, b.client_order_id,
+       b.client_order_id                                                                       as client_order_id,
+--                     ex.secondary_exch_exec_id                                      as exec_id,
+       tag_17                                                                                  as exec_id,
+       b.trading_firm_name                                                                     as trading_firm_name,
+--                     b.cat_imid,
+       b.tf_cat_imid                                                                           as tf_cat_imid,
+--                     b.cat_crd,
+       b.tf_cat_crd                                                                            as tf_cat_crd,
+       case
+           when ex.exec_type in ('A', '0', '5') then 'Order Ack'
+           when ex.exec_type = '4' then 'Cancelled'
+           else et.exec_type_description end                                                   as event_type,
+       case
+           when ex.exec_type in ('A', '0', '5', 's') then
+               b.tag_5050
+           when ex.exec_type = '4' then
+               ex.exec_time::timestamp
+           else
+               to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'
+           end                                                                                 as event_ts,
+       b.client_order_id::text                                                                 as street_client_order_id,
+       b.order_qty                                                                             as event_qty,
+       b.price                                                                                 as event_price,
+--        null::numeric                                                                           as net_price,
+       b.orig_price                                                                            as net_price,
+       b.multileg_reporting_type                                                               as multileg_indicator,
+       b.no_legs::int4,
+       b.co_client_leg_ref_id                                                                  as multileg_order_id,
+       case
+           when ex.exec_type in ('A', 'F', '5', 'W', '4') then 'false'
+           else '' end                                                                         as manual_flag,
+       case when ex.exec_type not in ('A', '0', '5') then ex.exec_text end                     as exec_text,
+       os.order_status_description,
+       b.opra_symbol,
+       b.root_symbol,
+       b.symbol,
+       b.instrument_type_id,
+       case
+           when b.instrument_type_id = 'M' then (select underlying_symbol
+                                                 from t_base
+                                                 where t_base.multileg_order_id = b.order_id
+                                                 limit 1)
+           else b.underlying_symbol end                                                        as underlying_symbol,
+       b.pcv,
+       coalesce(b.last_trade_date, ex.exec_time)                                               as expiration_ts,
+       b.side,
+       b.tif,
+       b.expire_time                                                                           as good_till_ts,
+       ex.cum_qty                                                                              as cum_qty,
+--        fmj.tag_14                                                                              as cum_qty,
+       b.order_type_name,
+       ex.exec_time                                                                            as order_creation_ts,
+--        to_timestamp(fmj.tag_5050, 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone 'UTC'      as order_creation_ts,
+       b.open_close,
+--           compliance.get_sor_trading_session(b.order_id, b.instrument_type_id, b.create_date_id)    as trading_session,
+       case
+           when fmj.tag_9281 in ('A', 'D', 'G') or fmj.tag_22017 = 'A' then 'ALL'
+           when fmj.tag_9281 in ('F', 'C') or fmj.tag_22017 = 'B' then 'REGPOST'
+           else 'REG' end                                                                      as trading_session,
+       b.is_held                                                                               as is_held,
+       case
+           when b.cross_order_id is not null then 'Y'
+           else 'N' end                                                                        as is_cross,
+       b.fee_sensitivity,
+       b.stop_price,
+       b.max_floor,
+       b.customer_or_firm_name,
+--        b.par_tag_9000                                                                          as ex_destination,
+       b.ex_destination                                                                        as ex_destination,
+       b.ratio_qty,
+       coalesce(fmj.tag_50, fmj.tag_109, b.account_name)                                       as user_,
+       b.account_name                                                                          as account_name,
+--        null                                                                                    as account_name,
+       b.account_id                                                                            as account_id,
+--        null::int                                                                               as account_id,
+       b.account_holder_type,
+       b.cat_fdid,
+       b.ac_imid,
+       b.ac_number,
+--         ac.broker_dealer_mpid,
+       b.sender_sub_id,
+
+       -- Execution Details
+       ex.last_mkt,
+       exc.mic_code,
+       ex.trade_liquidity_indicator,
+       case when ex.exec_type = 'F' then ex.exec_time end                                      as trade_exec_time,
+       ex.exec_type,
+       case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then tf.cat_imid end   as cat_imid,
+       case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
+       order_request_time,
+--            cancel_request_time,
+       strike_price,
+       b.order_qty - coalesce(ex.cum_qty, 0)                                                   as remaining_qty,
+       b.is_affiliate,
+       null                                                                                    as solicitation
+from t_base b
+         left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
+         left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
+         left join dwh.execution ex
+                   on ex.order_id = b.order_id and ex.exec_date_id >= b.create_date_id
+                       and ex.exec_type not in ('a', 'A', 'S', '0')
+         left join lateral (select fmj.fix_message ->> '10061'          as tag_10061,
+                                   coalesce(fmj.fix_message ->> '5050',
+                                            fmj.fix_message ->> '5051') as tag_5050,
+
+                                   fmj.fix_message ->> '50'             as tag_50,
+                                   fmj.fix_message ->> '109'            as tag_109,
+                                   fmj.fix_message ->> '17'             as tag_17,
+
+                                   fmj.fix_message ->> '9281'           as tag_9281,
+                                   fmj.fix_message ->> '22017'          as tag_22017
+                            from fix_capture.fix_message_json fmj
+                            where fmj.fix_message_id = ex.fix_message_id
+                              and fmj.date_id >= ex.exec_date_id
+                            limit 1) fmj on true
+         left join dwh.d_order_status os on ex.order_status = os.order_status
+         join dwh.d_exec_type et on et.exec_type = ex.exec_type
+         left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
 
 
 select * from t_base;
