@@ -78,7 +78,8 @@ select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_orde
        'UTC'                                                       as order_request_time,
        case when cl.ex_destination = 'DASH' then 'Y' else 'N' end  as is_solicitation,
        to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                       as tag_5050
+       'UTC'                                                       as tag_5050,
+       tag_17
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
          join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -100,7 +101,7 @@ from dwh.client_order cl
                                    fmj.fix_message ->> '109'   as tag_109,
                                    -- fmj.fix_message ->> '9000'  as tag_9000,
                                    fmj.fix_message ->> '58'    as tag_58,
-                                   -- fmj.fix_message ->> '17'    as tag_17,
+                                   fmj.fix_message ->> '17'    as tag_17,
                                    -- fmj.fix_message ->> '52'    as tag_52,
                                    -- fmj.fix_message ->> '9291'  as tag_9291,
                                    fmj.fix_message ->> '9281'  as tag_9281,
@@ -135,19 +136,19 @@ select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_orde
        di.symbol_suffix,
        di.instrument_type_id,
        di.last_trade_date,
-       null            as cat_report_on_behalf_of,
+       null                                                        as cat_report_on_behalf_of,
        par.trading_firm_name,
-       par.tf_cat_imid as tf_cat_imid,
-       par.tf_cat_crd  as tf_cat_crd,
+       par.tf_cat_imid                                             as tf_cat_imid,
+       par.tf_cat_crd                                              as tf_cat_crd,
        par.orig_client_order_id,
        par.orig_price,
        par.opra_symbol,
        par.strike_price,
        par.root_symbol,
        par.underlying_symbol,
-       par.tag_58,
-       par.tag_50,
-       par.tag_109,
+       fmj.tag_58,
+       fmj.tag_50,
+       fmj.tag_109,
        par.pcv,
        par.tif,
        par.order_type_name,
@@ -162,12 +163,30 @@ select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_orde
        par.ac_imid,
        par.ac_number,
        par.sender_sub_id,
-       par.order_request_time,
+       to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+       'UTC'                                                       as order_request_time,
        par.is_solicitation,
-       par.tag_5050
+       to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+       'UTC'                                                       as tag_5050,
+       fmj.tag_17
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
          left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+         left join lateral (select fmj.fix_message ->> '5050'  as tag_5050,
+                                   fmj.fix_message ->> '50'    as tag_50,
+                                   fmj.fix_message ->> '109'   as tag_109,
+                                   -- fmj.fix_message ->> '9000'  as tag_9000,
+                                   fmj.fix_message ->> '58'    as tag_58,
+                                   fmj.fix_message ->> '17'    as tag_17,
+                                   -- fmj.fix_message ->> '52'    as tag_52,
+                                   -- fmj.fix_message ->> '9291'  as tag_9291,
+                                   fmj.fix_message ->> '9281'  as tag_9281,
+                                   fmj.fix_message ->> '22017' as tag_22017,
+                                   fmj.fix_message ->> '60'    as tag_60
+                            from fix_capture.fix_message_json fmj
+                            where cl.fix_message_id = fmj.fix_message_id
+                              and fmj.date_id >= cl.create_date_id
+                            limit 1) fmj on true
 where true
   and cl.create_date_id between :l_date_begin_id and :l_date_end_id
   and case
@@ -181,16 +200,18 @@ where true
 drop table if exists t_exs;
 create temp table t_exs as
 select b.first_order_id,
-       b.order_id                                                                              as parent_order_id,
+       b.order_id,
        -----
        b.orig_client_order_id,
        3                                                                                       as rn,
-       b.leg_cl_ord_id,
+       b.co_client_leg_ref_id,
        b.client_order_id                                                                       as client_order_id,
-       tag_17                                                                                  as exec_id,
+       fmj.tag_17                                                                              as exec_id,
        b.trading_firm_name                                                                     as trading_firm_name,
        b.tf_cat_imid                                                                           as tf_cat_imid,
        b.tf_cat_crd                                                                            as tf_cat_crd,
+--        ex.exec_type,
+--        et.exec_type_description,
        case
            when ex.exec_type in ('A', '0', '5') then 'Order Ack'
            when ex.exec_type = '4' then 'Cancelled'
@@ -208,8 +229,7 @@ select b.first_order_id,
        b.price                                                                                 as event_price,
        b.orig_price                                                                            as net_price,
        b.multileg_reporting_type                                                               as multileg_indicator,
-       b.no_legs::int4,
-       b.co_client_leg_ref_id                                                                  as multileg_order_id,
+       b.no_legs,
        case
            when ex.exec_type in ('A', 'F', '5', 'W', '4') then 'false'
            else '' end                                                                         as manual_flag,
@@ -267,7 +287,8 @@ select b.first_order_id,
        case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then tf.cat_imid end   as cat_imid,
        case when ac.cat_fdid like ac.crd_number || '%:%' || tf.cat_imid then ac.crd_number end as crd_number,
        order_request_time,
-       nxt_tag_60                                                                              as cancel_request_time,
+       to_timestamp(left(nxt.nxt_tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+       'UTC'                                                                                   as cancel_request_time,
        strike_price,
        b.order_qty - coalesce(ex.cum_qty, 0)                                                   as remaining_qty,
        b.is_affiliate,
@@ -275,7 +296,7 @@ select b.first_order_id,
 from t_base b
          join dwh.execution ex
               on ex.order_id = b.order_id and ex.exec_date_id >= b.create_date_id
-                  and ex.exec_type not in ('a', 'A', 'S', '0')
+--                   and ex.exec_type not in ('a', 'A', 'S', '0')
          left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
          left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
 
@@ -315,12 +336,14 @@ select * from t_base;
 drop table if exists t_result;
 create temp table if not exists t_result as
     -- Orders
-select x.order_id                                                           as "OrderID",
+select x.first_order_id,
+       x.order_id                                                           as "OrderID",
+       x.orig_client_order_id,
+       x.rn,
        trading_firm_name                                                    as "Trading Firm Name",
        tf_cat_imid                                                          as "Trading Firm IMID",
        tf_cat_crd                                                           as "Trading Firm CRD",
        order_type_value                                                     as "Event Type",
-
        to_char(x.process_time, 'MM/DD/YYYY')                                as "Event Date",
        to_char(x.process_time, 'HH24:MI:SS:US')                             as "Event Time",
        x.client_order_id                                                    as "Client clOrderID",
@@ -335,7 +358,7 @@ select x.order_id                                                           as "
            else 'N'
            end                                                              as "Multi Leg Indicator",
        no_legs                                                              as "Number of legs",
-       multileg_order_id                                                    as "Leg Order ID",
+       co_client_leg_ref_id                                                 as "Leg Order ID",
        'false'                                                              as "Manual Flag",
        x.tag_58                                                             as "Free Text",
        -- Order Detail
@@ -399,7 +422,7 @@ select x.order_id                                                           as "
        ex.last_mkt                                                          as "Last Mkt",
        null                                                                 as "MIC Code",
        trade_liquidity_indicator                                            as "Liquidity Indicator",
-       exec_id                                                              as "ExecutionID",
+       tag_17                                                               as "ExecutionID",
        ac_imid                                                              as "CAT Reporting Firm IMID",
        null::text                                                           as "Request Date",
        null::text                                                           as "Request Time",
@@ -408,11 +431,7 @@ select x.order_id                                                           as "
            when order_type_value = 'New Order' then order_qty
            end                                                              as "Remaining Qty",
        is_affiliate                                                         as "Affiliated Flag",
-       is_solicitation                                                      as "Solicitation Flag",
-       'parent',
-       x.order_id,
-       x.rn,
-       x.kind_of_type
+       is_solicitation                                                      as "Solicitation Flag"
 from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
       from t_base tb
                join t_route tr on tr.trans_type = tb.trans_type
@@ -444,3 +463,257 @@ from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
          left join dwh.d_exec_type et on et.exec_type = ex.exec_type
          left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active;
 
+
+insert into t_result
+-- executions
+select first_order_id,
+       order_id                                                      as "OrderID",
+       orig_client_order_id,
+       rn,
+       trading_firm_name                                             as "Trading Firm Name",
+       tf_cat_imid                                                   as "Trading Firm IMID",
+       tf_cat_crd                                                    as "Trading Firm CRD",
+       event_type                                                    as "Event Type",
+       to_char(event_ts, 'MM/DD/YYYY')                               as "Event Date",
+       case
+           when event_type = 'Cancelled' then coalesce(to_char(event_ts, 'HH24:MI:SS:MS'), '')
+           else coalesce(to_char(event_ts, 'HH24:MI:SS:US'), '') end as "Event Time",
+       client_order_id                                               as "Client clOrderID",
+       street_client_order_id                                        as "Street clOrderID",
+       event_qty                                                     as "Event Qty",
+       to_char(event_price, 'FM99999990D0099')                       as "Event Price",
+       to_char(net_price, 'FM99999990D0099')                         as "Net Price",
+       case
+           when multileg_indicator <> '1' then 'Y'
+           else 'N'
+           end                                                       as "Multi Leg Indicator",
+       no_legs                                                       as "Number of legs",
+       co_client_leg_ref_id                                          as "Leg Order ID",
+       manual_flag                                                   as "Manual Flag",
+       exec_text                                                     as "Free Text",
+       -- Order Detail
+       order_status_description                                      as "Order Status",
+       case
+           when event_type = 'New Order' then ''
+           else orig_client_order_id end                             as "Original Client clOrderID",
+       case
+           when event_type = 'Order Route'
+               then orig_client_order_id end                         as "Original Street clOrderID",
+       opra_symbol                                                   as "OSI Symbol",
+       root_symbol                                                   as "Base symbol",
+       symbol                                                        as "Symbol",
+       case instrument_type_id
+           when 'O' then 'Option'
+           when 'E' then 'Equity'
+           else coalesce(instrument_type_id, '') end                 as "Security Type",
+
+       underlying_symbol                                             as "Underlying Symbol",
+       pcv                                                           as "P/C/S",
+       to_char(expiration_ts, 'MM/DD/YYYY')                          as "Expiration Date",
+       to_char(expiration_ts, 'HH24:MI:SS.MS')                       as "Expiration Time",
+       case
+           when side = '1' then 'Buy'
+           when side = '2' then 'Sell'
+           when side in ('5', '6') then 'Sell Short'
+           end                                                       as "Side",
+       tif                                                           as "TIF",
+       to_char(good_till_ts, 'MM/DD/YYYY')                           as "Good Till Date",
+       to_char(good_till_ts, 'HH24:MI:SS.MS')                        as "Good Till Time",
+       event_qty                                                     as "Order Qty",
+       cum_qty                                                       as "Filled Qty",
+       order_type_name                                               as "Order Type Code",
+       to_char(event_price, 'FM99999990D0099')                       as "Order Price",
+       to_char(order_creation_ts, 'DD.MM.YYYY')                      as "Order Creation Date",
+       to_char(order_creation_ts, 'HH24:MI:SS.US')                   as "Order Creation Time",
+       open_close                                                    as "Open/Close",
+       trading_session::varchar                                      as "Trading Session",
+       is_held                                                       as "Is Held",
+       is_cross                                                      as "Is Cross",
+       fee_sensitivity                                               as "Fee Sensitivity",
+       to_char(stop_price, 'FM99999990D0099')                        as "Stop Price",
+       max_floor                                                     as "Max Floor",
+       customer_or_firm_name                                         as "Capacity",
+       ex_destination                                                as "ExDestination",
+       ratio_qty                                                     as "Leg ratio",
+       user_                                                         as "User",
+
+-- Account Details
+       account_name                                                  as "Account Name",
+       account_id                                                    as "Account ID",
+       account_holder_type                                           as "Account Holder Type",
+       cat_fdid                                                      as "Account FDID",
+       ac_imid::text                                                 as "Account IMID",
+       ac_number                                                     as "Account CRD",
+       sender_sub_id                                                 as "Sender Type",
+
+       -- Execution Details
+       last_mkt                                                      as "Last Mkt",
+       mic_code                                                      as "MIC Code",
+       trade_liquidity_indicator                                     as "Liquidity Indicator",
+       exec_id                                                       as "ExecutionID",
+       ac_imid                                                       as "CAT Reporting Firm IMID",
+       to_char(case
+                   when event_type = 'Cancelled' then cancel_request_time
+                   when event_type ilike '%modify%' then order_request_time
+                   end, 'DD.MM.YYYY')                                as "Request Date",
+       to_char(case
+                   when event_type = 'Cancelled' then cancel_request_time
+                   when event_type ilike '%modify%' then order_request_time
+                   end, 'HH24:MI:SS.US')                             as "Request Time",
+       to_char(strike_price, 'FM99999990D0099')                      as "Strike Price",
+       case
+           when event_type = 'New Order' then event_qty
+           when event_type = 'Trade' then remaining_qty end
+                                                                     as "Remaining Qty",
+       is_affiliate                                                  as "Affiliated Flag",
+       solicitation                                                  as "Solicitation Flag"
+from t_exs x
+where case when exec_type in ('A', '0', '5', 'b') and event_ts is null then false else true end
+  and case when :in_include_acks = 'Y' then true else exec_type not in ('A', '0', '5') end
+
+
+
+select * from t_result
+order by first_order_id, "OrderID", orig_client_order_id  nulls first, rn
+
+select "OrderID",
+       "Trading Firm Name",
+       "Trading Firm IMID",
+       "Trading Firm CRD",
+       "Event Type",
+       "Event Date",
+       "Event Time",
+       "Client clOrderID",
+       "Street clOrderID",
+       "Event Qty",
+       "Event Price",
+       "Net Price",
+       "Multi Leg Indicator",
+       "Number of legs",
+       "Leg Order ID",
+       "Manual Flag",
+       "Free Text",
+       "Order Status",
+       "Original Client clOrderID",
+       "Original Street clOrderID",
+       "OSI Symbol",
+       "Base symbol",
+       "Symbol",
+       "Security Type",
+       "Underlying Symbol",
+       "P/C/S",
+       "Expiration Date",
+       "Expiration Time",
+       "Side",
+       "TIF",
+       "Good Till Date",
+       "Good Till Time",
+       "Order Qty",
+       "Filled Qty",
+       "Order Type Code",
+       "Order Price",
+       "Order Creation Date",
+       "Order Creation Time",
+       "Open/Close",
+       "Trading Session",
+       "Is Held",
+       "Is Cross",
+       "Fee Sensitivity",
+       "Stop Price",
+       "Max Floor",
+       "Capacity",
+       "ExDestination",
+       "Leg ratio",
+       "User",
+       "Account Name",
+       "Account ID",
+       "Account Holder Type",
+       "Account FDID",
+       "Account IMID",
+       "Account CRD",
+       "Sender Type",
+       "Last Mkt",
+       "MIC Code",
+       "Liquidity Indicator",
+       "ExecutionID",
+       "CAT Reporting Firm IMID",
+       "Request Date",
+       "Request Time",
+       "Strike Price",
+       "Remaining Qty",
+       "Affiliated Flag",
+       "Solicitation Flag"
+, first_order_id, orig_client_order_id , rn
+into trash.so_obo_lifecycle
+from t_result
+order by first_order_id, "OrderID", orig_client_order_id nulls first, rn
+
+select "OrderID",
+       "Trading Firm Name",
+       "Trading Firm IMID",
+       "Trading Firm CRD",
+       "Event Type",
+       "Event Date",
+       "Event Time",
+       "Client clOrderID",
+       "Street clOrderID",
+       "Event Qty",
+       "Event Price",
+       "Net Price",
+       "Multi Leg Indicator",
+       "Number of legs",
+       "Leg Order ID",
+       "Manual Flag",
+       "Free Text",
+       "Order Status",
+       "Original Client clOrderID",
+       "Original Street clOrderID",
+       "OSI Symbol",
+       "Base symbol",
+       "Symbol",
+       "Security Type",
+       "Underlying Symbol",
+       "P/C/S",
+       "Expiration Date",
+       "Expiration Time",
+       "Side",
+       "TIF",
+       "Good Till Date",
+       "Good Till Time",
+       "Order Qty",
+       "Filled Qty",
+       "Order Type Code",
+       "Order Price",
+       "Order Creation Date",
+       "Order Creation Time",
+       "Open/Close",
+       "Trading Session",
+       "Is Held",
+       "Is Cross",
+       "Fee Sensitivity",
+       "Stop Price",
+       "Max Floor",
+       "Capacity",
+       "ExDestination",
+       "Leg ratio",
+       "User",
+       "Account Name",
+       "Account ID",
+       "Account Holder Type",
+       "Account FDID",
+       "Account IMID",
+       "Account CRD",
+       "Sender Type",
+       "Last Mkt",
+       "MIC Code",
+       "Liquidity Indicator",
+       "ExecutionID",
+       "CAT Reporting Firm IMID",
+       "Request Date",
+       "Request Time",
+       "Strike Price",
+       "Remaining Qty",
+       "Affiliated Flag",
+       "Solicitation Flag"
+from trash.so_obo_lifecycle
+order by first_order_id, "OrderID", orig_client_order_id nulls first, rn
