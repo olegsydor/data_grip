@@ -1056,6 +1056,6 @@ select *
 -- into trash.so_obo_lifecycle
 from t_result
 order by order_id, rn;
- 
+
 
 
