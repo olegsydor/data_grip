@@ -128,6 +128,7 @@ where cl.parent_order_id is null
   and cl.trans_type in ('D', 'G')
   and cl.multileg_reporting_type in ('1', '2')
 ;
+
 -- Street orders
 insert into t_base
 select coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
@@ -203,7 +204,7 @@ select b.first_order_id,
        b.order_id,
        -----
        b.orig_client_order_id,
-       3                                                                                       as rn,
+       3 + row_number() over (partition by b.order_id order by ex.exec_id)                     as rn,
        b.co_client_leg_ref_id,
        b.client_order_id                                                                       as client_order_id,
        fmj.tag_17                                                                              as exec_id,
@@ -644,11 +645,16 @@ select "OrderID",
        "Affiliated Flag",
        "Solicitation Flag"
 , first_order_id, orig_client_order_id , rn
-into trash.so_obo_lifecycle
+into
+-- drop table
+    trash.so_obo_lifecycle
 from t_result
 order by first_order_id, "OrderID", orig_client_order_id nulls first, rn
 
-select "OrderID",
+select
+first_order_id, "OrderID", orig_client_order_id, rn,
+
+    "OrderID",
        "Trading Firm Name",
        "Trading Firm IMID",
        "Trading Firm CRD",
