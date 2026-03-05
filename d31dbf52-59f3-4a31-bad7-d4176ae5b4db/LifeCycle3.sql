@@ -29,7 +29,7 @@ where true
 drop table if exists t_base;
 create temp table t_base as
 select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
-       order_id                                                                           as first_order_id,
+       order_id                                                                              as first_order_id,
        cl.*,
        di.symbol,
        di.symbol_suffix,
@@ -37,14 +37,14 @@ select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_or
        di.last_trade_date,
        ac.cat_report_on_behalf_of,
        tf.trading_firm_name,
-       tf.cat_imid                                                                        as tf_cat_imid,
-       tf.cat_crd                                                                         as tf_cat_crd,
-       orig.client_order_id                                                               as orig_client_order_id,
-       orig.price                                                                         as orig_price,
+       tf.cat_imid                                                                           as tf_cat_imid,
+       tf.cat_crd                                                                            as tf_cat_crd,
+       orig.client_order_id                                                                  as orig_client_order_id,
+       orig.price                                                                            as orig_price,
        oc.opra_symbol,
        oc.strike_price,
        os.root_symbol,
-       ui.symbol                                                                          as underlying_symbol,
+       ui.symbol                                                                             as underlying_symbol,
        fmj.tag_58,
        fmj.tag_50,
        fmj.tag_109,
@@ -52,34 +52,31 @@ select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_or
            when di.instrument_type_id = 'E' then 'Stock'
            when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
            when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
-           end                                                                            as pcv,
-       dtif.tif_short_name                                                                as tif,
+           end                                                                               as pcv,
+       dtif.tif_short_name                                                                   as tif,
        dot.order_type_name,
        case
            when tag_9281 in ('A', 'D', 'G') then 'ALL'
            when tag_22017 = 'A' then 'ALL'
            when tag_9281 in ('F', 'C') then 'REGPOST'
            when tag_22017 = 'B' then 'REGPOST'
-           else 'REG' end                                                                 as trading_session,
+           else 'REG' end                                                                    as trading_session,
        cof.customer_or_firm_name,
        ac.account_name,
-       case when ac.is_broker_dealer is distinct from 'Y' then ac.account_holder_type end as account_holder_type,
-       case when ac.is_broker_dealer is distinct from 'Y' then ac.cat_fdid end            as ac_fdid,
+       case when ac.is_broker_dealer is distinct from 'Y' then ac.account_holder_type end    as account_holder_type,
+       case when ac.is_broker_dealer is distinct from 'Y' then ac.cat_fdid end               as ac_fdid,
        ac.crd_number,
        tf.cat_imid,
        ac.is_affiliate,
-       case
-           when ac.cat_fdid like coalesce(ac.crd_number, '') || ':' || coalesce(tf.cat_imid, '')
-               then tf.cat_imid end                                                       as ac_imid,
-       case
-           when ac.cat_fdid like coalesce(ac.crd_number, '') || ':' || coalesce(tf.cat_imid, '')
-               then ac.crd_number end                                                     as ac_number,
+       case when ac.is_broker_dealer is not distinct from 'Y' then ac.broker_dealer_mpid end as ac_imid,
+       ac.crd_number                                                                         as ac_number,
+       case when ac.is_broker_dealer is not distinct from 'Y' then 'F' end                   as sender_type,
        fc.sender_sub_id,
        to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                                              as order_request_time,
-       case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                         as is_solicitation,
+       'UTC'                                                                                 as order_request_time,
+       case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                            as is_solicitation,
        to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                                              as tag_5050,
+       'UTC'                                                                                 as tag_5050,
        tag_17
 from dwh.client_order cl
          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
@@ -139,10 +136,10 @@ select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_or
        di.symbol_suffix,
        di.instrument_type_id,
        di.last_trade_date,
-       null                                                        as cat_report_on_behalf_of,
+       null               as cat_report_on_behalf_of,
        par.trading_firm_name,
-       par.tf_cat_imid                                             as tf_cat_imid,
-       par.tf_cat_crd                                              as tf_cat_crd,
+       par.tf_cat_imid    as tf_cat_imid,
+       par.tf_cat_crd     as tf_cat_crd,
        par.orig_client_order_id,
        par.orig_price,
        par.opra_symbol,
@@ -165,12 +162,13 @@ select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_or
        par.is_affiliate,
        par.ac_imid,
        par.ac_number,
+       par.sender_type,
        par.sender_sub_id,
        to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                       as order_request_time,
+       'UTC'              as order_request_time,
        par.is_solicitation,
        to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'                                                       as tag_5050,
+       'UTC'              as tag_5050,
        fmj.tag_17
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
@@ -420,7 +418,7 @@ select x.first_order_id,
        ac_fdid                                                                    as "Account FDID",
        ac_imid                                                                     as "Account IMID",
        ac_number                                                                   as "Account CRD",
-       sender_sub_id                                                               as "Sender Type",
+       sender_type                                                                 as "Sender Type",
 
        -- Execution Details
        case
@@ -430,7 +428,7 @@ select x.first_order_id,
        case
            when order_type_value != 'New Order' then trade_liquidity_indicator end as "Liquidity Indicator",
        tag_17                                                                      as "ExecutionID",
-       ac_imid                                                                     as "CAT Reporting Firm IMID",
+       'DFIN'                                                                      as "CAT Reporting Firm IMID",
        null::text                                                                  as "Request Date",
        null::text                                                                  as "Request Time",
        to_char(strike_price, 'FM99999990D0099')                                    as "Strike Price",
@@ -439,7 +437,7 @@ select x.first_order_id,
            end                                                                     as "Remaining Qty",
        is_affiliate                                                                as "Affiliated Flag",
        case
-           when order_type_value != 'New Order' then is_solicitation end           as "Solicitation Flag"
+           when order_type_value = 'New Order' then is_solicitation end            as "Solicitation Flag"
 from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
       from t_base tb
                join t_route tr on tr.trans_type = tb.trans_type
