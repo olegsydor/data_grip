@@ -130,7 +130,7 @@ where cl.parent_order_id is null
 -- Street orders
 insert into t_base
 select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
-       cl.parent_order_id as first_order_id,
+    cl.parent_order_id as first_order_id,
        cl.*,
        di.symbol,
        di.symbol_suffix,
@@ -347,7 +347,10 @@ select x.first_order_id,
        trading_firm_name                                                           as "Trading Firm Name",
        tf_cat_imid                                                                 as "Trading Firm IMID",
        tf_cat_crd                                                                  as "Trading Firm CRD",
-       order_type_value                                                            as "Event Type",
+       case
+           when order_type_value != 'Street' then order_type_value
+           when ex.exec_type = '4' then 'Order Cancel'
+           else 'Order Route' end                                                  as "Event Type",
        to_char(x.process_time, 'MM/DD/YYYY')                                       as "Event Date",
        to_char(x.process_time, 'HH24:MI:SS:US')                                    as "Event Time",
        x.client_order_id                                                           as "Client clOrderID",
@@ -417,7 +420,7 @@ select x.first_order_id,
        account_name                                                                as "Account Name",
        account_id                                                                  as "Account ID",
        account_holder_type                                                         as "Account Holder Type",
-       ac_fdid                                                                    as "Account FDID",
+       ac_fdid                                                                     as "Account FDID",
        ac_imid                                                                     as "Account IMID",
        ac_number                                                                   as "Account CRD",
        sender_type                                                                 as "Sender Type",
@@ -440,25 +443,26 @@ select x.first_order_id,
        is_affiliate                                                                as "Affiliated Flag",
        case
            when order_type_value = 'New Order' then is_solicitation end            as "Solicitation Flag"
-from (select case when tb.order_class = 'O' then tr.order_type_value else 'Ack' end,
-             tb.*,
-             case when tb.order_class = 'O' then tr.rn else 4 end,
-             'syntetic' as kind_of_type
-      from t_base tb
-               join t_route tr on tr.trans_type = tb.trans_type
-      where tb.parent_order_id is null
-        and case when tb.order_class = 'O' then true else tr.trans_type = 'D' and tr.rn = 1 end
-      union all
---       select case when tb.cat_report_on_behalf_of != 'N' then 'New' else 'Ack' end, tb.*, 3, 'natural' as kind_of_type
-      select case when tb.order_class != 'O' then 'New' else 'Ack' end, tb.*, 3, 'natural' as kind_of_type
-      from t_base tb
-               left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
-      where tb.parent_order_id is null
-      union all
-      select 'New street', tb.*, 5, 'natural' as kind_of_type
-      from t_base tb
-               left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
-      where tb.parent_order_id is not null) x
+from (
+-- Real order
+         select 'New' as order_type_value, tb.*, 0 as rn
+         from t_base tb
+                  left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
+         where tb.parent_order_id is null
+-- Syntetic row
+         union all
+         select case when tb.order_class = 'O' then tr.order_type_value else 'Ack' end,
+                tb.*,
+                case when tb.order_class = 'O' then tr.rn else 1 end
+         from t_base tb
+                  join t_route tr on tr.trans_type = tb.trans_type
+         where tb.parent_order_id is null
+           and case when tb.order_class = 'O' then true else tr.trans_type = 'D' and tr.rn = 1 end
+         union all
+-- Street orders
+         select 'Street', tb.*, 5
+         from t_base tb
+         where tb.parent_order_id is not null) x
          left join lateral
     ( select ex.exec_id,
              ex.order_status,
