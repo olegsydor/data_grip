@@ -194,8 +194,10 @@ where true
           when coalesce(:in_account_ids, '{}') = '{}' then true
           else cl.account_id = any (:in_account_ids) end
   and cl.parent_order_id is not null
-  and cl.trans_type in ('D', 'G')
+--   and cl.trans_type in ('D', 'G')
   and cl.multileg_reporting_type in ('1', '2');
+
+select * from t_base;
 
 -- executions
 drop table if exists t_exs;
@@ -438,18 +440,22 @@ select x.first_order_id,
        is_affiliate                                                                as "Affiliated Flag",
        case
            when order_type_value = 'New Order' then is_solicitation end            as "Solicitation Flag"
-from (select tr.order_type_value, tb.*, tr.rn, 'syntetic' as kind_of_type
+from (select case when tb.order_class = 'O' then tr.order_type_value else 'Ack' end,
+             tb.*,
+             case when tb.order_class = 'O' then tr.rn else 4 end,
+             'syntetic' as kind_of_type
       from t_base tb
                join t_route tr on tr.trans_type = tb.trans_type
       where tb.parent_order_id is null
-        and tb.cat_report_on_behalf_of = 'N'
+        and case when tb.order_class = 'O' then true else tr.trans_type = 'D' and tr.rn = 1 end
       union all
-      select case when tb.cat_report_on_behalf_of != 'N' then 'New' else 'Ack' end, tb.*, 3, 'natural' as kind_of_type
+--       select case when tb.cat_report_on_behalf_of != 'N' then 'New' else 'Ack' end, tb.*, 3, 'natural' as kind_of_type
+      select case when tb.order_class != 'O' then 'New' else 'Ack' end, tb.*, 3, 'natural' as kind_of_type
       from t_base tb
                left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
       where tb.parent_order_id is null
       union all
-      select 'New street', tb.*, 4, 'natural' as kind_of_type
+      select 'New street', tb.*, 5, 'natural' as kind_of_type
       from t_base tb
                left join t_route tr on tr.trans_type = tb.trans_type and tr.trans_type = 'N'
       where tb.parent_order_id is not null) x
