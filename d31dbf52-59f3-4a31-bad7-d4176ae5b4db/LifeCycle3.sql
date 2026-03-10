@@ -657,9 +657,9 @@ select "OrderID",
        "Affiliated Flag",
        "Solicitation Flag"
 , first_order_id, orig_client_order_id , rn
-into
--- drop table
-    trash.so_obo_lifecycle
+-- into
+-- -- drop table
+--     trash.so_obo_lifecycle
 from t_result;
 
 select
