@@ -130,18 +130,18 @@ where cl.parent_order_id is null
 -- Street orders
 insert into t_base
 select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_order_id,
-    cl.parent_order_id as first_order_id,
+       cl.parent_order_id   as first_order_id,
        cl.*,
        di.symbol,
        di.symbol_suffix,
        di.instrument_type_id,
        di.last_trade_date,
-       null               as cat_report_on_behalf_of,
+       null                 as cat_report_on_behalf_of,
        par.trading_firm_name,
-       par.tf_cat_imid    as tf_cat_imid,
-       par.tf_cat_crd     as tf_cat_crd,
-       par.orig_client_order_id,
-       par.orig_price,
+       par.tf_cat_imid      as tf_cat_imid,
+       par.tf_cat_crd       as tf_cat_crd,
+       orig.client_order_id as orig_client_order_id,
+       orig.price           as orig_price,
        par.opra_symbol,
        par.strike_price,
        par.root_symbol,
@@ -165,14 +165,20 @@ select --coalesce(staging.last_orig_order(cl.order_id), cl.order_id) as first_or
        par.sender_type,
        par.sender_sub_id,
        to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'              as order_request_time,
+       'UTC'                as order_request_time,
        par.is_solicitation,
        to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
-       'UTC'              as tag_5050,
+       'UTC'                as tag_5050,
        fmj.tag_17
 from t_base par
          join dwh.client_order cl on cl.parent_order_id = par.order_id
          left join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+         left join lateral (select client_order_id, price
+                            from dwh.client_order orig
+                            where orig.order_id = cl.orig_order_id
+                              and orig.create_date_id <= cl.create_date_id
+                              and orig.create_date_id >= :l_retention_date_id
+                            limit 1) orig on cl.orig_order_id is not null
          left join lateral (select fmj.fix_message ->> '5050'  as tag_5050,
                                    fmj.fix_message ->> '50'    as tag_50,
                                    fmj.fix_message ->> '109'   as tag_109,
