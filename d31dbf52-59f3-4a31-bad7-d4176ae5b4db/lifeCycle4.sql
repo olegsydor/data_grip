@@ -243,20 +243,3 @@ where cl.parent_order_id is not null
 select * from t_base;
 
 
-create table inc_hft.hft_incremental_files
-(
-    date_id          int4                          not null,
-    filename         varchar                       not null,
-    db_create_time   timestamptz                   not null default clock_timestamp(),
-    start_processing timestamptz                   null,
-    start_position   int8                          null,
-    end_processing   timestamptz                   null,
-    end_position     int8                          null,
-    load_batch_id    int4                          null,
-    is_processed     bpchar(1) default 's'::bpchar null,
-    file_size        int8                          null,
-    processed_rows   int8                          null,
-    hft_comment      text                          null,
-    is_active        bpchar(1) default 'y'::bpchar null,
-    node_name        text                          null
-);
