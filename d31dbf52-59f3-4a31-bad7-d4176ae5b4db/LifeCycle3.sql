@@ -767,10 +767,10 @@ from execution ec
          inner join client_order cl on ec.order_id = cl.order_id
 where ec.exec_date_id >= 20260106
 --   and ec.is_parent_level = false
-  and (ec.exec_type = '4' or ec.order_status = '4')
+--   and (ec.exec_type = '4' or ec.order_status = '4')
   and (cl.create_date_id = 20260106 or cl.time_in_force_id in ('1', '6'))
   and cl.parent_order_id is not null
-  and cl.trans_type in ('D', 'G')
-  and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
+--   and cl.trans_type in ('D', 'G')
+--   and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
   and cl.client_order_id in ('EGAK9099-20260106', 'EGAK9104-20260106', 'EGAK9105-20260106', 'EGAK9106-20260106', 'EGAK9107-20260106')
-
+order by 1, 2
