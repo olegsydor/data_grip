@@ -23,16 +23,16 @@ create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer,
                                                        in_client_order_ids character varying[] DEFAULT '{}'::character varying(256)[])
     returns table
             (
-                "OrderID"                   bigint, -- 1
+                "OrderID"                   bigint,            -- 1
                 "Trading Firm Name"         character varying,
                 "Trading Firm IMID"         character varying,
                 "Trading Firm CRD"          character varying,
-                "Event Type"                text, -- 5
+                "Event Type"                text,              -- 5
                 "Event Date"                text,
                 "Event Time"                text,
                 "Client clOrderID"          character varying,
                 "Street clOrderID"          character varying,
-                "Event Qty"                 integer, -- 10
+                "Event Qty"                 integer,           -- 10
                 "Event Price"               text,
                 "Net Price"                 text,
                 "Multi Leg Indicator"       text,
@@ -67,7 +67,7 @@ create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer,
                 "Is Cross"                  text,
                 "Fee Sensitivity"           smallint,
                 "Stop Price"                text,
-                "Max Floor"                 bigint, --45
+                "Max Floor"                 bigint,            --45
                 "Capacity"                  character varying,
                 "ExDestination"             character varying,
                 "Leg ratio"                 bigint,
@@ -82,12 +82,12 @@ create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer,
                 "Last Mkt"                  character varying,
                 "MIC Code"                  character varying,
                 "Liquidity Indicator"       character varying,
-                "ExecutionID"               text, -- 60
+                "ExecutionID"               text,              -- 60
                 "CAT Reporting Firm IMID"   text,
                 "Request Date"              text,
                 "Request Time"              text,
                 "Strike Price"              text,
-                "Remaining Qty"             integer, -- 65
+                "Remaining Qty"             integer,           -- 65
                 "Affiliated Flag"           character,
                 "Solicitation Flag"         text
             )
@@ -199,6 +199,8 @@ begin
            fc.sender_sub_id,
            to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
            'UTC'                                                                                 as order_request_time,
+           to_timestamp(left(nxt.nxt_tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+           'UTC'                                                                                 as cancel_request_time,
            case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                            as is_solicitation,
            to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
            'UTC'                                                                                 as tag_5050,
@@ -253,6 +255,16 @@ begin
                                 where cl.fix_message_id = fmj.fix_message_id
                                   and fmj.date_id >= cl.create_date_id
                                 limit 1) fmj on true
+             left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
+                                from dwh.client_order nxt
+                                         join fix_capture.fix_message_json fmj
+                                              on fmj.fix_message_id = nxt.fix_message_id and
+                                                 fmj.date_id = nxt.create_date_id
+                                where nxt.create_date_id >= cl.create_date_id
+                                  and nxt.orig_order_id = cl.order_id
+                                  and nxt.create_date_id >= l_date_begin_id
+                                  and nxt.create_date_id <= l_date_end_id
+                                limit 1) nxt on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
     where cl.parent_order_id is null
@@ -325,6 +337,8 @@ begin
            fc.sender_sub_id,
            to_timestamp(left(fmj.tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
            'UTC'                                                                                 as order_request_time,
+           to_timestamp(left(nxt.nxt_tag_60, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
+           'UTC'                                                                                 as cancel_request_time,
            case when cl.ex_destination = 'DASH' then 'Y' else 'N' end                            as is_solicitation,
            to_timestamp(left(fmj.tag_5050, 24), 'YYYYMMDD-HH24:MI:SS:US')::timestamp at time zone
            'UTC'                                                                                 as tag_5050,
@@ -380,6 +394,16 @@ begin
                                 where cl.fix_message_id = fmj.fix_message_id
                                   and fmj.date_id >= cl.create_date_id
                                 limit 1) fmj on true
+             left join lateral (select fmj.fix_message ->> '60' as nxt_tag_60
+                                from dwh.client_order nxt
+                                         join fix_capture.fix_message_json fmj
+                                              on fmj.fix_message_id = nxt.fix_message_id and
+                                                 fmj.date_id = nxt.create_date_id
+                                where nxt.create_date_id >= cl.create_date_id
+                                  and nxt.orig_order_id = cl.order_id
+                                  and nxt.create_date_id >= l_date_begin_id
+                                  and nxt.create_date_id <= l_date_end_id
+                                limit 1) nxt on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
     where cl.parent_order_id is not null
@@ -549,7 +573,7 @@ begin
            tf_cat_crd                                                           as "Trading Firm CRD",
            case
                when rn in (0, 1) then order_type_value
-               when x.exec_type = '4' then 'Order Cancel'
+               when x.exec_type = 'X' then 'Order Cancel'
                else 'Order Route' end                                           as "Event Type",
            to_char(x.process_time, 'MM/DD/YYYY')                                as "Event Date",
            to_char(x.process_time, 'HH24:MI:SS:US')                             as "Event Time",
@@ -633,15 +657,27 @@ begin
                when rn not in (0, 1) then trade_liquidity_indicator end         as "Liquidity Indicator",
            tag_17                                                               as "ExecutionID",
            'DFIN'                                                               as "CAT Reporting Firm IMID",
-           null::text                                                           as "Request Date",
-           null::text                                                           as "Request Time",
+           to_char(case
+                       when rn in (0, 1) then null
+                       when x.exec_type = 'X' then cancel_request_time
+--                        when event_type ilike '%modify%' then order_request_time
+                       else order_request_time
+                       end, 'DD.MM.YYYY')                                       as "Request Date",
+           to_char(case
+                       when rn in (0, 1) then null
+                       when x.exec_type = 'X' then cancel_request_time
+--                        when event_type ilike '%modify%' then order_request_time
+                       else order_request_time
+                       end, 'HH24:MI:SS.US')                                    as "Request Time",
+
            to_char(strike_price, 'FM99999990D0099')                             as "Strike Price",
            case
                when rn != 1 then order_qty
                end                                                              as "Remaining Qty",
            is_affiliate                                                         as "Affiliated Flag",
            case
-               when rn not in (1, 3) then is_solicitation end                   as "Solicitation Flag" -- Ack and Routes empty
+               when rn not in (1, 3)
+                   then is_solicitation end                                     as "Solicitation Flag" -- Ack and Routes empty
     from (
 -- Real order
              select 'New' as order_type_value, tb.*, 0 as rn
@@ -654,7 +690,7 @@ begin
                     1
              from t_order tb
              where tb.parent_order_id is null
-             and in_include_acks = 'Y'
+               and in_include_acks = 'Y'
 
              union all
 -- Street orders
@@ -874,3 +910,7 @@ $fn$;
 
 select exec_type, client_order_id, *
 from t_order;
+
+select event_type, *
+from t_result as tr
+order by first_order_id, rn, "OrderID";

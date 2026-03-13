@@ -12,7 +12,7 @@ FROM
     pg_depend dep
    JOIN pg_proc p ON dep.objid = p.oid
 WHERE
-    dep.refobjid = '436442723'::regclass -- Use your type's OID here
+    dep.refobjid = 436442723::regclass -- Use your type's OID here
     AND dep.deptype = 'n';
 
 
