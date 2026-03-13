@@ -202,16 +202,16 @@ from execution ec
     limit 1
     ) ml on true
 where ec.exec_date_id = 20260106
-  and ec.is_parent_level = false
+--   and ec.is_parent_level = false
   and (ec.exec_type = '4' or ec.order_status = '4')
   and cl.create_date_id > 20230619                                --l_gtc_date_id
-  and (cl.create_date_id = 20260106 or cl.time_in_force_id in ('1', '6'))
+--   and (cl.create_date_id = 20260106 or cl.time_in_force_id in ('1', '6'))
   and cl.parent_order_id is not null
-  and cl.trans_type in ('D', 'G')
-  and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
+--   and cl.trans_type in ('D', 'G')
+--   and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
   and cl.client_order_id = any
       ('{"STS58450000425", "aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN", "20260106WEBUL473748", "20260106WEBUL467862", "10Z2612950942332", "10105039617582D1"}')
-  and cl.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE') --suppression
+--   and cl.ex_destination not in ('RPTR', 'BRKPT', 'SLXX', 'BLAZE') --suppression
   --and cl.exchange_id not in ('JSEB','PHLXFB','SQHT','TRAFX','WEEDN','WEEDNE','CTDLHT')--collapsion
 --   and di.symbol in ('PRGO', 'AAPL', 'GOOG', 'MSFT', 'NVDA', 'SPY', 'TSLA')
 group by ec.exec_date_id,

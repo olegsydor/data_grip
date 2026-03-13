@@ -750,3 +750,27 @@ first_order_id, "OrderID", orig_client_order_id, rn,
        "Solicitation Flag"
 from trash.so_obo_lifecycle
 order by first_order_id, orig_client_order_id nulls first, "OrderID", rn
+
+
+select cl.client_order_id, ex.*
+from dwh.client_order cl
+         join dwh.execution ex on (ex.order_id = cl.order_id and exec_date_id >= cl.create_date_id)
+where cl.client_order_id in ('EGAK9099-20260106', 'EGAK9104-20260106')
+order by 1, 2;
+
+select * from dwh.d_exec_type;
+
+select * from dwh.d_order_status;
+
+select cl.client_order_id, *
+from execution ec
+         inner join client_order cl on ec.order_id = cl.order_id
+where ec.exec_date_id >= 20260106
+--   and ec.is_parent_level = false
+  and (ec.exec_type = '4' or ec.order_status = '4')
+  and (cl.create_date_id = 20260106 or cl.time_in_force_id in ('1', '6'))
+  and cl.parent_order_id is not null
+  and cl.trans_type in ('D', 'G')
+  and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
+  and cl.client_order_id in ('EGAK9099-20260106', 'EGAK9104-20260106', 'EGAK9105-20260106', 'EGAK9106-20260106', 'EGAK9107-20260106')
+
