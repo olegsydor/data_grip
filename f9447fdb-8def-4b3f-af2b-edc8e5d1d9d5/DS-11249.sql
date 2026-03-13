@@ -109,9 +109,8 @@ end ;
 $function$
 ;
 
-select *
+select jtr.*
 from genesis2.clearing_instruction_entry cie
---      join genesis2.clearing_instruction ci on ci.clearing_instr_id = cie.clearing_instr_id and ci.date_id = cie.date_id
          join genesis2.trade_record tr on tr.trade_record_id = cie.trade_record_id
          join genesis2.instrument di on di.instrument_id = tr.instrument_id
          left join lateral (select sum(l1.rate * itr.last_qty) / nullif(sum(itr.last_qty), 0) as rate,
@@ -128,12 +127,12 @@ from genesis2.clearing_instruction_entry cie
                                                           AND tl.book_record_type_id = 'CCRU'
                                                           and tl.trade_record_id = itr.trade_record_id) l1
                                                on true
-                            where cie.new_trade_record_id = itr.trade_record_id
-                              and cie.date_id = itr.date_id
+                            where itr.trade_record_id = cie.new_trade_record_id
+                              and itr.date_id = cie.date_id
 --                                   and case when ai.is_deleted = 'Y' then true else tr.is_busted = 'N' end
                               and (l1.rn = 1 or l1.rn is null)
     ) ccr on true
-/*
+
              join lateral (select count(*) as alloc_cnt,
                                   jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
                                                                'allocQty', aie.alloc_qty,
@@ -145,14 +144,11 @@ from genesis2.clearing_instruction_entry cie
                                                                ccr.amount * 1.0 * aie.alloc_qty / total_qty
                                             ))
                                            as entries
-                           from genesis2.allocation_instruction_entry aie
-                                    left join genesis2.clearing_account ca
-                                              on (ca.clearing_account_id = aie.clearing_account_id
-                                                  )
-                                    join genesis2.account ac on ac.account_id = ai.account_id
-                           where aie.alloc_instr_id = ai.alloc_instr_id
-                             and aie.date_id = ai.date_id
+                           from genesis2.clearing_instruction_entry ie
+                           where ie.new_trade_record_id = aie.new_trade_record_id
+                             and ie.date_id = ai.date_id
                            limit 1) aie on true
+
              join lateral (select count(*) as trade_cnt,
                                   jsonb_agg(jsonb_build_object('dashExecId', tr.exch_exec_id,
                                                                'secondaryExchExecId', tr.secondary_exch_exec_id,
@@ -160,22 +156,19 @@ from genesis2.clearing_instruction_entry cie
                                                                'legRefId', tr.leg_ref_id,
                                                                'chainExecId', fmj.chain_exec_id)
                                   )        as trades
-                           from genesis2.alloc_instr2trade_record aitr
-                                    join genesis2.trade_record tr
-                                         on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+                           from genesis2.trade_record jtr
                                     join lateral (select fix_message ->> '10710' as chain_exec_id
                                                   from staging.fix_message_json fmj
-                                                  where fmj.date_id = aitr.date_id
+                                                  where fmj.date_id = jtr.date_id
                                                     and fmj.fix_message_id = tr.trade_fix_message_id
                                                   limit 1) fmj on true
-                           where aitr.alloc_instr_id = ai.alloc_instr_id
-                             and aitr.date_id = ai.date_id
+                           where jtr.trade_record_id = cie.trade_record_id
+                             and jtr.date_id = cie.date_id
 --                             and is_busted = 'N'
-                           limit 1) aitr on true
-*/
+                           limit 1) jtr on true
+
          left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
          left join genesis2.option_series os on oc.option_series_id = os.option_series_id
 where true
---       and cie.trade_record_id = :in_orig_trade_record_id
-  and cie.new_trade_record_id is not null
+  and cie.trade_record_id = :in_trade_record_id
   and case when :in_date_id is null then true else cie.date_id = :in_date_id end;
