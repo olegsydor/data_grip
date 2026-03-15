@@ -160,25 +160,41 @@ select * from loader.files;
 select * from loader.daily_load;
 
 
--- DROP FUNCTION inc_hft.choose_next_file_node(int4, varchar, varchar);
+-- DROP FUNCTION loader.choose_next_file(int4, varchar, bool);
 
-create or replace function loader.choose_next_file(in_date_id integer, in_node_name character varying, in_is_only_show bool default true)
- returns table(last_row bigint, batch_id integer)
- language plpgsql
-AS $function$
+create or replace function loader.choose_next_file(in_date_id int, in_node_name text, in_is_only_show bool default true)
+    returns table
+            (
+                file_id        int4,
+                file_name      text,
+                start_position int4,
+                batch_id       int4
+            )
+    language plpgsql
+as
+$fn$
 declare
-    l_start_row int4;
-    l_batch_id     int4;
-    l_file_id int4;
-l_eod_ts time;
+    l_load_id        int;
+    l_step_id        int;
+    l_start_position int4;
+    l_batch_id       int4;
+    l_file_id        int4;
+    l_eod_ts         time;
 
 begin
+    select nextval('load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+
+    select public.load_log(l_load_id, l_step_id, 'choose_next_file for ' || in_node_name || ' STARTED ===', 0, 'O')
+    into l_step_id;
+
     select setting_value::time
     into l_eod_ts
     from loader.setting
     where setting_name = 'end_of_day_time';
 
-    select dl.batch_id, l_file_id
+    select dl.batch_id, dl.file_id
     into l_batch_id, l_file_id
     from loader.daily_load dl
              join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
@@ -190,62 +206,47 @@ begin
                       where dle.file_id = dl.file_id
                         and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + l_eod_ts
                         and dle.loading_status != 'R')
-    group by dl.batch_id
-    order by max(dl.start_processing) nulls first
-    limit 1;
+    order by dl.start_processing nulls first
+    limit 1 for update skip locked;
+
 
     if l_batch_id is not null then
         -- start position
         select end_position
+        into l_start_position
         from loader.daily_load dl
         where dl.date_id = in_date_id
           and dl.file_id = l_file_id
           and dl.loading_status != 'R'
-        order by end_position desc nulls last
-        limit 1
-        into l_start_row;
+        order by dl.end_position desc nulls last
+        limit 1;
 
-
-
-        if in_just_show <> 'Y' then
-            l_batch = (select nextval('public.load_batch_id'));
---            into in_batch;
-
-            update inc_hft.hft_incremental_files hif
-            set load_batch_id    = l_batch,
-                start_position   = coalesce(l_start_row, 0) + 1,
+        if not in_is_only_show then
+            update loader.daily_load dl
+            set loading_status   = 'M',
+                start_position   = coalesce(l_start_position, 0) + 1,
                 start_processing = clock_timestamp()
-            where hif.date_id = in_date_id
-              and hif.filename = l_filename
-              and hif.load_batch_id is null
-              and hif.end_position is null
-              and hif.is_active = 'Y';
+            where dl.batch_id = l_batch_id;
         end if;
 
-        return query select l_filename::varchar, coalesce(l_start_row, 0)::bigint, l_batch::int, l_hash::varchar;
-        return;
+        return query
+            select l_file_id, fl.file_name, coalesce(l_start_position, 0), l_batch_id
+            from loader.files fl
+            where fl.file_id = l_file_id;
+
+        select public.load_log(l_load_id, l_step_id,
+                               'chosen file for ' || in_node_name || ' is - ' ||
+                               coalesce(l_file_id::text, 'no files') || '. COMPLETED ===',
+                               0, 'F')
+        into l_step_id;
     end if;
 
 end ;
-$function$
+$fn$
 ;
+comment on function loader.choose_next_file is 'Selects the next file to process';
 
-COMMENT ON FUNCTION inc_hft.choose_next_file_node(int4, varchar, varchar) IS 'Selects the next file to process. Called from a Python script';
 
+select *
+from loader.choose_next_file(in_date_id := 20260315, in_node_name := 'vega', in_is_only_show := true)
 
-    select dl.batch_id
---     into l_batch_id
-    from loader.daily_load dl
-    join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
-    where dl.date_id = :in_date_id
-    and fl.node_name = :in_node_name
-      and dl.loading_status != 'R'
-      and not exists (select 1
-                     from loader.daily_load dle
-                     where dle.file_id = dl.file_id
-                       and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + :l_eod_ts
-                       and dle.loading_status != 'R'
-        )
-    group by dl.batch_id
-    order by max(dl.start_processing) nulls first
-    limit 1;
