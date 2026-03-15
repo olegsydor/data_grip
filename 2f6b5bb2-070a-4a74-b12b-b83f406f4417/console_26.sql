@@ -116,7 +116,7 @@ begin
         -- for new files
         (select tfl.date_id, tfl.file_id
          from tmp_files tfl
-         where not exists(select 1
+         where not exists(select null
                           from loader.daily_load dl
                           where dl.date_id = tfl.date_id
                             and dl.file_id = tfl.file_id))
@@ -124,12 +124,12 @@ begin
     -- for
     (select tfl.date_id, tfl.file_id
      from tmp_files tfl
-     where exists(select 1
+     where exists(select null
                   from loader.daily_load dl
                   where dl.date_id = tfl.date_id
                     and dl.file_id = tfl.file_id
                     and (dl.loading_status = 'E' or end_position is not null))
-       and not exists(select 1
+       and not exists(select null
                       from loader.daily_load dl
                       where dl.date_id = tfl.date_id
                         and dl.file_id = tfl.file_id
@@ -248,5 +248,5 @@ comment on function loader.choose_next_file is 'Selects the next file to process
 
 
 select *
-from loader.choose_next_file(in_date_id := 20260315, in_node_name := 'vega', in_is_only_show := true)
+from loader.choose_next_file(in_date_id := '20260315', in_node_name := 'ego-hp', in_is_only_show := true)
 
