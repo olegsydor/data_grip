@@ -17,7 +17,7 @@ create table if not exists loader.files
     date_id        int4      not null,
     node_name      text      not null,
     db_create_time timestamp not null default clock_timestamp(),
-    constraint files_file_name_date_id_unq unique (file_name, date_id)
+    constraint files_file_name_date_id_unq unique (file_name, date_id, node_name)
 );
 create index if not exists files_date_id_node_name_idx on loader.files (date_id, node_name);
 
@@ -34,7 +34,7 @@ create table if not exists loader.daily_load
     start_processing timestamp,
     end_processing   timestamp,
     loaded_rows      int4,
-    loading_status   bpchar,
+    loading_status   bpchar not null default 'A',
     loading_confirmed bool not null default false,
     db_create_time   timestamp not null      default clock_timestamp()
 );
@@ -47,7 +47,7 @@ comment on column loader.daily_load.end_position is 'The position of the process
 comment on column loader.daily_load.start_processing is 'Actual start time of file fragment download';
 comment on column loader.daily_load.end_processing is 'Actual end time of file fragment download';
 comment on column loader.daily_load.loaded_rows is 'Actual downloaded row count of the file fragment';
-comment on column loader.daily_load.loading_status is 'The current status of downloading: null -just added. M - marked as a file to load by the loading process, S - loading started, E - loading finished';
+comment on column loader.daily_load.loading_status is 'The current status of downloading: A -just added. M - marked as a file to load by the loading process, S - loading started, E - loading finished, R - needs to be reloaded';
 comment on column loader.daily_load.loading_confirmed is 'checked as loading is confirmed';
 comment on column loader.daily_load.db_create_time is 'The time of adding the file fragment to this table';
 
@@ -90,7 +90,7 @@ begin
         (select unnest(in_files::text[]) as filename,
                 in_date_id               as date_id,
                 in_node_name)
-    on conflict (file_name, date_id) do nothing;
+    on conflict (file_name, date_id, node_name) do nothing;
     get diagnostics l_row_cnt = row_count;
 
     if l_row_cnt > 0 then
@@ -153,3 +153,99 @@ begin
 end;
 $function$
 ;
+
+select * from loader.add_files_to_process(in_date_id := 20260315, in_files := '{"file_1", "file_2", "file_3", "file_4"}'::text, in_node_name := 'vega');
+select * from loader.add_files_to_process(in_date_id := 20260315, in_files := '{"file_1", "file_2", "file_3", "file_4"}'::text, in_node_name := 'sirius');
+select * from loader.files;
+select * from loader.daily_load;
+
+
+-- DROP FUNCTION inc_hft.choose_next_file_node(int4, varchar, varchar);
+
+create or replace function loader.choose_next_file(in_date_id integer, in_node_name character varying, in_is_only_show bool default true)
+ returns table(last_row bigint, batch_id integer)
+ language plpgsql
+AS $function$
+declare
+    l_start_row int4;
+    l_batch_id     int4;
+    l_file_id int4;
+l_eod_ts time;
+
+begin
+    select setting_value::time
+    into l_eod_ts
+    from loader.setting
+    where setting_name = 'end_of_day_time';
+
+    select dl.batch_id, l_file_id
+    into l_batch_id, l_file_id
+    from loader.daily_load dl
+             join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
+    where dl.date_id = in_date_id
+      and fl.node_name = in_node_name
+      and dl.loading_status != 'R'
+      and not exists (select 1
+                      from loader.daily_load dle
+                      where dle.file_id = dl.file_id
+                        and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + l_eod_ts
+                        and dle.loading_status != 'R')
+    group by dl.batch_id
+    order by max(dl.start_processing) nulls first
+    limit 1;
+
+    if l_batch_id is not null then
+        -- start position
+        select end_position
+        from loader.daily_load dl
+        where dl.date_id = in_date_id
+          and dl.file_id = l_file_id
+          and dl.loading_status != 'R'
+        order by end_position desc nulls last
+        limit 1
+        into l_start_row;
+
+
+
+        if in_just_show <> 'Y' then
+            l_batch = (select nextval('public.load_batch_id'));
+--            into in_batch;
+
+            update inc_hft.hft_incremental_files hif
+            set load_batch_id    = l_batch,
+                start_position   = coalesce(l_start_row, 0) + 1,
+                start_processing = clock_timestamp()
+            where hif.date_id = in_date_id
+              and hif.filename = l_filename
+              and hif.load_batch_id is null
+              and hif.end_position is null
+              and hif.is_active = 'Y';
+        end if;
+
+        return query select l_filename::varchar, coalesce(l_start_row, 0)::bigint, l_batch::int, l_hash::varchar;
+        return;
+    end if;
+
+end ;
+$function$
+;
+
+COMMENT ON FUNCTION inc_hft.choose_next_file_node(int4, varchar, varchar) IS 'Selects the next file to process. Called from a Python script';
+
+
+    select dl.batch_id
+--     into l_batch_id
+    from loader.daily_load dl
+    join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
+    where dl.date_id = :in_date_id
+    and fl.node_name = :in_node_name
+      and dl.loading_status != 'R'
+      and not exists (select 1
+                     from loader.daily_load dle
+                     where dle.file_id = dl.file_id
+                       and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + :l_eod_ts
+                       and dle.loading_status != 'R'
+        )
+    group by dl.batch_id
+    order by max(dl.start_processing) nulls first
+    limit 1;
