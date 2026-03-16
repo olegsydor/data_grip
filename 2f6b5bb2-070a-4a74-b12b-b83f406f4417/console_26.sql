@@ -274,6 +274,6 @@ comment on function loader.choose_next_file is 'Selects the next file to process
 
 
 select *
-from loader.choose_next_file(in_date_id := '20260315', in_node_name := 'ego-hp', in_is_only_show := true)
+from loader.choose_next_file(in_date_id := '20260316', in_node_name := 'ego-hp', in_is_only_show := true)
 
-select * from loader.hft_fix_message_event
+select count(*) from loader.hft_fix_message_event
