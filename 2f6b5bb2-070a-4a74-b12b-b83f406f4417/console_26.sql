@@ -8,6 +8,32 @@ create sequence loader.daily_load_batch_id_seq
     cache 1
     no cycle;
 
+create table loader.hft_fix_message_event
+(
+    date_id               int4         null,
+    fix_date              varchar(32)  null,
+    msg_type              varchar(3)   null,
+    sub_system_id         varchar(32)  null,
+    sender_comp_id        varchar(32)  null,
+    target_comp_id        varchar(32)  null,
+    account_name          varchar(32)  null,
+    cl_ord_id             varchar(128) null,
+    parent_cl_ord_id      varchar(128) null,
+    secondary_ord_id      varchar(32)  null,
+    exch_exec_id          varchar(128) null,
+    sec_exch_exec_id      varchar(128) null,
+    exch_ord_id           varchar(128) null,
+    session_id            varchar(32)  null,
+    orig_cl_ord_id        varchar(128) null,
+    security_type         varchar(10)  null,
+    leg_cfi_code          varchar(10)  null,
+    fix_msg_json          jsonb        null,
+    load_batch_id         int8         null,
+    exec_type             varchar(8)   null,
+    leg_ref_id            varchar(30)  null,
+    alternative_cl_ord_id varchar(128) null
+);
+
 drop table if exists loader.files;
 create table if not exists loader.files
 (
@@ -250,3 +276,4 @@ comment on function loader.choose_next_file is 'Selects the next file to process
 select *
 from loader.choose_next_file(in_date_id := '20260315', in_node_name := 'ego-hp', in_is_only_show := true)
 
+select * from loader.hft_fix_message_event
