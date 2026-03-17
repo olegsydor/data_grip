@@ -910,9 +910,12 @@ begin
 end;
 $fn$;
 
-select exec_type, client_order_id, event_type, *
+select ex_destination, *
 from t_order;
 
 select , *
 from t_result as tr
 order by first_order_id, rn, "OrderID";
+
+select ex_destination, exchange_id, * from dwh.client_order
+    where order_id in (408797182017002287,408797182017002288)

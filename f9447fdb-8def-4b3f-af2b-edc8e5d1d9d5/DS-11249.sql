@@ -172,3 +172,5 @@ from genesis2.clearing_instruction_entry cie
 where true
   and cie.trade_record_id = :in_trade_record_id
   and case when :in_date_id is null then true else cie.date_id = :in_date_id end;
+
+
