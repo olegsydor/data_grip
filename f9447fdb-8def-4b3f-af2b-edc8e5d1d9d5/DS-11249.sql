@@ -174,3 +174,5 @@ where true
   and case when :in_date_id is null then true else cie.date_id = :in_date_id end;
 
 
+-- DROP FUNCTION dash360.f_get_clearing_account_id(int8, varchar, varchar, varchar, varchar, int4);
+
