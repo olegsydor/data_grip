@@ -774,3 +774,8 @@ where ec.exec_date_id >= 20260106
 --   and (cl.multileg_reporting_type in ('1', '2') or cl.sub_strategy_desc = 'VEGA')
   and cl.client_order_id in ('EGAK9099-20260106', 'EGAK9104-20260106', 'EGAK9105-20260106', 'EGAK9106-20260106', 'EGAK9107-20260106')
 order by 1, 2
+
+
+select * from dwh.client_order
+where create_date_id = 20260316
+and time_in_force_id = '6'
