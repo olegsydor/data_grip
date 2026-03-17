@@ -223,25 +223,12 @@ begin
     select dl.batch_id, dl.file_id
     into l_batch_id, l_file_id
     from loader.daily_load dl
-             join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
-             left join lateral (select dl.start_processing
-                           from loader.daily_load idl
-                           where idl.file_id = dl.file_id
-                             and idl.date_id = dl.date_id
-                             and idl.batch_id < dl.batch_id
-                           order by idl.start_processing
-                           limit 1) idl on true
+             join loader.files fl using (file_id, date_id)
     where dl.date_id = in_date_id
       and fl.node_name = in_node_name
       and dl.loading_status = 'A'
-      and not exists (select null
-                      from loader.daily_load dle
-                      where dle.file_id = dl.file_id
-                        and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + l_eod_ts
-                        and dle.loading_status != 'R')
-    order by idl.start_processing nulls first
---         for update skip locked
-    ;
+    order by dl.db_create_time
+    limit 1 for update skip locked;
 
     if l_batch_id is not null then
         -- start position
@@ -286,31 +273,11 @@ from loader.choose_next_file(in_date_id := '20260316', in_node_name := 'ego-hp',
 truncate loader.hft_fix_message_event;
 
 select count(*) from loader.hft_fix_message_event;
+
 select * from loader.files
-where date_id = 20260316;
+where date_id = 20260317;
+
 select * from loader.daily_load
-where date_id = 20260316
+where date_id = 20260317
 order by file_id, start_position;
-
-
-select idl.*, dl.*
-from loader.daily_load dl
-             join loader.files fl on fl.file_id = dl.file_id and fl.date_id = dl.date_id
-             left join lateral (select dl.start_processing
-                           from loader.daily_load idl
-                           where idl.file_id = dl.file_id
-                             and idl.date_id = dl.date_id
-                             and idl.batch_id != dl.batch_id
-                           order by idl.start_processing desc nulls last
-                           limit 1) idl on true
-    where dl.date_id = :in_date_id
-      and fl.node_name = :in_node_name
-      and dl.loading_status = 'A'
-      and not exists (select null
-                      from loader.daily_load dle
-                      where dle.file_id = dl.file_id
-                        and dle.start_processing >= to_date(dl.date_id::text, 'YYYYMMDD') + :l_eod_ts
-                        and dle.loading_status != 'R')
-order by idl.start_processing nulls first
-
 
