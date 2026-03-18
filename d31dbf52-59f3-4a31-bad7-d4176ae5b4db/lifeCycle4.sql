@@ -8,6 +8,12 @@ from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id :=
                                  in_include_routes := 'Y', in_include_acks := 'Y',
                                  in_client_order_ids := '{"aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN"}');
 
+select *
+from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                 in_include_routes := 'Y', in_include_acks := 'Y',
+                                 in_client_order_ids := '{"DFIN:5KP600000G0006"}');
+
+
 drop function if exists trash.so_dash_finra_inquiry;
 create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer, in_date_end_id integer,
                                                        in_instrument_type character DEFAULT NULL::bpchar,
@@ -696,12 +702,12 @@ begin
                    then is_solicitation end                                                                           as "Solicitation Flag"        -- Ack and Routes empty
     from (
 -- Real order
-             select 'New' as order_type_value, tb.*, 0 as rn
+             select case when trans_type = 'D' then 'New' when trans_type = 'G' then 'Modify' end as order_type_value, tb.*, 0 as rn
              from t_order tb
              where tb.parent_order_id is null
 -- Syntetic row
              union all
-             select 'Ack',
+             select case when trans_type = 'D' then 'Ack' when trans_type = 'G' then 'Modify Ack' end as order_type_value,
                     tb.*,
                     1
              from t_order tb
@@ -755,7 +761,7 @@ begin
            -- Order Detail
            order_status_description                                               as "Order Status",
            case
-               when event_type = 'New Order' then ''
+               when event_type = 'New Order' then null
                else orig_client_order_id end                                      as "Original Client clOrderID",
            case
                when event_type = 'Order Route'
@@ -766,7 +772,7 @@ begin
            case instrument_type_id
                when 'O' then 'Option'
                when 'E' then 'Equity'
-               else coalesce(instrument_type_id, '') end                          as "Security Type",
+               else instrument_type_id               end                          as "Security Type",
 
            underlying_symbol                                                      as "Underlying Symbol",
            pcv                                                                    as "P/C/S",
