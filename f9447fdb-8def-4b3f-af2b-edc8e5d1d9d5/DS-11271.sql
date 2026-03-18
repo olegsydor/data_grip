@@ -560,3 +560,64 @@ $function$
 ;
 
 
+-- DROP FUNCTION dash360.allocations_instruction_entries(int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.allocations_instruction_entries(in_alloc_instr_id integer, in_date_id integer)
+    RETURNS TABLE
+            (
+                clearing_account_number         character varying,
+                clearing_account_name           character varying,
+                clearing_account_type           character,
+                cmta                            character varying,
+                is_default                      character,
+                alloc_qty                       integer,
+                occ_actionable_id               character varying,
+                clearing_account_id             integer,
+                account_nickname                character varying,
+                account_id                      integer,
+                sg_brid                         character varying,
+                sg_sub_account_name             character varying,
+                sg_mint_account                 character varying,
+                sg_alloc_config_id              integer,
+                allocation_instruction_entry_id bigint,
+                clearing_submitted_away         bpchar
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    -- SO: 20251103 https://dashfinancial.atlassian.net/browse/D360-16593
+    -- SO: 20251119 https://dashfinancial.atlassian.net/browse/DS-10739 added sg_mint_account
+    -- SO: 20260210 https://dashfinancial.atlassian.net/browse/DS-11079 added sg_allocation_configuration
+    -- SO: 20260318 https://dashfinancial.atlassian.net/browse/DS-11271 Process clearing_submitted_away field in allocation workflows
+begin
+
+    return query
+        select ca.clearing_account_number,
+               ca.clearing_account_name,
+               ca.clearing_account_type::character,
+               ca.cmta,
+               ca.is_default::character,
+               e.alloc_qty,
+               e.occ_actionable_id,
+               ca.clearing_account_id,
+               e.account_nickname,
+               a.account_id,
+               ca.sg_brid,
+               ca.sg_sub_account_name,
+               ca.sg_mint_account,
+               e.sg_alloc_config_id,
+               e.allocation_instruction_entry_id,
+               a.clearing_submitted_away
+        from genesis2.allocation_instruction_entry e
+                 inner join genesis2.allocation_instruction a
+                            on a.alloc_instr_id = e.alloc_instr_id and a.is_deleted = 'N' and a.date_id = in_date_id
+                 inner join genesis2.clearing_account ca
+                            on e.clearing_account_id = ca.clearing_account_id /*and ca.is_deleted = 'N'*/ /* No need to is_deleted ='N' because clearing_account_id is surrogate key and we SCD inside the dimension*/
+        where true
+        and e.alloc_instr_id = in_alloc_instr_id
+          and e.date_id = in_date_id
+          and e.alloc_qty > 0;
+end;
+$function$
+;

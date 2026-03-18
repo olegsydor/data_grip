@@ -275,9 +275,9 @@ truncate loader.hft_fix_message_event;
 select count(*) from loader.hft_fix_message_event;
 
 select * from loader.files
-where date_id = 20260317;
+where date_id = 20260318;
 
 select * from loader.daily_load
-where date_id = 20260317
+where date_id = 20260318
 order by file_id, start_position;
 
