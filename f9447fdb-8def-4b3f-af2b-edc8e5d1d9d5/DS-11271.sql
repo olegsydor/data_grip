@@ -1,7 +1,7 @@
 -- https://dashfinancial.atlassian.net/browse/DS-11271
 
 
-alter table genesis2.allocation_instruction add column if not exists clearing_submitted_away bpchar;
+alter table genesis2.allocation_instruction add column if not exists clearing_submitted_away bpchar null;
 
 -- FUNCTIONS
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
@@ -209,10 +209,51 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar, bool);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[], in_date_id integer DEFAULT get_dateid(CURRENT_DATE), in_reported_status character DEFAULT NULL::character(1), in_hide_non_customer_bphops boolean DEFAULT false)
- RETURNS TABLE(date_id integer, trade_record_id bigint, account_id integer, instrument_id bigint, side character, open_close character, avg_px numeric, exec_qty integer, display_instrument_id character varying, last_trade_date date, instrument_type_id character, alloc_instr_id integer, alloc_time timestamp without time zone, is_allocated boolean, is_bundle boolean, cmta character varying, exec_broker character varying, principal_amount numeric, client_commission_rate numeric, username character varying, blaze_account_alias character varying, street_exec_time timestamp without time zone, expiration_date timestamp without time zone, opt_customer_firm character, reported_status character, reported_time timestamp without time zone, claimed_by integer, claim_status character, is_prev_reported boolean, db_create_time timestamp without time zone, drop_message_status character, drop_message_reject_reason text, client_commission_amount numeric, client_order_id character varying, client_order_status character)
- LANGUAGE plpgsql
- COST 1
+CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                        in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
+                                                        in_reported_status character DEFAULT NULL::character(1),
+                                                        in_hide_non_customer_bphops boolean DEFAULT false)
+    RETURNS TABLE
+            (
+                date_id                    integer,
+                trade_record_id            bigint,
+                account_id                 integer,
+                instrument_id              bigint,
+                side                       character,
+                open_close                 character,
+                avg_px                     numeric,
+                exec_qty                   integer,
+                display_instrument_id      character varying,
+                last_trade_date            date,
+                instrument_type_id         character,
+                alloc_instr_id             integer,
+                alloc_time                 timestamp without time zone,
+                is_allocated               boolean,
+                is_bundle                  boolean,
+                cmta                       character varying,
+                exec_broker                character varying,
+                principal_amount           numeric,
+                client_commission_rate     numeric,
+                username                   character varying,
+                blaze_account_alias        character varying,
+                street_exec_time           timestamp without time zone,
+                expiration_date            timestamp without time zone,
+                opt_customer_firm          character,
+                reported_status            character,
+                reported_time              timestamp without time zone,
+                claimed_by                 integer,
+                claim_status               character,
+                is_prev_reported           boolean,
+                db_create_time             timestamp without time zone,
+                drop_message_status        character,
+                drop_message_reject_reason text,
+                client_commission_amount   numeric,
+                client_order_id            character varying,
+                client_order_status        character,
+                clearing_submitted_away    character
+            )
+    LANGUAGE plpgsql
+    COST 1
 AS $function$
     --in_date_id = 20190301;
     -- VP 20231030 https://dashfinancial.atlassian.net/browse/DS-7465 [ALLOC] Return street_exec_time in dash360.allocations_snapshot()
@@ -322,7 +363,8 @@ begin
                                    where fpo.status_date_id = in_date_id
                                      and fpo.parent_order_id = tr.order_id
                                    limit 1)
-                              else null end::character                               as client_order_status
+                              else null end::character                                                  as client_order_status,
+               null::character                                                                          as clearing_submitted_away
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join genesis2.account acc on acc.account_id = tr.account_id
@@ -431,7 +473,8 @@ begin
                    else ccr.client_order_id[1] end                                                         as client_order_id,
                case
                    when array_length(ccr.order_status, 1) > 1 then '-'
-                   else ccr.order_status[1] end ::char                                                     as client_order_status
+                   else ccr.order_status[1] end ::char                                                     as client_order_status,
+               ai.clearing_submitted_away                                                                  as clearing_submitted_away
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join lateral (select case
