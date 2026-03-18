@@ -8,8 +8,6 @@ from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id :=
                                  in_include_routes := 'Y', in_include_acks := 'Y',
                                  in_client_order_ids := '{"aV0jpDKHR5a6/KsCIlRQnA==_0a15hvN"}');
 
-
-
 drop function if exists trash.so_dash_finra_inquiry;
 create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer, in_date_end_id integer,
                                                        in_instrument_type character DEFAULT NULL::bpchar,
@@ -206,7 +204,8 @@ begin
            'UTC'                                                                                 as tag_5050,
            tag_17,
            ex.*,
-           cl.client_order_id                                                                    as parent_client_order_id
+           cl.client_order_id                                                                    as parent_client_order_id,
+           dex.ex_destination_desc
     from dwh.client_order cl
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -267,6 +266,8 @@ begin
                                 limit 1) nxt on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
+--              left join dwh.d_ex_destination dex on dex.ex_destination_code = cl.ex_destination and dex.exchange_id = cl.exchange_id and dex.is_active
+             left join dwh.d_ex_destination dex on (dex.ex_destination_code = cl.ex_destination and coalesce(dex.exchange_id, '') = coalesce(cl.exchange_id, '') and dex.instrument_type_id = di.instrument_type_id and dex.is_active)
     where cl.parent_order_id is null
       and cl.create_date_id between l_date_begin_id and l_date_end_id
       and case
@@ -344,7 +345,8 @@ begin
            'UTC'                                                                                 as tag_5050,
            fmj.tag_17,
            ex.*,
-           par.parent_client_order_id                                                            as parent_client_order_id
+           par.parent_client_order_id                                                            as parent_client_order_id,
+           dex.ex_destination_desc
     from t_order par
              join dwh.client_order cl on cl.parent_order_id = par.order_id
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
@@ -406,6 +408,7 @@ begin
                                 limit 1) nxt on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
+             left join dwh.d_ex_destination dex on (dex.ex_destination_code = cl.ex_destination and coalesce(dex.exchange_id, '') = coalesce(cl.exchange_id, '') and dex.instrument_type_id = di.instrument_type_id and dex.is_active)
     where cl.parent_order_id is not null
       and cl.create_date_id between l_date_begin_id and l_date_end_id;
 
@@ -488,7 +491,7 @@ begin
            b.stop_price,
            b.max_floor,
            b.customer_or_firm_name,
-           b.ex_destination                                                                        as ex_destination,
+           b.ex_destination_desc                                                                   as ex_destination_desc,
            b.ratio_qty,
            coalesce(fmj.tag_50, fmj.tag_109, b.account_name)                                       as user_,
            b.account_name                                                                          as account_name,
@@ -631,7 +634,7 @@ begin
            case when rn != 1 then x.cum_qty end                                                                       as "Filled Qty",
            order_type_name                                                                                            as "Order Type Code",
            to_char(price, 'FM99999990D0099')                                                                          as "Order Price",
-           to_char(process_time, 'DD.MM.YYYY')                                                                        as "Order Creation Date",
+           to_char(process_time, 'MM/DD/YYYY')                                                                        as "Order Creation Date",
            to_char(process_time, 'HH24:MI:SS.US')                                                                     as "Order Creation Time",
            open_close                                                                                                 as "Open/Close",
            trading_session::varchar                                                                                   as "Trading Session",
@@ -643,7 +646,7 @@ begin
            to_char(stop_price, 'FM99999990D0099')                                                                     as "Stop Price",
            max_floor                                                                                                  as "Max Floor",
            case when rn = 0 then customer_or_firm_name end                                                            as "Capacity",                -- Capacity: Only on New Orders as it does not change
-           ex_destination                                                                                             as "ExDestination",
+           ex_destination_desc                                                                                        as "ExDestination",
            ratio_qty                                                                                                  as "Leg ratio",
            coalesce(x.tag_50, x.tag_109, x.account_name)                                                              as "User",
 
@@ -674,7 +677,7 @@ begin
 --                        when event_type ilike '%modify%' then order_request_time
                        else order_request_time
                        end,
-                   'DD.MM.YYYY')                                                                                      as "Request Date",
+                   'MM/DD/YYYY')                                                                                      as "Request Date",
            to_char(case
                        when rn in (0, 1) then null
                        when x.exec_type = 'X' then cancel_request_time
@@ -783,9 +786,7 @@ begin
            to_char(event_price, 'FM99999990D0099')                                as "Order Price",
            to_char(order_creation_ts, 'MM/DD/YYYY')                               as "Order Creation Date",
 --            to_char(order_creation_ts, 'HH24:MI:SS.US')                   as "Order Creation Time",
-           case
-               when event_type = 'Cancelled' then coalesce(to_char(order_creation_ts, 'HH24:MI:SS:MS'), '')
-               else coalesce(to_char(order_creation_ts, 'HH24:MI:SS:US'), '') end as "Order Creation Time", -- Creation time: Please set to the same format as event Time
+           to_char(order_creation_ts, 'HH24:MI:SS:US')                            as "Order Creation Time", -- Creation time: Please set to the same format as event Time
            open_close                                                             as "Open/Close",
            trading_session::varchar                                               as "Trading Session",
            is_held                                                                as "Is Held",
@@ -794,7 +795,7 @@ begin
            to_char(stop_price, 'FM99999990D0099')                                 as "Stop Price",
            max_floor                                                              as "Max Floor",
            null                                                                   as "Capacity",
-           ex_destination                                                         as "ExDestination",
+           ex_destination_desc                                                    as "ExDestination",
            ratio_qty                                                              as "Leg ratio",
            user_                                                                  as "User",
 
@@ -816,7 +817,7 @@ begin
            to_char(case
                        when event_type = 'Cancelled' then cancel_request_time
                        when event_type ilike '%modify%' then order_request_time
-                       end, 'DD.MM.YYYY')                                         as "Request Date",
+                       end, 'MM/DD/YYYY')                                         as "Request Date",
            to_char(case
                        when event_type = 'Cancelled' then cancel_request_time
                        when event_type ilike '%modify%' then order_request_time
@@ -932,6 +933,7 @@ order by first_order_id, rn, "OrderID";
 
 select * from t_event
 
+select ex_destination, exchange_id, instrument_type_id, * from t_order
 select ex_destination, exchange_id, *
 from dwh.client_order
 where order_id in (408797182017002287, 408797182017002288)
