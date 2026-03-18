@@ -1,0 +1,1 @@
+alter table genesis2.clearing_instruction add column if not exists clearing_submitted_away bpchar null default 'N';

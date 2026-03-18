@@ -1,8 +1,13 @@
 -- https://dashfinancial.atlassian.net/browse/DS-11271
 
 
-alter table genesis2.allocation_instruction add column if not exists clearing_submitted_away bpchar null;
-
+alter table genesis2.allocation_instruction add column if not exists clearing_submitted_away bpchar null default 'N';
+/*
+update genesis2.allocation_instruction
+set clearing_submitted_away ='N'
+where clearing_submitted_away is null;
+alter table genesis2.allocation_instruction alter column clearing_submitted_away set default 'N';
+*/
 -- FUNCTIONS
 -- DROP FUNCTION dash360.allocations_create(int4, int4, varchar);
 
@@ -19,6 +24,7 @@ AS $function$
     -- SO 20251220 https://dashfinancial.atlassian.net/browse/DS-10030
     -- SO 20260210 https://dashfinancial.atlassian.net/browse/DS-11079 add sg_allocation_configuration
     -- SO 20260318 https://dashfinancial.atlassian.net/browse/DS-11271 Process clearing_submitted_away field in allocation workflows
+
 declare
     l_change_vector        jsonb;
     l_new_trade_record_ids bigint[];
@@ -552,3 +558,5 @@ begin
 end ;
 $function$
 ;
+
+
