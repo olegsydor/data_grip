@@ -408,7 +408,7 @@ $function$
 ;
 
 
-DROP FUNCTION dash360.clearing_instruction_create(int4, bpchar, int4, bpchar, varchar);
+DROP FUNCTION dash360.clearing_instruction_create;
 CREATE OR REPLACE FUNCTION dash360.clearing_instruction_create(in_date_id integer, in_clearing_status character,
                                                                in_user_id integer, in_modification_type character,
                                                                in_json_values character varying,
@@ -544,3 +544,5 @@ begin
 end;
 $function$
 ;
+
+
