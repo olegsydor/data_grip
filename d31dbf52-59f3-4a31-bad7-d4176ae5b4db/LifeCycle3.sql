@@ -786,4 +786,17 @@ select client_order_id, order_id, orig_order_id, * from dwh.client_order
          and client_order.client_order_id in ('DFIN:5KP600000G0006', 'DFIN:5KP600000G0001', 'DFIN:5KP600000G0003')
 and orig_order_id = 408841501732193947;
 
-select * from
+	with recursive total (order_id, orig_order_id) as
+	(
+		 select order_id, orig_order_id
+		 from dwh.client_order co
+		 where orig_order_id is not null
+		 and order_id = :in_order_id
+		 union all
+		 select co.order_id, co.orig_order_id
+		 from dwh.client_order co
+		 join total on co.order_id = total.orig_order_id
+	)
+	select order_id
+	from total
+	where orig_order_id is null;

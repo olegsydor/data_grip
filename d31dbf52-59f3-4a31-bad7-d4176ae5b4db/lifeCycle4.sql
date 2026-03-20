@@ -1,3 +1,4 @@
+
 select *
 from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                  in_include_routes := 'Y', in_include_acks := 'N',
@@ -166,7 +167,55 @@ begin
                            'C')
     into l_step_id;
 
--- parent orders
+-- List of parent orders
+    drop table if exists tmp_all_orders;
+    create temp table tmp_all_orders
+    as
+        with recursive total as (select order_id, create_date_id, orig_order_id
+                                 from dwh.client_order cl
+                                          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
+                                          join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                                          join dwh.d_instrument di
+                                               on di.instrument_id = cl.instrument_id and di.is_active
+                                          left join dwh.d_fix_connection fc
+                                                    on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
+                                 where true
+                                   and cl.parent_order_id is null
+                                   and cl.create_date_id between l_date_begin_id and l_date_end_id
+                                   and case
+                                           when coalesce(l_account_ids, '{}') = '{}' then true
+                                           else cl.account_id = any (l_account_ids) end
+                                   and case
+                                           when coalesce(in_client_order_ids, '{}') = '{}' then true
+                                           else cl.client_order_id = any (in_client_order_ids) end
+                                   and case
+                                           when in_instrument_type is null then true
+                                           else di.instrument_type_id = in_instrument_type end
+                                   and case
+                                           when in_exclude_eos = 'N' then true
+                                           else fc.is_high_frequency_trader = 'N' end
+                                   and case
+                                           when in_fix_comp_ids = '{}' then true
+                                           else coalesce(fc.fix_comp_id, '') = any (in_fix_comp_ids) end
+                                   and cl.trans_type <> 'F'
+                                   and cl.trans_type in ('D', 'G')
+                                   and cl.multileg_reporting_type in ('1', '2')
+                                 union all
+
+                                 select cl.order_id, cl.create_date_id, cl.orig_order_id
+                                 from dwh.client_order cl
+                                          join total on cl.order_id = total.orig_order_id)
+    select * from total;
+    get diagnostics l_row_count = row_count;
+    select public.load_log(l_load_id, l_step_id,
+                           l_script_name || l_date_begin_id::text || '-' || l_date_end_id::text ||
+                           ' all parent orders with all origs counted', l_row_count,
+                           'C')
+    into l_step_id;
+
+    create index on tmp_all_orders (create_date_id, order_id);
+
+    -- parent orders
     drop table if exists t_order;
     create temp table t_order as
     select order_id                                                                              as first_order_id,
@@ -225,6 +274,7 @@ begin
            dex.ex_destination_desc,
            fmj.tag_60 as tag60
     from dwh.client_order cl
+        join tmp_all_orders using (create_date_id, order_id)
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -288,13 +338,13 @@ begin
              left join dwh.d_ex_destination dex on (dex.ex_destination_code = cl.ex_destination and coalesce(dex.exchange_id, '') = coalesce(cl.exchange_id, '') and dex.instrument_type_id = di.instrument_type_id and dex.is_active)
     where cl.parent_order_id is null
       and cl.create_date_id between l_date_begin_id and l_date_end_id
-      and case
-              when coalesce(l_account_ids, '{}') = '{}' then true
-              else cl.account_id = any (l_account_ids) end
-      and case
-              when coalesce(in_client_order_ids, '{}') = '{}' then true
-              else cl.client_order_id = any (in_client_order_ids) end
-      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+--       and case
+--               when coalesce(l_account_ids, '{}') = '{}' then true
+--               else cl.account_id = any (l_account_ids) end
+--       and case
+--               when coalesce(in_client_order_ids, '{}') = '{}' then true
+--               else cl.client_order_id = any (in_client_order_ids) end
+--       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case when in_exclude_eos = 'N' then true else fc.is_high_frequency_trader = 'N' end
       and case when in_fix_comp_ids = '{}' then true else coalesce(fc.fix_comp_id, '') = any (in_fix_comp_ids) end
       and cl.trans_type <> 'F'
@@ -1029,3 +1079,26 @@ where order_id in (408797182017002287, 408797182017002288)
         order by first_order_id, rn, "OrderID";
 
 
+
+
+    create temp table tmp_all_orders
+    as
+        with recursive total as (select order_id, create_date_id, orig_order_id
+                                 from dwh.client_order cl
+                                          join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
+                                          join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+                                          join dwh.d_instrument di
+                                               on di.instrument_id = cl.instrument_id and di.is_active
+                                          left join dwh.d_fix_connection fc
+                                                    on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
+                                 where true
+                                   and cl.parent_order_id is null
+                                   and case
+                                           when coalesce(:in_client_order_ids, '{}') = '{}' then true
+                                           else cl.client_order_id = any (:in_client_order_ids) end
+                                 union all
+
+                                 select cl.order_id, cl.create_date_id, cl.orig_order_id
+                                 from dwh.client_order cl
+                                          join total on cl.order_id = total.orig_order_id)
+    select * from total;
