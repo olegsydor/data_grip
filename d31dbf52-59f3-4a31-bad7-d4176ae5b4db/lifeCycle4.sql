@@ -13,6 +13,17 @@ from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id :=
                                  in_include_routes := 'Y', in_include_acks := 'Y',
                                  in_client_order_ids := '{"DFIN:5KP600000G0006"}');
 
+select *
+from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                 in_include_routes := 'Y', in_include_acks := 'Y',
+                                 in_client_order_ids := '{"DFIN:5KP600000G0006", "DFTD:20260106-00196-00009"}');
+
+select *
+from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                 in_include_routes := 'Y', in_include_acks := 'Y',
+                                 in_client_order_ids := '{"EGAK9104-20260106"}');
+
+
 
 drop function if exists trash.so_dash_finra_inquiry;
 create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer, in_date_end_id integer,
@@ -43,7 +54,7 @@ create or replace function trash.so_dash_finra_inquiry(in_date_begin_id integer,
                 "Number of legs"            integer,
                 "Leg Order ID"              character varying, -- 15
                 "Manual Flag"               text,
-                "Free Text"                 text,
+--                 "Free Text"                 text,
                 "Order Status"              character varying,
                 "Original Client clOrderID" character varying,
                 "Original Street clOrderID" character varying, -- 20
@@ -211,7 +222,8 @@ begin
            tag_17,
            ex.*,
            cl.client_order_id                                                                    as parent_client_order_id,
-           dex.ex_destination_desc
+           dex.ex_destination_desc,
+           fmj.tag_60 as tag60
     from dwh.client_order cl
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -352,7 +364,8 @@ begin
            fmj.tag_17,
            ex.*,
            par.parent_client_order_id                                                            as parent_client_order_id,
-           dex.ex_destination_desc
+           dex.ex_destination_desc,
+           fmj.tag_60 as tag60
     from t_order par
              join dwh.client_order cl on cl.parent_order_id = par.order_id
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
@@ -678,14 +691,14 @@ begin
            tag_17                                                                                                     as "ExecutionID",
            'DFIN'                                                                                                     as "CAT Reporting Firm IMID", -- CAT Reporting Firm IMID: Should be DFIN or empty on Trades
            to_char(case
-                       when rn in (0, 1) then null
+                       when rn in (0, 1) and trans_type = 'D' then null
                        when x.exec_type = 'X' then cancel_request_time
 --                        when event_type ilike '%modify%' then order_request_time
                        else order_request_time
                        end,
                    'MM/DD/YYYY')                                                                                      as "Request Date",
            to_char(case
-                       when rn in (0, 1) then null
+                       when rn in (0, 1) and trans_type = 'D'  then null
                        when x.exec_type = 'X' then cancel_request_time
 --                        when event_type ilike '%modify%' then order_request_time
                        else order_request_time
@@ -869,7 +882,7 @@ begin
                tr."Number of legs",
                tr."Leg Order ID",
                tr."Manual Flag",
-               tr."Free Text",
+--                tr."Free Text",
                tr."Order Status",
                tr."Original Client clOrderID",
                tr."Original Street clOrderID",
@@ -930,7 +943,7 @@ begin
 end ;
 $fn$;
 
-select ex_destination, *
+select tif, *
 from t_order;
 
 select *
@@ -943,4 +956,76 @@ select ex_destination, exchange_id, instrument_type_id, * from t_order
 select ex_destination, exchange_id, *
 from dwh.client_order
 where order_id in (408797182017002287, 408797182017002288)
+
+
+        select tr."OrderID",
+               tr."Trading Firm Name",
+               tr."Trading Firm IMID",
+               tr."Trading Firm CRD",
+               tr."Event Type",
+               tr."Event Date",
+               tr."Event Time",
+               tr."Client clOrderID",
+               tr."Street clOrderID",
+               tr."Event Qty",
+               tr."Event Price",
+               tr."Net Price",
+               tr."Multi Leg Indicator",
+               tr."Number of legs",
+               tr."Leg Order ID",
+               tr."Manual Flag",
+               tr."Free Text",
+               tr."Order Status",
+               tr."Original Client clOrderID",
+               tr."Original Street clOrderID",
+               tr."OSI Symbol",
+               tr."Base symbol",
+               tr."Symbol",
+               tr."Security Type",
+               tr."Underlying Symbol",
+               tr."P/C/S",
+               tr."Expiration Date",
+               tr."Expiration Time",
+               tr."Side",
+               tr."TIF",
+               tr."Good Till Date",
+               tr."Good Till Time",
+               tr."Order Qty",
+               tr."Filled Qty",
+               tr."Order Type Code",
+               tr."Order Price",
+               tr."Order Creation Date",
+               tr."Order Creation Time",
+               tr."Open/Close",
+               tr."Trading Session",
+               tr."Is Held",
+               tr."Is Cross",
+               tr."Fee Sensitivity",
+               tr."Stop Price",
+               tr."Max Floor",
+               tr."Capacity",
+               tr."ExDestination",
+               tr."Leg ratio",
+               tr."User",
+               tr."Account Name",
+               tr."Account ID",
+               tr."Account Holder Type",
+               tr."Account FDID",
+               tr."Account IMID",
+               tr."Account CRD",
+               tr."Sender Type",
+               tr."Last Mkt",
+               tr."MIC Code",
+               tr."Liquidity Indicator",
+               tr."ExecutionID",
+               tr."CAT Reporting Firm IMID",
+               tr."Request Date",
+               tr."Request Time",
+               tr."Strike Price",
+               tr."Remaining Qty",
+               tr."Affiliated Flag",
+               tr."Solicitation Flag"
+        from t_result as tr
+        order by first_order_id, rn, "OrderID";
+
 
