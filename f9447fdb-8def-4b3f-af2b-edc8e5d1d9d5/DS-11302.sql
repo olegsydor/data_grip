@@ -85,7 +85,7 @@ begin
         select tr.trade_record_id as new_trade_record_id, in_date_id as date_id, tr.account_id
         from genesis2.trade_record tr
         where tr.trade_record_id = any (l_inserted)
-          and date_id = in_date_id
+          and tr.date_id = in_date_id
           and l_inserted is not null;
 
 end;
