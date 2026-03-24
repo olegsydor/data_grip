@@ -91,7 +91,98 @@ drop table if exists t_report;
                                cl.orig_order_id, -- SOURCE_PREDECESSOR_ID
                                null, -- SOURCE_COMPLEX_ID
                                case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
-               --
+                               case
+                                   when cl.multileg_reporting_type = '3' then ac.eq_mpid
+                                   when cl.parent_order_id is null then ac.eq_mpid
+                                   else coalesce(exc.mic_code, exc.eq_mpid, '')
+                                   end , -- FIRM_MPID
+                               fmj.tag_109, -- FIRM_TRADER_ID
+                               ac.account_name, -- ORDER_ACCOUNT_ID
+                               case
+                                   when cl.multileg_reporting_type != '3' then di.instrument_type_id
+                                   end, -- SECURITY_TYPE
+                               case
+                                   when di.instrument_type_id = 'E' then di.instrument_type_id
+                                   when di.instrument_type_id = 'O' then oc.opra_symbol end, -- SYMBOL
+                               null, -- SYMBOL_EXCHANGE
+                               case cl.side
+                                   when '1' then 'B'
+                                   when '2' then 'S'
+                                   when '5' then 'SS'
+                                   when '6' then 'SSE' end, -- ORDER_ACTION
+                               to_char(cl.process_time, 'YYYYMMDD') || 'T' ||
+                               to_char(cl.process_time, 'HH24MISSFF3'), -- ORDER_DATETIME
+                               ot.order_type_short_name, -- ORDER_TYPE
+                               case when cl.multileg_reporting_type != '3' then cl.order_qty::text end, -- ORDER_VOLUME
+                               to_char(cl.price, 'FM99990D0099'), -- LIMIT_PRICE
+                               to_char(cl.stop_price, 'FM99990D0099'), -- STOP_PRICE
+               tif.tif_short_name, -- TIME_IN_FORCE
+case  when cl.time_in_force_id = '6' then concat_ws('T', to_char(cl.expire_time, 'YYYYMMDD'), to_char(cl.expire_time, 'HH24MISSFF3')) end, -- EXPIRATION_DATETIME
+case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
+               null, -- PRE_MARKET_TIME
+case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
+null, -- POST_MARKET_TIME
+0,  -- DIRECTED_ORDER_IND
+null, --	NON_DISPLAY_IND -- ??
+0, --	DO_NOT_REDUCE_IND
+case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
+case when cl.exec_instruction = '1' then 1 when cl.is_held then '1' else '0' end, --	NOT_HELD_IND
+0, --	FILL_AT_OPEN_IND
+0, --	FILL_AT_CLOSE_IND
+0, --	MANUAL_IND
+null, --	OPTION_STRIKE_PRICE
+null, --	OPTIONS_UNDER_SYMBOL
+null, --	OPTION_EXPIRATION_DATETIME
+null, --	OPTION_TYPE
+null, --	CLIENT_TEXT1
+null, --	CLIENT_TEXT2
+null, --	CLIENT_TEXT3
+null, --	CLIENT_TEXT4
+null, --	CLIENT_TEXT5
+null, --	TARGET_COUNTRY_CODE
+null, --	CURRENCYCODE
+null, --	ALGO
+null, --	ORDER_START_TIME
+null, --	ORDER_REQUIRED_TIME
+null, --	CURRENCY_PAIR
+null, --	EXCHANGE_RATE
+null, --	HOUSEHOLD_ID
+null, --	FURTHER_ROUTABLE
+null, --	CL_ORD_ID
+null, --	IS_BD
+
+null, --	CAT_NEW_ORDER_IND
+null, --	CAT_FDID
+null, --	CAT_ACCOUNT_TYPE
+null, --	CAT_SENDER_IMID
+null, --	CAT_RECEIVIER_IMID
+null, --	CAT_DESTINATION
+null, --	CAT_DESTINATION_TYPE
+null, --	CAT_SESSION
+null, --	CAT_ORDER_ID
+null, --	CAT_ROUTED_ORDER_ID
+null, --	CAT_EXCHANGE_ORIGIN_CODE
+null, --	CAT_REJECTED_IND
+null, --	CAT_PREDESSOR_ORDER_DATE
+null, --	CAT_PREDESSOR_ORDER_ID
+null, --	CAT_PREDESSOR_ROUTE_ORDER_ID
+null, --	CAT_ATS_SEQ_NUM
+null, --	CAT_ATS_DISPLAY_IND
+null, --	CAT_ATS_DISPLAY_PRICE
+null, --	CAT_ATS_WORKING_PRICE
+null, --	CAT_ATS_DISPLAY_QUANTITY
+null, --	CAT_ATS_ORDER_TYPE
+null, --	CAT_ATS_NBB_PRICE
+null, --	CAT_ATS_NBB_QUANTITY
+null, --	CAT_ATS_NBO_PRICE
+null, --	CAT_ATS_NBO_QUANTITY
+null, --	CAT_ATS_NBBO_SOURCE
+null, --	CAT_ATS_NBBO_TIMESTAMP
+null, --	CAT_CHILD_IND
+null, --	CAT_MODIFY_REQ_DATETIME
+
+
+
            case
                when not l_is_multileg
                    then ''
@@ -194,7 +285,7 @@ drop table if exists t_report;
             ], ',', '')                                         as REC
     from dwh.client_order cl
              inner join dwh.d_account ac on ac.account_id = cl.account_id
-             inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
+             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
              left join lateral (select po.sub_strategy_desc
                                 from dwh.client_order po
                                 where po.order_id = cl.parent_order_id
@@ -208,6 +299,7 @@ drop table if exists t_report;
                                 from dwh.d_exchange exc
                                 where exc.exchange_id = cl.exchange_id and exc.is_active
                                 limit 1) exc on true
+    left join lateral(select fmj.fix_message ->>'109' as tag_109 from fix_capture.fix_message_json fmj where fmj.fix_message_id = cl.fix_message_id and fmj.date_id between in_start_date_id and in_end_date_id limit 1) fmj on true
     where true
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
