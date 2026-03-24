@@ -73,7 +73,7 @@ begin
         select max(mpid)
         into l_opt_exec_broker
         from soc_gen_manual_broker
-        where mamual_broker = in_dash_broker;
+        where manual_broker = in_dash_broker;
 
     ELSE
         -- l_opt_exec_broker := 'null';
