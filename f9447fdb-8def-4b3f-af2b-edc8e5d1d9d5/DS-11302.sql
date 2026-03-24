@@ -1,24 +1,4 @@
 -- DROP FUNCTION dash360.clearing_complete_instruction(int4, int4, int4, bpchar, varchar, text);
--- list of functions
-
-select distinct routines.routine_schema || '.' || routines.routine_name--, parameters.data_type, parameters.ordinal_position, *
-from information_schema.routines
-         left join information_schema.parameters on routines.specific_name = parameters.specific_name
-where true
---and routine_name ilike '%dash360_widgets_latest_orders_summary_tbl%'
---and routine_name ilike '%way%'
---and routine_name ilike '%report_fintech_eod%'
---and parameter_name ilike '%eos%'
---and parameter_mode = 'IN'
--- and routine_name !~~* all(ARRAY['%_bkp%', '%_old%', '%_tst%', '%_test%'])
---and routines.routine_schema not in ('trash', 'pg_catalog', 'information_schema')
---and routines.routine_schema in ('dash360', 'dash_reporting')
-and routine_definition ilike '%clearing_complete_instruction%'
---and routine_definition ilike $$%dwh.d_fix_connection%$$
---and routine_definition like $$%put%$$
---and routine_definition like $$%call%$$
-and routine_definition ilike $$%d\_strategy\_dec%$$
-
 
 CREATE OR REPLACE FUNCTION dash360.clearing_complete_instruction(in_date_id integer, in_user_id integer,
                                                                  in_instr_id integer, in_status character,

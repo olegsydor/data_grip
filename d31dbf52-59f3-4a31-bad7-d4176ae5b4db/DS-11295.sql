@@ -1,3 +1,4 @@
+-- https://dashfinancial.atlassian.net/browse/DS-11295
 -- DROP FUNCTION dash360.report_rps_s3(int4, int4, _int4, bpchar, _varchar, bool);
 
 CREATE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
@@ -252,9 +253,7 @@ drop table if exists t_report;
       and cl.create_date_id between in_start_date_id and in_end_date_id
 --                           and cl.order_id = ex.order_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
-      and cl.trans_type <> 'F'
-      and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
-      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+      and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
 
@@ -304,9 +303,7 @@ drop table if exists t_report;
       and gtc.close_date_id is not null
       and gtc.close_date_id > in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
-      and cl.trans_type <> 'F'
-      and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
-      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+      and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' close today gtc added', l_row_cnt, 'O')
