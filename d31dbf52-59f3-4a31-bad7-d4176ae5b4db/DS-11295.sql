@@ -1,10 +1,12 @@
 -- https://dashfinancial.atlassian.net/browse/DS-11295
 -- DROP FUNCTION dash360.report_rps_s3(int4, int4, _int4, bpchar, _varchar, bool);
 
+select * from dash360.report_fintech_s3_master_file(20260323, 20260323);
+
 CREATE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                       in_account_ids integer[] DEFAULT '{}'::integer[],
                                                       in_instrument_type character DEFAULT null,
-                                                      in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],)
+                                                      in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
                 ret_row text
@@ -201,7 +203,7 @@ drop table if exists t_report;
                                 where po.order_id = cl.parent_order_id
                                   and po.create_date_id <= cl.create_date_id
                                 limit 1) po on true
-             left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id and oc.is_active
+             left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
              left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
              left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
              left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
@@ -278,8 +280,9 @@ drop table if exists t_report;
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
-      and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
-      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+--       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
+--       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
+    ;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' open gtc added', l_row_cnt, 'O')
@@ -338,9 +341,9 @@ drop table if exists t_report;
                        where cl.create_date_id <= ex.exec_date_id
                          and cl.order_id = ex.order_id
                        limit 1) cl on true
-                      and case
-                              when l_is_multileg then cl.parent_order_id is null
-                              else cl.parent_order_id is not null end
+--                       and case
+--                               when l_is_multileg then cl.parent_order_id is null
+--                               else cl.parent_order_id is not null end
                            inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
                            left join lateral (select opra_symbol, option_series_id
                                               from dwh.d_option_contract oc
@@ -352,9 +355,10 @@ drop table if exists t_report;
                     and ex.exec_type in ('4', '8', 'F')
 --                     and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
                     and cl.trans_type <> 'F'
-                    and case
-                            when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-                            else cl.multileg_reporting_type = '1' end)
+--                     and case
+--                             when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+--                             else cl.multileg_reporting_type = '1' end
+                  )
     --order activity: cancel
     select 'A'                                  as record_type,
            coalesce(parent_order_id, order_id)  as order_id,
@@ -379,7 +383,7 @@ drop table if exists t_report;
            '' --[14]
     from base
     where tp = 2
-      and case when l_is_multileg then parent_order_id is null else true end
+--       and case when l_is_multileg then parent_order_id is null else true end
 
     union all
 
@@ -404,7 +408,8 @@ drop table if exists t_report;
            exchange_id || '|' ||
            '' || '|' || --[12]
            '' || '|' || --[13]
-           case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
+--            case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
+           case when multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
            '' || '|' || --[15]
            '' || '|' || --[16]
            '' || '|' || --[17]
@@ -416,9 +421,10 @@ drop table if exists t_report;
            '' --[23]
     from base
     where tp = 3
-      and case
-              when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
-              else multileg_reporting_type = '1' end;
+--       and case
+--               when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
+--               else multileg_reporting_type = '1' end
+;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' Cancels added', l_row_cnt, 'O')
