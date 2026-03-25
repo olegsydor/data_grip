@@ -1,7 +1,9 @@
 -- https://dashfinancial.atlassian.net/browse/DS-11295
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int4, bpchar, _varchar, bool);
+-- DROP FUNCTION dash360.report_fintech_s3_master_file;
 create temp table tmp_os as
-select * from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374}');
+select *
+from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374}',
+                                           in_sub_strategy_ids := '{1, 4}');
 
 
 select * from tmp_os
@@ -9,7 +11,8 @@ select * from tmp_os
 CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                  in_account_ids int8[] DEFAULT '{}'::int8[],
                                                                  in_instrument_type character DEFAULT null,
-                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                 in_sub_strategy_ids int[] default '{}'::int4[])
     RETURNS TABLE
             (
                 ret_row text
@@ -235,6 +238,7 @@ begin
     where true
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
+      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -479,7 +483,7 @@ end;
 $function$
 ;
 
-select  tag_111
+select  cl.sub_strategy_id
 from dwh.client_order cl
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -513,7 +517,7 @@ from dwh.client_order cl
 --       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between :in_start_date_id and :in_end_date_id
       and cl.trans_type <> 'F'
-    and  tag_111 is not null
+    and  cl.sub_strategy_id is not null
       and  tag_111 <> '0'
     and cl.sub_strategy_desc
 limit 10;
