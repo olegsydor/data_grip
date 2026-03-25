@@ -1,12 +1,23 @@
 -- https://dashfinancial.atlassian.net/browse/DS-11295
--- DROP FUNCTION dash360.report_rps_s3(int4, int4, _int4, bpchar, _varchar, bool);
+-- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int4, bpchar, _varchar, bool);
+create temp table tmp_os as
+select * from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374}');
 
-select * from dash360.report_fintech_s3_master_file(20260323, 20260323);
+1183
+2928
+6331
+6670
+7670
+7671
+8112
+9234
+9374
+9880
 
-CREATE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
-                                                      in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                      in_instrument_type character DEFAULT null,
-                                                      in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
+CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
+                                                                 in_account_ids int8[] DEFAULT '{}'::int8[],
+                                                                 in_instrument_type character DEFAULT null,
+                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
                 ret_row text
@@ -21,7 +32,7 @@ $function$
     -- SO 20260324 https://dashfinancial.atlassian.net/browse/DEVREQ-7857 Based on S3 report
 declare
 
-    l_account_ids int4[];
+    l_account_ids int8[];
     l_load_id     int;
     l_row_cnt     int;
     l_step_id     int;
@@ -40,11 +51,14 @@ begin
                       then trading_firm_id = ANY (in_trading_firm_ids)
                   else true end
           and case
-                  when coalesce(in_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (in_account_ids)
+                  when coalesce(in_account_ids, '{}') <> '{}'::int8[] then account_id = ANY (in_account_ids)
                   else true end;
     end if;
-    l_msg := 'report_fintech_s3_master_file for ' || in_start_date_id::text || ' - ' || in_end_date_id::text ||
-             case in_instrument_type when 'E' then '. Equities' when 'O' then '. Options' else '. All instrument types' end ||'. accounts - '||substr(l_account_ids::text, 1, 50);
+    l_msg := 'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
+             case in_instrument_type
+                 when 'E' then '. Equities'
+                 when 'O' then '. Options'
+                 else '. All instrument types' end || '. accounts - ' || substr(l_account_ids::text, 1, 50);
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -52,10 +66,10 @@ begin
     into l_step_id;
 
     -- header
-drop table if exists t_report;
+    drop table if exists t_report;
     create temp table t_report
 --          on commit drop
-        as
+    as
     select 'H'                                                                                        as record_type,
            0::int8                                                                                    as order_id,
            null                                                                                       as time_id,
@@ -66,10 +80,10 @@ drop table if exists t_report;
            to_char(clock_timestamp(), 'YYYYMMDD') || 'T' || to_char(clock_timestamp(), 'HH24MISSFF3') as rec;
 
     raise notice 'temp table created - %', clock_timestamp();
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
 
     ----Parent/Street orders----
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
@@ -79,7 +93,7 @@ drop table if exists t_report;
            cl.client_order_id                        as record_id,
            1                                         as record_type_id,
            -- REC --
-           array_to_string(ARRAY [
+           array_to_string(array [
                                'O', -- RECORD_TYPE
                                case
                                    when cl.multileg_reporting_type = '3' then 'NO'
@@ -90,8 +104,8 @@ drop table if exists t_report;
                                cl.order_id::text, --SOURCE_ORDER_ID
                                case
                                    when cl.multileg_reporting_type = '2' then cl.client_order_id
-                                   else cl.parent_order_id end, -- SOURCE_PARENT_ID
-                               cl.orig_order_id, -- SOURCE_PREDECESSOR_ID
+                                   else cl.parent_order_id::text end, -- SOURCE_PARENT_ID
+                               cl.orig_order_id::text, -- SOURCE_PREDECESSOR_ID
                                null, -- SOURCE_COMPLEX_ID
                                case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
                                case
@@ -128,22 +142,21 @@ drop table if exists t_report;
                                null, -- PRE_MARKET_TIME
                                case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
                                null, -- POST_MARKET_TIME
-                               0, -- DIRECTED_ORDER_IND
+                               '0', -- DIRECTED_ORDER_IND
                                null, --	NON_DISPLAY_IND -- ??
-                               0, --	DO_NOT_REDUCE_IND
+                               '0', --	DO_NOT_REDUCE_IND
                                case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
                                case
-                                   when cl.exec_instruction = '1' then 1
-                                   when cl.is_held then '1'
+                                   when cl.exec_instruction = '1' then '1'
+                                   when cl.is_held = 'Y' then '1'
                                    else '0' end, --	NOT_HELD_IND
-                               0, --	FILL_AT_OPEN_IND
-                               0, --	FILL_AT_CLOSE_IND
-                               0, --	MANUAL_IND
+                               '0', --	FILL_AT_OPEN_IND
+                               '0', --	FILL_AT_CLOSE_IND
+                               '0', --	MANUAL_IND
                                null, --	OPTION_STRIKE_PRICE
                                null, --	OPTIONS_UNDER_SYMBOL
                                null, --	OPTION_EXPIRATION_DATETIME
                                case
-
                                    when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
                                    when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
                                    end , --	OPTION_TYPE
@@ -160,7 +173,7 @@ drop table if exists t_report;
                                null, --	CURRENCY_PAIR
                                null, --	EXCHANGE_RATE
                                null, --	HOUSEHOLD_ID
-                               0, --	FURTHER_ROUTABLE
+                               '0', --	FURTHER_ROUTABLE
                                null, --	CL_ORD_ID
                                case trading_firm_name when '2' then '1' when '1' then '0' end, --	IS_BD
 
@@ -223,7 +236,7 @@ drop table if exists t_report;
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
     where true
-      and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and cl.trans_type <> 'F';
 
@@ -232,10 +245,10 @@ drop table if exists t_report;
     select public.load_log(l_load_id, l_step_id, l_msg || ' Parent/Street added', l_row_cnt, 'O')
     into l_step_id;
 
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
 
 
     drop table if exists t_orders;
@@ -280,7 +293,7 @@ drop table if exists t_report;
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
---       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
+    --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
 --       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
     ;
 
@@ -341,7 +354,7 @@ drop table if exists t_report;
                        where cl.create_date_id <= ex.exec_date_id
                          and cl.order_id = ex.order_id
                        limit 1) cl on true
---                       and case
+                      --                       and case
 --                               when l_is_multileg then cl.parent_order_id is null
 --                               else cl.parent_order_id is not null end
                            inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
@@ -358,29 +371,29 @@ drop table if exists t_report;
 --                     and case
 --                             when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
 --                             else cl.multileg_reporting_type = '1' end
-                  )
+    )
     --order activity: cancel
     select 'A'                                  as record_type,
            coalesce(parent_order_id, order_id)  as order_id,
            to_char(process_time, 'HH24MISSFF3') as time_id,
            client_order_id                      as record_id,
            3                                    as record_type_id,
-           'A' || '|' ||
-           order_id::text || '|' ||
-           case exec_type when '4' then 'c' when '8' then 'RJ' else '' end || '|' || --EVENT
-           '' || '|' || --SYSTEM_ID
-           case multileg_reporting_type when '3' then '' else coalesce(instrument_type_id, '') end || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' ||
-           '' || '|' || --DESCRIPTION
-           '' || '|' || --[10]
-           '' || '|' || --[11]
-           '' || '|' || --[12]
-           '' || '|' || --[13]
-           '' --[14]
+           array_to_string(array [
+                               'A',
+                               order_id::text,
+                               case exec_type when '4' then 'c' when '8' then 'RJ' else '' end, --EVENT
+                               null, --SYSTEM_ID
+                               case multileg_reporting_type when '3' then null else instrument_type_id end,
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
+                               null, --SYMBOL_EXCHANGE
+                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),
+                               null, --DESCRIPTION
+                               null, --[10]
+                               null, --[11]
+                               null, --[12]
+                               null, --[13]
+                               null --[14]
+                               ], ',', '')
     from base
     where tp = 2
 --       and case when l_is_multileg then parent_order_id is null else true end
@@ -392,48 +405,47 @@ drop table if exists t_report;
            to_char(exec_time, 'HH24MISSFF3')   as time_id,
            client_order_id                     as record_id,
            2                                   as record_type_id,
-           'T' || '|' ||
-           order_id::text || '|' ||
-           order_id::text || '_' || exec_id::text || '|' ||
-           '' || '|' ||
-           '' || '|' ||
-           instrument_type_id || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' || --ACTION_DATETIME
-           last_qty || '|' ||
-           to_char(last_px, 'fm99990d0099') || '|' ||
-           exchange_id || '|' ||
-           '' || '|' || --[12]
-           '' || '|' || --[13]
---            case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
-           case when multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
-           '' || '|' || --[15]
-           '' || '|' || --[16]
-           '' || '|' || --[17]
-           '' || '|' || --[18]
-           '' || '|' || --[19]
-           '' || '|' || --[20]
-           '' || '|' || --[21]
-           '' || '|' || --[22]
-           '' --[23]
+           array_to_string(array [
+                               'T',
+                               order_id::text,
+                               order_id::text || '_' || exec_id::text,
+                               null,
+                               null,
+                               instrument_type_id,
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
+                               null , --SYMBOL_EXCHANGE
+                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),--ACTION_DATETIME
+                               last_qty::text,
+                               to_char(last_px, 'fm99990d0099'),
+                               exchange_id,
+                               null, --[12]
+                               null, --[13]
+                               case when multileg_reporting_type = '2' then 'COMPLEX' end, --[14]
+                               null , --[15]
+                               null , --[16]
+                               null , --[17]
+                               null , --[18]
+                               null , --[19]
+                               null , --[20]
+                               null , --[21]
+                               null , --[22]
+                               null --[23]
+                               ], ',', '')
     from base
     where tp = 3
---       and case
+    --       and case
 --               when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
 --               else multileg_reporting_type = '1' end
-;
+    ;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' Cancels added', l_row_cnt, 'O')
     into l_step_id;
 
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
 
     return query
         select case
@@ -462,10 +474,45 @@ drop table if exists t_report;
               from t_report
 
               order by order_id, time_id, record_id, record_type_id) x;
-        get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' COMPLETED ===', l_row_cnt, 'O')
     into l_step_id;
 
 end;
 $function$
 ;
+
+select distinct cl.account_id
+from dwh.client_order cl
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             left join lateral (select po.sub_strategy_desc
+                                from dwh.client_order po
+                                where po.order_id = cl.parent_order_id
+                                  and po.create_date_id <= cl.create_date_id
+                                limit 1) po on true
+             left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
+             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
+             left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+             left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
+             left join lateral (select *
+                                from dwh.d_exchange exc
+                                where exc.exchange_id = cl.exchange_id
+                                  and exc.is_active
+                                limit 1) exc on true
+             left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                       fmj.fix_message ->> '9000' as tag_9000,
+                                       fmj.fix_message ->> '9003' as tag_9003,
+                                       fmj.fix_message ->> '9004' as tag_9004
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = cl.fix_message_id
+                                  and fmj.date_id between :in_start_date_id and :in_end_date_id
+                                limit 1) fmj on true
+             left join dwh.d_strategy_decision_reason_code sdr
+                       on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
+    where true
+--       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
+      and cl.create_date_id between :in_start_date_id and :in_end_date_id
+      and cl.trans_type <> 'F'
+limit 10;
