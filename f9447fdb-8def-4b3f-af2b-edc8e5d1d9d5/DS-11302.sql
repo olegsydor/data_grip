@@ -82,7 +82,7 @@ begin
         end case;
 
     return query
-        select tr.trade_record_id as new_trade_record_id, in_date_id as date_id, tr.account_id
+        select tr.trade_record_id as new_trade_record_id, in_date_id as date_id, tr.account_id::int8
         from genesis2.trade_record tr
         where tr.trade_record_id = any (l_inserted)
           and tr.date_id = in_date_id
