@@ -3,16 +3,8 @@
 create temp table tmp_os as
 select * from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374}');
 
-1183
-2928
-6331
-6670
-7670
-7671
-8112
-9234
-9374
-9880
+
+select * from tmp_os
 
 CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                  in_account_ids int8[] DEFAULT '{}'::int8[],
@@ -143,7 +135,11 @@ begin
                                case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
                                null, -- POST_MARKET_TIME
                                '0', -- DIRECTED_ORDER_IND
-                               null, --	NON_DISPLAY_IND -- ??
+                               case
+                                   when cl.sub_strategy_desc = 'SENSORDARK' then '1'
+                                   when cl.sub_strategy_desc = 'SENSORDARK' and tag_111::int > 0 then '1'
+                                   when cl.session_eligibility = 'G' and tag_111::int > 0 then '1'
+                                   else '0' end, --	NON_DISPLAY_IND -- ??
                                '0', --	DO_NOT_REDUCE_IND
                                case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
                                case
@@ -226,6 +222,7 @@ begin
                                   and exc.is_active
                                 limit 1) exc on true
              left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                       fmj.fix_message ->> '111'  as tag_111,
                                        fmj.fix_message ->> '9000' as tag_9000,
                                        fmj.fix_message ->> '9003' as tag_9003,
                                        fmj.fix_message ->> '9004' as tag_9004
@@ -482,7 +479,7 @@ end;
 $function$
 ;
 
-select distinct cl.account_id
+select  tag_111
 from dwh.client_order cl
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -501,7 +498,8 @@ from dwh.client_order cl
                                 where exc.exchange_id = cl.exchange_id
                                   and exc.is_active
                                 limit 1) exc on true
-             left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+ left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                       fmj.fix_message ->> '111'  as tag_111,
                                        fmj.fix_message ->> '9000' as tag_9000,
                                        fmj.fix_message ->> '9003' as tag_9003,
                                        fmj.fix_message ->> '9004' as tag_9004
@@ -515,4 +513,7 @@ from dwh.client_order cl
 --       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between :in_start_date_id and :in_end_date_id
       and cl.trans_type <> 'F'
+    and  tag_111 is not null
+      and  tag_111 <> '0'
+    and cl.sub_strategy_desc
 limit 10;
