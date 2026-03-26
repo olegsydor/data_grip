@@ -8,25 +8,19 @@ from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids :=
 
 select * from tmp_os
 
-CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
-                                                                 in_account_ids int8[] DEFAULT '{}'::int8[],
-                                                                 in_instrument_type character DEFAULT null,
-                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                 in_sub_strategy_ids int[] default '{}'::int4[])
-    RETURNS TABLE
-            (
-                ret_row text
-            )
-    LANGUAGE plpgsql
-AS
-$function$
+-- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
+
+CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[], in_instrument_type character DEFAULT NULL::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
     -- SO 20260108 https://dashfinancial.atlassian.net/browse/DEVREQ-7409 Add a new parameter: Exclude S3 EOD Blaze Orders (as well as BLAZE as exchange_id)
     -- SO 20260324 https://dashfinancial.atlassian.net/browse/DEVREQ-7857 Based on S3 report
 declare
-
+    l_data_firm_id text;
     l_account_ids int8[];
     l_load_id     int;
     l_row_cnt     int;
@@ -71,7 +65,7 @@ begin
            'A'                                                                                        as record_id,
            0                                                                                          as record_type_id,
            'H' || '|' ||
-           'V2.0.4' || '|' ||
+           'V3.0.7' || '|' ||
            to_char(clock_timestamp(), 'YYYYMMDD') || 'T' || to_char(clock_timestamp(), 'HH24MISSFF3') as rec;
 
     raise notice 'temp table created - %', clock_timestamp();
@@ -98,6 +92,8 @@ begin
                                cl.client_order_id, -- ORDER_ID
                                cl.order_id::text, --SOURCE_ORDER_ID
                                case
+                                   when cl.multileg_reporting_type = '3' then ''
+                                   when cl.parent_order_id is null then ''
                                    when cl.multileg_reporting_type = '2' then cl.client_order_id
                                    else cl.parent_order_id::text end, -- SOURCE_PARENT_ID
                                cl.orig_order_id::text, -- SOURCE_PREDECESSOR_ID
@@ -140,8 +136,8 @@ begin
                                '0', -- DIRECTED_ORDER_IND
                                case
                                    when cl.sub_strategy_desc = 'SENSORDARK' then '1'
-                                   when cl.sub_strategy_desc = 'SENSORDARK' and tag_111::int > 0 then '1'
-                                   when cl.session_eligibility = 'G' and tag_111::int > 0 then '1'
+                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
+                                   when cl.session_eligibility = 'G' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
                                    else '0' end, --	NON_DISPLAY_IND -- ??
                                '0', --	DO_NOT_REDUCE_IND
                                case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
@@ -166,16 +162,15 @@ begin
                                null, --	CLIENT_TEXT5
                                'US', --	TARGET_COUNTRY_CODE
                                'USD', --	CURRENCYCODE
-                               tag_9000, --	ALGO
-                               tag_9003, --	ORDER_START_TIME
-                               tag_9004, --	ORDER_REQUIRED_TIME
+                               case when cl.is_held = 'N' then tag_9000 end, --	ALGO
+                               case when cl.is_held = 'N' then tag_9003 end, --	ORDER_START_TIME
+                               case when cl.is_held = 'N' then tag_9004 end, --	ORDER_REQUIRED_TIME
                                null, --	CURRENCY_PAIR
                                null, --	EXCHANGE_RATE
                                null, --	HOUSEHOLD_ID
                                '0', --	FURTHER_ROUTABLE
                                null, --	CL_ORD_ID
                                case trading_firm_name when '2' then '1' when '1' then '0' end, --	IS_BD
-
                                null, --	CAT_NEW_ORDER_IND
                                null, --	CAT_FDID
                                null, --	CAT_ACCOUNT_TYPE
@@ -205,7 +200,7 @@ begin
                                null, --	CAT_ATS_NBBO_TIMESTAMP
                                null, --	CAT_CHILD_IND
                                null --	CAT_MODIFY_REQ_DATETIME
-                               ], ',', '')           as REC
+                               ], '|', '')           as REC
     from dwh.client_order cl
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
@@ -236,8 +231,9 @@ begin
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
     where true
-      and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
+      and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
+      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
@@ -265,10 +261,12 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
+    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
---                           and cl.order_id = ex.order_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -287,12 +285,15 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
-             join dwh.gtc_order_status gtc using (order_id, create_date_id)
+    join dwh.gtc_order_status gtc using (order_id, create_date_id)
+    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.create_date_id < in_start_date_id
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
       and cl.trans_type <> 'F'
     --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
 --       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
@@ -313,13 +314,16 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
-             join dwh.gtc_order_status gtc using (order_id, create_date_id)
+    join dwh.gtc_order_status gtc using (order_id, create_date_id)
+    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.create_date_id < in_start_date_id
       and gtc.close_date_id is not null
       and gtc.close_date_id > in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -347,7 +351,10 @@ begin
                          ex.exec_id,
                          ex.last_qty,
                          ex.last_px,
-                         ex.exchange_id
+                         ex.exchange_id,
+                         ex.trade_liquidity_indicator,
+                         a.account_name,
+                         a.eq_order_capacity
                   from dwh.execution ex
                            join lateral
                       (select *
@@ -364,6 +371,7 @@ begin
                                               where oc.instrument_id = i.instrument_id
                                               limit 1) oc on true
                            left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
+                           left join dwh.d_account a on a.account_id = cl.account_id
                   where true
                     and ex.exec_date_id between in_start_date_id and in_end_date_id
                     and ex.exec_type in ('4', '8', 'F')
@@ -380,21 +388,33 @@ begin
            client_order_id                      as record_id,
            3                                    as record_type_id,
            array_to_string(array [
-                               'A',
-                               order_id::text,
-                               case exec_type when '4' then 'c' when '8' then 'RJ' else '' end, --EVENT
+                               'A', --RECORD_TYPE
+                               order_id::text, --SOURCE_ORDER_ID
+                               case exec_type when '4' then 'C' when '8' then 'RJ' else '' end, --EVENT
                                null, --SYSTEM_ID
-                               case multileg_reporting_type when '3' then null else instrument_type_id end,
-                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
+                               case multileg_reporting_type when '3' then null else instrument_type_id end, --SECURITY_TYPE
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, --SYMBOL
                                null, --SYMBOL_EXCHANGE
-                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),
+                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')), --ACTION_DATETIME
                                null, --DESCRIPTION
-                               null, --[10]
-                               null, --[11]
-                               null, --[12]
-                               null, --[13]
-                               null --[14]
-                               ], ',', '')
+                               null, --CLIENT_TEXT1
+                               null, --CLIENT_TEXT2
+                               null, --CLIENT_TEXT3
+                               null, --CLIENT_TEXT4
+                               null, --CLIENT_TEXT5
+                               null, --CAT_ORDER_DATE
+                               null, --CAT_ORDER_ID
+                               null, --CAT_ORDER_LEAVES_QTY
+                               null, --CAT_ROUTED_ORDER_ID
+                               null, --CAT_CXL_REQ_DATETIME
+                               null, --CAT_CXL_QUANTITY
+                               null, --CAT_SEQ_NUM
+                               null, --CAT_INITATOR
+                               null, --CAT_DESTINATION
+                               null, --CAT_IS_COMPLEX_IND
+                               null, --CAT_CHILD_IND
+                               null --CAT_CANCEL_RJ_IND
+                               ], '|', '')
     from base
     where tp = 2
 --       and case when l_is_multileg then parent_order_id is null else true end
@@ -407,31 +427,65 @@ begin
            client_order_id                     as record_id,
            2                                   as record_type_id,
            array_to_string(array [
-                               'T',
-                               order_id::text,
-                               order_id::text || '_' || exec_id::text,
-                               null,
-                               null,
-                               instrument_type_id,
-                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
-                               null , --SYMBOL_EXCHANGE
+                               'T', --RECORD_TYPE
+                               order_id::text, --SOURCE_ORDER_ID
+                               order_id::text || '_' || exec_id::text, --SOURCE_TRADE_ID
+                               null, --TRADE_ID
+                               null, --TRADER_ID
+                               instrument_type_id, --SECURITY_TYPE
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, --SYMBOL_EXCHANGE
                                concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),--ACTION_DATETIME
-                               last_qty::text,
-                               to_char(last_px, 'fm99990d0099'),
-                               exchange_id,
-                               null, --[12]
-                               null, --[13]
-                               case when multileg_reporting_type = '2' then 'COMPLEX' end, --[14]
-                               null , --[15]
-                               null , --[16]
-                               null , --[17]
-                               null , --[18]
-                               null , --[19]
-                               null , --[20]
-                               null , --[21]
-                               null , --[22]
-                               null --[23]
-                               ], ',', '')
+                               last_qty::text, --ACTION_VOLUME
+                               to_char(last_px, 'fm99990d0099'), --ACTION_PRICE
+                               exchange_id, --ACTION_FIRM
+                               null, --ACTION_PART_NUMBER
+                               case when instrument_type_id = 'E' then eq_order_capacity end, --ACTION_PARTY_TYPE
+                               case when multileg_reporting_type = '2' then 'COMPLEX' end, --CLIENT_TEXT1
+                               null, --CLIENT_TEXT2
+                               null, --CLIENT_TEXT3
+                               null, --CLIENT_TEXT4
+                               null, --CLIENT_TEXT5
+                               null, --EXCHANGE_FEES
+                               null, --EXCHANGE_FEES_CURRENCY_CODE
+                               null, --CURRENCY_PAIR
+                               null, --EXCHANGE_RATE
+                               trade_liquidity_indicator, --TRADE_FLAGS
+                               account_name, --ORDER_ACCOUNT_ID
+                               null, --HOUSEHOLD_ID
+                               null, --NET_EXECUTION_FEE
+                               null, --LIQUIDITY_FLAG
+                               null, --CL_ORD_ID
+                               null, --CAT_ATS_TRADE_ID
+                               null, --CAT_ATS_CXL_FLAG
+                               null, --CAT_ATS_CXL_DATETIME
+                               null, --CAT_ATS_TRADE_CAPACITY
+                               null, --CAT_ATS_TAPE_TRADE_ID
+                               null, --CAT_ATS_MKT_CTR_IND
+                               null, --CAT_ATS_SIDE_DETAIL_IND
+                               null, --CAT_ATS_BUY_ORDER_DATE
+                               null, --CAT_ATS_BUY_ORDER_ID
+                               null, --CAT_ATS_BUY_SIDE
+                               null, --CAT_ATS_BUY_FDID
+                               null, --CAT_ATS_BUY_ACCT_TYPE
+                               null, --CAT_ATS_BUY_ORIG_IMID
+                               null, --CAT_ATS_SELL_ORDER_DATE
+                               null, --CAT_ATS_SELL_ORDER_ID
+                               null, --CAT_ATS_SELL_SIDE
+                               null, --CAT_ATS_SELL_FDID
+                               null, --CAT_ATS_SELL_ACCT_TYPE
+                               null, --CAT_ATS_SELL_ORIG_IMID
+                               null, --CAT_ATS_NBB_PRICE
+                               null, --CAT_ATS_NBB_QUANTITY
+                               null, --CAT_ATS_NBO_PRICE
+                               null, --CAT_ATS_NBO_QUANTITY
+                               null, --CAT_ATS_NBBO_SOURCE
+                               null, --CAT_ATS_NBBO_TIMESTAMP
+                               null, --CAT_ATS_RPT_EXCEPTION_IND
+                               null, --CAT_ATS_SEQ_NUM
+                               null, --CAT_ATS_CLEARING_NUM
+                               null, --CAT_ATS_COUNTERPARTY
+                               null --CAT_IS_COMPLEX_IND
+                               ], '|', '')
     from base
     where tp = 3
     --       and case
@@ -448,6 +502,23 @@ begin
     from t_report;
     raise notice 't_report has - %', l_row_cnt;
 
+    select
+        case
+            when count(distinct tf.trading_firm_id) > 1 then 'MULTIPLE'
+            else max(
+                case
+                    when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                    else tf.cat_imid
+                end
+            )
+        end
+    into l_data_firm_id
+    from dwh.d_trading_firm tf
+    join dwh.d_account ac using (trading_firm_id)
+    where ac.account_id = any(l_account_ids);
+
+
+
     return query
         select case
                    when record_type = 'H' then rec || '|' ||
@@ -455,15 +526,16 @@ begin
                                                in_end_date_id::text || 'T' || max_time || '|' || --Ending Event
                                                'DFIN' || '|' ||
 --                                                'DAIN' || '|' ||
-                                               (select coalesce(cat_imid, '')
-                                                from dwh.d_account
-                                                         join dwh.d_trading_firm using (trading_firm_id)
-                                                where true
-                                                  and case
-                                                          when l_account_ids = '{}' then true
-                                                          else account_id = any (l_account_ids) end
-                                                  and cat_imid is not null
-                                                limit 1) || '|' ||
+--                                                (select coalesce(cat_imid, '')
+--                                                 from dwh.d_account
+--                                                          join dwh.d_trading_firm using (trading_firm_id)
+--                                                 where true
+--                                                   and case
+--                                                           when l_account_ids = '{}' then true
+--                                                           else account_id = any (l_account_ids) end
+--                                                   and cat_imid is not null
+--                                                 limit 1) || '|' ||
+                                                coalesce(l_data_firm_id, '') || '|' ||
                                                'dashtradedesk@iongroup.com' || '|' ||
                                                ''
                    else rec
@@ -482,42 +554,3 @@ begin
 end;
 $function$
 ;
-
-select  cl.sub_strategy_id
-from dwh.client_order cl
-             inner join dwh.d_account ac on ac.account_id = cl.account_id
-             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-             left join lateral (select po.sub_strategy_desc
-                                from dwh.client_order po
-                                where po.order_id = cl.parent_order_id
-                                  and po.create_date_id <= cl.create_date_id
-                                limit 1) po on true
-             left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
-             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
-             left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
-             left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-             left join lateral (select *
-                                from dwh.d_exchange exc
-                                where exc.exchange_id = cl.exchange_id
-                                  and exc.is_active
-                                limit 1) exc on true
- left join lateral (select fmj.fix_message ->> '109'  as tag_109,
-                                       fmj.fix_message ->> '111'  as tag_111,
-                                       fmj.fix_message ->> '9000' as tag_9000,
-                                       fmj.fix_message ->> '9003' as tag_9003,
-                                       fmj.fix_message ->> '9004' as tag_9004
-                                from fix_capture.fix_message_json fmj
-                                where fmj.fix_message_id = cl.fix_message_id
-                                  and fmj.date_id between :in_start_date_id and :in_end_date_id
-                                limit 1) fmj on true
-             left join dwh.d_strategy_decision_reason_code sdr
-                       on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
-    where true
---       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
-      and cl.create_date_id between :in_start_date_id and :in_end_date_id
-      and cl.trans_type <> 'F'
-    and  cl.sub_strategy_id is not null
-      and  tag_111 <> '0'
-    and cl.sub_strategy_desc
-limit 10;
