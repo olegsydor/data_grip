@@ -2,11 +2,13 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file;
 create temp table tmp_os as
 select *
-from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374}',
+from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374, 18766}',
                                            in_sub_strategy_ids := '{1, 4}');
 
-
-select * from tmp_os
+select tf.*, account_id
+    from dwh.d_trading_firm tf
+    join dwh.d_account ac using (trading_firm_id)
+    where ac.account_id = any(l_account_ids);
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 
