@@ -12,6 +12,8 @@ select tf.*, account_id
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 
+-- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
+
 CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[], in_instrument_type character DEFAULT NULL::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
@@ -100,7 +102,11 @@ begin
                                    else cl.parent_order_id::text end, -- SOURCE_PARENT_ID
                                cl.orig_order_id::text, -- SOURCE_PREDECESSOR_ID
                                null, -- SOURCE_COMPLEX_ID
-                               case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
+--                                case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
+                               case
+                                    when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                                    else tf.cat_imid
+                                end, -- ORIG_FIRM
                                case
                                    when cl.multileg_reporting_type = '3' then ac.eq_mpid
                                    when cl.parent_order_id is null then ac.eq_mpid
@@ -112,7 +118,8 @@ begin
                                    when cl.multileg_reporting_type != '3' then di.instrument_type_id
                                    end, -- SECURITY_TYPE
                                case
-                                   when di.instrument_type_id = 'E' then di.instrument_type_id
+--                                    when di.instrument_type_id = 'E' then di.instrument_type_id
+                                   when di.instrument_type_id = 'E' then di.symbol
                                    when di.instrument_type_id = 'O' then oc.opra_symbol end, -- SYMBOL
                                null, -- SYMBOL_EXCHANGE
                                case cl.side
@@ -139,7 +146,7 @@ begin
                                case
                                    when cl.sub_strategy_desc = 'SENSORDARK' then '1'
                                    when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
-                                   when cl.session_eligibility = 'G' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
+                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
                                    else '0' end, --	NON_DISPLAY_IND -- ??
                                '0', --	DO_NOT_REDUCE_IND
                                case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
@@ -232,6 +239,7 @@ begin
                                 limit 1) fmj on true
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
+    left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
@@ -556,3 +564,202 @@ begin
 end;
 $function$
 ;
+
+SELECT * FROM DWH.d_account;
+
+
+
+select cl.sub_strategy_desc,
+     case
+                                   when cl.sub_strategy_desc = 'SENSORDARK' then '1'
+                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
+                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+                                   when cl.session_eligibility = 'G' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+                                   else '0' end, --	NON_DISPLAY_IND -- ??
+    ap."MaxFloorPctEnrichment",
+			ap."MaxFloorQtyEnrichment",
+			fmj.*, cl.max_floor from dwh.client_order cl
+ left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                       fmj.fix_message ->> '111'  as tag_111,
+                                       fmj.fix_message ->> '9000' as tag_9000,
+                                       fmj.fix_message ->> '9003' as tag_9003,
+                                       fmj.fix_message ->> '9004' as tag_9004
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = cl.fix_message_id
+                                  and fmj.date_id = cl.create_date_id
+                                limit 1) fmj on true
+                left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
+    where client_order_id = '1774350014971130406'
+and cl.create_date_id = 20260324;
+
+
+select 'NO'                                      as record_type,
+           coalesce(cl.parent_order_id, cl.order_id) as order_id,
+           to_char(cl.process_time, 'HH24MISSFF3')   as time_id,
+           cl.client_order_id                        as record_id,
+           1                                         as record_type_id,
+           -- REC --
+--            array_to_string(array [
+                               'O', -- RECORD_TYPE
+                               case
+                                   when cl.multileg_reporting_type = '3' then 'NO'
+                                   when cl.parent_order_id is null then 'NO'
+                                   else 'RO'
+                                   end , -- EVENT
+                               cl.client_order_id, -- ORDER_ID
+                               cl.order_id::text, --SOURCE_ORDER_ID
+                               case
+                                   when cl.multileg_reporting_type = '3' then ''
+                                   when cl.parent_order_id is null then ''
+                                   when cl.multileg_reporting_type = '2' then cl.client_order_id
+                                   else cl.parent_order_id::text end, -- SOURCE_PARENT_ID
+                               cl.orig_order_id::text, -- SOURCE_PREDECESSOR_ID
+                               null, -- SOURCE_COMPLEX_ID
+--                                case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
+                               case
+                                    when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                                    else tf.cat_imid
+                                end, -- ORIG_FIRM
+                               case
+                                   when cl.multileg_reporting_type = '3' then ac.eq_mpid
+                                   when cl.parent_order_id is null then ac.eq_mpid
+                                   else coalesce(exc.mic_code, exc.eq_mpid, '')
+                                   end , -- FIRM_MPID
+                               fmj.tag_109, -- FIRM_TRADER_ID
+                               ac.account_name, -- ORDER_ACCOUNT_ID
+                               case
+                                   when cl.multileg_reporting_type != '3' then di.instrument_type_id
+                                   end, -- SECURITY_TYPE
+                               case
+--                                    when di.instrument_type_id = 'E' then di.instrument_type_id
+                                   when di.instrument_type_id = 'E' then di.symbol
+                                   when di.instrument_type_id = 'O' then oc.opra_symbol end, -- SYMBOL
+                               null, -- SYMBOL_EXCHANGE
+                               case cl.side
+                                   when '1' then 'B'
+                                   when '2' then 'S'
+                                   when '5' then 'SS'
+                                   when '6' then 'SSE' end, -- ORDER_ACTION
+                               to_char(cl.process_time, 'YYYYMMDD') || 'T' ||
+                               to_char(cl.process_time, 'HH24MISSFF3'), -- ORDER_DATETIME
+                               ot.order_type_short_name, -- ORDER_TYPE
+                               case when cl.multileg_reporting_type != '3' then cl.order_qty::text end, -- ORDER_VOLUME
+                               to_char(cl.price, 'FM99990D0099'), -- LIMIT_PRICE
+                               to_char(cl.stop_price, 'FM99990D0099'), -- STOP_PRICE
+                               tif.tif_short_name, -- TIME_IN_FORCE
+                               case
+                                   when cl.time_in_force_id = '6' then concat_ws('T',
+                                                                                 to_char(cl.expire_time, 'YYYYMMDD'),
+                                                                                 to_char(cl.expire_time, 'HH24MISSFF3')) end, -- EXPIRATION_DATETIME
+                               case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
+                               null, -- PRE_MARKET_TIME
+                               case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
+                               null, -- POST_MARKET_TIME
+                               '0', -- DIRECTED_ORDER_IND
+                               case
+                                   when cl.sub_strategy_desc = 'SENSORDARK' then '1'
+                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
+                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+                                   else '0' end, --	NON_DISPLAY_IND -- ??
+                               '0', --	DO_NOT_REDUCE_IND
+                               case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
+                               case
+                                   when cl.exec_instruction = '1' then '1'
+                                   when cl.is_held = 'Y' then '1'
+                                   else '0' end, --	NOT_HELD_IND
+                               case when ot.order_type_id = 'O' then '1'
+                                   when tif.tif_id = '2' then '1'
+                                       else '0' end, --	FILL_AT_OPEN_IND: If Order_Type = Market on_Open or if TimeInForce = On Open set to 1 otherwise set to 0
+                               case when ot.order_type_id = '5' then '1'
+                                   when tif.tif_id = '7' then '1'
+                                       else '0' end, --	FILL_AT_CLOSE_IND
+                               '0', --	MANUAL_IND
+                               null, --	OPTION_STRIKE_PRICE
+                               null, --	OPTIONS_UNDER_SYMBOL
+                               null, --	OPTION_EXPIRATION_DATETIME
+                               case
+                                   when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
+                                   when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
+                                   end , --	OPTION_TYPE
+                               tf.trading_firm_demo_mnemonic, --	CLIENT_TEXT1
+                               sdr.wave_type_name, --	CLIENT_TEXT2
+                               null, --	CLIENT_TEXT3
+                               null, --	CLIENT_TEXT4
+                               null, --	CLIENT_TEXT5
+                               'US', --	TARGET_COUNTRY_CODE
+                               'USD', --	CURRENCYCODE
+                               tag_9000, --	ALGO
+                               case when cl.is_held = 'N' then tag_9003 end, --	ORDER_START_TIME
+                               case when cl.is_held = 'N' then tag_9004 end, --	ORDER_REQUIRED_TIME
+                               null, --	CURRENCY_PAIR
+                               null, --	EXCHANGE_RATE
+                               null, --	HOUSEHOLD_ID
+                               '0', --	FURTHER_ROUTABLE
+                               null, --	CL_ORD_ID
+                               case when cl.side in ('2', '4', '5', '6') then '1' when cl.side in ('1', '3') then '0' end, --	IS_BD
+                               null, --	CAT_NEW_ORDER_IND
+                               null, --	CAT_FDID
+                               null, --	CAT_ACCOUNT_TYPE
+                               null, --	CAT_SENDER_IMID
+                               null, --	CAT_RECEIVIER_IMID
+                               null, --	CAT_DESTINATION
+                               null, --	CAT_DESTINATION_TYPE
+                               null, --	CAT_SESSION
+                               null, --	CAT_ORDER_ID
+                               null, --	CAT_ROUTED_ORDER_ID
+                               null, --	CAT_EXCHANGE_ORIGIN_CODE
+                               null, --	CAT_REJECTED_IND
+                               null, --	CAT_PREDESSOR_ORDER_DATE
+                               null, --	CAT_PREDESSOR_ORDER_ID
+                               null, --	CAT_PREDESSOR_ROUTE_ORDER_ID
+                               null, --	CAT_ATS_SEQ_NUM
+                               null, --	CAT_ATS_DISPLAY_IND
+                               null, --	CAT_ATS_DISPLAY_PRICE
+                               null, --	CAT_ATS_WORKING_PRICE
+                               null, --	CAT_ATS_DISPLAY_QUANTITY
+                               null, --	CAT_ATS_ORDER_TYPE
+                               null, --	CAT_ATS_NBB_PRICE
+                               null, --	CAT_ATS_NBB_QUANTITY
+                               null, --	CAT_ATS_NBO_PRICE
+                               null, --	CAT_ATS_NBO_QUANTITY
+                               null, --	CAT_ATS_NBBO_SOURCE
+                               null, --	CAT_ATS_NBBO_TIMESTAMP
+                               null, --	CAT_CHILD_IND
+                               null --	CAT_MODIFY_REQ_DATETIME
+--                                ], '|', '')           as REC
+    from dwh.client_order cl
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             left join lateral (select po.sub_strategy_desc
+                                from dwh.client_order po
+                                where po.order_id = cl.parent_order_id
+                                  and po.create_date_id <= cl.create_date_id
+                                limit 1) po on true
+             left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
+             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
+             left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+             left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
+             left join lateral (select *
+                                from dwh.d_exchange exc
+                                where exc.exchange_id = cl.exchange_id
+                                  and exc.is_active
+                                limit 1) exc on true
+             left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                       fmj.fix_message ->> '111'  as tag_111,
+                                       fmj.fix_message ->> '9000' as tag_9000,
+                                       fmj.fix_message ->> '9003' as tag_9003,
+                                       fmj.fix_message ->> '9004' as tag_9004
+                                from fix_capture.fix_message_json fmj
+                                where fmj.fix_message_id = cl.fix_message_id
+                                  and fmj.date_id = 20260324
+                                limit 1) fmj on true
+             left join dwh.d_strategy_decision_reason_code sdr
+                       on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
+    left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
+    where true
+and cl.client_order_id = '1774350014971130406'
+and cl.create_date_id = 20260324;
+
+select * from dwh.d_order_type
+select * from dwh.d_time_in_force
