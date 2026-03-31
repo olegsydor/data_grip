@@ -2,8 +2,10 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file;
 create temp table tmp_os as
 select *
-from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374, 18766}',
+from dash360.report_fintech_s3_master_file(20260323, 20260323, in_account_ids := '{9374, 18766}'),
                                            in_sub_strategy_ids := '{1, 4}');
+
+select * from tmp_os
 
 select tf.*, account_id
     from dwh.d_trading_firm tf
@@ -14,10 +16,18 @@ select tf.*, account_id
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 
-CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[], in_instrument_type character DEFAULT NULL::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
+                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                 in_instrument_type character DEFAULT NULL::bpchar,
+                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                 in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
@@ -25,11 +35,11 @@ AS $function$
     -- SO 20260324 https://dashfinancial.atlassian.net/browse/DEVREQ-7857 Based on S3 report
 declare
     l_data_firm_id text;
-    l_account_ids int8[];
-    l_load_id     int;
-    l_row_cnt     int;
-    l_step_id     int;
-    l_msg         text;
+    l_account_ids  int8[];
+    l_load_id      int;
+    l_row_cnt      int;
+    l_step_id      int;
+    l_msg          text;
 begin
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
@@ -104,9 +114,9 @@ begin
                                null, -- SOURCE_COMPLEX_ID
 --                                case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
                                case
-                                    when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
-                                    else tf.cat_imid
-                                end, -- ORIG_FIRM
+                                   when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                                   else tf.cat_imid
+                                   end, -- ORIG_FIRM
                                case
                                    when cl.multileg_reporting_type = '3' then ac.eq_mpid
                                    when cl.parent_order_id is null then ac.eq_mpid
@@ -145,8 +155,10 @@ begin
                                '0', -- DIRECTED_ORDER_IND
                                case
                                    when cl.sub_strategy_desc = 'SENSORDARK' then '1'
-                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
-                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0
+                                       then '1'
+                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0
+                                       then '1'
                                    else '0' end, --	NON_DISPLAY_IND -- ??
                                '0', --	DO_NOT_REDUCE_IND
                                case cl.exec_instruction when 'G' then '1' else '0' end, --	ALL_OR_NONE_IND
@@ -154,8 +166,14 @@ begin
                                    when cl.exec_instruction = '1' then '1'
                                    when cl.is_held = 'Y' then '1'
                                    else '0' end, --	NOT_HELD_IND
-                               '0', --	FILL_AT_OPEN_IND
-                               '0', --	FILL_AT_CLOSE_IND
+                               case
+                                   when ot.order_type_id = 'O' then '1'
+                                   when tif.tif_id = '2' then '1'
+                                   else '0' end, --	FILL_AT_OPEN_IND: If Order_Type = Market on_Open or if TimeInForce = On Open set to 1 otherwise set to 0
+                               case
+                                   when ot.order_type_id = '5' then '1'
+                                   when tif.tif_id = '7' then '1'
+                                   else '0' end, --	FILL_AT_CLOSE_IND:  If Order_Type = Market on_Close or if TimeInForce = On Close set to 1 otherwise set to 0
                                '0', --	MANUAL_IND
                                null, --	OPTION_STRIKE_PRICE
                                null, --	OPTIONS_UNDER_SYMBOL
@@ -171,7 +189,7 @@ begin
                                null, --	CLIENT_TEXT5
                                'US', --	TARGET_COUNTRY_CODE
                                'USD', --	CURRENCYCODE
-                               case when cl.is_held = 'N' then tag_9000 end, --	ALGO
+                               tag_9000, --	ALGO
                                case when cl.is_held = 'N' then tag_9003 end, --	ORDER_START_TIME
                                case when cl.is_held = 'N' then tag_9004 end, --	ORDER_REQUIRED_TIME
                                null, --	CURRENCY_PAIR
@@ -179,7 +197,9 @@ begin
                                null, --	HOUSEHOLD_ID
                                '0', --	FURTHER_ROUTABLE
                                null, --	CL_ORD_ID
-                               case trading_firm_name when '2' then '1' when '1' then '0' end, --	IS_BD
+                               case
+                                   when cl.side in ('2', '4', '5', '6') then '1'
+                                   when cl.side in ('1', '3') then '0' end, --	IS_BD
                                null, --	CAT_NEW_ORDER_IND
                                null, --	CAT_FDID
                                null, --	CAT_ACCOUNT_TYPE
@@ -239,12 +259,14 @@ begin
                                 limit 1) fmj on true
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
-    left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
+--     left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
+      and case
+              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -271,12 +293,14 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
-    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
+      and case
+              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -295,15 +319,17 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
-    join dwh.gtc_order_status gtc using (order_id, create_date_id)
-    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             join dwh.gtc_order_status gtc using (order_id, create_date_id)
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.create_date_id < in_start_date_id
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
+      and case
+              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F'
     --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
 --       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
@@ -324,8 +350,8 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
-    join dwh.gtc_order_status gtc using (order_id, create_date_id)
-    join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             join dwh.gtc_order_status gtc using (order_id, create_date_id)
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.create_date_id < in_start_date_id
@@ -333,7 +359,9 @@ begin
       and gtc.close_date_id > in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case when coalesce(in_sub_strategy_ids, '{}') = '{}' then true else cl.sub_strategy_id = any(in_sub_strategy_ids) end
+      and case
+              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -403,9 +431,12 @@ begin
                                case exec_type when '4' then 'C' when '8' then 'RJ' else '' end, --EVENT
                                null, --SYSTEM_ID
                                case multileg_reporting_type when '3' then null else instrument_type_id end, --SECURITY_TYPE
-                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, --SYMBOL
+                               case instrument_type_id
+                                   when 'E' then display_instrument_id
+                                   when 'O' then opra_symbol end, --SYMBOL
                                null, --SYMBOL_EXCHANGE
-                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')), --ACTION_DATETIME
+                               concat_ws('T', to_char(exec_time, 'YYYYMMDD'),
+                                         to_char(exec_time, 'HH24MISSFF3')), --ACTION_DATETIME
                                null, --DESCRIPTION
                                null, --CLIENT_TEXT1
                                null, --CLIENT_TEXT2
@@ -443,7 +474,9 @@ begin
                                null, --TRADE_ID
                                null, --TRADER_ID
                                instrument_type_id, --SECURITY_TYPE
-                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, --SYMBOL_EXCHANGE
+                               case instrument_type_id
+                                   when 'E' then display_instrument_id
+                                   when 'O' then opra_symbol end, --SYMBOL_EXCHANGE
                                concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),--ACTION_DATETIME
                                last_qty::text, --ACTION_VOLUME
                                to_char(last_px, 'fm99990d0099'), --ACTION_PRICE
@@ -512,21 +545,19 @@ begin
     from t_report;
     raise notice 't_report has - %', l_row_cnt;
 
-    select
-        case
-            when count(distinct tf.trading_firm_id) > 1 then 'MULTIPLE'
-            else max(
-                case
-                    when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
-                    else tf.cat_imid
-                end
-            )
-        end
+    select case
+               when count(distinct tf.trading_firm_id) > 1 then 'MULTIPLE'
+               else max(
+                       case
+                           when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                           else tf.cat_imid
+                           end
+                    )
+               end
     into l_data_firm_id
     from dwh.d_trading_firm tf
-    join dwh.d_account ac using (trading_firm_id)
-    where ac.account_id = any(l_account_ids);
-
+             join dwh.d_account ac using (trading_firm_id)
+    where ac.account_id = any (l_account_ids);
 
 
     return query
@@ -535,7 +566,7 @@ begin
                                                in_start_date_id::text || 'T' || min_time || '|' || --Starting Event
                                                in_end_date_id::text || 'T' || max_time || '|' || --Ending Event
                                                'DFIN' || '|' ||
---                                                'DAIN' || '|' ||
+                                                   --                                                'DAIN' || '|' ||
 --                                                (select coalesce(cat_imid, '')
 --                                                 from dwh.d_account
 --                                                          join dwh.d_trading_firm using (trading_firm_id)
@@ -545,7 +576,7 @@ begin
 --                                                           else account_id = any (l_account_ids) end
 --                                                   and cat_imid is not null
 --                                                 limit 1) || '|' ||
-                                                coalesce(l_data_firm_id, '') || '|' ||
+                                               coalesce(l_data_firm_id, '') || '|' ||
                                                'dashtradedesk@iongroup.com' || '|' ||
                                                ''
                    else rec
@@ -570,27 +601,36 @@ SELECT * FROM DWH.d_account;
 
 
 select cl.sub_strategy_desc,
-     case
-                                   when cl.sub_strategy_desc = 'SENSORDARK' then '1'
-                                   when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
-                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
-                                   when cl.session_eligibility = 'G' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
-                                   else '0' end, --	NON_DISPLAY_IND -- ??
-    ap."MaxFloorPctEnrichment",
-			ap."MaxFloorQtyEnrichment",
-			fmj.*, cl.max_floor from dwh.client_order cl
- left join lateral (select fmj.fix_message ->> '109'  as tag_109,
-                                       fmj.fix_message ->> '111'  as tag_111,
-                                       fmj.fix_message ->> '9000' as tag_9000,
-                                       fmj.fix_message ->> '9003' as tag_9003,
-                                       fmj.fix_message ->> '9004' as tag_9004
-                                from fix_capture.fix_message_json fmj
-                                where fmj.fix_message_id = cl.fix_message_id
-                                  and fmj.date_id = cl.create_date_id
-                                limit 1) fmj on true
-                left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
-    where client_order_id = '1774350014971130406'
-and cl.create_date_id = 20260324;
+       cl.max_floor,
+       tag_111,
+       ap.*,
+       case
+           when cl.sub_strategy_desc = 'SENSORDARK' then '1'
+           when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0 then '1'
+           when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+           when cl.session_eligibility = 'G' and coalesce(cl.max_floor, tag_111::int, 0) > 0 then '1'
+           else '0' end, --	NON_DISPLAY_IND -- ??
+       ap."MaxFloorPctEnrichment",
+       ap."MaxFloorQtyEnrichment",
+       fmj.*,
+       cl.max_floor
+from dwh.client_order cl
+         left join lateral (select fmj.fix_message ->> '109'  as tag_109,
+                                   fmj.fix_message ->> '111'  as tag_111,
+                                   fmj.fix_message ->> '9000' as tag_9000,
+                                   fmj.fix_message ->> '9003' as tag_9003,
+                                   fmj.fix_message ->> '9004' as tag_9004
+                            from fix_capture.fix_message_json fmj
+                            where fmj.fix_message_id = cl.fix_message_id
+                              and fmj.date_id = cl.create_date_id
+                            limit 1) fmj on true
+         left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment"
+                            from dwh.historic_order_algo_parameters ap
+                            where cl.order_id = ap."OrderID"
+                              and cl.Create_Date_ID = ap."Status_Date_id"
+                            limit 1) ap on true
+where client_order_id = '1774350014971130406'
+  and cl.create_date_id = 20260324;
 
 
 select 'NO'                                      as record_type,
@@ -600,6 +640,7 @@ select 'NO'                                      as record_type,
            1                                         as record_type_id,
            -- REC --
 --            array_to_string(array [
+
                                'O', -- RECORD_TYPE
                                case
                                    when cl.multileg_reporting_type = '3' then 'NO'
@@ -672,7 +713,7 @@ select 'NO'                                      as record_type,
                                        else '0' end, --	FILL_AT_OPEN_IND: If Order_Type = Market on_Open or if TimeInForce = On Open set to 1 otherwise set to 0
                                case when ot.order_type_id = '5' then '1'
                                    when tif.tif_id = '7' then '1'
-                                       else '0' end, --	FILL_AT_CLOSE_IND
+                                       else '0' end, --	FILL_AT_CLOSE_IND:  If Order_Type = Market on_Close or if TimeInForce = On Close set to 1 otherwise set to 0
                                '0', --	MANUAL_IND
                                null, --	OPTION_STRIKE_PRICE
                                null, --	OPTIONS_UNDER_SYMBOL
