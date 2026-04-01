@@ -1,9 +1,6 @@
--- https://dashfinancial.atlassian.net/browse/DS-11295
--- DROP FUNCTION dash360.report_fintech_s3_master_file;
-drop table if exists tmp_os;
-create temp table tmp_os as
+create temp table tmp_trash_os as
 select *
-from dash360.report_fintech_s3_master_file(
+from trash.report_fintech_s3_master_file(
 	in_start_date_id := 20260331,
 	in_end_date_id := 20260331,
 	--in_account_ids := '{}',
@@ -11,42 +8,14 @@ from dash360.report_fintech_s3_master_file(
 	in_trading_firm_ids := '{ctctrad01}',
 	in_sub_strategy_ids := '{76,77,79,80,81,82}'
 );
-select * from t_parent_orders_sub_str
-
-select * from tmp_os
-
-select tf.*, account_id
-    from dwh.d_trading_firm tf
-    join dwh.d_account ac using (trading_firm_id)
-    where ac.account_id = any(l_account_ids);
-
-
-select * from dwh.client_order cl
-    where true
-      and case
-              when coalesce(:in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (:in_sub_strategy_ids)
-          else cl.parent_order_id in (select order_id from dwh.client_order po where po.create_date_id = :in_date_id and po.sub_strategy_id = any (:in_sub_strategy_ids))
-          end
-
+select * from tmp_trash_os;
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
-
-CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
-                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                 in_instrument_type character DEFAULT NULL::bpchar,
-                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                 in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
-    RETURNS TABLE
-            (
-                ret_row text
-            )
-    LANGUAGE plpgsql
-AS
-$function$
+CREATE OR REPLACE FUNCTION trash.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[], in_instrument_type character DEFAULT NULL::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
@@ -76,42 +45,15 @@ begin
                   when coalesce(in_account_ids, '{}') <> '{}'::int8[] then account_id = ANY (in_account_ids)
                   else true end;
     end if;
-
-    l_msg := 'report_fintech_s3_master_file';
-
-    select nextval('public.load_timing_seq') into l_load_id;
-    l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
+    l_msg := 'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
              case in_instrument_type
                  when 'E' then '. Equities'
                  when 'O' then '. Options'
-                 else '. All instrument types' end || '. accounts - ' || substr(l_account_ids::text, 1, 50) || ' STARTED ===', 0, 'O')
-    into l_step_id;
+                 else '. All instrument types' end || '. accounts - ' || substr(l_account_ids::text, 1, 50);
 
-    drop table if exists t_parent_orders_sub_str;
-    create temp table t_parent_orders_sub_str as
-    select order_id
-    from dwh.client_order cl
-    inner join dwh.d_account ac on ac.account_id = cl.account_id
-             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-    where true
-      and cl.create_date_id between in_start_date_id and in_end_date_id
-      and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
-      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then false
-              else cl.sub_strategy_id = any (in_sub_strategy_ids)        end
-      and cl.trans_type <> 'F'
-      and cl.parent_order_id is null;
-
-        get diagnostics l_row_cnt = row_count;
-
-    create index on t_parent_orders_sub_str (order_id);
-
-
-
-    select public.load_log(l_load_id, l_step_id, l_msg || ' Parent orders with correct sub_strategy calculated', l_row_cnt, 'O')
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id, l_msg || ' STARTED ===', 0, 'O')
     into l_step_id;
 
     -- header
@@ -158,13 +100,13 @@ begin
                                    else cl.parent_order_id::text end, -- SOURCE_PARENT_ID
                                cl.orig_order_id::text, -- SOURCE_PREDECESSOR_ID
                                null, -- SOURCE_COMPLEX_ID
-               --case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
-               /*
-               case
-                   when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
-                   else tf.cat_imid
-                   end, -- ORIG_FIRM
-               */
+                               --case when ac.is_broker_dealer = 'Y' then ac.broker_dealer_mpid end, -- ORIG_FIRM
+                               /*
+                               case
+                                   when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                                   else tf.cat_imid
+                                   end, -- ORIG_FIRM
+                               */
                                tf.trading_firm_demo_mnemonic, -- ORIG_FIRM
                                case
                                    when cl.multileg_reporting_type = '3' then ac.eq_mpid
@@ -172,7 +114,7 @@ begin
                                    else coalesce(exc.mic_code, exc.eq_mpid, '')
                                    end , -- FIRM_MPID
                                fmj.tag_109, -- FIRM_TRADER_ID
-               --ac.account_name, -- ORDER_ACCOUNT_ID
+                               --ac.account_name, -- ORDER_ACCOUNT_ID
                                ac.account_algo_alias, --ORDER_ACCOUNT_ID
                                case
                                    when cl.multileg_reporting_type != '3' then di.instrument_type_id
@@ -207,7 +149,7 @@ begin
                                    when cl.sub_strategy_desc = 'SENSORDARK' then '1'
                                    when cl.sub_strategy_desc = 'SENSORDARK' and coalesce(cl.max_floor, tag_111::int) > 0
                                        then '1'
-                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) = 0
+                                   when cl.sub_strategy_desc = 'SENSOR' and coalesce(cl.max_floor, tag_111::int, 0) > 0
                                        then '1'
                                    else '0' end, --	NON_DISPLAY_IND -- ??
                                '0', --	DO_NOT_REDUCE_IND
@@ -316,9 +258,7 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
               when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -352,9 +292,7 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
               when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -383,9 +321,7 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
               when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F'
     --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
 --       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
@@ -417,9 +353,7 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
               when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -552,7 +486,7 @@ begin
                                null, --CURRENCY_PAIR
                                null, --EXCHANGE_RATE
                                trade_liquidity_indicator, --TRADE_FLAGS
-               --account_name, --ORDER_ACCOUNT_ID
+                               --account_name, --ORDER_ACCOUNT_ID
                                account_algo_alias, ----ORDER_ACCOUNT_ID
                                null, --HOUSEHOLD_ID
                                null, --NET_EXECUTION_FEE
@@ -608,12 +542,12 @@ begin
     select case
                when count(distinct tf.trading_firm_id) > 1 then 'MULTIPLE'
                else max(
-                   /*
-                   case
-                       when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
-                       else tf.cat_imid
-                       end
-                   */
+                       /*
+                       case
+                           when tf.trading_firm_name ilike 'CTC Trading Firm%' then 'Dash916'
+                           else tf.cat_imid
+                           end
+                       */
                        tf.trading_firm_demo_mnemonic
                     )
                end
@@ -658,4 +592,3 @@ begin
 end;
 $function$
 ;
-
