@@ -62,9 +62,12 @@ select *, '{0}'::int4[] as load_batch_id_eod
 into trash.so_20260406_diff
 from base;
 
+
+select * from trash.so_20260406_diff1
+
 select *
 --     min(to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS.MS')), max(to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS.MS'))
-    from trash.so_20251118_diff
+    from trash.so_20260406_diff1
 where true
 	        and case
                  when (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
@@ -72,13 +75,12 @@ where true
                      msg_type not in ('9', 'F')
                  else true end
 
-create table trash.diff_20251118 as
+create table trash.diff_20260406 as
 select
---     (to_timestamp(df.fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone 'US/Eastern')::time,
-    *
-from trash.so_20260217_diff df
-         join partitions.hft_fix_message_event_20260217_eod eod on (true
-    and eod.load_batch_id = any (df.load_batch_id_eod)
+    eod.*
+from trash.so_20260406_diff1 df
+         join partitions.hft_fix_message_event_20260406_eod eod on (true
+    and eod.load_batch_id = any ('{760132,760136,760154}')
     and eod.cl_ord_id = df.cl_ord_id
     and coalesce(eod.parent_cl_ord_id, 'parent') = coalesce(df.parent_cl_ord_id, 'parent')
     and coalesce(eod.orig_cl_ord_id, 'orig') = coalesce(df.orig_cl_ord_id, 'orig')
@@ -94,11 +96,7 @@ from trash.so_20260217_diff df
 -- --                       df.msg_type not in ('9', 'F')
 --                   else true end;
 
-select
---     account_name, count(*)
-*
-from trash.diff_20251111
-group by account_name;
+
 
 select (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                         'US/Eastern')::time, * from trash.so_disc_20260105
