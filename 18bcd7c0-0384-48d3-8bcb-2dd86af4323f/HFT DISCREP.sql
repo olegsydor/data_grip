@@ -362,3 +362,28 @@ order by cl_ord_id, load_batch_id
 alter table inc_hft.hft_incremental_files
     add column if not exists is_str_modif_processed bool not null default false;
 comment on column inc_hft.hft_incremental_files.is_str_modif_processed is 'Switched into true as soon as the process of filling the very orig message 35=D';
+
+
+
+with frst as (SELECT date_id,
+                     left(split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) - 1), '.', 1), 10) as eos,
+--                      split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) - 1), '.', 1)           as file,
+                     sum(loaded_row)                                                                           as first_rows
+              FROM public.load_hft_log AS x
+              WHERE date_id between 20251201 and 20260131
+                and x.start_time::date between 20251201::text::date and 20251231::text::date
+              group by 1, 2)
+   , sec as (select date_id,
+                    left(split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) - 1), '.', 1), 10) as eos,
+--                     split_part(RIGHT(filename, POSITION('/' in REVERSE(filename)) - 1), '.', 1)           as file,
+                    sum(loaded_row)                                                                       as reloaded_rows
+             from public.load_hft_log
+             where date_id between 20251201 and 20251231
+               and start_time::date >= '2026-04-01'
+               and comment is null
+             group by 1, 2)
+select date_id, eos, first_rows, reloaded_rows
+from frst
+         left join sec using (eos, date_id)
+where eos = 'EOS1INTDC1'
+order by 1, 2
