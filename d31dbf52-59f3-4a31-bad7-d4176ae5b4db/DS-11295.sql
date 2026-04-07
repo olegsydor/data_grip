@@ -32,9 +32,6 @@ select * from dwh.client_order cl
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
-
 CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                  in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                                  in_instrument_type character DEFAULT NULL::bpchar,
@@ -59,6 +56,7 @@ declare
     l_row_cnt      int;
     l_step_id      int;
     l_msg          text;
+    l_msg_ext      text;
 begin
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
@@ -81,18 +79,21 @@ begin
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
-    select public.load_log(l_load_id, l_step_id, 'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
-             case in_instrument_type
-                 when 'E' then '. Equities'
-                 when 'O' then '. Options'
-                 else '. All instrument types' end || '. accounts - ' || substr(l_account_ids::text, 1, 50) || ' STARTED ===', 0, 'O')
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text ||
+                           case in_instrument_type
+                               when 'E' then '. Equities'
+                               when 'O' then '. Options'
+                               else '. All instrument types' end || '. accounts - ' ||
+                           substr(l_account_ids::text, 1, 50) || ' STARTED ===', 0, 'O')
     into l_step_id;
 
     drop table if exists t_parent_orders_sub_str;
     create temp table t_parent_orders_sub_str as
     select order_id
     from dwh.client_order cl
-    inner join dwh.d_account ac on ac.account_id = cl.account_id
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
@@ -101,17 +102,17 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
               when coalesce(in_sub_strategy_ids, '{}') = '{}' then false
-              else cl.sub_strategy_id = any (in_sub_strategy_ids)        end
+              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
       and cl.trans_type <> 'F'
       and cl.parent_order_id is null;
 
-        get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
 
     create index on t_parent_orders_sub_str (order_id);
 
 
-
-    select public.load_log(l_load_id, l_step_id, l_msg || ' Parent orders with correct sub_strategy calculated', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg || ' Parent orders with correct sub_strategy calculated',
+                           l_row_cnt, 'O')
     into l_step_id;
 
     -- header
@@ -198,9 +199,11 @@ begin
                                    when cl.time_in_force_id = '6' then concat_ws('T',
                                                                                  to_char(cl.expire_time, 'YYYYMMDD'),
                                                                                  to_char(cl.expire_time, 'HH24MISSFF3')) end, -- EXPIRATION_DATETIME
-                               case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
+--                                case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
+                               case when cl.process_time::time between '04:00'::time and '09:30'::time then '1' else '0' end, -- PRE_MARKET_IND: Column 23 - PRE_MARKET_IND - Set to 1 if co.process_time between 4:00 - 9:30 EST
                                null, -- PRE_MARKET_TIME
-                               case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
+--                                case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
+                               case when cl.process_time::time between '16:00'::time and '20:00'::time then '1' else '0' end, --POST_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
                                null, -- POST_MARKET_TIME
                                '0', -- DIRECTED_ORDER_IND
                                case
@@ -232,8 +235,8 @@ begin
                                    when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
                                    when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
                                    end , --	OPTION_TYPE
-                               tf.trading_firm_demo_mnemonic, --	CLIENT_TEXT1
-                               sdr.wave_type_name, --	CLIENT_TEXT2
+                               sdr.wave_type_name, --	CLIENT_TEXT1 (39)
+                               fc.fix_comp_id, --	CLIENT_TEXT2 (40)
                                null, --	CLIENT_TEXT3
                                null, --	CLIENT_TEXT4
                                null, --	CLIENT_TEXT5
@@ -244,7 +247,7 @@ begin
                                case when cl.is_held = 'N' then tag_9004 end, --	ORDER_REQUIRED_TIME
                                null, --	CURRENCY_PAIR
                                null, --	EXCHANGE_RATE
-                               null, --	HOUSEHOLD_ID
+                               tf.trading_firm_demo_mnemonic, --	HOUSEHOLD_ID (51)
                                '0', --	FURTHER_ROUTABLE
                                null, --	CL_ORD_ID
                                case
@@ -309,6 +312,8 @@ begin
                                 limit 1) fmj on true
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
+             left join dwh.d_fix_connection fc
+                       on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
 --     left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
@@ -659,3 +664,11 @@ end;
 $function$
 ;
 
+
+select cl.process_time::time, case
+           when cl.process_time::time between '04:00' and '09:30' then '1'
+           else '0' end, -- PRE_MARKET_IND: Column 23 - PRE_MARKET_IND - Set to 1 if co.process_time between 4:00 - 9:30 EST
+       *
+from dwh.client_order cl
+where create_date_id = 20260407
+order by cl.process_time
