@@ -17,7 +17,7 @@ group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ),
 select base_inc.fn, base_inc.loaded_row as sum_inc, base_inc.batchs, base_eod.loaded_row as sum_eod, base_eod.loaded_row - base_inc.loaded_row as diff, base_eod.batchs
 from base_eod
 left join base_inc using(fn)
-where base_inc.loaded_row = base_eod.loaded_row;
+where base_inc.loaded_row != base_eod.loaded_row;
 
 select count(*) from partitions.hft_fix_message_event_20260217_eod
 where load_batch_id = any ('{724518,724517,724515,724516,724505,724522,724509}')
@@ -27,19 +27,25 @@ from partitions.hft_fix_message_event_20260217
 where load_batch_id = any ('{723821,723880,723950,724024,724089,724152,724215,724278,724339,724400,724457}')
 
 
-create index on partitions.hft_fix_message_event_20260217_eod (load_batch_id);
+SELECT split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ), '.', 1) as fn, sum(x.loaded_row) as  loaded_row, array_agg(load_batch_id) as batchs
+FROM public.load_hft_log x
+WHERE date_id = :p_date_id
+and load_batch_id = 760128
+group by split_part(RIGHT(x.filename, POSITION('/' in REVERSE(x.filename)) -1 ), '.', 1)
+
+create index on partitions.hft_fix_message_event_20260406_eod (load_batch_id);
 
 with base as (select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id--, load_batch_id
-              from partitions.hft_fix_message_event_20260217_eod
+              from partitions.hft_fix_message_event_20260406_eod
               where true
---                 and load_batch_id = any ('{724527}')
+                and load_batch_id = any ('{760153,760152,760134}')
                 and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                      'US/Eastern')::time <= '16:30'::time
               except
               select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord_id, fix_date, leg_ref_id
-              from partitions.hft_fix_message_event_20260217
+              from partitions.hft_fix_message_event_20260406
               where true
---                 and load_batch_id = any ('{723842,723914,723989,724053,724117,724180,724242,724304,724365,724428,724464}')
+                and load_batch_id = any ('{760128, 759429,759450,759463,759483,759507,759531,759555,759579,759603,759627,759651,759676,759700,759723,759748,759771,759795,759820,759843,759867,759891,759915,759939,759964,759987,760011,760035,760060,760083}')
                 and (to_timestamp(fix_date, 'YYYYMMDD-HH24:MI:SS')::timestamp at time zone 'UTC' at time zone
                      'US/Eastern')::time <= '16:30'::time
 /*              except
@@ -51,9 +57,9 @@ with base as (select orig_cl_ord_id, msg_type, date_id, cl_ord_id, parent_cl_ord
                      'US/Eastern')::time <= '16:30'::time
  */
 )
-insert into trash.so_20260217_diff
+-- insert into trash.so_20260406_diff
 select *, '{0}'::int4[] as load_batch_id_eod
--- into table trash.so_20260217_diff
+into trash.so_20260406_diff
 from base;
 
 select *
