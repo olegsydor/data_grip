@@ -17,9 +17,9 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.GET_ACCOUNT_STATIC_DATA(
     l_clearing_firm           varchar2(40);
     l_opt_exec_broker         varchar2(20);
     l_return                  varchar2(1500);
-    l_client_opt_cust_or_firm varchar2(20) := '';
+    l_client_opt_cust_or_firm varchar2(20)  := '';
     l_eq_order_capacity       char;
-    l_opt_sub_acc             varchar2(256);
+    l_opt_sub_acc             varchar2(256) := '';
 
 
 begin
@@ -106,32 +106,36 @@ begin
 
 
     -- Add logic to return `OPT_SUB_ACC`
-    SELECT ae.account_id, ae.exchange_id, ae.specific_tag_set_id, stv.*
-    FROM ACCOUNT2EXCHANGE ae
-             join SPECIFIC_TAG_SET sts
-                  on sts.specific_tag_set_id = ae.specific_tag_set_id -- SO. Probably this join is only for check if specific_tag_set_id is allowed
-             join SPECIFIC_TAG_VALUE stv on stv.specific_tag_set_id = ae.specific_tag_set_id
-    where 1 = 1
-      and ae.account_id = 259161
-      and ae.exchange_id = 'AMEXP'
-      and (case
-               when ae.exchange_id in ('AMEXP', 'ARCAP') and stv.tag_number = 50 then 1
-               when stv.tag_number = 440 then 1 end) = 1;
+    if in_instrument_type = 'O' then
+        SELECT max(stv.TAG_VALUE)
+        into l_opt_sub_acc
+        FROM ACCOUNT2EXCHANGE ae
+                 join SPECIFIC_TAG_SET sts
+                      on sts.specific_tag_set_id = ae.specific_tag_set_id -- SO. Probably this join is only for check if specific_tag_set_id is allowed
+                 join SPECIFIC_TAG_VALUE stv on stv.specific_tag_set_id = ae.specific_tag_set_id
+        where 1 = 1
+          and ae.account_id = in_account_id
+          and ae.exchange_id = in_exchange_id
+          and stv.tag_number = case
+                                   when ae.exchange_id in ('AMEXP', 'ARCAP') then 50
+                                   else 440 end;
+    end if;
 
 
     select '{' ||
 -- OPTIONS
-           '"ACCOUNT": "' || l_account || '",' ||                                      -- +++
-           '"OPT_EXEC_BROKER": "' || l_opt_exec_broker || '",' ||                      -- +++
+           '"ACCOUNT": "' || l_account || '",' || -- +++
+           '"OPT_EXEC_BROKER": "' || l_opt_exec_broker || '",' || -- +++
            '"OPT_IS_FIX_EXECBROK_PROCESSED": "' || l_opt_is_fix_execbrok_pr || '",' || -- +++
-           '"OPT_CLEARING_FIRM": "' || l_clearing_firm || '",' ||                      -- +++
-           '"OPT_IS_FIX_CLFIRM_PROCESSED": "' || l_opt_is_fix_clfirm_pr || '",' ||     -- +++
-           '"OPT_CUST_OR_FIRM": "' || l_opt_customer_or_firm || '",' ||                -- +++
+           '"OPT_CLEARING_FIRM": "' || l_clearing_firm || '",' || -- +++
+           '"OPT_IS_FIX_CLFIRM_PROCESSED": "' || l_opt_is_fix_clfirm_pr || '",' || -- +++
+           '"OPT_CUST_OR_FIRM": "' || l_opt_customer_or_firm || '",' || -- +++
            '"OPT_IS_FIX_CUSTFIRM_PROCESSED": "' || l_opt_is_fix_custfirm_pr || '",' || -- +++
-           '"OPT_OCC_ID": "' || l_opt_occ_id || '",' ||                                -- +++
+           '"OPT_OCC_ID": "' || l_opt_occ_id || '",' || -- +++
+           '"OPT_SUB_ACC": "' || l_opt_sub_acc || '",' || -- +++
 -- EQUITIES
-           '"EQ_MPID": "' || l_eq_mpid || '",' ||                                      -- +++
-           '"EQ_ORDER_CAPACITY": "' || l_client_opt_cust_or_firm ||                    -- +++
+           '"EQ_MPID": "' || l_eq_mpid || '",' || -- +++
+           '"EQ_ORDER_CAPACITY": "' || l_client_opt_cust_or_firm || -- +++
            '"}'
 --select 'DATA'
     into l_return
