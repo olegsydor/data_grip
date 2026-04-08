@@ -1,29 +1,27 @@
-select * from account
-    where IS_DELETED = 'N'
+SELECT * FROM ALL_source WHERE UPPER(text) LIKE '%CAPACITY_GROUP_ID%'
+and owner = 'GENESIS2_QA_20100601'
 
-FUNCTION has_mm_capacity(
-    in_account_id  IN ACCOUNT.ACCOUNT_ID%TYPE,
-    in_exchange_id IN EXCHANGE.EXCHANGE_ID%TYPE  -- not actually used for group check
-) RETURN BOOLEAN IS
-    v_custfirm    ACCOUNT.OPT_CUSTOMER_OR_FIRM%TYPE;
-    v_group_id    NUMBER;
-BEGIN
-    SELECT acc.OPT_CUSTOMER_OR_FIRM, ACCOUNT_ID
---       INTO v_custfirm
-      FROM ACCOUNT acc
-     WHERE acc.ACCOUNT_ID != 3500--in_account_id
-       AND acc.IS_DELETED = 'N';
+select * from CLEARING_ACCOUNT
+    where ACCOUNT_ID = 21
+and IS_DELETED = 'N';
 
-    SELECT c.capacity_group_id
-      INTO v_group_id
-      FROM CA_CUSTOMER_OR_FIRM c
-     WHERE c.customer_or_firm_id = v_custfirm;
+select *
+    from CAPACITY_GROUP
+    where IS_DELETED <> 'Y';
 
-    RETURN (v_group_id IN (4));
-EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-        RETURN FALSE;
-END;
+SELECT * FROM all_tab_columns
+where COLUMN_NAME like '%CUSTOMER_OR_FIRM_ID%'
+and owner = 'GENESIS2_QA_20100601';
+
+select * from CUSTOMER_OR_FIRM
+
+select * from EXCHANGE2CUSTOMER_OR_FIRM
+
+    SELECT *
+    from account acc
+    WHERE 1 = 1
+      and acc.ACCOUNT_ID = in_account_id;
+
 
 
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.GET_ACCOUNT_STATIC_DATA(
@@ -134,7 +132,9 @@ begin
 
 
     -- Add logic to return `OPT_SUB_ACC`
-    if in_instrument_type = 'O' then
+    if in_instrument_type = 'O' and
+       l_opt_customer_or_firm in
+       (select CUSTOMER_OR_FIRM_ID from CUSTOMER_OR_FIRM where CAPACITY_GROUP_ID in (4)) then
         SELECT max(stv.TAG_VALUE)
         into l_opt_sub_acc
         FROM ACCOUNT2EXCHANGE ae
