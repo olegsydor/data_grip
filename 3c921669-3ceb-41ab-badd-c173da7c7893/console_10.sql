@@ -1,3 +1,31 @@
+select * from account
+    where IS_DELETED = 'N'
+
+FUNCTION has_mm_capacity(
+    in_account_id  IN ACCOUNT.ACCOUNT_ID%TYPE,
+    in_exchange_id IN EXCHANGE.EXCHANGE_ID%TYPE  -- not actually used for group check
+) RETURN BOOLEAN IS
+    v_custfirm    ACCOUNT.OPT_CUSTOMER_OR_FIRM%TYPE;
+    v_group_id    NUMBER;
+BEGIN
+    SELECT acc.OPT_CUSTOMER_OR_FIRM, ACCOUNT_ID
+--       INTO v_custfirm
+      FROM ACCOUNT acc
+     WHERE acc.ACCOUNT_ID != 3500--in_account_id
+       AND acc.IS_DELETED = 'N';
+
+    SELECT c.capacity_group_id
+      INTO v_group_id
+      FROM CA_CUSTOMER_OR_FIRM c
+     WHERE c.customer_or_firm_id = v_custfirm;
+
+    RETURN (v_group_id IN (4));
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN FALSE;
+END;
+
+
 CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.GET_ACCOUNT_STATIC_DATA(
     in_account_id NUMBER,
     in_instrument_type CHAR,
