@@ -28,7 +28,8 @@ CREATE OR REPLACE FUNCTION GENESIS2_QA_20100601.GET_ACCOUNT_STATIC_DATA(
     in_account_id NUMBER,
     in_instrument_type CHAR,
     in_opt_exec_broker VARCHAR2,
-    in_exchange_id VARCHAR2
+    in_exchange_id VARCHAR2,
+    in_is_cross CHAR
 ) RETURN varchar2
     is
     l_account                 varchar2(30);
@@ -147,6 +148,13 @@ begin
           and stv.tag_number = case
                                    when ae.exchange_id in ('AMEXP', 'ARCAP') then 50
                                    else 440 end;
+    elsif in_instrument_type = 'O' and
+       l_opt_customer_or_firm in
+       (select CUSTOMER_OR_FIRM_ID from CUSTOMER_OR_FIRM where CAPACITY_GROUP_ID in (5)) and in_is_cross = 'Y' then
+        select e.exchange_id , e.real_exchange_id , e.home_mmid_cross_tag, e.away_mmid_cross_tag, e.home_mmid_tag, e.away_mmid_cross_tag
+from exchange e
+where e.is_active = 'Y'
+
     end if;
 
 
