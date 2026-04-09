@@ -15,6 +15,7 @@ select * from t_parent_orders_sub_str
 
 select * from tmp_os
 
+
 select tf.*, account_id
     from dwh.d_trading_firm tf
     join dwh.d_account ac using (trading_firm_id)
@@ -31,12 +32,13 @@ select * from dwh.client_order cl
 
 
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
+select * from d_target_strategy;
 
 CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                  in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                                  in_instrument_type character DEFAULT NULL::bpchar,
                                                                  in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                 in_sub_strategy_ids integer[] DEFAULT NULL::integer[])
+                                                                 in_strategies varchar(128)[] DEFAULT NULL::varchar(128)[])
     RETURNS TABLE
             (
                 ret_row text
@@ -50,13 +52,14 @@ $function$
     -- SO 20260108 https://dashfinancial.atlassian.net/browse/DEVREQ-7409 Add a new parameter: Exclude S3 EOD Blaze Orders (as well as BLAZE as exchange_id)
     -- SO 20260324 https://dashfinancial.atlassian.net/browse/DEVREQ-7857 Based on S3 report
 declare
-    l_data_firm_id text;
-    l_account_ids  int8[];
-    l_load_id      int;
-    l_row_cnt      int;
-    l_step_id      int;
-    l_msg          text;
-    l_msg_ext      text;
+    l_data_firm_id     text;
+    l_account_ids      int8[];
+    l_load_id          int;
+    l_row_cnt          int;
+    l_step_id          int;
+    l_msg              text;
+    l_msg_ext          text;
+    l_sub_strategy_ids int4[];
 begin
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
@@ -89,6 +92,15 @@ begin
                            substr(l_account_ids::text, 1, 50) || ' STARTED ===', 0, 'O')
     into l_step_id;
 
+    if array_length(coalesce(in_strategies, '{}'), 1) > 0 then
+        select array_agg(target_strategy_id)
+        into l_sub_strategy_ids
+        from dwh.d_target_strategy
+        where target_strategy_name = any (in_strategies);
+    else
+        l_sub_strategy_ids := '{}';
+    end if;
+
     drop table if exists t_parent_orders_sub_str;
     create temp table t_parent_orders_sub_str as
     select order_id
@@ -101,8 +113,8 @@ begin
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then false
-              else cl.sub_strategy_id = any (in_sub_strategy_ids) end
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then false
+              else cl.sub_strategy_id = any (l_sub_strategy_ids) end
       and cl.trans_type <> 'F'
       and cl.parent_order_id is null;
 
@@ -199,11 +211,9 @@ begin
                                    when cl.time_in_force_id = '6' then concat_ws('T',
                                                                                  to_char(cl.expire_time, 'YYYYMMDD'),
                                                                                  to_char(cl.expire_time, 'HH24MISSFF3')) end, -- EXPIRATION_DATETIME
---                                case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
-                               case when cl.process_time::time between '04:00'::time and '09:30'::time then '1' else '0' end, -- PRE_MARKET_IND: Column 23 - PRE_MARKET_IND - Set to 1 if co.process_time between 4:00 - 9:30 EST
+                               case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
                                null, -- PRE_MARKET_TIME
---                                case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
-                               case when cl.process_time::time between '16:00'::time and '20:00'::time then '1' else '0' end, --POST_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
+                               case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
                                null, -- POST_MARKET_TIME
                                '0', -- DIRECTED_ORDER_IND
                                case
@@ -235,8 +245,8 @@ begin
                                    when di.instrument_type_id = 'O' and oc.put_call = '1' then 'Call'
                                    when di.instrument_type_id = 'O' and oc.put_call = '0' then 'Put'
                                    end , --	OPTION_TYPE
-                               sdr.wave_type_name, --	CLIENT_TEXT1 (39)
-                               fc.fix_comp_id, --	CLIENT_TEXT2 (40)
+                               tf.trading_firm_demo_mnemonic, --	CLIENT_TEXT1
+                               sdr.wave_type_name, --	CLIENT_TEXT2
                                null, --	CLIENT_TEXT3
                                null, --	CLIENT_TEXT4
                                null, --	CLIENT_TEXT5
@@ -247,7 +257,7 @@ begin
                                case when cl.is_held = 'N' then tag_9004 end, --	ORDER_REQUIRED_TIME
                                null, --	CURRENCY_PAIR
                                null, --	EXCHANGE_RATE
-                               tf.trading_firm_demo_mnemonic, --	HOUSEHOLD_ID (51)
+                               null, --	HOUSEHOLD_ID
                                '0', --	FURTHER_ROUTABLE
                                null, --	CL_ORD_ID
                                case
@@ -312,16 +322,14 @@ begin
                                 limit 1) fmj on true
              left join dwh.d_strategy_decision_reason_code sdr
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
-             left join dwh.d_fix_connection fc
-                       on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
 --     left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
         end
       and cl.trans_type <> 'F';
@@ -356,8 +364,8 @@ begin
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
         end
       and cl.trans_type <> 'F';
@@ -387,8 +395,8 @@ begin
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
         end
       and cl.trans_type <> 'F'
@@ -421,8 +429,8 @@ begin
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(in_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (in_sub_strategy_ids)
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
         end
       and cl.trans_type <> 'F';
@@ -660,15 +668,17 @@ begin
     select public.load_log(l_load_id, l_step_id, l_msg || ' COMPLETED ===', l_row_cnt, 'O')
     into l_step_id;
 
-end;
+end ;
 $function$
 ;
 
 
-select cl.process_time::time, case
-           when cl.process_time::time between '04:00' and '09:30' then '1'
-           else '0' end, -- PRE_MARKET_IND: Column 23 - PRE_MARKET_IND - Set to 1 if co.process_time between 4:00 - 9:30 EST
-       *
-from dwh.client_order cl
-where create_date_id = 20260407
-order by cl.process_time
+select *
+from dash360.report_fintech_s3_master_file(
+        in_start_date_id := 20260401,
+        in_end_date_id := 20260401,
+        in_account_ids := '{75774}',
+        in_instrument_type := 'E',
+        in_trading_firm_ids := '{ctctrad01}',
+        in_strategies := '{"SENSORDARK"}'
+     );
