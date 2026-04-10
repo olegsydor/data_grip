@@ -354,3 +354,8 @@ begin
 end ;
 $function$
 ;
+
+
+
+-- DROP FUNCTION dash360.get_data_for_allocation_drop(int8, int4);
+
