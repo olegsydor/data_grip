@@ -1,5 +1,5 @@
--- https://dashfinancial.atlassian.net/browse/DS-11344
--- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar, bool);
+
+
 
 CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
