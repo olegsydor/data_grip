@@ -133,7 +133,7 @@ select yc.order_id,
        yc.side_multiplier,
        yc.parent_order_qty,
        yc.parent_exec_qty,
-       sum(yc.total_parent_exec_qty) over(),  -- yc.total_parent_exec_qty,
+       sum(yc.parent_exec_qty) over(),  -- yc.total_parent_exec_qty,
        yc.parent_avg_price,
        yc.principal_amount,
        ts.target_strategy_id,
@@ -232,7 +232,7 @@ from trash.tmp_fyc yc
                               and da.date_id > yc.date_id
                             order by date_id
                             limit 1) nxt on true
-         join LATERAL (select *
+         join LATERAL (select co.order_cancel_time, co.fix_message_id, co.create_date_id
                        from dwh.client_order co
                        where co.order_id = yc.order_id
                          and co.create_date_id = yc.date_id
@@ -639,6 +639,246 @@ select 1 = any(:in_step);
             and yc.multileg_reporting_type = '1';
       end if;
       get diagnostics l_row_cnt = row_count;
-      return l_row_cnt;
+
+      if 2 = any (in_step) then
+          insert into trash.pre_pre_fetch_equity_tca (order_id, client_order_id, date_id, multileg_reporting_type,
+                                                      instrument_type_id,
+                                                      trading_firm_unq_id, trading_firm_name, account_id, account_name,
+                                                      client_id,
+                                                      instrument_id, symbol, parent_routed_time, order_end_time,
+                                                      order_cancel_time,
+                                                      side, buy_or_sell, side_multiplier, parent_order_qty,
+                                                      parent_exec_qty,
+                                                      total_parent_exec_qty,
+                                                      parent_avg_price, principal_amount,
+                                                      target_strategy_id,
+                                                      algorithm, parent_nbbo_bid_price, parent_nbbo_ask_price,
+                                                      parent_nbbo_bid_qty,
+                                                      parent_nbbo_ask_qty, buy_limit_vs_ask_bps, sell_limit_vs_bid_bps,
+                                                      parent_is_marketable, parent_limit_price, routing_table_name,
+                                                      order_arrival_price,
+                                                      order_end_price, vwap_over_life, eligible_vwap_over_life,
+                                                      twap_over_life,
+                                                      eligible_twap_over_life, volume_over_life,
+                                                      eligible_volume_over_life,
+                                                      eligible_pwp_5pc, eligible_pwp_10pc, eligible_pwp_15pc,
+                                                      eligible_pwp_20pc,
+                                                      trade_count, eligible_trade_count, block_volume,
+                                                      eligible_qd_volume,
+                                                      eligible_ix_volume, avg_spread_over_life, day_high_price,
+                                                      day_low_price,
+                                                      open_px,
+                                                      close_px, prev_close_px, next_close_px, routing_time_mid_price,
+                                                      routing_time_spread, aggression_level, activ_symbol,
+                                                      day_order_qty,
+                                                      order_qty)
+          select yc.order_id,
+                 yc.client_order_id,
+                 yc.date_id,
+                 yc.multileg_reporting_type,
+                 yc.instrument_type_id,
+                 tf.trading_firm_unq_id,
+                 tf.trading_firm_name,
+                 yc.account_id,
+                 yc.account_name,
+                 yc.client_id,
+                 yc.instrument_id,
+                 i.symbol,
+                 yc.parent_routed_time,
+                 yc.order_end_time,
+                 co.order_cancel_time,
+                 yc.side,
+                 yc.buy_or_sell,
+                 yc.side_multiplier,
+                 yc.parent_order_qty,
+                 yc.parent_exec_qty,
+                 sum(yc.parent_exec_qty) over () as total_parent_exec_qty,
+                 yc.parent_avg_price,
+                 yc.principal_amount,
+                 ts.target_strategy_id,
+                 case
+                     when true
+                         then coalesce(fix_message ->> '9264', ts.target_strategy_desc)
+                     else ts.target_strategy_desc
+                     end                                                                as algorithm,
+                 yc.parent_nbbo_bid_price,
+                 yc.parent_nbbo_ask_price,
+                 yc.parent_nbbo_bid_qty,
+                 yc.parent_nbbo_ask_qty,
+                 yc.buy_limit_vs_ask_bps,
+                 yc.sell_limit_vs_bid_bps,
+                 yc.parent_is_marketable,
+                 yc.parent_limit_price,
+                 rt.routing_table_name,
+                 nullif(tca.order_arrival_price, 0)::float,
+                 nullif(tca.order_end_price, 0)::float,
+                 nullif(tca.vwap_over_life, 0)::float,
+                 nullif(tca.eligible_vwap_over_life, 0)::float,
+                 nullif(tca.twap_over_life, 0)::float,
+                 nullif(tca.eligible_twap_over_life, 0)::float,
+                 nullif(tca.volume_over_life, 0)::float,
+                 nullif(tca.eligible_volume_over_life, 0)::float,
+                 nullif(tca.pwp_5pc, 0)::float,
+                 nullif(tca.pwp_10pc, 0)::float,
+                 nullif(tca.pwp_15pc, 0)::float,
+                 nullif(tca.pwp_20pc, 0)::float,
+                 tca.trade_count,
+                 tca.eligible_trade_count,
+                 tca.block_volume,
+                 COALESCE((tca.eligible_volume_over_life_by_exchange ->> 'QD')::int, 0) as eligible_qd_volume,
+                 COALESCE((tca.eligible_volume_over_life_by_exchange ->> 'IX')::int, 0) as eligible_ix_volume,
+                 tca.wtd_avg_spread_arrival                                             as avg_spread_over_life,
+                 da.high                                                                as day_high_price,
+                 da.low                                                                 as day_low_price,
+                 da.open_price                                                          as open_px,
+                 da.close_price                                                         as close_px,
+                 prev.close_price                                                       as prev_close_px,
+                 nxt.close_price                                                        as next_close_px,
+                 yc.routing_time_mid_price,
+                 yc.routing_time_spread,
+                 coalesce(case target_strategy_desc
+                              when 'POV' then public.get_message_tag_string(yc.order_fix_message_id, 9023,
+                                                                            yc.date_id) --target_pov
+                              when 'VOLUME  PARTICIPATION' then public.get_message_tag_string(yc.order_fix_message_id,
+                                                                                              9023,
+                                                                                              yc.date_id) --target_pov
+                              when 'PHANTOM' then case public.get_message_tag_string(yc.order_fix_message_id, 9002,
+                                                                                     yc.date_id) --urgency
+                                                      when '1' then 'Low'
+                                                      when '2' then 'Medium'
+                                                      when '3' then 'High'
+                                  end
+                              when 'VWAP' then case public.get_message_tag_string(yc.order_fix_message_id, 9002,
+                                                                                  yc.date_id)
+                                                   when '1' then 'Low'
+                                                   when '2' then 'Medium'
+                                                   when '3' then 'High'
+                                  end
+                              when 'TWAP' then case public.get_message_tag_string(yc.order_fix_message_id, 9002,
+                                                                                  yc.date_id)
+                                                   when '1' then 'Low'
+                                                   when '2' then 'Medium'
+                                                   when '3' then 'High'
+                                  end
+                              when 'CLOSE' then public.get_message_tag_string(yc.order_fix_message_id, 9126,
+                                                                              yc.date_id) --close_aggression
+                              when 'SENSOR  DARK' then 'Default  (PI  =  ' ||
+                                                       public.get_message_tag_string(yc.order_fix_message_id, 9191,
+                                                                                     yc.date_id)::text || ')'
+                              else null
+                              end, 'Default')                                           as aggression_level,
+                 i.activ_symbol,
+                 yc.day_order_qty,
+                 yc.order_qty
+          from trash.tmp_fyc yc
+                   join dwh.d_trading_firm tf on tf.trading_firm_unq_id = yc.trading_firm_unq_id
+                   join dwh.d_instrument i on i.instrument_id = yc.instrument_id and i.is_active
+                   left join dwh.d_target_strategy ts on ts.target_strategy_id = yc.sub_strategy_id and ts.is_active
+                   left join dwh.d_routing_table rt on rt.routing_table_id = yc.routing_table_id and rt.is_active = true
+                   left join eq_tca.algorithmic_order_analytic_v2 tca
+                             on tca.order_id = yc.order_id and tca.date_id = yc.date_id
+                   left join lateral (select *
+                                      from eq_tca.daily_analytic_v2 da
+                                      where da.symbol = i.activ_symbol
+                                        and da.date_id = yc.date_id
+                                        and da.date_id between in_date_begin and in_date_end
+                                      limit 100500) da on true
+                   left join lateral (select da.close_price as close_price
+                                      from eq_tca.daily_analytic_v2 da
+                                      where da.symbol = i.activ_symbol
+                                        and da.date_id < yc.date_id
+                                      order by date_id desc
+                                      limit 1) prev on true
+                   left join lateral (select da.close_price as close_price
+                                      from eq_tca.daily_analytic_v2 da
+                                      where da.symbol = i.activ_symbol
+                                        and da.date_id > yc.date_id
+                                      order by date_id
+                                      limit 1) nxt on true
+                   join LATERAL (select co.order_cancel_time, co.fix_message_id, co.create_date_id
+                                 from dwh.client_order co
+                                 where co.order_id = yc.order_id
+                                   and co.create_date_id = yc.date_id
+                                   and co.create_date_id between in_date_begin and in_date_end
+                                 limit 100500) co on true
+                   left join lateral (select fix_message
+                                      from fix_capture.fix_message_json fmj
+                                      where fmj.fix_message_id = co.fix_message_id
+                                        and fmj.date_id = co.create_date_id
+                                        and fmj.date_id between in_date_begin and in_date_end
+                                      limit 1) fmj on true;
+          get diagnostics l_row_cnt = row_count;
+          return l_row_cnt;
+      end if;
   end;
+
   $$
+
+
+
+CREATE TABLE trash.pre_pre_fetch_equity_tca (
+	order_id int8 NULL,
+	client_order_id varchar(256) NULL,
+	date_id int4 NULL,
+	multileg_reporting_type bpchar(1) NULL,
+	instrument_type_id bpchar(1) NULL,
+	trading_firm_unq_id int4 NULL,
+	trading_firm_name varchar(60) NULL,
+	account_id int8 NULL,
+	account_name varchar(30) NULL,
+	client_id varchar(255) NULL,
+	instrument_id int4 NULL,
+	symbol varchar(10) NULL,
+	parent_routed_time timestamp NULL,
+	order_end_time timestamp NULL,
+	order_cancel_time timestamp(3) NULL,
+	side bpchar(1) NULL,
+	buy_or_sell bpchar(1) NULL,
+	side_multiplier int4 NULL,
+	parent_order_qty int4 NULL,
+	parent_exec_qty int4 NULL,
+	total_parent_exec_qty int8 NULL,
+	parent_avg_price numeric NULL,
+	principal_amount numeric NULL,
+	target_strategy_id int4 NULL,
+	algorithm varchar(128) NULL,
+	parent_nbbo_bid_price numeric(12, 4) NULL,
+	parent_nbbo_ask_price numeric(12, 4) NULL,
+	parent_nbbo_bid_qty int4 NULL,
+	parent_nbbo_ask_qty int4 NULL,
+	buy_limit_vs_ask_bps numeric NULL,
+	sell_limit_vs_bid_bps numeric NULL,
+	parent_is_marketable bpchar(1) NULL,
+	parent_limit_price numeric(12, 4) NULL,
+	routing_table_name varchar(30) NULL,
+	order_arrival_price float8 NULL,
+	order_end_price float8 NULL,
+	vwap_over_life float8 NULL,
+	eligible_vwap_over_life float8 NULL,
+	twap_over_life float8 NULL,
+	eligible_twap_over_life float8 NULL,
+	volume_over_life float8 NULL,
+	eligible_volume_over_life float8 NULL,
+	eligible_pwp_5pc float8 NULL,
+	eligible_pwp_10pc float8 NULL,
+	eligible_pwp_15pc float8 NULL,
+	eligible_pwp_20pc float8 NULL,
+	trade_count int4 NULL,
+	eligible_trade_count int4 NULL,
+	block_volume int4 NULL,
+	eligible_qd_volume int4 NULL,
+	eligible_ix_volume int4 NULL,
+	avg_spread_over_life numeric NULL,
+	day_high_price numeric NULL,
+	day_low_price numeric NULL,
+	open_px numeric NULL,
+	close_px numeric NULL,
+	prev_close_px numeric NULL,
+	next_close_px numeric NULL,
+	routing_time_mid_price numeric NULL,
+	routing_time_spread numeric NULL,
+	aggression_level text NULL,
+	activ_symbol varchar(30) NULL,
+	day_order_qty int4 NULL,
+	order_qty int4 NULL
+);

@@ -152,7 +152,7 @@ begin
                msg.drop_message_reject_reason                                                           as alloc_drop_msg_reject_reason,
                CCRU.amount                                                                              as client_commission_amount,
                tr.client_order_id                                                                       as client_order_id,
-               fpo.order_status::character                                                              as client_order_status,
+               (case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end)::character    as client_order_status,
                null::character                                                                          as clearing_submitted_away
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -204,7 +204,7 @@ begin
                                     from staging.f_parent_order fpo
                                     where fpo.status_date_id = in_date_id
                                       and fpo.parent_order_id = tr.order_id
-                                    limit 1) fpo on true
+                                    limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
         where tr.date_id = in_date_id
           and case when coalesce(in_account_ids, '{}') = '{}' then true else tr.account_id = any (in_account_ids) end
           and tr.is_busted = 'N'
@@ -320,7 +320,7 @@ begin
                                                                   AND tl.book_record_type_id = 'CCRU'
                                                                   and tl.trade_record_id = alt.trade_record_id) l1
                                                        on true
-                                             left join lateral (select distinct fpo.order_status
+                                             left join lateral (select distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end
                                                                 from staging.f_parent_order fpo
                                                                 where fpo.status_date_id = in_date_id
                                                                   and fpo.parent_order_id = tr.order_id) fpo on true
@@ -359,3 +359,9 @@ $function$
 
 -- DROP FUNCTION dash360.get_data_for_allocation_drop(int8, int4);
 
+select tr.subsystem_id, os.* from genesis2.trade_record tr
+left join lateral (select distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end
+                                                                from staging.f_parent_order fpo
+                                                                where fpo.status_date_id = :in_date_id
+                                                                  and fpo.parent_order_id = tr.order_id) os on true
+where tr.date_id = :in_date_id
