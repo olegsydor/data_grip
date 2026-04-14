@@ -31,14 +31,15 @@ select * from dwh.client_order cl
           end
 
 
--- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
+-- DROP FUNCTION trash.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _int4);
 select * from d_target_strategy;
 
-CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
-                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                 in_instrument_type character DEFAULT NULL::bpchar,
-                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                 in_strategies varchar(128)[] DEFAULT NULL::varchar(128)[])
+
+CREATE OR REPLACE FUNCTION trash.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
+                                                               in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                               in_instrument_type character DEFAULT NULL::bpchar,
+                                                               in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                               in_strategies character varying[] DEFAULT NULL::character varying(128)[])
     RETURNS TABLE
             (
                 ret_row text
@@ -82,6 +83,7 @@ begin
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
+
     select public.load_log(l_load_id, l_step_id,
                            'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' ||
                            in_end_date_id::text ||
@@ -445,52 +447,57 @@ begin
     select public.load_log(l_load_id, l_step_id, l_msg || ' indexed', 0, 'O')
     into l_step_id;
 
+    drop table if exists t_exc;
+    create temp table t_exc as
+    select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
+           cl.parent_order_id,
+           cl.order_id,
+           cl.process_time,
+           cl.client_order_id,
+           ex.exec_type,
+           cl.multileg_reporting_type,
+           i.instrument_type_id,
+           i.display_instrument_id,
+           oc.opra_symbol,
+           ex.exec_time,
+           ex.exec_id,
+           ex.last_qty,
+           ex.last_px,
+           ex.exchange_id,
+           ex.trade_liquidity_indicator,
+           a.account_name,
+           a.account_algo_alias,
+           a.eq_order_capacity
+    from dwh.execution ex
+             join lateral
+        (select cl.parent_order_id,
+                cl.order_id,
+                cl.process_time,
+                cl.client_order_id,
+                cl.multileg_reporting_type,
+                cl.instrument_id,
+                cl.account_id
+         from t_orders cl
+         where cl.create_date_id <= ex.exec_date_id
+           and cl.order_id = ex.order_id
+           and cl.trans_type <> 'F'
+         limit 1) cl on true
+             inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
+             left join lateral (select opra_symbol, option_series_id
+                                from dwh.d_option_contract oc
+                                where oc.instrument_id = i.instrument_id
+                                limit 1) oc on true
+             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
+             left join dwh.d_account a on a.account_id = cl.account_id
+    where true
+      and ex.exec_date_id between in_start_date_id and in_end_date_id
+      and ex.exec_type in ('4', '8', 'F');
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, l_msg || ' t_exc created', l_row_cnt, 'O')
+    into l_step_id;
+
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
-    with base as (select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
-                         cl.parent_order_id,
-                         cl.order_id,
-                         cl.process_time,
-                         cl.client_order_id,
-                         ex.exec_type,
-                         cl.multileg_reporting_type,
-                         i.instrument_type_id,
-                         i.display_instrument_id,
-                         oc.opra_symbol,
-                         ex.exec_time,
-                         ex.exec_id,
-                         ex.last_qty,
-                         ex.last_px,
-                         ex.exchange_id,
-                         ex.trade_liquidity_indicator,
-                         a.account_name,
-                         a.account_algo_alias,
-                         a.eq_order_capacity
-                  from dwh.execution ex
-                           join lateral
-                      (select *
-                       from t_orders cl
-                       where cl.create_date_id <= ex.exec_date_id
-                         and cl.order_id = ex.order_id
-                       limit 1) cl on true
-                      --                       and case
---                               when l_is_multileg then cl.parent_order_id is null
---                               else cl.parent_order_id is not null end
-                           inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
-                           left join lateral (select opra_symbol, option_series_id
-                                              from dwh.d_option_contract oc
-                                              where oc.instrument_id = i.instrument_id
-                                              limit 1) oc on true
-                           left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
-                           left join dwh.d_account a on a.account_id = cl.account_id
-                  where true
-                    and ex.exec_date_id between in_start_date_id and in_end_date_id
-                    and ex.exec_type in ('4', '8', 'F')
---                     and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
-                    and cl.trans_type <> 'F'
---                     and case
---                             when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
---                             else cl.multileg_reporting_type = '1' end
-    )
     --order activity: cancel
     select 'A'                                  as record_type,
            coalesce(parent_order_id, order_id)  as order_id,
@@ -528,12 +535,13 @@ begin
                                null, --CAT_CHILD_IND
                                null --CAT_CANCEL_RJ_IND
                                ], '|', '')
-    from base
-    where tp = 2
---       and case when l_is_multileg then parent_order_id is null else true end
+    from t_exc
+    where tp = 2;
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || ' tp = 2', l_row_cnt, 'O')
+    into l_step_id;
 
-    union all
-
+    insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
     select 'T'                                 as record_type,
            coalesce(parent_order_id, order_id) as order_id,
            to_char(exec_time, 'HH24MISSFF3')   as time_id,
@@ -602,15 +610,11 @@ begin
                                null, --CAT_ATS_COUNTERPARTY
                                null --CAT_IS_COMPLEX_IND
                                ], '|', '')
-    from base
-    where tp = 3
-    --       and case
---               when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
---               else multileg_reporting_type = '1' end
-    ;
+    from t_exc
+    where tp = 3;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, l_msg || ' Cancels added', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg || ' tp = 3', l_row_cnt, 'O')
     into l_step_id;
 
     select count(*)
@@ -672,12 +676,12 @@ end ;
 $function$
 ;
 
-
+create temp table t_os1 as
 select *
-from dash360.report_fintech_s3_master_file(
+from trash.report_fintech_s3_master_file(
         in_start_date_id := 20260401,
         in_end_date_id := 20260401,
-        in_account_ids := '{75774}',
+--         in_account_ids := '{75774}',
         in_instrument_type := 'E',
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'

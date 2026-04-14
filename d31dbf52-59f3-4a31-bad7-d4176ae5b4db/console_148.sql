@@ -1,10 +1,103 @@
+  select  coalesce(:in_date_begin, to_char(date_trunc('quarter', current_date - interval '3 month'),
+                                                            'YYYYMMDD')::int4); -- :in_date_begin
+    select coalesce(:in_date_end,
+                                     to_char((date_trunc('quarter', current_date) - interval '1 day'), 'YYYYMMDD')::int4); -- :in_date_end
+
+
+drop table if exists trash.tmp_fyc;
+  create table if not exists trash.tmp_fyc
+  as
+  select yc.order_id,
+         yc.client_order_id,
+         yc.status_date_id                                                                     as date_id,
+         yc.multileg_reporting_type,
+         yc.instrument_type_id,
+         yc.account_id,
+         a.account_name,
+         yc.client_id,
+         yc.instrument_id,
+         yc.routed_time                                                                        as parent_routed_time,
+         yc.order_end_time,
+         yc.side,
+         yc.buy_or_sell,
+         (case when yc.buy_or_sell = 'B' then 1 else -1 end)::int                              as side_multiplier,
+         case when yc.day_order_qty < yc.order_qty then yc.day_order_qty else yc.order_qty end as parent_order_qty,
+         yc.day_cum_qty                                                                        as parent_exec_qty,
+--            sum(yc.day_cum_qty) over (partition by true)                                          as total_parent_exec_qty,
+         yc.avg_px                                                                             as parent_avg_price,
+         yc.avg_px * yc.day_cum_qty                                                            as principal_amount,
+         yc.nbbo_bid_price                                                                     as parent_nbbo_bid_price,
+         yc.nbbo_ask_price                                                                     as parent_nbbo_ask_price,
+         yc.nbbo_bid_quantity                                                                  as parent_nbbo_bid_qty,
+         yc.nbbo_ask_quantity                                                                  as parent_nbbo_ask_qty,
+         case
+             when yc.side = '1' then 10000 * (yc.order_price - yc.nbbo_ask_price) /
+                                     coalesce(yc.nbbo_ask_price, 0, null)
+             else null end                                                                     as buy_limit_vs_ask_bps,
+         case
+             when yc.side <> '1' then 10000 * (yc.order_price - yc.nbbo_bid_price) /
+                                      coalesce(yc.nbbo_bid_price, 0, null)
+             else null end                                                                     as sell_limit_vs_bid_bps,
+         yc.is_marketable                                                                      as parent_is_marketable,
+         yc.order_price                                                                        as parent_limit_price,
+         (yc.nbbo_ask_price + yc.nbbo_bid_price) / 2                                              routing_time_mid_price,
+         yc.nbbo_ask_price - yc.nbbo_bid_price                                                    routing_time_spread,
+         yc.trading_firm_unq_id,
+         yc.sub_strategy_id,
+         yc.routing_table_id,
+         yc.order_fix_message_id,
+         yc.day_order_qty,
+         yc.order_qty,
+--          co.order_cancel_time,
+         fmj.tag_9002,
+         fmj.tag_9023,
+         fmj.tag_9126,
+         fmj.tag_9191,
+         fmj.tag_9264
+  into trash.tmp_fyc
+  from data_marts.f_yield_capture yc
+           join lateral (select account_name
+                         from dwh.d_account a
+                         where a.account_id = yc.account_id and a.is_active
+                         limit 1) a on true
+           left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
+
+
+           left join lateral (select fix_message ->> '9264' as tag_9264,
+                                     fix_message ->> '9023' as tag_9023,
+                                     fix_message ->> '9002' as tag_9002,
+                                     fix_message ->> '9126' as tag_9126,
+                                     fix_message ->> '9191' as tag_9191
+                              from fix_capture.fix_message_json fmj
+                              where fmj.fix_message_id = yc.order_fix_message_id--co.fix_message_id
+                                and fmj.date_id = yc.status_date_id
+                                and fmj.date_id >= :in_date_begin
+                                and fmj.date_id <= :in_date_end
+                              limit 1) fmj on true
+
+  where yc.parent_order_id is null
+    and yc.status_date_id between :in_date_begin and :in_date_end
+    and yc.instrument_type_id = 'E'
+    and yc.multileg_reporting_type = '1'
+  limit 0;
+  --       and case when coalesce(in_account_ids, '{}') <> '{}' then yc.account_id = any (in_account_ids) else true end
+--       and case
+--               when coalesce(in_trading_firm_ids, '{}') <> '{}' then a.trading_firm_id = any (in_trading_firm_ids)
+--               else true end
+--       and case when coalesce(in_client_ids, '{}') <> '{}' then yc.client_id = any (in_client_ids) else true end
+--       and case when in_sub_strategy <> '{}' then dts.target_strategy_name = any (in_sub_strategy) else true end
+--       and case when l_instrument_id_arr <> '{}' then yc.instrument_id = any (l_instrument_id_arr) else true end;
+
+
+
 insert into trash.pre_pre_fetch_equity_tca (order_id, client_order_id, date_id, multileg_reporting_type,
                                             instrument_type_id,
                                             trading_firm_unq_id, trading_firm_name, account_id, account_name, client_id,
                                             instrument_id, symbol, parent_routed_time, order_end_time,
                                             order_cancel_time,
                                             side, buy_or_sell, side_multiplier, parent_order_qty, parent_exec_qty,
-                                            total_parent_exec_qty, parent_avg_price, principal_amount,
+                                            total_parent_exec_qty,
+                                            parent_avg_price, principal_amount,
                                             target_strategy_id,
                                             algorithm, parent_nbbo_bid_price, parent_nbbo_ask_price,
                                             parent_nbbo_bid_qty,
@@ -40,7 +133,7 @@ select yc.order_id,
        yc.side_multiplier,
        yc.parent_order_qty,
        yc.parent_exec_qty,
-       yc.total_parent_exec_qty,
+       sum(yc.total_parent_exec_qty) over(),  -- yc.total_parent_exec_qty,
        yc.parent_avg_price,
        yc.principal_amount,
        ts.target_strategy_id,
@@ -125,7 +218,7 @@ from trash.tmp_fyc yc
                             from eq_tca.daily_analytic_v2 da
                             where da.symbol = i.activ_symbol
                               and da.date_id = yc.date_id
-                              and da.date_id between 20250701 and 20250930
+                              and da.date_id between :in_date_begin and :in_date_end
                             limit 100500) da on true
          left join lateral (select da.close_price as close_price
                             from eq_tca.daily_analytic_v2 da
@@ -143,13 +236,13 @@ from trash.tmp_fyc yc
                        from dwh.client_order co
                        where co.order_id = yc.order_id
                          and co.create_date_id = yc.date_id
-                         and co.create_date_id between 20250701 and 20250930
+                         and co.create_date_id between :in_date_begin and :in_date_end
                        limit 100500) co on true
          left join lateral (select fix_message
                             from fix_capture.fix_message_json fmj
                             where fmj.fix_message_id = co.fix_message_id
                               and fmj.date_id = co.create_date_id
-                              and fmj.date_id between 20250701 and 20250930
+                              and fmj.date_id between :in_date_begin and :in_date_end
                             limit 1) fmj on true;
 
 
@@ -233,7 +326,7 @@ with ftr as
                                    on real_exch.exchange_id = e.real_exchange_id and real_exch.is_active
                          left join staging.real_exchange real_exch_q on real_exch_q.exchange_id = real_exch.exchange_id
                 where ftr.is_busted = 'N'
-                  and ftr.date_id between 20250701 and 20250930
+                  and ftr.date_id between :in_date_begin and :in_date_end
                   and ftr.instrument_type_id = 'E'
                   and ftr.multileg_reporting_type = '1') f)
 select tp.order_id,
@@ -367,7 +460,7 @@ from trash.pre_pre_fetch_equity_tca as tp
            dea.as 5d_avg_bid_ask_spread_pctas  * 100 as as 5d_avg_spread_bpsas 
     from data_marts.f_daily_equity_analytics dea
              left join data_marts.d_scale_market_cap mc on mc.scale_market_cap_id = dea.scale_market_cap_id
-    where date_id between 20250701 and 20250930
+    where date_id between :in_date_begin and :in_date_end
       and date_id = tp.date_id
       and dea.activ_symbol = tp.activ_symbol
     limit 1
@@ -434,17 +527,17 @@ select yc.order_id,
        row_number() over (partition by yc.order_id)   as rn
 from data_marts.f_yield_capture yc
          left join dwh.flat_trade_record ftr
-                   on (ftr.street_order_id = yc.order_id and ftr.date_id between 20250701 and 20250930)
+                   on (ftr.street_order_id = yc.order_id and ftr.date_id between :in_date_begin and :in_date_end)
          left join dwh.d_exchange e on (e.exchange_id = yc.exchange_id and e.is_active)
          left join staging.real_exchange re on re.exchange_id = e.real_exchange_id and e.is_active
          left join eq_tca.order_type_mapping ot on ot.order_type_unq_id = yc.order_type_mapping_id
          join dwh.d_account a on a.account_id = yc.account_id
          left join eq_tca.eq_rev_ft rev on (rev.trade_record_id = ftr.trade_record_id and
                                             num_nulls(p0ms_bid, p0ms_ask, p10ms_bid, p10ms_ask) = 0 and
-                                            rev.date_id between 20250701 and 20250930)
+                                            rev.date_id between :in_date_begin and :in_date_end)
          left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
          join trash.tmp_fyc par on par.order_id = yc.parent_order_id
-where yc.status_date_id between 20250701 and 20250930
+where yc.status_date_id between :in_date_begin and :in_date_end
   and yc.instrument_type_id = 'E'
   and yc.multileg_reporting_type = '1'
   and yc.exchange_id is not null;
@@ -452,3 +545,100 @@ where yc.status_date_id between 20250701 and 20250930
 
 select * from trash.pre_fetch_equity_tca_venue
 
+
+select 1 = any(:in_step);
+
+  create or replace function trash.tca_report_q_step_by_step(in_date_begin int4, in_date_end int4, in_step int4[])
+      returns int4
+      language plpgsql
+  as
+  $$
+  declare
+      l_row_cnt int4;
+  begin
+      if 1 = any (in_step) then
+          insert into trash.tmp_fyc
+          select yc.order_id,
+                 yc.client_order_id,
+                 yc.status_date_id                                        as date_id,
+                 yc.multileg_reporting_type,
+                 yc.instrument_type_id,
+                 yc.account_id,
+                 a.account_name,
+                 yc.client_id,
+                 yc.instrument_id,
+                 yc.routed_time                                           as parent_routed_time,
+                 yc.order_end_time,
+                 yc.side,
+                 yc.buy_or_sell,
+                 (case when yc.buy_or_sell = 'B' then 1 else -1 end)::int as side_multiplier,
+                 case
+                     when yc.day_order_qty < yc.order_qty then yc.day_order_qty
+                     else yc.order_qty end                                as parent_order_qty,
+                 yc.day_cum_qty                                           as parent_exec_qty,
+--            sum(yc.day_cum_qty) over (partition by true)                                          as total_parent_exec_qty,
+                 yc.avg_px                                                as parent_avg_price,
+                 yc.avg_px * yc.day_cum_qty                               as principal_amount,
+                 yc.nbbo_bid_price                                        as parent_nbbo_bid_price,
+                 yc.nbbo_ask_price                                        as parent_nbbo_ask_price,
+                 yc.nbbo_bid_quantity                                     as parent_nbbo_bid_qty,
+                 yc.nbbo_ask_quantity                                     as parent_nbbo_ask_qty,
+                 case
+                     when yc.side = '1' then 10000 * (yc.order_price - yc.nbbo_ask_price) /
+                                             coalesce(yc.nbbo_ask_price, 0, null)
+                     else null end                                        as buy_limit_vs_ask_bps,
+                 case
+                     when yc.side <> '1' then 10000 * (yc.order_price - yc.nbbo_bid_price) /
+                                              coalesce(yc.nbbo_bid_price, 0, null)
+                     else null end                                        as sell_limit_vs_bid_bps,
+                 yc.is_marketable                                         as parent_is_marketable,
+                 yc.order_price                                           as parent_limit_price,
+                 (yc.nbbo_ask_price + yc.nbbo_bid_price) / 2                 routing_time_mid_price,
+                 yc.nbbo_ask_price - yc.nbbo_bid_price                       routing_time_spread,
+                 yc.trading_firm_unq_id,
+                 yc.sub_strategy_id,
+                 yc.routing_table_id,
+                 yc.order_fix_message_id,
+                 yc.day_order_qty,
+                 yc.order_qty,
+--                 co.order_cancel_time,
+                 fmj.tag_9002,
+                 fmj.tag_9023,
+                 fmj.tag_9126,
+                 fmj.tag_9191,
+                 fmj.tag_9264
+          from data_marts.f_yield_capture yc
+                   join lateral (select account_name
+                                 from dwh.d_account a
+                                 where a.account_id = yc.account_id
+                                   and a.is_active
+                                 limit 1) a on true
+                   left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
+
+              --                   join LATERAL (select order_cancel_time
+--                                 from dwh.client_order co
+--                                 where co.order_id = yc.order_id
+--                                   and co.create_date_id = yc.status_date_id
+--                                   and co.create_date_id between in_date_begin and in_date_end
+--                                 limit 1) co on true
+                   left join lateral (select fix_message ->> '9264' as tag_9264,
+                                             fix_message ->> '9023' as tag_9023,
+                                             fix_message ->> '9002' as tag_9002,
+                                             fix_message ->> '9126' as tag_9126,
+                                             fix_message ->> '9191' as tag_9191
+                                      from fix_capture.fix_message_json fmj
+                                      where fmj.fix_message_id = yc.order_fix_message_id--co.fix_message_id
+                                        and fmj.date_id = yc.status_date_id
+                                        and fmj.date_id >= in_date_begin
+                                        and fmj.date_id <= in_date_end
+                                      limit 1) fmj on true
+
+          where yc.parent_order_id is null
+            and yc.status_date_id between in_date_begin and in_date_end
+            and yc.instrument_type_id = 'E'
+            and yc.multileg_reporting_type = '1';
+      end if;
+      get diagnostics l_row_cnt = row_count;
+      return l_row_cnt;
+  end;
+  $$
