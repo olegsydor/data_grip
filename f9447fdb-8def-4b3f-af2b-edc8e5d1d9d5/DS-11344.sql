@@ -330,10 +330,10 @@ begin
                                       and (l1.rn = 1 or l1.rn is null)
                                       and alt.date_id = in_date_id
                                       and tr.date_id = in_date_id
-                                      and case
-                                              when in_client_order_states is null then true
-                                              else fpo.order_status is not null and
-                                                   fpo.order_status = any (in_client_order_states) end
+--                                       and case
+--                                               when in_client_order_states is null then true
+--                                               else fpo.order_status is not null and
+--                                                    fpo.order_status = any (in_client_order_states) end
                                     limit 1
             ) ccr on true
                  left join lateral (select *
