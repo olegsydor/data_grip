@@ -676,7 +676,8 @@ end ;
 $function$
 ;
 
-create temp table t_os1 as
+
+create temp table t_os_new as
 select *
 from trash.report_fintech_s3_master_file(
         in_start_date_id := 20260401,
@@ -686,3 +687,5 @@ from trash.report_fintech_s3_master_file(
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
      );
+
+
