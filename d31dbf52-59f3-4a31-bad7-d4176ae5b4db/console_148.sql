@@ -1064,3 +1064,4 @@ select * from trash.pre_fetch_equity_tca_venue
 
 select 1 = any(:in_step);
 
+select * from trash.pre_fetch_equity_tca
