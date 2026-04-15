@@ -691,7 +691,7 @@ $function$
 drop table if exists t_os_new;
 create temp table t_os_new as
 select *
-from trash.report_fintech_s3_master_file(
+from dash360.report_fintech_s3_master_file(
         in_start_date_id := 20260401,
         in_end_date_id := 20260401,
 --         in_account_ids := '{75774}',
@@ -699,3 +699,6 @@ from trash.report_fintech_s3_master_file(
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
      );
+
+alter function dash360.report_fintech_s3_master_file rename to report_fintech_s3_master_file_bkp;
+alter function trash.report_fintech_s3_master_file set schema dash360;
