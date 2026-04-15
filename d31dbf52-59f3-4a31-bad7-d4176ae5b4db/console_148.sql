@@ -1056,12 +1056,97 @@ select * from trash.pre_fetch_equity_tca_venue
           into l_step_id;
       end if;
 
+      if 4 = any (in_step) then
+          select public.load_log(l_load_id, l_step_id, 'step 4  STARTED  ====', 0, 'O')
+          into l_step_id;
+
+          insert into trash.pre_fetch_equity_tca_venue
+          select yc.order_id,
+                 yc.day_order_qty,
+                 yc.exchange_id,
+                 coalesce(re.exchange_name, e.exchange_name)    as exchange_name,
+                 re.venue_type,
+                 ot.hierarchy_1                                 as order_type,
+                 yc.trading_firm_unq_id,
+                 --ftr.order_id,
+                 ftr.street_order_qty,
+                 ftr.date_id,
+                 ftr.last_qty,
+                 case
+                     when ftr.side = '1' then 1
+                     else -1
+                     end                                        as side_multiplier,
+                 case
+                     when ftr.last_px > ftr.ask_price then ftr.ask_price
+                     when ftr.last_px < ftr.bid_price then ftr.bid_price
+                     else ftr.last_px
+                     end                                           efq_last_px,
+                 ftr.last_qty * (ftr.ask_price - ftr.bid_price) as observed_spread_value,
+                 ftr.last_qty * case
+                                    when ftr.side = '1' then ftr.ask_price - (case
+                                                                                  when ftr.last_px > ftr.ask_price
+                                                                                      then ftr.ask_price
+                                                                                  when ftr.last_px < ftr.bid_price
+                                                                                      then ftr.bid_price
+                                                                                  else ftr.last_px end)
+                                    else (case
+                                              when ftr.last_px > ftr.ask_price then ftr.ask_price
+                                              when ftr.last_px < ftr.bid_price then ftr.bid_price
+                                              else ftr.last_px end) - ftr.bid_price
+                     end                                        as dollars_saved_from_far,
+                 case
+                     when ftr.ask_price - ftr.bid_price <= 0 then 0
+                     else ftr.last_qty * (ftr.ask_price - ftr.bid_price) * ((case
+                                                                                 when ftr.last_px > ftr.ask_price
+                                                                                     then ftr.ask_price
+                                                                                 when ftr.last_px < ftr.bid_price
+                                                                                     then ftr.bid_price
+                                                                                 else ftr.last_px end) -
+                                                                            (ftr.ask_price + ftr.bid_price) / 2) /
+                          (0.5 * (ftr.ask_price - ftr.bid_price))
+                     end                                           efq_dollars,
+                 case
+                     when ftr.side = '1' and (rev.p10ms_bid + rev.p10ms_ask) > (ftr.bid_price + ftr.ask_price) then 0
+                     when ftr.side <> '1' and (rev.p10ms_bid + rev.p10ms_ask) < (ftr.bid_price + ftr.ask_price) then 0
+                     when ftr.side = '1' and (rev.p10ms_bid + rev.p10ms_ask) <= (ftr.bid_price + ftr.ask_price) then 1
+                     when ftr.side <> '1' and (rev.p10ms_bid + rev.p10ms_ask) >= (ftr.bid_price + ftr.ask_price) then 1
+                     end                                        as midpont_stability,
+                 --
+                 ftr.tcce_firm_execution_cost                   as net_fees_rebates_amount,
+                 ftr.clearing_fee_amout                         as clearing_amount,
+                 ftr.tcce_account_dash_commission_amount        as commission_amount,
+                 --
+                 row_number() over (partition by yc.order_id)   as rn
+          from data_marts.f_yield_capture yc
+                   join trash.tmp_fyc par on par.order_id = yc.parent_order_id
+                   left join dwh.flat_trade_record ftr on (ftr.street_order_id = yc.order_id and
+                                                           ftr.date_id between in_date_begin and in_date_end)
+                   left join dwh.d_exchange e on (e.exchange_id = yc.exchange_id and e.is_active)
+                   left join staging.real_exchange re on re.exchange_id = e.real_exchange_id and e.is_active
+                   left join eq_tca.order_type_mapping ot on ot.order_type_unq_id = yc.order_type_mapping_id
+                   join dwh.d_account a on a.account_id = yc.account_id
+                   left join eq_tca.eq_rev_ft rev on (rev.trade_record_id = ftr.trade_record_id and
+                                                      num_nulls(p0ms_bid, p0ms_ask, p10ms_bid, p10ms_ask) = 0 and
+                                                      rev.date_id between in_date_begin and in_date_end)
+                   left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
+
+          where yc.status_date_id between in_date_begin and in_date_end
+            and yc.instrument_type_id = 'E'
+            and yc.multileg_reporting_type = '1'
+            and yc.exchange_id is not null;
+
+          get diagnostics l_row_cnt = row_count;
+          select public.load_log(l_load_id, l_step_id, 'step 4  COMPLETED  ====', l_row_cnt, 'O')
+          into l_step_id;
+      end if;
+
+
       return l_row_cnt;
   end;
 
   $$;
 
 
-select 1 = any(:in_step);
 
-select * from trash.pre_fetch_equity_tca
+
+
