@@ -124,6 +124,8 @@ begin
 
     create index on t_parent_orders_sub_str (order_id);
 
+    analyze t_parent_orders_sub_str;
+
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' Parent orders with correct sub_strategy calculated',
                            l_row_cnt, 'O')
@@ -298,7 +300,11 @@ begin
     from dwh.client_order cl
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
-             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+
+--              left join t_parent_orders_sub_str ord on ord.order_id = cl.order_id
+--              left join t_parent_orders_sub_str pord on pord.order_id = cl.parent_order_id
+
              left join lateral (select po.sub_strategy_desc
                                 from dwh.client_order po
                                 where po.order_id = cl.parent_order_id
@@ -308,7 +314,7 @@ begin
              left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
              left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
              left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-             left join lateral (select *
+             left join lateral (select exc.mic_code, exc.eq_mpid
                                 from dwh.d_exchange exc
                                 where exc.exchange_id = cl.exchange_id
                                   and exc.is_active
@@ -334,6 +340,11 @@ begin
               when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
         end
+--             and case
+--               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+--               when cl.parent_order_id is null then ord.order_id is not null
+--           else pord.order_id is not null
+--         end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -443,6 +454,7 @@ begin
 
     create index on t_orders (create_date_id);
     create index on t_orders (order_id);
+    analyze t_orders;
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' indexed', 0, 'O')
     into l_step_id;
@@ -469,19 +481,20 @@ begin
            a.account_algo_alias,
            a.eq_order_capacity
     from dwh.execution ex
-             join lateral
-        (select cl.parent_order_id,
-                cl.order_id,
-                cl.process_time,
-                cl.client_order_id,
-                cl.multileg_reporting_type,
-                cl.instrument_id,
-                cl.account_id
-         from t_orders cl
-         where cl.create_date_id <= ex.exec_date_id
-           and cl.order_id = ex.order_id
-           and cl.trans_type <> 'F'
-         limit 1) cl on true
+--              join lateral
+--         (select cl.parent_order_id,
+--                 cl.order_id,
+--                 cl.process_time,
+--                 cl.client_order_id,
+--                 cl.multileg_reporting_type,
+--                 cl.instrument_id,
+--                 cl.account_id
+--          from t_orders cl
+--          where cl.create_date_id <= ex.exec_date_id
+--            and cl.order_id = ex.order_id
+--            and cl.trans_type <> 'F'
+--          limit 1) cl on true
+             join t_orders cl on true and cl.order_id = ex.order_id and cl.create_date_id <= ex.exec_date_id
              inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
              left join lateral (select opra_symbol, option_series_id
                                 from dwh.d_option_contract oc
@@ -675,8 +688,7 @@ begin
 end ;
 $function$
 ;
-
-
+drop table if exists t_os_new;
 create temp table t_os_new as
 select *
 from trash.report_fintech_s3_master_file(
@@ -687,5 +699,3 @@ from trash.report_fintech_s3_master_file(
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
      );
-
-
