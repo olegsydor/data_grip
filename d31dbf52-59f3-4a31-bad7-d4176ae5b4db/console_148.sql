@@ -1160,3 +1160,369 @@ create index on trash.pre_fetch_equity_tca (aggression_level);
 create index on trash.pre_fetch_equity_tca (account_name);
 create index on trash.pre_fetch_equity_tca (client_id);
 
+----
+-- DROP FUNCTION dash360.report_equity_tca_v2(int4);
+
+CREATE FUNCTION trash.report_equity_tca_v2(in_group_by integer)
+ RETURNS TABLE(group_name integer, grouped_by text, order_count bigint, shares_ordered bigint, avg_shares_per_order numeric, child_executions numeric, shares_executed bigint, principal_amount numeric, total_shares_executed_pct double precision, avg_exec_qty numeric, total_volume_participation_pct double precision, marketable_volume_participation_pct double precision, dark_volume_participation_pct double precision, prev_close_px_bps double precision, open_px_bps double precision, arrival_px_px_bps double precision, eligible_pwp_5pc_bps double precision, eligible_pwp_10pc_bps double precision, eligible_pwp_15pc_bps double precision, eligible_pwp_20pc_bps double precision, twap_over_life_bps double precision, eligible_twap_over_life_bps double precision, vwap_over_life_bps double precision, eligible_vwap_over_life_bps double precision, last_px_bps double precision, close_px_bps double precision, prev_close_px_value numeric, open_px_value numeric, arrival_px_px_value double precision, eligible_pwp_5pc_value double precision, eligible_pwp_10pc_value double precision, eligible_pwp_15pc_value double precision, eligible_pwp_20pc_value double precision, twap_over_life_value double precision, eligible_twap_over_life_value double precision, vwap_over_life_value double precision, eligible_vwap_over_life_value double precision, last_px_value double precision, close_px_value numeric, spread_5d_bps numeric, observed_spread numeric, efq numeric, spread_saving numeric, spread_saving_bps numeric, spread_saving_mils numeric, orders_with_limit_pct double precision, orders_with_limit_not_marketable_pct double precision, buy_limit_vs_ask_bps numeric, sell_limit_vs_bid_bps numeric, net_fees_rebates_mils numeric, commission_mils numeric, total_costs_mils numeric, net_fees_rebates_amount numeric, commission_amount numeric, total_costs_amount numeric)
+ LANGUAGE plpgsql
+AS $function$
+begin
+	-- Created by PD 2022/05/25
+	-- 2022-02-06 PD added round(,15) to spread_5d_bps, principal_amount
+	-- 2022-06-21 PD added round(,15) to prev_close_px_value
+	-- 2023-08-17 PD added round(,15) to buy_limit_vs_ask_bps
+	-- 2024-02-02 PD https://dashfinancial.atlassian.net/browse/DS-7922 removed clearing fields
+	-- 2024-10-16 PD https://dashfinancial.atlassian.net/browse/DS-9019 removed myltiplying for net_fees_rebates_mils,
+	-- 2024-10-28 PD https://dashfinancial.atlassian.net/browse/DS-9019 removed for spread_saving_mils, total_costs_mils
+	-- 2025-09-10 PD https://dashfinancial.atlassian.net/browse/DS-10431 added in_group_by 14
+	-- 2025-11-11 PD https://dashfinancial.atlassian.net/browse/DS-10657 added symbol and date_id to in_group_by 14
+	return query
+	select
+		in_group_by as gb,
+		case in_group_by
+			when 1 then 'all'::text
+			when 2 then o.side::text
+		  	when 3 then o.scale_market_cap_id::text
+			when 4 then o.sector::text
+			when 5 then o.adv_pct::text
+			when 6 then o.algorithm::text
+			when 7 then o.date_id::text
+			when 8 then (o.date_id / 100)::text
+			when 9 then (o.algorithm || ' | ' || o.symbol)::text
+			when 10 then (o.algorithm || ' | ' || coalesce(o.aggression_level, null, 'Default'))::text
+			when 11 then o.symbol::text
+			when 12 then o.account_name::text
+			when 13 then o.client_id::text
+			when 14 then client_order_id || ' | ' || o.algorithm::text || ' | ' || o.symbol::text || ' | ' || o.date_id::text
+			else 'all'
+		end as grouped_by,
+--		in_group_by as t1,
+		count(o.order_id) order_count,
+		sum(o.parent_order_qty) as shares_ordered,
+		avg(o.parent_order_qty) as avg_shares_per_order,
+--		--executions
+		sum(o.trades_count) child_executions,
+		sum(o.parent_exec_qty) as shares_executed,
+		round(sum(o.principal_amount),15) principal_amount,
+		sum(o.parent_exec_qty) / nullif(max(o.total_parent_exec_qty), 0)::float total_shares_executed_pct,
+		avg(o.avg_exec_qty) avg_exec_qty,
+--		--participation
+		avg(o.parent_exec_qty / nullif(o.volume_over_life,  0))::float as total_volume_participation_pct,
+		avg(o.parent_exec_qty / nullif(o.eligible_volume_over_life, 0))::float as marketable_volume_participation_pct,
+		sum(o.dark_shares_executed) / nullif(sum(o.parent_exec_qty), 0)::float as dark_volume_participation_pct, --???????
+
+		--performance _bps
+		(10000 * sum(o.side_multiplier * (o.prev_close_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.prev_close_px * o.parent_exec_qty), 0))::float						as prev_close_px_bps,
+		(10000 * sum(o.side_multiplier * (o.open_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.open_px * o.parent_exec_qty), 0))::float									as open_px_bps,
+		(10000 * sum(o.side_multiplier * (o.order_arrival_price * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.order_arrival_price * o.parent_exec_qty), 0))::float			as arrival_px_px_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_pwp_5pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_pwp_5pc * o.parent_exec_qty), 0))::float				as eligible_pwp_5pc_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_pwp_10pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_pwp_10pc * o.parent_exec_qty), 0))::float				as eligible_pwp_10pc_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_pwp_15pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_pwp_15pc * o.parent_exec_qty), 0))::float				as eligible_pwp_15pc_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_pwp_20pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_pwp_20pc * o.parent_exec_qty), 0))::float				as eligible_pwp_20pc_bps,
+		(10000 * sum(o.side_multiplier * (o.twap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.twap_over_life * o.parent_exec_qty), 0))::float					as twap_over_life_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_twap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_twap_over_life * o.parent_exec_qty), 0))::float 	as eligible_twap_over_life_bps,
+		(10000 * sum(o.side_multiplier * (o.vwap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.vwap_over_life * o.parent_exec_qty), 0))::float					as vwap_over_life_bps,
+		(10000 * sum(o.side_multiplier * (o.eligible_vwap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.eligible_vwap_over_life * o.parent_exec_qty), 0))::float 	as eligible_vwap_over_life_bps,
+		(10000 * sum(o.side_multiplier * (o.order_end_price * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.order_end_price * o.parent_exec_qty), 0))::float					as last_px_bps,
+		(10000 * sum(o.side_multiplier * (o.close_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) / nullif(sum(o.close_px * o.parent_exec_qty), 0))::float								as close_px_bps,
+
+		--performance _value
+		round(sum(o.side_multiplier * (o.prev_close_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)),15) 			as prev_close_px_value,
+		round(sum(o.side_multiplier * (o.open_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)),15) 				as open_px_value,
+		sum(o.side_multiplier * (o.order_arrival_price * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 		as arrival_px_px_value,
+		sum(o.side_multiplier * (o.eligible_pwp_5pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 			as eligible_pwp_5pc_value,
+		sum(o.side_multiplier * (o.eligible_pwp_10pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 		as eligible_pwp_10pc_value,
+		sum(o.side_multiplier * (o.eligible_pwp_15pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 		as eligible_pwp_15pc_value,
+		sum(o.side_multiplier * (o.eligible_pwp_20pc * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 		as eligible_pwp_20pc_value,
+		sum(o.side_multiplier * (o.twap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 			as twap_over_life_value,
+		sum(o.side_multiplier * (o.eligible_twap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 	as eligible_twap_over_life_value,
+		sum(o.side_multiplier * (o.vwap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 			as vwap_over_life_value,
+		sum(o.side_multiplier * (o.eligible_vwap_over_life * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 	as eligible_vwap_over_life_value,
+		sum(o.side_multiplier * (o.order_end_price * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 			as last_px_value,
+		sum(o.side_multiplier * (o.close_px * o.parent_exec_qty - o.parent_avg_price * o.parent_exec_qty)) 					as close_px_value,
+
+		--spread
+		round(sum(o.avg_bid_ask_spread_5d_bps * o.principal_amount) / nullif(sum(o.principal_amount), 0),15)						as spread_5d_bps,
+		10000 * sum(o.principal_amount * o.routing_time_spread / nullif(o.routing_time_mid_price, 0)) / nullif(sum(o.principal_amount), 0) 	as observed_spread,
+		sum(o.efq_dollars) / nullif(sum(o.observed_spread_value), 0)													as efq,
+		sum(o.spread_saving) 																							as spread_saving,
+		10000 * sum(o.spread_saving) / nullif(sum(o.principal_amount), 0)												as spread_saving_bps,
+		sum(o.spread_saving) / nullif(sum(o.parent_exec_qty), 0)												as spread_saving_mils,
+
+		--limit price
+		sum(case when o.parent_limit_price is not null then 1 else 0 end) / count(*)::float 																								as orders_with_limit_pct,
+		sum(case when o.parent_limit_price is not null and o.parent_is_marketable = 'N' then 1 else 0 end) / count(*)::float 																as orders_with_limit_not_marketable_pct,
+		round(sum(case when o.side = '1' then o.buy_limit_vs_ask_bps * o.parent_order_qty else 0 end) / nullif(sum(case when o.side = '1' then o.parent_order_qty else 0 end), 0), 15) 	    as buy_limit_vs_ask_bps,
+		round(sum(case when o.side <> '1' then o.sell_limit_vs_bid_bps * o.parent_order_qty else 0 end) / nullif(sum(case when o.side <> '1' then o.parent_order_qty else 0 end), 0),15) 	as sell_limit_vs_bid_bps,
+
+		-- costs
+		sum(o.net_fees_rebates_amount) / nullif(sum(o.last_qty), 0)					as net_fees_rebates_mils,
+		sum(o.commission_amount) / nullif(sum(o.last_qty), 0) 						as commission_mils,
+		(coalesce(sum(o.net_fees_rebates_amount), 0) +
+				coalesce(sum(o.commission_amount), 0)) / nullif(sum(o.last_qty), 0)			as total_costs_mils,
+
+		-- costs amounts
+		sum(o.net_fees_rebates_amount)														as net_fees_rebates_amount,
+		sum(o.commission_amount)							 								as commission_amount,
+		coalesce(sum(o.net_fees_rebates_amount), 0) +
+		coalesce(sum(o.commission_amount), 0)											 	as total_costs_amount
+
+	from trash.pre_fetch_equity_tca o
+	group by grouped_by;
+end
+$function$
+;
+
+
+-- DROP FUNCTION trash.report_equity_tca_venue(int4);
+
+CREATE OR REPLACE FUNCTION trash.report_equity_tca_venue(in_group_by integer DEFAULT 1)
+ RETURNS TABLE(gb integer, grouped_by text, n_orders bigint, n_shares_orders bigint, avg_order_size numeric, n_executions bigint, n_shares_executions bigint, avg_execution_size numeric, perc_total_shares_executed numeric, executed_shares_to_ordered numeric, midpont_stability numeric, saved_from_far_side_of_spread numeric, perc_eq numeric, net_fees_rebates_mils numeric, clearing_mils numeric, commission_mils numeric, total_costs_mils numeric, net_fees_rebates_amount numeric, clearing_amount numeric, commission_amount numeric, total_costs_amount numeric)
+ LANGUAGE plpgsql
+AS $function$
+begin
+	-- O. Sydor 2021-04-27
+	-- https://dashfinancial.atlassian.net/browse/DS-3381
+	-- SY 20210928: Several nillif have been added to avoid divisor equal to 0
+	-- PD 20241016: https://dashfinancial.atlassian.net/browse/DS-9019 removed multiplying by 1000 for net_fees_rebates_mils and commission_mils
+	-- PD 20241028: https://dashfinancial.atlassian.net/browse/DS-9019 removed multiplying by 1000 for total_costs_mils and clearing_mils
+    return query
+    select
+            in_group_by 																										as gb,
+            case in_group_by
+                when 1 then smt.exchange_name::text -- Venue
+                when 2 then smt.venue_type::text -- VenueType
+                when 3 then smt.order_type::text -- OrderType
+                when 4 then (smt.order_type || ' | ' || smt.exchange_name)::text -- OrderVenue
+                else 'all'
+            end as grouped_by,
+        sum(case when rn = 1 then 1 else 0 end) 																				as n_orders,
+        sum(case when rn = 1 then day_order_qty else 0 end) 																	as n_shares_orders,
+        round(sum(case when rn = 1 then day_order_qty else 0 end) / nullif(sum(case when rn = 1 then 1 else 0 end), 0.00), 0) 	as avg_order_size,
+    count(last_qty) 																											as n_executions,
+    sum(last_qty) 																												as n_shares_executions,
+    sum(last_qty) / nullif(count(last_qty), 0.00) 																				as avg_execution_size,
+    sum(last_qty) * 1.00 / nullif(sum(sum(last_qty)) over () ,0)																			as perc_total_shares_executed,
+    sum(last_qty) * 1.00 / nullif(sum(case when rn = 1 then day_order_qty else 0 end),0) 													as executed_shares_to_ordered,
+    avg(smt.midpont_stability) 																									as midpont_stability,
+    sum(dollars_saved_from_far) 																								as saved_from_far_side_of_spread,
+    sum(side_multiplier * efq_dollars) / nullif(sum(observed_spread_value) ,0)															as perc_eq,
+		-- costs
+	sum(smt.net_fees_rebates_amount) / nullif(sum(smt.last_qty), 0)														as net_fees_rebates_mils,
+	sum(smt.clearing_amount) / nullif(count(smt.last_qty), 0)															as clearing_mils,
+	sum(smt.commission_amount) / nullif(sum(smt.last_qty), 0) 															as commission_mils,
+	(coalesce(sum(smt.net_fees_rebates_amount), 0) +
+			coalesce(sum(smt.clearing_amount), 0) +
+			coalesce(sum(smt.commission_amount), 0)) / nullif(sum(smt.last_qty), 0)												as total_costs_mils	,
+		-- costs amounts
+	sum(smt.net_fees_rebates_amount)																							as net_fees_rebates_amount,
+	sum(smt.clearing_amount)																									as clearing_amount,
+	sum(smt.commission_amount)								 																	as commission_amount,
+	coalesce(sum(smt.net_fees_rebates_amount), 0) +
+	coalesce(sum(smt.clearing_amount), 0) +
+	coalesce(sum(smt.commission_amount), 0)													 									as total_costs_amount
+
+    from trash.pre_fetch_equity_tca_venue smt
+    group by grouped_by;
+end;
+$function$
+;
+
+
+
+-- DROP FUNCTION dash_reporting.report_equity_tca_quick_gen(int4, int4);
+
+CREATE OR REPLACE FUNCTION trash.report_equity_tca_quick_gen(in_date_begin integer, in_date_end integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+declare
+    l_date_id_begin int4 := coalesce(in_date_begin, to_char(date_trunc('quarter', current_date - interval '3 month'),
+                                                            'YYYYMMDD')::int4);
+    l_date_id_end   int4 := coalesce(in_date_end,
+                                     to_char((date_trunc('quarter', current_date) - interval '1 day'), 'YYYYMMD')::int4);
+    l_step_id       int4;
+    l_load_id       int4;
+    l_row_cnt       int4;
+    ret_row_cnt     int4 := 0;
+begin
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+
+    select public.load_log(l_load_id, l_step_id, 'report_equity_tca_quick generation STARTED ====', 0, 'O')
+    into l_step_id;
+
+--     perform dash360.report_equity_tca_init_v2(l_date_id_begin, l_date_id_end);
+--    perform trash.report_equity_tca_init_v2_temp(l_date_id_begin, l_date_id_end, in_sub_strategy=>'{0,13,15,1,2,4,5,99,83,84,12}');
+    --     row_cnt = (select count(*) from pre_fetch_equity_tca);
+--     raise notice 'pre_fetch - % rows', row_cnt;
+
+    delete
+    from dash_reporting.eq_tca_quick
+    where date_id_report_begin = l_date_id_begin
+      and date_id_report_end = l_date_id_end;
+
+    delete
+    from dash_reporting.eq_tca_venue_quick
+    where date_id_report_begin = l_date_id_begin
+      and date_id_report_end = l_date_id_end;
+
+    for each_group in 1..13
+        loop
+            insert into dash_reporting.eq_tca_quick(group_name, grouped_by, order_count, shares_ordered,
+                                                    avg_shares_per_order, child_executions, shares_executed,
+                                                    principal_amount, total_shares_executed_pct, avg_exec_qty,
+                                                    total_volume_participation_pct, marketable_volume_participation_pct,
+                                                    dark_volume_participation_pct, prev_close_px_bps, open_px_bps,
+                                                    arrival_px_px_bps, eligible_pwp_5pc_bps, eligible_pwp_10pc_bps,
+                                                    eligible_pwp_15pc_bps, eligible_pwp_20pc_bps, twap_over_life_bps,
+                                                    eligible_twap_over_life_bps, vwap_over_life_bps,
+                                                    eligible_vwap_over_life_bps, last_px_bps, close_px_bps,
+                                                    prev_close_px_value, open_px_value, arrival_px_px_value,
+                                                    eligible_pwp_5pc_value, eligible_pwp_10pc_value,
+                                                    eligible_pwp_15pc_value, eligible_pwp_20pc_value,
+                                                    twap_over_life_value, eligible_twap_over_life_value,
+                                                    vwap_over_life_value, eligible_vwap_over_life_value, last_px_value,
+                                                    close_px_value, spread_5d_bps, observed_spread, efq, spread_saving,
+                                                    spread_saving_bps, spread_saving_mils, orders_with_limit_pct,
+                                                    orders_with_limit_not_marketable_pct, buy_limit_vs_ask_bps,
+                                                    sell_limit_vs_bid_bps, net_fees_rebates_mils,
+                                                    commission_mils, total_costs_mils, net_fees_rebates_amount,
+                                                    commission_amount, total_costs_amount,
+                                                    date_id_report_begin, date_id_report_end, group_by)
+            select group_name,
+                   grouped_by,
+                   order_count,
+                   shares_ordered,
+                   avg_shares_per_order,
+                   child_executions,
+                   shares_executed,
+                   principal_amount,
+                   total_shares_executed_pct,
+                   avg_exec_qty,
+                   total_volume_participation_pct,
+                   marketable_volume_participation_pct,
+                   dark_volume_participation_pct,
+                   prev_close_px_bps,
+                   open_px_bps,
+                   arrival_px_px_bps,
+                   eligible_pwp_5pc_bps,
+                   eligible_pwp_10pc_bps,
+                   eligible_pwp_15pc_bps,
+                   eligible_pwp_20pc_bps,
+                   twap_over_life_bps,
+                   eligible_twap_over_life_bps,
+                   vwap_over_life_bps,
+                   eligible_vwap_over_life_bps,
+                   last_px_bps,
+                   close_px_bps,
+                   prev_close_px_value,
+                   open_px_value,
+                   arrival_px_px_value,
+                   eligible_pwp_5pc_value,
+                   eligible_pwp_10pc_value,
+                   eligible_pwp_15pc_value,
+                   eligible_pwp_20pc_value,
+                   twap_over_life_value,
+                   eligible_twap_over_life_value,
+                   vwap_over_life_value,
+                   eligible_vwap_over_life_value,
+                   last_px_value,
+                   close_px_value,
+                   spread_5d_bps,
+                   observed_spread,
+                   efq,
+                   spread_saving,
+                   spread_saving_bps,
+                   spread_saving_mils,
+                   orders_with_limit_pct,
+                   orders_with_limit_not_marketable_pct,
+                   buy_limit_vs_ask_bps,
+                   sell_limit_vs_bid_bps,
+                   net_fees_rebates_mils,
+                   commission_mils,
+                   total_costs_mils,
+                   net_fees_rebates_amount,
+                   commission_amount,
+                   total_costs_amount,
+                   l_date_id_begin,
+                   l_date_id_end,
+                   each_group
+            from trash.report_equity_tca_v2(each_group);
+            get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, 'report_equity_tca_quick generated ' || each_group::text, 0, 'O')
+    into l_step_id;
+
+            ret_row_cnt := ret_row_cnt + l_row_cnt;
+
+        end loop;
+
+    for each_group in 1..4
+        loop
+            insert into dash_reporting.eq_tca_venue_quick(gb, grouped_by, n_orders, n_shares_orders, avg_order_size,
+            											  n_executions, n_shares_executions, avg_execution_size,
+            											  perc_total_shares_executed, executed_shares_to_ordered,
+            											  midpont_stability, saved_from_far_side_of_spread, perc_eq,
+            											  net_fees_rebates_mils, clearing_mils, commission_mils,
+            											  total_costs_mils, net_fees_rebates_amount, clearing_amount,
+            											  commission_amount, total_costs_amount, date_id_report_begin,
+            											  date_id_report_end, each_group)
+            select gb,
+            	   grouped_by,
+            	   n_orders,
+            	   n_shares_orders,
+            	   avg_order_size,
+            	   n_executions,
+            	   n_shares_executions,
+            	   avg_execution_size,
+            	   perc_total_shares_executed,
+            	   executed_shares_to_ordered,
+            	   midpont_stability,
+            	   saved_from_far_side_of_spread,
+            	   perc_eq,
+            	   net_fees_rebates_mils,
+            	   clearing_mils,
+            	   commission_mils,
+            	   total_costs_mils,
+            	   net_fees_rebates_amount,
+            	   clearing_amount,
+            	   commission_amount,
+            	   total_costs_amount,
+                   l_date_id_begin,
+                   l_date_id_end,
+                   each_group
+            from trash.report_equity_tca_venue(each_group);
+    select public.load_log(l_load_id, l_step_id, 'report_equity_tca_quick generated ' || each_group::text, 0, 'O')
+    into l_step_id;
+
+        end loop;
+
+
+
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_equity_tca_quick for date ' || l_date_id_begin::text || ' - ' ||
+                           l_date_id_end::text || ' FINISHED ====', ret_row_cnt, 'I')
+    into l_step_id;
+
+exception
+    when others then
+        raise notice 'error: %', sqlerrm;
+end;
+$function$
+;
+select * from trash.report_equity_tca_quick_gen(20260101, 20260331)
+
+select *
+delete
+from dash_reporting.eq_tca_quick
+where date_id_report_begin = 2060101
+and date_id_report_end = 20260331
+
+select *
+delete
+from dash_reporting.eq_tca_venue_quick
+where date_id_report_begin = 2060101
+and date_id_report_end = 20260331
+
