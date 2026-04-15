@@ -561,6 +561,7 @@ select * from trash.pre_fetch_equity_tca_venue
 
       select public.load_log(l_load_id, l_step_id, 'report_equity_tca step-by-step  STARTED  ====', 0, 'O')
       into l_step_id;
+
       if 1 = any (in_step) then
           select public.load_log(l_load_id, l_step_id, 'step 1  STARTED  ====', 0, 'O')
           into l_step_id;
@@ -644,10 +645,11 @@ select * from trash.pre_fetch_equity_tca_venue
             and yc.status_date_id between in_date_begin and in_date_end
             and yc.instrument_type_id = 'E'
             and yc.multileg_reporting_type = '1';
+          get diagnostics l_row_cnt = row_count;
+          select public.load_log(l_load_id, l_step_id, 'step 1  COMPLETED  ====', l_row_cnt, 'O')
+          into l_step_id;
       end if;
-      get diagnostics l_row_cnt = row_count;
-      select public.load_log(l_load_id, l_step_id, 'step 1  COMPLETED  ====', l_row_cnt, 'O')
-      into l_step_id;
+
 
       if 2 = any (in_step) then
           select public.load_log(l_load_id, l_step_id, 'step 2  STARTED  ====', 0, 'O')
@@ -1057,7 +1059,7 @@ select * from trash.pre_fetch_equity_tca_venue
       return l_row_cnt;
   end;
 
-  $$
+  $$;
 
 
 select 1 = any(:in_step);
