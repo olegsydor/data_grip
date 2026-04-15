@@ -1515,14 +1515,14 @@ $function$
 select * from trash.report_equity_tca_quick_gen(20260101, 20260331)
 
 select *
-delete
+-- delete
 from dash_reporting.eq_tca_quick
-where date_id_report_begin = 2060101
-and date_id_report_end = 20260331
+where date_id_report_begin = 20260101
+and date_id_report_end = 20260331;
 
 select *
-delete
+-- delete
 from dash_reporting.eq_tca_venue_quick
-where date_id_report_begin = 2060101
+where date_id_report_begin = 20260101
 and date_id_report_end = 20260331
 
