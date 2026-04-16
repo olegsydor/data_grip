@@ -17,7 +17,7 @@ from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id :=
 select *
 from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                  in_include_routes := 'Y', in_include_acks := 'Y',
-                                 in_client_order_ids := '{"DFIN:5KP600000G0006", "DFTD:20260106-00196-00009"}');
+                                 in_client_order_ids := '{"DFIN:5KP600000G0006", "DFTD:20260106-00196-00001"}');
 
 select *
 from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
