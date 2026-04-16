@@ -22,6 +22,16 @@ from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id :=
 select *
 from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
                                  in_include_routes := 'Y', in_include_acks := 'Y',
+                                 in_client_order_ids := '{"DFTD:20260106-00196-00001"}');
+
+
+select * from dwh.client_order
+where client_order_id = 'DFTD:20260106-00196-00009'
+and create_date_id = 20260106
+
+select *
+from trash.so_dash_finra_inquiry(in_date_begin_id := 20260106, in_date_end_id := 20260106,
+                                 in_include_routes := 'Y', in_include_acks := 'Y',
                                  in_client_order_ids := '{"EGAK9104-20260106"}');
 
 
@@ -218,7 +228,7 @@ begin
     -- parent orders
     drop table if exists t_order;
     create temp table t_order as
-    select order_id                                                                              as first_order_id,
+    select cl.order_id                                                                           as first_order_id,
            cl.*,
            di.symbol,
            di.symbol_suffix,
@@ -272,7 +282,8 @@ begin
            ex.*,
            cl.client_order_id                                                                    as parent_client_order_id,
            dex.ex_destination_desc,
-           fmj.tag_60 as tag60
+           fmj.tag_60                                                                            as tag60,
+           ml.no_legs                                                                            as ml_no_legs
     from dwh.client_order cl
         join tmp_all_orders using (create_date_id, order_id)
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
@@ -332,6 +343,19 @@ begin
                                   and nxt.create_date_id >= l_date_begin_id
                                   and nxt.create_date_id <= l_date_end_id
                                 limit 1) nxt on true
+         left join lateral
+    (
+    select ml.order_id
+         , ml.client_order_id
+         , ml.fix_message_id
+         , ml.no_legs
+    from client_order ml
+    where cl.multileg_reporting_type = '2'
+      and ml.order_id = cl.multileg_order_id
+      and ml.multileg_reporting_type = '3'
+      and ml.create_date_id = cl.create_date_id
+    limit 1
+    ) ml on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
 --              left join dwh.d_ex_destination dex on dex.ex_destination_code = cl.ex_destination and dex.exchange_id = cl.exchange_id and dex.is_active
@@ -415,7 +439,8 @@ begin
            ex.*,
            par.parent_client_order_id                                                            as parent_client_order_id,
            dex.ex_destination_desc,
-           fmj.tag_60 as tag60
+           fmj.tag_60                                                                            as tag60,
+           ml.no_legs                                                                            as ml_no_legs
     from t_order par
              join dwh.client_order cl on cl.parent_order_id = par.order_id
              join dwh.d_account ac on ac.account_id = cl.account_id and ac.is_active
@@ -475,6 +500,19 @@ begin
                                   and nxt.create_date_id >= l_date_begin_id
                                   and nxt.create_date_id <= l_date_end_id
                                 limit 1) nxt on true
+         left join lateral
+    (
+    select ml.order_id
+         , ml.client_order_id
+         , ml.fix_message_id
+         , ml.no_legs
+    from client_order ml
+    where cl.multileg_reporting_type = '2'
+      and ml.order_id = cl.multileg_order_id
+      and ml.multileg_reporting_type = '3'
+      and ml.create_date_id = cl.create_date_id
+    limit 1
+    ) ml on true
              left join dwh.d_order_type dot on dot.order_type_id = cl.order_type_id
              left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
              left join dwh.d_ex_destination dex on (dex.ex_destination_code = cl.ex_destination and coalesce(dex.exchange_id, '') = coalesce(cl.exchange_id, '') and dex.instrument_type_id = di.instrument_type_id and dex.is_active)
@@ -523,6 +561,7 @@ begin
            b.orig_price                                                                            as net_price,
            b.multileg_reporting_type                                                               as multileg_indicator,
            b.no_legs,
+           b.ml_no_legs,
            case
                when ex.exec_type in ('A', 'F', '5', 'W', '4') then 'false'
                else '' end                                                                         as manual_flag,
@@ -654,7 +693,7 @@ begin
                when rn in (0, 1) then null
                else x.client_order_id end                                                                             as "Street clOrderID",
            x.order_qty                                                                                                as "Event Qty",
-           to_char(x.price, 'FM99999990D0099')                                                                        as "Event Price",
+           case when x.exec_type != 'X'  then to_char(x.price, 'FM99999990D0099') end                                 as "Event Price",
            case
                when x.exec_type != 'X'
                    then to_char(x.orig_price, 'FM99999990D0099') end                                                  as "Net Price",
@@ -662,7 +701,7 @@ begin
                when x.multileg_reporting_type <> '1' then 'Y'
                else 'N'
                end                                                                                                    as "Multi Leg Indicator",
-           no_legs                                                                                                    as "Number of legs",
+           coalesce(ml_no_legs, no_legs)                                                                              as "Number of legs",
            co_client_leg_ref_id                                                                                       as "Leg Order ID",
            'false'                                                                                                    as "Manual Flag",
            x.tag_58                                                                                                   as "Free Text",
@@ -817,7 +856,7 @@ begin
                when multileg_indicator <> '1' then 'Y'
                else 'N'
                end                                                                as "Multi Leg Indicator",
-           no_legs                                                                as "Number of legs",
+           coalesce(ml_no_legs, no_legs)                                          as "Number of legs",
            co_client_leg_ref_id                                                   as "Leg Order ID",
            manual_flag                                                            as "Manual Flag",
            exec_text                                                              as "Free Text",
@@ -993,7 +1032,10 @@ begin
 end ;
 $fn$;
 
-select tif, *
+
+
+
+select tif, order_type_id, *
 from t_order;
 
 select *
