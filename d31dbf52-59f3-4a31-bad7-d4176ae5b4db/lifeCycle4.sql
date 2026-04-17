@@ -1144,3 +1144,90 @@ where order_id in (408797182017002287, 408797182017002288)
                                  from dwh.client_order cl
                                           join total on cl.order_id = total.orig_order_id)
     select * from total;
+
+
+445982794079030469
+445982776994561429
+445982798411718231
+446018566919321035
+
+with fx as (select fix_message ->> '11' as cl_ord_id,
+                   fix_message ->> '60' as date_id
+            from fix_capture.fix_message_json fmj
+            where fmj.fix_message_id = :in_fix_message_id
+              and case when :in_date_id is not null then fmj.date_id = :in_date_id else true end)
+select *
+from dwh.client_order cl
+         join fx on fx.cl_ord_id = cl.client_order_id
+and true
+where client_order_id = fx.cl_ord_id
+  and case when fx.date_id is not null then cl.create_date_id = fx.date_id::int else true end;
+
+
+-- DROP FUNCTION public.get_order_id_by_natural_key(int4, varchar, int4, bpchar, varchar, int8, varchar, bpchar, int8, varchar);
+
+CREATE OR REPLACE FUNCTION public.get_order_id_by_natural_key(in_create_date_id integer,
+                                                              in_client_order_id character varying,
+                                                              in_fix_connection_id integer, in_side character,
+                                                              in_co_client_leg_ref_id character varying,
+                                                              in_transaction_id bigint,
+                                                              in_parent_client_order_id character varying,
+                                                              in_multileg_reporting_type character,
+                                                              in_cross_order_id bigint, in_quote_id character varying)
+    RETURNS TABLE
+            (
+                order_id          bigint,
+                parent_order_id   bigint,
+                orig_order_id     bigint,
+                multileg_order_id bigint
+            )
+    LANGUAGE plpgsql
+AS
+$function$
+    -- 2023-11-29 SO https://dashfinancial.atlassian.net/browse/DS-7457
+    -- The algorithm is described here https://dashfinancial.atlassian.net/wiki/spaces/DMP/pages/3773038946/DMP+Order+Search
+    -- https://dashfinancial.atlassian.net/browse/DMP-523 SO 20240124 returns table with multiple values order_id, parent_order_id, orig_order_id, multileg_order_id instead of order_id
+declare
+    ret_order_id text := null;
+
+begin
+    if in_multileg_reporting_type = '1' and (in_cross_order_id is null or in_quote_id is null) then
+--         raise notice 'Single';
+        return query
+            select x.order_id,
+                   x.parent_order_id,
+                   x.orig_order_id,
+                   x.multileg_order_id
+            from public.get_single_order_id(in_create_date_id := $1, in_client_order_id := $2,
+                                            in_fix_connection_id := $3, in_side := $4) as x;
+        return;
+    end if;
+
+
+    if in_cross_order_id is null then
+--         raise notice 'Multileg';
+        return query
+            select x.order_id,
+                   x.parent_order_id,
+                   x.orig_order_id,
+                   x.multileg_order_id
+            from public.get_multileg_order_id(in_create_date_id := $1, in_client_order_id := $2,
+                                              in_fix_connection_id := $3, in_co_client_leg_ref_id := $5,
+                                              in_transaction_id := $6) as x;
+        return;
+    end if;
+
+--     raise notice 'Cross';
+    return query
+        select x.order_id,
+               x.parent_order_id,
+               x.orig_order_id,
+               x.multileg_order_id
+        from public.get_cross_order_id(in_create_date_id := $1, in_client_order_id := $2,
+                                       in_fix_connection_id := $3,
+                                       in_co_client_leg_ref_id := $5, in_parent_client_order_id := $7,
+                                       in_transaction_id := $6) as x;
+    return;
+end;
+$function$
+;
