@@ -67,5 +67,25 @@ where ex.exec_date_id = l_date_id
           else false end
 group by coalesce(cl.parent_order_id, ex.order_id);
 
+----
 
+
+drop table if exists t_base;
+create temp table t_base as
+select coalesce(cl.parent_order_id, ex.order_id)                              as parent_order_id,
+       min(ex.exec_id)                                                        as min_exec_id,
+       max(ex.exec_id)                                                        as max_exec_id,
+       min(coalesce(cl.parent_order_process_time, cl.process_time))           as parent_order_process_time,
+       min(ex.order_create_date_id)                                           as order_create_date_id,
+       min(cl.create_date_id)                                                 as create_date_id
+from dwh.execution ex
+         join dwh.client_order cl on cl.order_id = ex.order_id and cl.create_date_id = ex.order_create_date_id
+where ex.exec_date_id = l_date_id
+  and case when in_dataset_ids is null then true else ex.dataset_id = any (in_dataset_ids) end
+  and case when in_parent_order_ids is null then true else cl.parent_order_id = any (in_parent_order_ids) end
+  and case
+          when not ex.is_parent_level /*and cl.parent_order_id is not null*/ then true
+          when ex.is_parent_level and ex.order_status = '4' /*and cl.parent_order_id is null*/ then true
+          else false end
+group by coalesce(cl.parent_order_id, ex.order_id);
 

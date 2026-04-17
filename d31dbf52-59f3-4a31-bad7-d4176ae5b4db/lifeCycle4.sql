@@ -1231,3 +1231,12 @@ begin
 end;
 $function$
 ;
+
+
+
+select order_id from  dwh.client_order
+where true--
+
+and exch_order_id = '7110078761337'
+  and client_order_id = 'gTD00xKQWI0u3'
+and create_date_id > 20220101
