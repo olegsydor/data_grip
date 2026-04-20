@@ -544,7 +544,8 @@ where yc.status_date_id between :in_date_begin and :in_date_end
 
 
 select *
-from trash.pre_fetch_equity_tca_venue
+from trash.pre_fetch_equity_tca_venue;
+
 
 create or replace function trash.tca_report_q_step_by_step(in_date_begin int4, in_date_end int4, in_step int4[])
     returns int4
@@ -623,13 +624,6 @@ begin
                                  and a.is_active
                                limit 1) a on true
                  left join dwh.d_target_strategy dts on dts.target_strategy_id = yc.sub_strategy_id
-
-            --                   join LATERAL (select order_cancel_time
-            --                                 from dwh.client_order co
-            --                                 where co.order_id = yc.order_id
-            --                                   and co.create_date_id = yc.status_date_id
-            --                                   and co.create_date_id between in_date_begin and in_date_end
-            --                                 limit 1) co on true
                  left join lateral (select fix_message ->> '9264' as tag_9264,
                                            fix_message ->> '9023' as tag_9023,
                                            fix_message ->> '9002' as tag_9002,
@@ -641,7 +635,6 @@ begin
                                       and fmj.date_id >= in_date_begin
                                       and fmj.date_id <= in_date_end
                                     limit 1) fmj on true
-
         where yc.parent_order_id is null
           and yc.status_date_id between in_date_begin and in_date_end
           and yc.instrument_type_id = 'E'
