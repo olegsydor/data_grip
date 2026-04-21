@@ -1520,3 +1520,16 @@ where date_id_report_begin = 20260101
 and date_id_report_end = 20260331
 
 
+-- list of tables with specific column names
+select distinct t.table_schema
+              , t.table_name
+              , c.column_name
+              , data_type
+from information_schema.tables t
+         inner join information_schema.columns c on (c.table_name = t.table_name and c.table_schema = t.table_schema)
+where true
+  and t.table_schema not in
+      ('trash', 'information_schema', 'pg_catalog', 'dm_partitions', 'ot_partitions', 'partitions', 'cmp_partitions',
+       'md_partitions', 'fc_partitions', 'fc_partitions_tmp_hft', 'external_data_partitions', 'cmp_partitions')
+  and c.column_name = 'fix_connection_id'
+  and data_type = 'smallint'
