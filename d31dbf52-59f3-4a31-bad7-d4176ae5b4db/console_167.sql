@@ -286,6 +286,14 @@ drop table if exists t_report;
     select public.load_log(l_load_id, l_step_id, l_msg || ' indexed', 0, 'O')
     into l_step_id;
 
+select * from d_exec_type
+select * from dwh.execution
+    where exec_id = 416589137494755638;
+
+select * from dwh.flat_trade_record
+    where exec_id = 416589137494755638;
+
+
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
     with base as (select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
                          cl.parent_order_id,
