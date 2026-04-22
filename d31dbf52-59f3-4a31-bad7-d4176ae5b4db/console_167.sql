@@ -301,7 +301,7 @@ select * from dwh.execution
            coalesce(tr.tcce_trade_Processing_Fee_Amount, 0) + coalesce(tr.qcc_Rebate_amount, 0) as exchange_fees,
            tcce_account_dash_commission_amount
     from dwh.flat_trade_record tr
-    where exec_id in (416589137494755659)
+    where exec_id in (416589137494755659);
 
 
 
