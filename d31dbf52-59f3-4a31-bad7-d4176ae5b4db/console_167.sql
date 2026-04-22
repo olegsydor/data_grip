@@ -301,12 +301,13 @@ select * from dwh.execution
            coalesce(tr.tcce_trade_Processing_Fee_Amount, 0) + coalesce(tr.qcc_Rebate_amount, 0) as exchange_fees,
            tcce_account_dash_commission_amount
     from dwh.flat_trade_record tr
-    where exec_id in (416589137494755638, 416589137494755644)
+    where exec_id in (416589137494755659)
 
 
 
     select date_id,
            client_order_id,
+           exec_id,
            secondary_order_id,
            exch_exec_id,
            secondary_exch_exec_id,
@@ -322,7 +323,7 @@ select * from dwh.execution
       and client_order_id = '1_gd260127'
 --     secondary_exch_exec_id = 'BSAC1005-20260127'
 -- and exch_exec_id = '371037011339'
-      and date_id = 20260127
+      and date_id = 20260127;
 
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
     with base as (select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
@@ -940,3 +941,10 @@ drop table if exists t_report;
 end;
 $function$
 ;
+
+
+select trade_record_id, count(distinct exec_id)
+from flat_trade_record
+where date_id = 20260421
+group by trade_record_id
+having count(distinct exec_id) > 1
