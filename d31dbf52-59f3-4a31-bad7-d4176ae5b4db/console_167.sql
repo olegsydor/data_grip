@@ -948,3 +948,9 @@ from flat_trade_record
 where date_id = 20260421
 group by trade_record_id
 having count(distinct exec_id) > 1
+
+
+select * from dwh.d_account
+where true
+--     and account_id = 62939
+    and account_name = 'PIPR_6243'
