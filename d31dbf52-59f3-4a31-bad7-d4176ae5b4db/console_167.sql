@@ -953,4 +953,11 @@ having count(distinct exec_id) > 1
 select * from dwh.d_account
 where true
 --     and account_id = 62939
-    and account_name = 'PIPR_6243'
+    and account_name = 'PIPR_6243';
+
+
+    select *
+    from d_account acc
+    where true
+      and acc.account_id != all (:in_removed_account_ids)
+      and account_id = 62919
