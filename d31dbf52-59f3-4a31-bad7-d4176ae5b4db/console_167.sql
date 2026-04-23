@@ -959,5 +959,5 @@ where true
     select *
     from d_account acc
     where true
-      and acc.account_id != all (:in_removed_account_ids)
-      and account_id = 62919
+--       and acc.account_id != all (:in_removed_account_ids)
+      and account_id = 263022
