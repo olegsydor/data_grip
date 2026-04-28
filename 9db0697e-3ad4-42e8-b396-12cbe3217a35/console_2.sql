@@ -44,19 +44,21 @@ comment on column loader.daily_load.loading_status is 'The current status of dow
 comment on column loader.daily_load.loading_confirmed is 'checked as loading is confirmed';
 comment on column loader.daily_load.db_create_time is 'The time of adding the file fragment to this table';
 
-
+drop table if exists loader.setting;
 create table if not exists loader.setting
 (
+    setting_type  text not null,
     setting_name  text not null
         constraint setting_setting_name_pk primary key,
     setting_value text null
 );
 
 
-insert into loader.setting (setting_name, setting_value)
-values ('end_of_day_time', '16:30')
+insert into loader.setting (setting_type, setting_name, setting_value)
+values ('time', 'end_of_day_time', '16:30')
 on conflict (setting_name) do update
-    set setting_value = excluded.setting_value;
+    set setting_value = excluded.setting_value,
+        setting_type = excluded.setting_type;
 
 
 drop function if exists loader.add_files_to_process(int4, text, text);
@@ -72,7 +74,7 @@ declare
     l_step_id int;
     l_eod_ts  time;
 begin
-    select nextval('load_timing_seq') into l_load_id;
+    select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
 
     select public.load_log(l_load_id, l_step_id, 'add_files_to_process STARTED ===', 0, 'O')
@@ -227,3 +229,60 @@ $function$
 ;
 
 comment on function loader.choose_next_file(int4, text, bool) is 'Selects the next file to process';
+
+insert into loader.setting (setting_type, setting_name, setting_value)
+values ('time', 'end_of_day_time', '16:30')
+on conflict (setting_name) do update
+    set setting_value = excluded.setting_value,
+        setting_type = excluded.setting_type;
+
+insert into loader.setting (setting_type, setting_name, setting_value)
+values ('limits', '250', '6'),
+       ('limits', '120', '5'),
+       ('limits', '60', '4'),
+       ('limits', '10', '3'),
+       ('limits', '0', '2')
+on conflict (setting_name) do update
+    set setting_value = excluded.setting_value,
+        setting_type  = excluded.setting_type;
+
+drop function if exists loader.choose_next_file(int4, text, bool);
+
+create or replace function loader.get_(in_date_id integer, in_node_name text,
+                                                   in_is_only_show boolean default true)
+    returns table
+            (
+                file_id        integer,
+                file_name      text,
+                start_position integer,
+                batch_id       integer
+            )
+    language plpgsql
+as
+$function$
+declare
+    l_load_id        int;
+    l_step_id        int;
+    l_start_position int4;
+    l_batch_id       int4;
+    l_file_id        int4;
+    l_eod_ts         time;
+
+begin
+
+select setting_value
+from (select coalesce(sum(end_position - start_position), 0) as cnt
+      from loader.daily_load dl
+               join loader.files fl using (file_id)
+      where true
+        and dl.date_id = :in_date_id
+        and fl.node_name = in_node_name
+        and dl.loading_status in ('S', 'M')
+        and dl.start_processing is not null) base
+         join lateral (select setting_value::int
+                       from loader.setting
+                       where setting.setting_type = 'limits'
+                         and setting_name::int >= cnt
+                       order by setting_name::int
+                       limit 1) vl on true
+

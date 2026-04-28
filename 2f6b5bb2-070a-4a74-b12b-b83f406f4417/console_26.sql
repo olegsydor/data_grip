@@ -281,3 +281,17 @@ select * from loader.daily_load
 where date_id = 20260318
 order by file_id, start_position;
 
+
+select filename,
+                       processed_rows,
+                       start_processing,
+                       start_position,
+                       end_position,
+                       is_processed,
+                       row_number() over (partition by filename order by is_processed, start_processing desc) as rn
+             from loader.daily_load hif
+                where true
+--                 and date_id = in_date_id
+                  and start_processing is not null
+
+
