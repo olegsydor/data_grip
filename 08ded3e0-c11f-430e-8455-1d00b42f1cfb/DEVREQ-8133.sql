@@ -1,0 +1,51 @@
+create function dash360.report_billing_ofp0067_execution(in_start_date_id integer,
+                                                         in_end_date_id integer)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+AS
+$fx$
+-- 20260226 SO https://dashfinancial.atlassian.net/browse/DEVREQ-7746
+declare
+    l_load_id int;
+    l_row_cnt int;
+    l_step_id int;
+
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_billing_ofp0067_execution for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' STARTED ===', 0, 'O')
+    into l_step_id;
+
+    return query
+        select 'order_id,execution_id,symbol,side,contracts,limit_price,order_type,is_marketable,avg_filled_price,is_complex,pfof_type,executed_contracts,notional_value,pfof_rate,estimated_payment';
+
+    return query
+        select to_char(tcb."date", 'yyyy-MM-dd')                                     as "Trade Date",
+               tcb.cl_ord_id                                                         as "Client Order ID",
+               sum(tcb."FILLED QTY")                                                 as "Quantity",
+               round(sum(tcb.premium * tcb."FILLED QTY") / sum(tcb."FILLED QTY"), 6) as "Executed Price",
+               sum(coalesce(tcb."OIRGPMT$", 0.0))                                    as "Access Fee",
+               tcb.symbol                                                            as "Symbol"
+
+        from billing.billing_data.tcustomer_billing_detail_all tcb
+        where tcb.date_id between 20260424 and 20260424
+          and tcb.billingentity = 'TRA_E'
+          and tcb."C/P" = 'S'
+          and tcb."FILLED QTY" > 0
+        group by "Trade Date", "Client Order ID", "Symbol"
+        order by "Trade Date", "Client Order ID", "Symbol"
+
+ get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_billing_ofp0067_execution for ' || in_start_date_id::text || '-' ||
+                           in_end_date_id::text || ' COMPLETED ===', l_row_cnt, 'O')
+    into l_step_id;
+end;
+$fx$;
