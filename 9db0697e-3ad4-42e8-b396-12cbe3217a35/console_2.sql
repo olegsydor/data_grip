@@ -248,41 +248,33 @@ on conflict (setting_name) do update
 
 drop function if exists loader.choose_next_file(int4, text, bool);
 
-create or replace function loader.get_(in_date_id integer, in_node_name text,
-                                                   in_is_only_show boolean default true)
-    returns table
-            (
-                file_id        integer,
-                file_name      text,
-                start_position integer,
-                batch_id       integer
-            )
+
+create or replace function loader.get_workers(in_date_id integer, in_node_name text)
+    returns int
     language plpgsql
 as
 $function$
 declare
-    l_load_id        int;
-    l_step_id        int;
-    l_start_position int4;
-    l_batch_id       int4;
-    l_file_id        int4;
-    l_eod_ts         time;
+    l_workers int;
 
 begin
 
-select setting_value
-from (select coalesce(sum(end_position - start_position), 0) as cnt
-      from loader.daily_load dl
-               join loader.files fl using (file_id)
-      where true
-        and dl.date_id = :in_date_id
-        and fl.node_name = in_node_name
-        and dl.loading_status in ('S', 'M')
-        and dl.start_processing is not null) base
-         join lateral (select setting_value::int
-                       from loader.setting
-                       where setting.setting_type = 'limits'
-                         and setting_name::int >= cnt
-                       order by setting_name::int
-                       limit 1) vl on true
-
+    select setting_value
+    into l_workers
+    from (select coalesce(sum(end_position - start_position), 0) as cnt
+          from loader.daily_load dl
+                   join loader.files fl using (file_id)
+          where true
+            and dl.date_id = in_date_id
+            and fl.node_name = in_node_name
+            and dl.loading_status in ('S', 'M')
+            and dl.start_processing is not null) base
+             join lateral (select setting_value::int
+                           from loader.setting
+                           where setting.setting_type = 'limits'
+                             and setting_name::int >= cnt
+                           order by setting_name::int
+                           limit 1) vl on true;
+    return l_workers;
+end;
+$function$
