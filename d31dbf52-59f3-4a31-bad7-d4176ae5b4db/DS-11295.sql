@@ -702,3 +702,5 @@ from dash360.report_fintech_s3_master_file(
 
 alter function dash360.report_fintech_s3_master_file rename to report_fintech_s3_master_file_bkp;
 alter function trash.report_fintech_s3_master_file set schema dash360;
+
+
