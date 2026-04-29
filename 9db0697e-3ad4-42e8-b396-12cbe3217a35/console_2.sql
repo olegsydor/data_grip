@@ -278,3 +278,17 @@ begin
     return l_workers;
 end;
 $function$
+
+
+-- NODES
+select *
+from (select node_name, sum(end_position - start_position), sum(processed_rows)
+      from inc_hft.hft_incremental_files
+      where date_id = to_char(current_date, 'YYYYMMDD')::int
+        and is_active = 'Y'
+      group by node_name
+      union all
+      select 'total', sum(end_position - start_position), sum(processed_rows)
+      from inc_hft.hft_incremental_files
+      where date_id = to_char(current_date, 'YYYYMMDD')::int
+        and is_active = 'Y') x
