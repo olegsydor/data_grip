@@ -8,9 +8,9 @@ and fix_connection_id is null
 limit 10
  account_ids = {29609}
 
--- DROP FUNCTION trash.report_gtc_fidelity_retail(varchar, _varchar, varchar, _int4, int4, int4);
+-- DROP FUNCTION dash360.report_gtc_fidelity_retail(varchar, _varchar, varchar, _int4, int4, int4);
 
-CREATE OR REPLACE FUNCTION trash.report_gtc_fidelity_retail(p_is_multileg_report character varying DEFAULT 'N'::character varying,
+CREATE OR REPLACE FUNCTION dash360.report_gtc_fidelity_retail(p_is_multileg_report character varying DEFAULT 'N'::character varying,
                                                               p_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                               p_instrument_type_id character varying DEFAULT NULL::character varying,
                                                               p_account_ids integer[] DEFAULT '{}'::integer[],
@@ -414,3 +414,7 @@ begin
 END;
 $function$
 ;
+
+
+select *
+from dash360.report_gtc_fidelity_retail(p_account_ids := '{29609}', in_fix_comp_ids := '{}')
