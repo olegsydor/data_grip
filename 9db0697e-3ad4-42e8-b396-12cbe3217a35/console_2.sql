@@ -248,16 +248,22 @@ on conflict (setting_name) do update
 
 drop function if exists loader.choose_next_file(int4, text, bool);
 
-
-create or replace function loader.get_workers(in_date_id integer, in_node_name text)
-    returns int
-    language plpgsql
-as
-$function$
+CREATE OR REPLACE FUNCTION loader.get_workers(in_date_id integer, in_node_name text)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
 declare
     l_workers int;
-
+    l_eod_ts  time;
 begin
+    select setting_value::time
+    into l_eod_ts
+    from loader.setting
+    where setting_name = 'end_of_day_time';
+
+    if clock_timestamp()::time > l_eod_ts then
+        return 21;
+    end if;
 
     select setting_value
     into l_workers
@@ -272,12 +278,14 @@ begin
              join lateral (select setting_value::int
                            from loader.setting
                            where setting.setting_type = 'limits'
-                             and setting_name::int >= cnt
-                           order by setting_name::int
+                             and setting_name::int * 1000000 <= cnt
+                           order by setting_name::int desc
                            limit 1) vl on true;
+
     return l_workers;
 end;
 $function$
+;
 
 
 -- NODES
@@ -291,4 +299,45 @@ from (select node_name, sum(end_position - start_position), sum(processed_rows)
       select 'total', sum(end_position - start_position), sum(processed_rows)
       from inc_hft.hft_incremental_files
       where date_id = to_char(current_date, 'YYYYMMDD')::int
-        and is_active = 'Y') x
+        and is_active = 'Y') x;
+
+
+create or replace function loader.check_loading(in_date_id integer)
+    returns integer
+    language plpgsql
+as
+$function$
+declare
+    l_row_count int;
+    l_batchs    int4[];
+begin
+    select array_agg(batch_id)
+    into l_batchs
+    from (select batch_id
+          from loader.daily_load
+          where date_id = :in_date_id
+            and loading_status = 'E'
+            and loaded_rows > 0
+          order by start_processing
+          limit 2 for update skip locked) x;
+
+    update loader.daily_load dl
+    set loading_confirmed = case
+                                when exists (select null
+                                             from hft.hft_fix_message_event fm
+                                             where fm.date_id = :in_date_id
+                                               and fm.load_batch_id = 96 limit 1
+                                                                         dl.batch_id) then true
+                                else false end
+    from loader.daily_load
+    where dl.date_id = in_date_id
+      and dl.batch_id = any (l_batchs);
+
+    get diagnostics l_row_count = row_count;
+    return l_row_count;
+end ;
+$function$
+;
+
+
+select * from loader.check_loading(in_date_id := 20260429)
