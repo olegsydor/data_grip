@@ -333,4 +333,5 @@ values ('Early Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 
        ('NBBO Joiner', 'EPRL', 'N', 1, 2, TRUE, to_date('27-04-26', 'DD-MM-YY')),
        ('NBBO First Joiner', 'EPRL', 'N', 1, 3, TRUE, to_date('27-04-26', 'DD-MM-YY'));
 
-select * from dwh.d_liquidity_indicator
+select * from dwh.d_liquidity_indicator;
+
