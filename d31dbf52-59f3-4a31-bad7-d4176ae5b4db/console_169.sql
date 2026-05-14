@@ -302,10 +302,6 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-
-        --              left join t_parent_orders_sub_str ord on ord.order_id = cl.order_id
---              left join t_parent_orders_sub_str pord on pord.order_id = cl.parent_order_id
-
              left join lateral (select po.sub_strategy_desc
                                 from dwh.client_order po
                                 where po.order_id = cl.parent_order_id
@@ -333,17 +329,10 @@ begin
                        on sdr.strategy_decision_reason_code = cl.strtg_decision_reason_code
              left join dwh.d_fix_connection fc
                        on fc.fix_connection_id = cl.fix_connection_id and fc.is_active = true
---     left join lateral (select "MaxFloorPctEnrichment", "MaxFloorQtyEnrichment" from dwh.historic_order_algo_parameters ap where cl.order_id = ap."OrderID" and cl.Create_Date_ID= ap."Status_Date_id" limit 1) ap on true
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-
---       and case
---               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
---               when cl.parent_order_id is null then cl.order_id in (select order_id from t_parent_orders_sub_str)
---               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
---         end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -370,16 +359,12 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
+             join t_parent_orders_sub_str using (order_id)
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case
-              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -398,6 +383,7 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
+             join t_parent_orders_sub_str using (order_id)
              join dwh.gtc_order_status gtc using (order_id, create_date_id)
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
@@ -406,14 +392,7 @@ begin
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case
-              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
       and cl.trans_type <> 'F'
-    --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
---       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
     ;
 
     get diagnostics l_row_cnt = row_count;
@@ -431,6 +410,7 @@ begin
            cl.trans_type,
            cl.multileg_reporting_type
     from dwh.client_order cl
+             join t_parent_orders_sub_str using (order_id)
              join dwh.gtc_order_status gtc using (order_id, create_date_id)
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
@@ -440,11 +420,6 @@ begin
       and gtc.close_date_id > in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case
-              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
       and cl.trans_type <> 'F';
 
     get diagnostics l_row_cnt = row_count;
@@ -690,29 +665,53 @@ end ;
 $function$
 ;
 
-insert into tmp_report1
-select *, 'new' as tp
-from trash.report_fintech_s3_master_file_(
-        in_start_date_id := 20260505,
-        in_end_date_id := 20260505,
-        in_instrument_type := 'E',
-        in_trading_firm_ids := '{ctctrad01}',
-        in_strategies := '{"SENSORDARK"}'
-     );
 
-
-create temp table tmp_report1 as
-select *, 'exc' as tp
+create temp table tmp_repo as
+select *, 'old' as tp, 20260312 as date_id
 from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260505,
-        in_end_date_id := 20260505,
+        in_start_date_id := 20260312,
+        in_end_date_id := 20260312,
         in_instrument_type := 'E',
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
      );
 
-select ret_row from tmp_report
+insert into tmp_repo
+select *, 'old' as tp, 20260212 as date_id
+from trash.report_fintech_s3_master_file_(
+        in_start_date_id := 20260212,
+        in_end_date_id := 20260212,
+        in_instrument_type := 'E',
+        in_trading_firm_ids := '{ctctrad01}',
+        in_strategies := '{"SENSORDARK"}'
+     );
+
+
+insert into tmp_repo
+select *, 'old' as tp, 20260121 as date_id
+from dash360.report_fintech_s3_master_file(
+        in_start_date_id := 20260121,
+        in_end_date_id := 20260121,
+        in_instrument_type := 'E',
+        in_trading_firm_ids := '{ctctrad01}',
+        in_strategies := '{"SENSORDARK"}'
+     );
+
+insert into tmp_repo
+select *, 'old' as tp, 20260511 as date_id
+from trash.report_fintech_s3_master_file_(
+        in_start_date_id := 20260511,
+        in_end_date_id := 20260511,
+        in_instrument_type := 'E',
+        in_trading_firm_ids := '{ctctrad01}',
+        in_strategies := '{"SENSORDARK"}'
+     );
+
+
+select ret_row
+from tmp_report
 where tp = 'new'
 except
-select ret_row from tmp_report
+select ret_row
+from tmp_report
 where tp = 'exc'

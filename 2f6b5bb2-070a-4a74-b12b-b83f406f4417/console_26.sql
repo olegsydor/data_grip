@@ -381,9 +381,16 @@ from test_cures as f1
 where f1.load_comment = 'not'
 order by f1.file_id, f1.batch_id;
 
-create table if not exists loader.cures
+drop table if exists loader.fixer;
+create table if not exists loader.fixer
 (
-    batch_id  int4      not null,
-    added     timestamp default clock_timestamp(),
-    processed timestamp null
-)
+    date_id        int4      not null,
+    batch_id       int4      not null,
+    file_id        int4      not null
+        constraint daily_lload_files_fk references loader.files (file_id),
+    start_position int4,
+    end_position   int4,
+    reason         text, -- 'MM  mismatch of batchs, E - empty batch
+    added          timestamp default clock_timestamp(),
+    processed      timestamp null
+);
