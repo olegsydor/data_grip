@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
 
-CREATE or replace FUNCTION trash.report_fintech_s3_master_file_(in_start_date_id integer, in_end_date_id integer,
+CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                                 in_instrument_type character DEFAULT NULL::bpchar,
                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
@@ -667,13 +667,13 @@ $function$
 
 
 create temp table tmp_repo as
-select *, 'old' as tp, 20260312 as date_id
+select *
 from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260312,
-        in_end_date_id := 20260312,
+        in_start_date_id := 20260512,
+        in_end_date_id := 20260512,
         in_instrument_type := 'E',
-        in_trading_firm_ids := '{ctctrad01}',
-        in_strategies := '{"SENSORDARK"}'
+        in_account_ids := '{63109,63384}',
+        in_strategies := '{"SENSOR"}'
      );
 
 insert into tmp_repo
@@ -715,3 +715,6 @@ except
 select ret_row
 from tmp_report
 where tp = 'exc'
+
+select * from dwh.d_account
+    where account_name in ('FUTCRET', 'MIRARET')
