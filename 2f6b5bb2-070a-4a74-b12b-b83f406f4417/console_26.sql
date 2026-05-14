@@ -335,3 +335,55 @@ values ('Early Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 
 
 select * from dwh.d_liquidity_indicator;
 
+SELECT *
+FROM (
+    VALUES
+        (1, 'ok'),
+        (2, 'ok'),
+        (3, 'not'),
+        (4, 'ok')
+) AS t(id, status);
+
+
+create table test_cures (batch_id int, file_id int4, load_comment text)
+insert into test_cures (batch_id, file_id, load_comment)
+values (1, 1, 'ok'),
+       (2, 1, 'ok'),
+       (3, 2, 'ok'),
+       (4, 2, 'ok'),
+       (5, 1, 'not'),
+       (6, 1, 'ok'),
+       (7, 2, 'not');
+
+select file_id, batch_id, load_comment
+from test_cures
+order by file_id, batch_id
+
+
+select
+--     f1.file_id,
+--        f1.batch_id,
+--        f1.load_comment,
+--        f2.batch_id,
+       f3.batch_id
+from test_cures as f1
+         join lateral (select *
+                       from test_cures f2
+                       where f2.file_id = f1.file_id
+                         and f2.batch_id < f1.batch_id
+                       order by f2.batch_id desc
+                       limit 1) f2 on true
+         join lateral (select *
+                       from test_cures f3
+                       where f3.file_id = f1.file_id
+                         and f3.batch_id >= f2.batch_id
+    ) f3 on true
+where f1.load_comment = 'not'
+order by f1.file_id, f1.batch_id;
+
+create table if not exists loader.cures
+(
+    batch_id  int4      not null,
+    added     timestamp default clock_timestamp(),
+    processed timestamp null
+)
