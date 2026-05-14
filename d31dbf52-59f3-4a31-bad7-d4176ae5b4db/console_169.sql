@@ -1,9 +1,17 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
 
-CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer, in_account_ids bigint[] DEFAULT '{}'::bigint[], in_instrument_type character DEFAULT NULL::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_strategies character varying[] DEFAULT NULL::character varying(128)[])
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+CREATE or replace FUNCTION trash.report_fintech_s3_master_file_(in_start_date_id integer, in_end_date_id integer,
+                                                                in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                in_instrument_type character DEFAULT NULL::bpchar,
+                                                                in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                in_strategies character varying[] DEFAULT NULL::character varying(128)[])
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
@@ -57,6 +65,7 @@ begin
         into l_sub_strategy_ids
         from dwh.d_target_strategy
         where target_strategy_name = any (in_strategies);
+
     else
         l_sub_strategy_ids := '{}';
     end if;
@@ -73,7 +82,7 @@ begin
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and case
-              when coalesce(l_sub_strategy_ids, '{}') = '{}' then false
+              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
               else cl.sub_strategy_id = any (l_sub_strategy_ids) end
       and cl.trans_type <> 'F'
       and cl.parent_order_id is null;
@@ -86,6 +95,25 @@ begin
 
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' Parent orders with correct sub_strategy calculated',
+                           l_row_cnt, 'O')
+    into l_step_id;
+
+    insert into t_parent_orders_sub_str
+    select cl.order_id
+    from t_parent_orders_sub_str par
+             join dwh.client_order cl on cl.parent_order_id = par.order_id
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+    where true
+      and cl.create_date_id between in_start_date_id and in_end_date_id
+      and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
+      and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+      and cl.trans_type <> 'F'
+      and cl.parent_order_id is not null;
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id, l_msg || ' Street orders with correct sub_strategy calculated',
                            l_row_cnt, 'O')
     into l_step_id;
 
@@ -145,10 +173,10 @@ begin
                                    when cl.multileg_reporting_type = '3' then ac.eq_mpid
                                    when cl.parent_order_id is null then ac.eq_mpid
 --                                   else coalesce(exc.mic_code, exc.eq_mpid, '')
-                                     else cl.exchange_id
+                                   else cl.exchange_id
                                    end , -- FIRM_MPID
                                fmj.tag_109, -- FIRM_TRADER_ID
-                               --ac.account_name, -- ORDER_ACCOUNT_ID
+               --ac.account_name, -- ORDER_ACCOUNT_ID
 --                               ac.account_algo_alias, --ORDER_ACCOUNT_ID
                                ac.account_demo_mnemonic, --ORDER_ACCOUNT_ID
                                case
@@ -176,10 +204,14 @@ begin
                                                                                  to_char(cl.expire_time, 'YYYYMMDD'),
                                                                                  to_char(cl.expire_time, 'HH24MISSFF3')) end, -- EXPIRATION_DATETIME
 --                               case when session_eligibility = 'G' then '1' else '0' end, -- PRE_MARKET_IND
-                               case when cl.process_time::time between '04:00'::time and '09:30'::time then '1' else '0' end, --PRE_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
+                               case
+                                   when cl.process_time::time between '04:00'::time and '09:30'::time then '1'
+                                   else '0' end, --PRE_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
                                null, -- PRE_MARKET_TIME
 --                               case when cl.time_in_force_id = '5' then '1' else '0' end, -- POST_MARKET_IND
-                               case when cl.process_time::time between '16:00'::time and '20:00'::time then '1' else '0' end, --POST_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
+                               case
+                                   when cl.process_time::time between '16:00'::time and '20:00'::time then '1'
+                                   else '0' end, --POST_MARKET_IND - Set to 1 if co.process_time between 16:00 - 20:00 EST
                                null, -- POST_MARKET_TIME
                                '0', -- DIRECTED_ORDER_IND
                                case
@@ -266,11 +298,12 @@ begin
                                null --	CAT_MODIFY_REQ_DATETIME
                                ], '|', '')           as REC
     from dwh.client_order cl
+             join t_parent_orders_sub_str using (order_id)
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
 
---              left join t_parent_orders_sub_str ord on ord.order_id = cl.order_id
+        --              left join t_parent_orders_sub_str ord on ord.order_id = cl.order_id
 --              left join t_parent_orders_sub_str pord on pord.order_id = cl.parent_order_id
 
              left join lateral (select po.sub_strategy_desc
@@ -305,15 +338,11 @@ begin
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
-      and case
-              when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
-              when cl.parent_order_id is null then cl.sub_strategy_id = any (l_sub_strategy_ids)
-              else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
-        end
---             and case
+
+--       and case
 --               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
---               when cl.parent_order_id is null then ord.order_id is not null
---           else pord.order_id is not null
+--               when cl.parent_order_id is null then cl.order_id in (select order_id from t_parent_orders_sub_str)
+--               else cl.parent_order_id in (select order_id from t_parent_orders_sub_str)
 --         end
       and cl.trans_type <> 'F';
 
@@ -452,7 +481,7 @@ begin
            a.eq_order_capacity,
            ex.contra_broker
     from dwh.execution ex
---              join lateral
+             --              join lateral
 --         (select cl.parent_order_id,
 --                 cl.order_id,
 --                 cl.process_time,
@@ -661,13 +690,29 @@ end ;
 $function$
 ;
 
-select *
-from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260512,
-        in_end_date_id := 20260512,
+insert into tmp_report1
+select *, 'new' as tp
+from trash.report_fintech_s3_master_file_(
+        in_start_date_id := 20260505,
+        in_end_date_id := 20260505,
         in_instrument_type := 'E',
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
      );
 
-{22767,22768,22769,22770,22771,22772,22774,22775,28515,18497,24011,25711,30650}
+
+create temp table tmp_report1 as
+select *, 'exc' as tp
+from dash360.report_fintech_s3_master_file(
+        in_start_date_id := 20260505,
+        in_end_date_id := 20260505,
+        in_instrument_type := 'E',
+        in_trading_firm_ids := '{ctctrad01}',
+        in_strategies := '{"SENSORDARK"}'
+     );
+
+select ret_row from tmp_report
+where tp = 'new'
+except
+select ret_row from tmp_report
+where tp = 'exc'
