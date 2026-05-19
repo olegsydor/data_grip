@@ -1,28 +1,31 @@
              left join dwh.client_order mleg
                        on (mleg.order_id = cl.multileg_order_id
 --                         and mleg.create_date_id >= cl.create_date_id
-                           and mleg.create_date_id >= l_retention_date_id)
+                           and mleg.create_date_id >= l_retention_date_id);
 
-select mle.exch_exec_id mleg_exec_id,
-       e.exch_exec_id   legged_exec_id,
-       co.multileg_reporting_type,
-       *
-from dwh.execution e
-         join dwh.client_order co
-              on e.order_id = co.order_id
-         left outer join dwh.execution mle
-                         on co.multileg_order_id = mle.order_id
-                             and e.order_status = mle.order_status
-                             and e.exec_type = mle.exec_type
+ select mle.exch_exec_id mleg_exec_id,
+        e.exch_exec_id   legged_exec_id,
+        co.multileg_reporting_type,
+        *
+ from dwh.execution e
+          join lateral (select *
+                        from dwh.client_order co
+                        where e.order_id = co.order_id
+                          and co.create_date_id = 20260226
+                          and co.multileg_reporting_type = '2'
+                          and co.multileg_order_id is not null
+                        limit 1) co on true
+          left join dwh.execution mle
+                    on co.multileg_order_id = mle.order_id
+                        and e.order_status = mle.order_status
+                        and e.exec_type = mle.exec_type
+                        and mle.exec_date_id = 20260226
 --and mle.exec_id > e.exec_id
-where
+ where true
 --(co.client_order_id  ='1_l260226') and
-    co.create_date_id = 20260226
-  and e.exec_date_id = 20260226
-  and co.multileg_reporting_type = '2'
-  and e.exec_type = 'F'
-  and co.multileg_order_id is not null
-  and e.is_parent_level = true;
+   and e.exec_date_id = 20260226
+   and e.exec_type = 'F'
+   and e.is_parent_level = true;
 
 
 -- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar, bpchar, bpchar, bpchar, _varchar);
