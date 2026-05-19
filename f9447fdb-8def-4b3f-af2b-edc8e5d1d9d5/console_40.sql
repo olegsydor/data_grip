@@ -1,4 +1,4 @@
-create function dash360.get_elliot(in_account_id int8)
+create or replace function dash360.get_elliot(in_account_id int8)
     returns varchar(20)
     language plpgsql
 as
@@ -16,7 +16,9 @@ begin
         return l_ret_val;
     end if;
 
-    if exists (select null from staging.SG_NULL_ACCOUNT_PARAMETER where account_id = in_account_id) then
+    if exists (select null
+               from staging.SG_NULL_ACCOUNT_PARAMETER
+               where account_id = in_account_id and db_field_name = 'SG_ELLIOT') then
         return null;
     else
         select sg_elliot
@@ -28,6 +30,17 @@ begin
 
 end
 $$
+
+select * from dash360.get_elliot(in_account_id := 263744)
+select * from staging.SG_NULL_ACCOUNT_PARAMETER
+         where true
+--              and account_id = 263744
+and db_field_name ilike '%elliot%'
+
+ select sg_elliot, sg_parent_account_id
+--     into l_ret_val, l_sg_parent_account_id
+    from staging.sg_account
+    where account_id = 263744;
 
 
 select jsonb_pretty('{"noAllocs": 1, "tradeDate": 20260514, "processTime": "2026-05-14T16:00:51.686", "AllocInstrId": -122499, "instrumentTypeId": "O", "allocationEntries": [{"clrFirm": "551", "allocQty": 110, "EquityBRID": null, "OptionBRID": "70001229", "subAccount": null, "salesTrader": "anthony.reinen", "actionableId": "SUS", "allocAccount": null, "sgMintAccount": null, "individualAllocID": 608517, "AllocEntryCCRURate": null, "ElliotCounterpartyCode": "SUSQUEHAFIUS", "AllocEntryCCRUTotalAmount": null}]}'::jsonb)
