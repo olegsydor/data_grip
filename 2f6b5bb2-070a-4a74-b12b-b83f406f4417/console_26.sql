@@ -399,17 +399,19 @@ create table if not exists loader.fixer
 );
 
 
-create or replace function loader.fixer(in_action text default 'check'::text,
-                                        in_date_id int4 default current_date::text::int4)
-    returns int
-    language plpgsql
-as
-$fn$
+-- DROP FUNCTION loader.fixer(text, int4);
+
+CREATE OR REPLACE FUNCTION loader.fixer(in_action text DEFAULT 'check'::text,
+                                        in_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer)
+    RETURNS integer
+    LANGUAGE plpgsql
+AS
+$function$
 declare
-    l_row_cnt   int4;
-    l_load_id   int;
-    l_step_id   int;
-    l_batch_ids int4[];
+    l_row_cnt        int4;
+    l_load_id        int;
+    l_step_id        int;
+    l_load_batch_ids int4[];
 begin
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
@@ -419,70 +421,76 @@ begin
     into l_step_id;
 
     if in_action = 'check' then
-        insert into loader.fixer (date_id, batch_id, file_id, start_position, end_position, reason)
-        select distinct on (dl1.date_id, dl3.file_id, dl3.batch_id) dl1.date_id,
-                                                                    dl3.batch_id,
-                                                                    dl3.file_id,
-                                                                    dl3.start_position,
-                                                                    dl3.end_position,
-                                                                    case
-                                                                        when
-                                                                            not coalesce(dl1.loading_confirmed, true) and
-                                                                            dl3.batch_id = dl1.batch_id
-                                                                            then 'no data in the batch'
-                                                                        when not coalesce(dl1.loading_confirmed, true)
-                                                                            then 'no data in the batch >'
-                                                                        when dl3.batch_id = dl1.batch_id
-                                                                            then 'Not matched'
-                                                                        when dl3.batch_id < dl1.batch_id
-                                                                            then '< Not matched'
-                                                                        when dl3.batch_id > dl1.batch_id
-                                                                            then 'Not matched >'
-                                                                        end
+        insert into loader.fixer (date_id, load_batch_id, file_id, start_position, end_position, reason)
+        select distinct on (dl1.date_id, dl3.file_id, dl3.load_batch_id) dl1.date_id,
+                                                                         dl3.load_batch_id,
+                                                                         dl3.file_id,
+                                                                         dl3.start_position,
+                                                                         dl3.end_position,
+                                                                         case
+                                                                             when
+                                                                                 not coalesce(dl1.loading_confirmed, true) and
+                                                                                 dl3.load_batch_id = dl1.load_batch_id
+                                                                                 then 'no data in the batch'
+                                                                             when not coalesce(dl1.loading_confirmed, true)
+                                                                                 then 'no data in the batch >'
+                                                                             when dl3.load_batch_id = dl1.load_batch_id
+                                                                                 then 'Not matched'
+                                                                             when dl3.load_batch_id < dl1.load_batch_id
+                                                                                 then '< Not matched'
+                                                                             when dl3.load_batch_id > dl1.load_batch_id
+                                                                                 then 'Not matched >'
+                                                                             end
         from loader.daily_load as dl1
-                 -- Get the previous batch_id for mismatched batches. For unloaded batches no needs to have the previous one
+                 -- Get the previous load_batch_id for mismatched batches. For unloaded batches no needs to have the previous one
                  join lateral (select *
                                from loader.daily_load dl2
                                where dl2.file_id = dl1.file_id
                                  and case
-                                         when not coalesce(dl1.loading_confirmed, true) then dl2.batch_id = dl1.batch_id
-                                         else dl2.batch_id < dl1.batch_id end
-                               order by dl2.batch_id desc
+                                         when not coalesce(dl1.loading_confirmed, true)
+                                             then dl2.load_batch_id = dl1.load_batch_id
+                                         else dl2.load_batch_id < dl1.load_batch_id end
+                               order by dl2.load_batch_id desc
                                limit 1) dl2 on true
             -- Get all batches for file_id newer than one we get in the dl2
                  join lateral (select *
                                from loader.daily_load dl3
                                where dl3.file_id = dl1.file_id
-                                 and dl3.batch_id >= dl2.batch_id
+                                 and dl3.load_batch_id >= dl2.load_batch_id
             ) dl3 on true
         where (dl1.loading_comment = 'Not matched' or not coalesce(dl1.loading_confirmed, true))
           and dl1.loading_comment is not null
-        on conflict (batch_id) do nothing; -- It should never happen
+          and dl1.date_id = in_date_id
+--          skip at this particular moment files where some part of it is in progress
+          and not exists (select null
+                          from loader.daily_load dl4
+                          where dl4.file_id = dl1.file_id and dl4.loading_status = 'S')
+        on conflict (load_batch_id) do nothing; -- It should never happen
 
-        with to_del as (select batch_id
+        with to_del as (select fixer.load_batch_id
                         from loader.fixer
-                        where date_id = in_date_id
+                        where fixer.date_id = in_date_id
                           and fixer.process_time is null)
         delete
         from loader.daily_load dl using to_del
-        where date_id = in_date_id
-          and batch_id = to_del.batch_id;
+        where dl.date_id = in_date_id
+          and dl.load_batch_id = to_del.load_batch_id;
 
         get diagnostics l_row_cnt = row_count;
 
     elseif in_action = 'fix' then
 
-        select array_agg(batch_id)
-        into l_batch_ids
-        from loader.fixer
-        where date_id = in_date_id
-          and fixer.process_time is null;
+        select array_agg(fx.load_batch_id)
+        into l_load_batch_ids
+        from loader.fixer fx
+        where fx.date_id = in_date_id
+          and fx.process_time is null;
 
-        if array_length(l_batch_ids, 1) > 0 then
+        if array_length(l_load_batch_ids, 1) > 0 then
             delete
             from hft.hft_fix_message_event hft
             where hft.date_id = in_date_id
-              and hft.load_batch_id = any (l_batch_ids);
+              and hft.load_batch_id = any (l_load_batch_ids);
 
             get diagnostics l_row_cnt = row_count;
             select public.load_log(l_load_id, l_step_id,
@@ -492,7 +500,7 @@ begin
 
             update loader.fixer fx
             set process_time = clock_timestamp()
-            where fx.batch_id = any (l_batch_ids);
+            where fx.load_batch_id = any (l_load_batch_ids);
             get diagnostics l_row_cnt = row_count;
 
         end if;
@@ -500,6 +508,10 @@ begin
     end if;
     select public.load_log(l_load_id, l_step_id, 'fixer to ' || in_action || ' COMPLETED ===', l_row_cnt, 'C')
     into l_step_id;
-end;
-$fn$
 
+    return l_row_cnt;
+end;
+$function$
+;
+
+COMMENT ON FUNCTION loader.fixer(text, int4) IS 'Checks if there are batches whose first row does not match the last row of the previous one. Also checks if there are batches for which no records were found in the hft table';

@@ -666,7 +666,7 @@ $function$
 ;
 
 
-create temp table tmp_repo as
+create temp table tmp_repo_ltl as
 select *
 from dash360.report_fintech_s3_master_file(
         in_start_date_id := 20260512,
