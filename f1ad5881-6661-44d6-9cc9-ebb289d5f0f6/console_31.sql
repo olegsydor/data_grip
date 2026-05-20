@@ -1,58 +1,5 @@
-             left join dwh.client_order mleg
-                       on (mleg.order_id = cl.multileg_order_id
---                         and mleg.create_date_id >= cl.create_date_id
-                           and mleg.create_date_id >= l_retention_date_id);
-
-select * from t_exs
-
-    select ex.*
-from t_base b
-    left join dwh.execution ex
-                       on ex.order_id = b.order_id and ex.exec_date_id >= b.create_date_id
-                           and ex.exec_type not in ('a', 'A', 'S', '0')
-
- select mle.exch_exec_id mleg_exec_id,
-        e.exch_exec_id   legged_exec_id,
-        co.multileg_reporting_type,
-        *
- from dwh.execution e
-          join lateral (select *
-                        from dwh.client_order co
-                        where e.order_id = co.order_id
-                          and co.create_date_id = 20260226
-                          and co.multileg_reporting_type = '2'
-                          and co.multileg_order_id is not null
-                        limit 1) co on true
-          left join dwh.execution mle
-                    on mle.order_id = co.multileg_order_id
-                        and mle.order_status = e.order_status
-                        and mle.exec_type = e.exec_type
-                        and mle.exec_date_id = 20260226
---and mle.exec_id > e.exec_id
- where true
---(co.client_order_id  ='1_l260226') and
-   and e.exec_date_id = 20260226
-   and e.exec_type = 'F'
-   and e.is_parent_level = true;
-
-
- select *
- from dwh.client_order co
-          join dwh.execution e on e.order_id = co.order_id
-           left join dwh.execution mle
-                    on mle.order_id = co.multileg_order_id
-                        and mle.order_status = e.order_status
-                        and mle.exec_type = e.exec_type
-                        and mle.exec_date_id = 20260226
- where true
-   and co.create_date_id = 20260226
-   and co.multileg_reporting_type = '2'
-   and co.multileg_order_id is not null
-
--- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar, bpchar, bpchar, bpchar, _varchar);
-select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in_date_end_id := 20260226, in_parent_order_ids := '{427617479676228073, 427617479676228074}');
-
-             CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer,
+drop FUNCTION dash360.report_obo_compliance_xls
+CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer,
                                                                           in_date_end_id integer,
                                                                           in_instrument_type character DEFAULT NULL::bpchar,
                                                                           in_account_ids integer[] DEFAULT '{}'::integer[],
@@ -482,7 +429,7 @@ select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in
                         b.order_qty - coalesce(ex.cum_qty, 0)                                                   as remaining_qty,
                         b.is_affiliate,
                         null                                                                                    as solicitation,
-                        mle.exec_id                                                                             as mleg_exec_id
+                        mle.exch_exec_id                                                                        as mleg_exec_id
                  from t_base b
                           left join dwh.d_account ac on b.account_id = ac.account_id and ac.is_active
                           left join dwh.d_trading_firm tf on b.trading_firm_unq_id = tf.trading_firm_unq_id
@@ -506,13 +453,13 @@ select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in
                           left join dwh.d_order_status os on ex.order_status = os.order_status
                           join dwh.d_exec_type et on et.exec_type = ex.exec_type
                           left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active
-                          left join lateral (select exec_id
+                          left join lateral (select exch_exec_id
                                              from dwh.execution mle
                                              where mle.order_id = b.multileg_order_id
                                                and mle.order_status = ex.order_status
                                                and mle.exec_type = ex.exec_type
                                                and mle.exec_date_id >= b.create_date_id
-                                             limit 1) mle on true;
+                                             limit 1) mle on b.multileg_reporting_type = ;
                  get diagnostics l_row_count = row_count;
                  select public.load_log(l_load_id, l_step_id,
                                         'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text ||
@@ -644,7 +591,7 @@ select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in
                         case
                             when ot.order_type_value = 'New Order'
                                 then b.solicitation end                        as solicitation,
-                        mle.exec_id                                            as mleg_exec_id
+                        mle.exch_exec_id                                       as mleg_exec_id
                  from t_base b
                           join ord_type ot
                                on ot.trans_type = b.trans_type and
@@ -669,7 +616,7 @@ select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in
                           left join dwh.d_order_status os on ex.order_status = os.order_status
                           left join dwh.d_exec_type et on et.exec_type = ex.exec_type
                           left join dwh.d_exchange exc on exc.exchange_id = ex.exchange_id and exc.is_active
-                          left join lateral (select exec_id
+                          left join lateral (select exch_exec_id
                                              from dwh.execution mle
                                              where mle.order_id = b.multileg_order_id
                                                and mle.order_status = ex.order_status
