@@ -459,7 +459,7 @@ CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id in
                                                and mle.order_status = ex.order_status
                                                and mle.exec_type = ex.exec_type
                                                and mle.exec_date_id >= b.create_date_id
-                                             limit 1) mle on b.multileg_reporting_type = ;
+                                             limit 1) mle on b.multileg_reporting_type = '2';
                  get diagnostics l_row_count = row_count;
                  select public.load_log(l_load_id, l_step_id,
                                         'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text ||
@@ -622,7 +622,7 @@ CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id in
                                                and mle.order_status = ex.order_status
                                                and mle.exec_type = ex.exec_type
                                                and mle.exec_date_id >= b.create_date_id
-                                             limit 1) mle on true;
+                                             limit 1) mle on b.multileg_reporting_type = '2';
                  get diagnostics l_row_count = row_count;
                  select public.load_log(l_load_id, l_step_id,
                                         'dash360.report_obo_compliance_xls_new for ' || l_date_begin_id::text ||
