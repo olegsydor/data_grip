@@ -91,6 +91,16 @@ values ('end_of_day_time', '16:30')
 on conflict (setting_name) do update
     set setting_value = excluded.setting_value;
 
+
+create table staging.load_finish
+(
+    date_id        int4                                not null,
+    db_create_time timestamp default clock_timestamp() not null,
+    constraint load_finish_pk primary key (date_id)
+);
+comment on table staging.load_finish is 'The signal table. date_id is filling as soon as daily loading has been finished';
+
+
 ----------------------
 -- FUNCTIONS
 ----------------------
