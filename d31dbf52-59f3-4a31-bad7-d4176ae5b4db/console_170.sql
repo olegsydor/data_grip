@@ -3,6 +3,9 @@
 --                         and mleg.create_date_id >= cl.create_date_id
                            and mleg.create_date_id >= l_retention_date_id);
 
+select * from t_exs
+
+
  select mle.exch_exec_id mleg_exec_id,
         e.exch_exec_id   legged_exec_id,
         co.multileg_reporting_type,
@@ -29,6 +32,7 @@
 
 
 -- DROP FUNCTION dash360.report_obo_compliance_xls(int4, int4, bpchar, _int4, _int8, _varchar, bpchar, bpchar, bpchar, _varchar);
+select * from dash360.report_obo_compliance_xls(in_date_begin_id := 20260226, in_date_end_id := 20260226, in_parent_order_ids := '{427617479676228073, 427617479676228074}');
 
 CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer, in_date_end_id integer,
                                                              in_instrument_type character DEFAULT NULL::bpchar,
