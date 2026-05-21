@@ -1,0 +1,105 @@
+insert into dwh.d_liquidity_indicator (description, exchange_id, is_grey, liquidity_indicator_type_id,
+                                       trade_liquidity_indicator, is_active, start_date)
+values ('Early Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 'EPRL', 'N', 2, 'eR', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Late Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 'EPRL', 'N', 2, 'fR', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Early Session, Removes Liquidity, Non-Displayed Retail Order (All Tapes)', 'EPRL', 'Y', 2, 'er', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Late Session, Removes Liquidity, Non-Displayed Retail Order (All Tapes)', 'EPRL', 'Y', 2, 'fr', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'RT', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Early Session, Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'eT', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Late Session, Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'fT', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'Rt', TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('Early Session, Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'et', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Late Session, Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'ft', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Early Session, Removes Liquidity at Midpoint, Midpoint Peg Order (All Tapes)', 'EPRL', 'Y', 2, 'ep', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Late Session, Removes Liquidity at Midpoint, Midpoint Peg Order (All Tapes)', 'EPRL', 'Y', 2, 'fp', TRUE,
+        to_date('27-04-26', 'DD-MM-YY')),
+       ('Not Applicable', 'EPRL', 'N', NULL, 0, TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('NBBO Setter', 'EPRL', 'N', 1, 1, TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('NBBO Joiner', 'EPRL', 'N', 1, 2, TRUE, to_date('27-04-26', 'DD-MM-YY')),
+       ('NBBO First Joiner', 'EPRL', 'N', 1, 3, TRUE, to_date('27-04-26', 'DD-MM-YY'));
+commit
+select * from LIQUIDITY_INDICATOR
+    where EXCHANGE_ID = 'EPRL'
+and TRADE_LIQUIDITY_INDICATOR = 'eR'
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Early Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 'EPRL', 'N', 2, 'eR',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Late Session, Removes Liquidity, Displayed Retail Order (All Tapes)', 'EPRL', 'N', 2, 'fR',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Early Session, Removes Liquidity, Non-Displayed Retail Order (All Tapes)', 'EPRL', 'Y', 2, 'er',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Late Session, Removes Liquidity, Non-Displayed Retail Order (All Tapes)', 'EPRL', 'Y', 2, 'fr',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'RT', to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Early Session, Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'eT',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Late Session, Removes Retail Liquidity, Displayed Order (All Tapes)', 'EPRL', 'N', 2, 'fT',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'Rt',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Early Session, Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'et',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Late Session, Removes Retail Liquidity, Non-Displayed Order (All Tapes)', 'EPRL', 'Y', 2, 'ft',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Early Session, Removes Liquidity at Midpoint, Midpoint Peg Order (All Tapes)', 'EPRL', 'Y', 2, 'ep',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Late Session, Removes Liquidity at Midpoint, Midpoint Peg Order (All Tapes)', 'EPRL', 'Y', 2, 'fp',
+        to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('Not Applicable', 'EPRL', 'N', NULL, 0, to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('NBBO Setter', 'EPRL', 'N', 1, 1, to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('NBBO Joiner', 'EPRL', 'N', 1, 2, to_date('27-04-26', 'DD-MM-YY'));
+
+INSERT INTO LIQUIDITY_INDICATOR
+(DESCRIPTION, EXCHANGE_ID, IS_GREY, LIQUIDITY_INDICATOR_TYPE_ID, TRADE_LIQUIDITY_INDICATOR, CREATE_TIME)
+values ('NBBO First Joiner', 'EPRL', 'N', 1, 3, to_date('27-04-26', 'DD-MM-YY'));
+
+select to_date('27-04-26', 'DD-MM-YY') from dual
