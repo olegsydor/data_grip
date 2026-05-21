@@ -92,6 +92,7 @@ on conflict (setting_name) do update
     set setting_value = excluded.setting_value;
 
 
+drop table if exists staging.load_finish;
 create table staging.load_finish
 (
     date_id        int4                                not null,
