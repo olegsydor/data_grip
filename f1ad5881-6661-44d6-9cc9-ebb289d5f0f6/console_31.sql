@@ -1,5 +1,7 @@
 drop FUNCTION dash360.report_obo_compliance_xls
 
+select * from dwh.d_account
+where trading_firm_id =  'socgen01'
 
 CREATE OR REPLACE FUNCTION dash360.report_obo_compliance_xls(in_date_begin_id integer,
                                                                           in_date_end_id integer,
