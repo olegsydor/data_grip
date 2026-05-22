@@ -526,3 +526,7 @@ $function$
 ;
 
 COMMENT ON FUNCTION loader.fixer(text, int4) IS 'Checks if there are batches whose first row does not match the last row of the previous one. Also checks if there are batches for which no records were found in the hft table';
+
+
+select * from loader.hft_fix_message_event
+limit null
