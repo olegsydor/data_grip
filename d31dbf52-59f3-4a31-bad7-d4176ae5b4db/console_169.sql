@@ -687,11 +687,11 @@ from trash.report_fintech_s3_master_file_(
      );
 
 
-insert into tmp_repo
+create temp table t_os as
 select *, 'old' as tp, 20260121 as date_id
 from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260121,
-        in_end_date_id := 20260121,
+        in_start_date_id := 20260520,
+        in_end_date_id := 20260520,
         in_instrument_type := 'E',
         in_trading_firm_ids := '{ctctrad01}',
         in_strategies := '{"SENSORDARK"}'
