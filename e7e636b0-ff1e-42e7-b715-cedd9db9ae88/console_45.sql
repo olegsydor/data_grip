@@ -77,6 +77,7 @@ where date_id between :in_start_date_id and :in_end_date_id
 and clearing_member_number in ('00333', '00733', '333', '733')
 and gup_clearing_firm_originator is null
 and trade_type = '0'
+and not exists (select null from genesis2.occ_data.occ_trade_data cnc where cnc.rpt_id = tr.rpt_id and cnc.date_id = tr.date_id and cnc.side = tr.side and cnc.trans_type = '1')
 
 select * from genesis2.occ_data.occ_matched_trade_record;
 
