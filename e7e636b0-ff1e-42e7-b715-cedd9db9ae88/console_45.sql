@@ -78,4 +78,6 @@ and clearing_member_number in ('00333', '00733', '333', '733')
 and gup_clearing_firm_originator is null
 and trade_type = '0'
 
-select * from genesis2.occ_data.occ_matched_trade_record
+select * from genesis2.occ_data.occ_matched_trade_record;
+
+select * from genesis2.occ_data.occ_trade_data_matching
