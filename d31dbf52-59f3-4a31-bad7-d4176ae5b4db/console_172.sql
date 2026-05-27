@@ -450,151 +450,27 @@ $function$
 ;
 
 
-select
-    EXC.MIC_CODE, EXC.EQ_MPID,
-    'NO'                                      as RECORD_TYPE,
-       coalesce(CL.PARENT_ORDER_ID, CL.ORDER_ID) as ORDER_ID,
-       to_char(CL.PROCESS_TIME, 'HH24MISSFF3')   as TIME_ID,
-       CL.CLIENT_ORDER_ID                        as RECORD_ID,
-       1                                         as RECORD_TYPE_ID,
---            array_to_string(array [
-       'O',                                                     --1
-       case
-           when CL.PARENT_ORDER_ID is null then 'NO'
-           else 'RO'
-           end,
-
-       CL.CLIENT_ORDER_ID,
-       CL.ORDER_ID::text,                                       --SOURCE_ORDER_ID
-       CL.PARENT_ORDER_ID::text,                                --SOURCE_PARENT_ID
-       CL.ORIG_ORDER_ID::text,
-       --
-       '',
-       case
-           when CL.PARENT_ORDER_ID is null then case AC.BROKER_DEALER_MPID
-                                                    when 'NONE' then NULL
-                                                    else AC.BROKER_DEALER_MPID end
-           else coalesce(cl.exchange_id, 'DFIN')
-           end,
-       case
-           when CL.PARENT_ORDER_ID is null then 'DFIN'
-           else coalesce(EXC.MIC_CODE, EXC.EQ_MPID)
-           end,
-       --AC.BROKER_DEALER_MPID,
-       --'DFIN',
-       '',
-       '',
-       case
-           when CL.MULTILEG_REPORTING_TYPE = '3' then ''
-           else I.INSTRUMENT_TYPE_ID end,                       --12
-       case I.INSTRUMENT_TYPE_ID
-           when 'E' then I.DISPLAY_INSTRUMENT_ID
-           when 'O' then OC.OPRA_SYMBOL end,
-       '',                                                      --primary Exchange
-       case CL.SIDE
-           when '1' then 'B'
-           when '2' then 'S'
-           when '5' then 'SS'
-           when '6' then 'SSE' end,                             --OrderAction
-       to_char(CL.PROCESS_TIME, 'YYYYMMDD') || 'T' ||
-       to_char(CL.PROCESS_TIME, 'HH24MISSFF3'),
-       OT.ORDER_TYPE_SHORT_NAME,                                --ORDER_TYPE
-       CL.ORDER_QTY::text,                                      --ORDER_VOLUME
-       to_char(CL.PRICE, 'FM99990D0099'),
-       to_char(CL.STOP_PRICE, 'FM99990D0099'),
-       TIF.TIF_SHORT_NAME,
-       case
-           when CL.EXPIRE_TIME is not null then
-               to_char(CL.EXPIRE_TIME, 'YYYYMMDD') || 'T' ||
-               to_char(CL.EXPIRE_TIME, 'HH24MISSFF3')
-           when CL.TIME_IN_FORCE_id = '6' then
-               (select coalesce(fix_message ->> '432', '') || 'T235959000'
-                from fix_capture.fix_message_json fmj
-                where fmj.fix_message_id = CL.FIX_MESSAGE_ID
-                  and fmj.date_id = cl.create_date_id)
-           end,                                                 --22
-       '0',                                                     --PRE_MARKET_IND
-       '',
-       '0',                                                     --POST_MARKET_IND
-       '',
-       case
-           when CL.PARENT_ORDER_ID is null
-               then case when CL.SUB_STRATEGY_desc = 'DMA' then '1' else '0' end
-           else (select case when PO.SUB_STRATEGY_desc = 'DMA' then '1' else '0' end
-                 from dwh.client_order PO
-                 where PO.ORDER_ID = CL.PARENT_ORDER_ID)
-           end,                                                 --DIRECTED_ORDER_IND
-       case
-           when CL.PARENT_ORDER_ID is null
-               then case when CL.SUB_STRATEGY_desc = 'SMOKE' then '1' else '0' end
-           else (select case when PO.SUB_STRATEGY_desc = 'SMOKE' then '1' else '0' end
-                 from dwh.client_order PO
-                 where PO.ORDER_ID = CL.PARENT_ORDER_ID)
-           end,                                                 --NON_DISPLAY_IND
-       '0',                                                     --DO_NOT_REDUCE
-       case CL.exec_instruction when 'G' then '1' else '0' end,
-       case CL.exec_instruction when '1' then '1' else '0' end, --NOT_HELD_IND [31]
-       '0',                                                     --[32]
-       '0',                                                     --[33]
-       '0',                                                     --[34]
-       '',                                                      --[35]
-       '',                                                      --[36]
-       '',                                                      --[37]
-       '',                                                      --[38]
-       '',                                                      --[39]
-       '',                                                      --[40]
-       '',                                                      --[41]
-       '',                                                      --[42]
-       '',                                                      --[43]
-       '',                                                      --[44]
-       '',                                                      --[45]
-       '',                                                      --[46]
-       '',                                                      --[47]
-       '' --[48]
---                                ], '|', '')
-                                                 as REC
-
-from dwh.client_order CL
-         inner join dwh.d_ACCOUNT AC on AC.ACCOUNT_ID = CL.ACCOUNT_ID
-         inner join dwh.d_TRADING_FIRM TF on TF.TRADING_FIRM_ID = AC.TRADING_FIRM_ID
-         inner join dwh.d_INSTRUMENT I on I.INSTRUMENT_ID = CL.INSTRUMENT_ID
-         left join dwh.d_EXCHANGE EXC on EXC.EXCHANGE_ID = CL.EXCHANGE_ID and exc.is_active
-         left join dwh.d_OPTION_CONTRACT OC on OC.INSTRUMENT_ID = I.INSTRUMENT_ID
-         left join dwh.d_OPTION_SERIES OS on OS.OPTION_SERIES_ID = OC.OPTION_SERIES_ID
-         left join dwh.d_ORDER_TYPE OT on OT.ORDER_TYPE_ID = CL.ORDER_TYPE_id
-         left join dwh.d_TIME_IN_FORCE TIF on TIF.TIF_ID = CL.TIME_IN_FORCE_id
-where true
-  and cl.client_order_id in ('DCCC1989-20260331', 'gTD00xKQRW4J2')
-
-  and CL.TRANS_TYPE <> 'F'
---        and CL.MULTILEG_REPORTING_TYPE = '1'
---   and case
---           when cl.parent_order_id is not null then cl.multileg_reporting_type in ('2', '3')
---           else cl.multileg_reporting_type = '1' end
-order by 7;
-
-
-
- select exc.mic_code, exc.eq_mpid,
-        'NO'                                      as record_type,
+  select
+      ac.broker_dealer_mpid,
+      'NO'                                      as record_type,
            coalesce(cl.parent_order_id, cl.order_id) as order_id,
            to_char(cl.process_time, 'HH24MISSFF3')   as time_id,
            cl.client_order_id                        as record_id,
            1                                         as record_type_id,
-           'O' , -- 
+           'O' , -- || '|' ||
            case
                when ((:l_is_multileg and cl.multileg_reporting_type = '3') or
                      (not :l_is_multileg and cl.parent_order_id is null)) then 'NO'
                else 'RO'
-               end , -- 
-           cl.client_order_id , -- 
-           cl.order_id::text , --  --source_order_id
+               end , -- || '|' ||
+           cl.client_order_id , -- || '|' ||
+           cl.order_id::text , -- || '|' || --source_order_id
            case
                when :l_is_multileg and cl.multileg_reporting_type = '2' then cl.client_order_id::text
                when not :l_is_multileg then coalesce(cl.parent_order_id::text, '')
                else ''
-               end , --  --source_parent_id
-           coalesce(cl.orig_order_id::text, '') , -- 
+               end , -- || '|' || --source_parent_id
+           coalesce(cl.orig_order_id::text, '') , -- || '|' ||
                --
            case
                when not :l_is_multileg
@@ -604,7 +480,7 @@ order by 7;
                        when cl.multileg_reporting_type = '3' then cl.order_id::text
                        when cl.multileg_reporting_type = '2' then cl.multileg_order_id::text
                        end
-               end , --  --
+               end , -- || '|' || --
            case
                when not :l_is_multileg then ac.broker_dealer_mpid
                else
@@ -613,33 +489,33 @@ order by 7;
                        when cl.parent_order_id is null then ac.broker_dealer_mpid
                        else 'DFIN'
                        end
-               end , -- 
+               end , -- || '|' ||
            case
-               when not :l_is_multileg then cl.exchange_id
+               when not :l_is_multileg then coalesce(cl.exchange_id, 'DFIN')
                else
                    case
                        when cl.parent_order_id is null then 'DFIN'
                        else coalesce(exc.mic_code, exc.eq_mpid, '') end
                end
-               , -- 
-           '' , -- 
-           '' , -- 
-           case cl.multileg_reporting_type when '3' then '' else i.instrument_type_id end , -- 
+               , -- || '|' ||
+           '' , -- || '|' ||
+           '' , -- || '|' ||
+           case cl.multileg_reporting_type when '3' then '' else i.instrument_type_id end , -- || '|' ||
            case i.instrument_type_id when 'E' then i.display_instrument_id when 'O' then oc.opra_symbol else '' end ||
            '|' ||
-           '' , --  --primary Exchange
+           '' , -- || '|' || --primary Exchange
            case cl.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SSE' else '' end ||
            '|' || --OrderAction
-           to_char(cl.process_time, 'YYYYMMDD') || 'T' || to_char(cl.process_time, 'HH24MISSFF3') , -- 
-           ot.order_type_short_name , --  --order_type
+           to_char(cl.process_time, 'YYYYMMDD') || 'T' || to_char(cl.process_time, 'HH24MISSFF3') , -- || '|' ||
+           ot.order_type_short_name , -- || '|' || --order_type
            case
                when not :l_is_multileg then cl.order_qty::text
                else
                    case when cl.multileg_reporting_type = '3' then '' else cl.order_qty::text end
-               end , --  --order_volume
-           coalesce(to_char(cl.price, 'FM99990D0099'),'') , -- 
-           coalesce(to_char(cl.stop_price, 'FM99990D0099'), '') , -- 
-           tif.tif_short_name , -- 
+               end , -- || '|' || --order_volume
+           coalesce(to_char(cl.price, 'FM99990D0099'),'') , -- || '|' ||
+           coalesce(to_char(cl.stop_price, 'FM99990D0099'), '') , -- || '|' ||
+           tif.tif_short_name , -- || '|' ||
            case
                when not :l_is_multileg then
                    coalesce(to_char(cl.expire_time, 'YYYYMMDD'), '') || 'T' ||
@@ -657,43 +533,43 @@ order by 7;
                             limit 1)
                        else ''
                        end
-               end , --  --22
-           '0' , --  --PRE_MARKET_IND
-           '' , -- 
-           '0' , --  --POST_MARKET_IND
-           '' , -- 
+               end , -- || '|' || --22
+           '0' , -- || '|' || --PRE_MARKET_IND
+           '' , -- || '|' ||
+           '0' , -- || '|' || --POST_MARKET_IND
+           '' , -- || '|' ||
            case
                when cl.parent_order_id is null then case cl.sub_strategy_desc when 'DMA' then '1' else '0' end
                else case po.sub_strategy_desc when 'DMA' then '1' else '0' end
-               end , --  --DIRECTED_ORDER_IND
+               end , -- || '|' || --DIRECTED_ORDER_IND
            case
                when (cl.parent_order_id is null or :l_is_multileg)
                    then case cl.sub_strategy_desc when 'SMOKE' then '1' else '0' end
                else case po.sub_strategy_desc when 'SMOKE' then '1' else '0' end
-               end , --  --NON_DISPLAY_IND
-           '0' , --  --DO_NOT_REDUCE
-           case cl.exec_instruction when 'G' then '1' else '0' end , -- 
-           case cl.exec_instruction when '1' then '1' else '0' end , --  --NOT_HELD_IND [31]
-           '0' , --  --[32]
-           '0' , --  --[33]
-           '0' , --  --[34]
-           '' , --  --[35]
-           '' , --  --[36]
-           '' , --  --[37]
-           '' , --  --[38]
+               end , -- || '|' || --NON_DISPLAY_IND
+           '0' , -- || '|' || --DO_NOT_REDUCE
+           case cl.exec_instruction when 'G' then '1' else '0' end , -- || '|' ||
+           case cl.exec_instruction when '1' then '1' else '0' end , -- || '|' || --NOT_HELD_IND [31]
+           '0' , -- || '|' || --[32]
+           '0' , -- || '|' || --[33]
+           '0' , -- || '|' || --[34]
+           '' , -- || '|' || --[35]
+           '' , -- || '|' || --[36]
+           '' , -- || '|' || --[37]
+           '' , -- || '|' || --[38]
            case
                when :l_is_multileg then coalesce(cl.ex_destination, '')
-               else '' end , --  --[39]
+               else '' end , -- || '|' || --[39]
            case
                when (:l_is_multileg and cl.multileg_reporting_type = '3') then coalesce(cl.no_legs::text, '')
-               else '' end , --  --[40]
-           '' , --  --[41]
-           '' , --  --[42]
-           '' , --  --[43]
-           '' , --  --[44]
-           '' , --  --[45]
-           '' , --  --[46]
-           '' , --  --[47]
+               else '' end , -- || '|' || --[40]
+           '' , -- || '|' || --[41]
+           '' , -- || '|' || --[42]
+           '' , -- || '|' || --[43]
+           '' , -- || '|' || --[44]
+           '' , -- || '|' || --[45]
+           '' , -- || '|' || --[46]
+           '' , -- || '|' || --[47]
            '' --[48]
                                                      as REC
     from dwh.client_order cl
@@ -713,14 +589,21 @@ order by 7;
                                 where exc.exchange_id = cl.exchange_id and exc.is_active
                                 limit 1) exc on true
     where true
-       and cl.client_order_id in ('DCCC1989-20260331', 'gTD00xKQRW4J2')
 --       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
 --       and cl.create_date_id between in_start_date_id and in_end_date_id
       and cl.trans_type <> 'F'
-      and case when :l_is_multileg then cl.parent_order_id is null else true end
-      and case
+  and cl.parent_order_id = 440160506409384778
+--       and case when :l_is_multileg then cl.parent_order_id is null else true end
+--       and case
 --               when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              when cl.parent_order_id is not null then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end
+--               else cl.multileg_reporting_type = '1' end
 --       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
---       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+--       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
+
+
+      select trans_type, * from dwh.client_order cl
+          where true
+--       and cl.client_order_id in ('gTD00xKQRW4J2')
+and parent_order_id = 440160506409384778
+
+          DCCC1989-20260331
