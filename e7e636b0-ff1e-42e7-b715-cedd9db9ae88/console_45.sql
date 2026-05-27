@@ -71,14 +71,40 @@ end ;
 $function$
 ;
 
-select trans_type, rpt_id, side, *
-        from genesis2.occ_data.occ_trade_data tr
-where date_id between :in_start_date_id and :in_end_date_id
-and clearing_member_number in ('00333', '00733', '333', '733')
-and gup_clearing_firm_originator is null
-and trade_type = '0'
-and not exists (select null from genesis2.occ_data.occ_trade_data cnc where cnc.rpt_id = tr.rpt_id and cnc.date_id = tr.date_id and cnc.side = tr.side and cnc.trans_type = '1')
+create temp table t_os as
+select coalesce(portfolio_id,  'A000' ) as portfolio_id, aacount_id, tr.*
+from occ_data.occ_trade_data tr
+         left join lateral ( select coalesce(hpm.portfolio_id, ac.trading_firm_id) as portfolio_id, ac.account_id as aacount_id
+                             from occ_data.occ_trade_data_matching mtr
+                                      join genesis2.account ac using (account_id)
+                                      left join fintech.hanweck_portfolio_mapping hpm using (trading_firm_id)
+                             where mtr.date_id = tr.date_id
+                               and mtr.trade_id = tr.trade_id
+                               and mtr.side = tr.side
+                               and mtr.trade_record_id != -1
+                             limit 1) on true
+where tr.date_id between :in_start_date_id and :in_end_date_id
+  and clearing_member_number in ('00333', '00733', '333', '733')
+  and gup_clearing_firm_originator is null
+  and trade_type = '0'
+  and not exists (select null
+                  from genesis2.occ_data.occ_trade_data cnc
+                  where cnc.rpt_id = tr.rpt_id
+                    and cnc.date_id = tr.date_id
+                    and cnc.side = tr.side
+                    and cnc.trans_type = '1')
+  and not exists (select null
+                  from genesis2.occ_data.occ_matched_trade_record mr
+                  where mr.date_id = tr.date_id
+                    and mr.trade_id = tr.trade_id);
+
+select * from t_os
+where aacount_id is not null
+
 
 select * from genesis2.occ_data.occ_matched_trade_record;
 
-select * from genesis2.occ_data.occ_trade_data_matching
+
+select mtr.account_id, tr.account_id, * from occ_data.occ_trade_data_matching mtr
+join genesis2.trade_record tr using (date_id, trade_record_id)
+where mtr.account_id != tr.account_id
