@@ -1,8 +1,22 @@
+select *
+from trash.so_report_rps_s3(in_start_date_id := 20260401, in_end_date_id := 20260401, in_account_ids := '{77005}',
+                         in_is_multi_leg := 'N')
 
-CREATE FUNCTION trash.report_rps_s3(in_start_date_id integer, in_end_date_id integer, in_account_ids integer[] DEFAULT '{}'::integer[], in_is_multi_leg character DEFAULT 'N'::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_exclude_blaze boolean DEFAULT true)
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+
+
+CREATE or replace FUNCTION trash.so_report_rps_s3(in_start_date_id integer, in_end_date_id integer,
+                                    in_account_ids integer[] DEFAULT '{}'::integer[],
+                                    in_is_multi_leg character DEFAULT 'N'::bpchar,
+                                    in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                    in_exclude_blaze boolean DEFAULT true,
+                                    in_cl_ord_ids varchar(256)[] default '{}'::varchar(256)[])
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
@@ -199,6 +213,7 @@ drop table if exists t_report;
     where true
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
+      and case when in_cl_ord_ids = '{}' then true else cl.client_order_id = any(in_cl_ord_ids) end
       and cl.trans_type <> 'F'
       and case when l_is_multileg then cl.parent_order_id is null else true end
       and case
@@ -235,6 +250,7 @@ drop table if exists t_report;
 --                           and cl.order_id = ex.order_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
+      and case when in_cl_ord_ids = '{}' then true else cl.client_order_id = any(in_cl_ord_ids) end
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
 
@@ -260,6 +276,7 @@ drop table if exists t_report;
       and cl.create_date_id < in_start_date_id
       and gtc.close_date_id is null
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when in_cl_ord_ids = '{}' then true else cl.client_order_id = any(in_cl_ord_ids) end
       and cl.trans_type <> 'F'
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
@@ -589,10 +606,11 @@ $function$
                                 where exc.exchange_id = cl.exchange_id and exc.is_active
                                 limit 1) exc on true
     where true
---       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
---       and cl.create_date_id between in_start_date_id and in_end_date_id
-      and cl.trans_type <> 'F'
-  and cl.parent_order_id = 440160506409384778
+--       and cl.account_id = 77005
+--       and cl.create_date_id between :in_start_date_id and :in_end_date_id
+--       and cl.trans_type <> 'F'
+--       and cl.client_order_id in ('gTD00xKQRW4J2')
+     and cl.parent_order_id = 440160506409384778
 --       and case when :l_is_multileg then cl.parent_order_id is null else true end
 --       and case
 --               when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
@@ -607,3 +625,31 @@ $function$
 and parent_order_id = 440160506409384778
 
           DCCC1989-20260331
+
+
+        select case
+                   when record_type = 'H' then rec || '|' ||
+                                               :in_start_date_id::text || 'T' || min_time || '|' || --Starting Event
+                                               :in_end_date_id::text || 'T' || max_time || '|' || --Ending Event
+                                               'DFIN' || '|' ||
+--                                                'DAIN' || '|' ||
+                                               (select coalesce(cat_imid, '')
+                                                from dwh.d_account
+                                                         join dwh.d_trading_firm using (trading_firm_id)
+                                                where true
+                                                  and case
+                                                          when l_account_ids = '{}' then true
+                                                          else account_id = any (l_account_ids) end
+                                                  and cat_imid is not null
+                                                limit 1) || '|' ||
+                                               'dashtradedesk@iongroup.com' || '|' ||
+                                               ''
+                   else rec
+                   end
+        from (select min(time_id) over () as min_time,
+                     max(time_id) over () as max_time,
+                     record_type,
+                     rec
+              from t_report
+
+              order by order_id, time_id, record_id, record_type_id) x;
