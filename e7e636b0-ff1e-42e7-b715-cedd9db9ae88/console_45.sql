@@ -71,49 +71,95 @@ end ;
 $function$
 ;
 
-select tr.date_id,
-       coalesce(portfolio_id, 'A000') as portfolio_id,
-       null as "SubPortfolioId",
-       os.root_symbol as "Symbol",
-       to_char(oc.maturity_day, 'FM00')||to_char(oc.maturity_month, 'FM00')||oc.maturity_year::text as "Expiration",
-       oc.strike_price as "Strike",
-case
-				when oc.put_call = '0' then 'P'
-				when oc.put_call = '1' then 'C'
-			end,
-    'O' as "InstType",
-    'O' as "PositionType",
-    null as "Exchange",
-    0 as "Quantity",
-    null as "PosSettleDate",
-    null as "Cash",
-    null as "ClientInfo"
-from occ_data.occ_trade_data tr
-inner join genesis2.option_contract oc on (oc.instrument_id = tr.instrument_id)
-			inner join genesis2.option_series os on (oc.option_series_id = os.option_series_id)
-         left join lateral ( select coalesce(hpm.portfolio_id, ac.trading_firm_id) as portfolio_id,
-                                    ac.account_id                                  as aacount_id
-                             from occ_data.occ_trade_data_matching mtr
-                                      join genesis2.account ac using (account_id)
-                                      left join fintech.hanweck_portfolio_mapping hpm using (trading_firm_id)
-                             where mtr.date_id = tr.date_id
-                               and mtr.trade_id = tr.trade_id
-                               and mtr.side = tr.side
-                               and mtr.trade_record_id != -1
-                             limit 1) on true
-where tr.date_id between :in_start_date_id and :in_end_date_id
-  and clearing_member_number in ('00333', '00733', '333', '733')
-  and gup_clearing_firm_originator is null
-  and trade_type = '0'
-  and not exists (select null
-                  from genesis2.occ_data.occ_trade_data cnc
-                  where cnc.rpt_id = tr.rpt_id
-                    and cnc.date_id = tr.date_id
-                    and cnc.side = tr.side
-                    and cnc.trans_type = '1')
-  and not exists (select null
-                  from genesis2.occ_data.occ_matched_trade_record mr
-                  where mr.date_id = tr.date_id
-                    and mr.trade_id = tr.trade_id);
+
+create or replace function dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(in_start_date_id integer, in_end_date_id integer)
+    returns table
+            (
+                ret_row text
+            )
+    language plpgsql
+as
+$function$
+    -- 2025-05-20 SO: https://dashfinancial.atlassian.net/browse/DEVREQ-6115
+    -- 2026-05-27 SO: https://dashfinancial.atlassian.net/browse/DS-11570 Change the Source of Data for OCC Portfolio - CBOE Hanweck Report
+declare
+    l_load_id int;
+    l_step_id int;
+    l_row_cnt int;
+
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_occ_portfolio_cboe_hanweck_new for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+
+    return query
+        select 'Date,PortfolioId,SubPortfolioId,Symbols,Expiration,Strike,PutCall,InstType,PositionType,Exchange,Quantity,PosSettleDate,Cash,ClientInfo';
+
+    return query
+        select array_to_string(ARRAY [
+                                   to_char(tr.trade_record_time, 'MM/dd/yyyy'),
+                                   max(coalesce(portfolio_id, 'A000')) ,-- as portfolio_id,
+                                   null ,-- as "SubPortfolioId",
+                                   os.root_symbol ,-- as "Symbol",
+                                   to_char(oc.maturity_month, 'FM00') || to_char(oc.maturity_day, 'FM00') ||
+                                   to_char(oc.maturity_year, 'FM0000') ,-- as "Expiration",
+                                   oc.strike_price::text ,-- as "Strike",
+                                   case
+                                       when oc.put_call = '0' then 'P'
+                                       when oc.put_call = '1' then 'C'
+                                       end ,-- as "PutCall",
+                                   'O' ,-- as "InstType",
+                                   'O' ,-- as "PositionType",
+                                   null ,-- as "Exchange",
+                                   sum(case when tr.side = '1' then 1 else -1 end * tr.last_qty)::text ,-- as "Quantity",
+                                   null ,-- as "PosSettleDate",
+                                   null ,-- as "Cash",
+                                   null -- as "ClientInfo"
+                                   ], ',', '')
+        from occ_data.occ_trade_data tr
+                 inner join genesis2.option_contract oc on (oc.instrument_id = tr.instrument_id)
+                 inner join genesis2.option_series os on (oc.option_series_id = os.option_series_id)
+                 left join lateral ( select coalesce(hpm.portfolio_id, ac.trading_firm_id) as portfolio_id
+                                     from occ_data.occ_trade_data_matching mtr
+                                              join genesis2.account ac using (account_id)
+                                              left join fintech.hanweck_portfolio_mapping hpm using (trading_firm_id)
+                                     where mtr.date_id = tr.date_id
+                                       and mtr.trade_id = tr.trade_id
+                                       and mtr.side = tr.side
+                                       and mtr.trade_record_id != -1
+                                     limit 1) on true
+        where tr.date_id between in_start_date_id and in_end_date_id
+          and clearing_member_number in ('00333', '00733', '333', '733')
+          and gup_clearing_firm_originator is null
+          and trade_type = '0'
+          and not exists (select null
+                          from genesis2.occ_data.occ_trade_data cnc
+                          where cnc.rpt_id = tr.rpt_id
+                            and cnc.date_id = tr.date_id
+                            and cnc.side = tr.side
+                            and cnc.trans_type = '1')
+          and not exists (select null
+                          from genesis2.occ_data.occ_matched_trade_record mr
+                          where mr.date_id = tr.date_id
+                            and mr.trade_id = tr.trade_id)
+
+        group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), os.root_symbol, oc.maturity_day, oc.maturity_month,
+                 oc.maturity_year, oc.strike_price, oc.put_call;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_occ_portfolio_cboe_hanweck_new for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
+
+end ;
+$function$
+;
 
 
