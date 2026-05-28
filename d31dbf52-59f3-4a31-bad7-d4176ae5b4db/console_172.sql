@@ -1,28 +1,43 @@
 create temp table t_os as
 select *
-from trash.so_report_rps_s3(in_start_date_id := 20260401, in_end_date_id := 20260401, in_account_ids := '{77005}',
-                            in_is_multi_leg := 'N');
+from trash.so_report_rps_s3(in_start_date_id := 20260127, in_end_date_id := 20260127, in_account_ids := '{14765}',
+                            in_is_multi_leg := 'N', in_exclude_blaze := false);
+
+select * from t_base
+where client_order_id = 'BAAA0450-20260122';
 
 select * from t_os
-where ret_row ilike '%440160506409384778%'
+where ret_row ilike '%BAAA0450-20260122%'
 
-CREATE OR REPLACE FUNCTION trash.so_report_rps_s3(in_start_date_id integer, in_end_date_id integer, in_account_ids integer[] DEFAULT '{}'::integer[], in_is_multi_leg character DEFAULT 'N'::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_exclude_blaze boolean DEFAULT true)
- RETURNS TABLE(ret_row text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION trash.so_report_rps_s3(in_start_date_id integer, in_end_date_id integer,
+                                                  in_account_ids integer[] DEFAULT '{}'::integer[],
+                                                  in_is_multi_leg character DEFAULT 'N'::bpchar,
+                                                  in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                  in_exclude_blaze boolean DEFAULT true)
+    RETURNS TABLE
+            (
+                ret_row text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
     -- SO 20260108 https://dashfinancial.atlassian.net/browse/DEVREQ-7409 Add a new parameter: Exclude S3 EOD Blaze Orders (as well as BLAZE as exchange_id)
 declare
-    l_is_multileg boolean := case when in_is_multi_leg = 'N' then false else true end;
-    l_account_ids int4[];
-    l_load_id     int;
-    l_row_cnt     int;
-    l_step_id     int;
-    l_msg         text;
+    l_is_multileg     boolean := case when in_is_multi_leg = 'N' then false else true end;
+    l_account_ids     int4[];
+    l_load_id         int;
+    l_row_cnt         int;
+    l_step_id         int;
+    l_msg             text;
+    l_is_current_date bool    := false;
+    l_min_gtc_date_id int4;
 begin
-
+    if in_start_date_id = in_end_date_id and in_start_date_id = to_char(current_date, 'YYYYMMDD')::int4 then
+        l_is_current_date = true;
+    end if;
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
         l_account_ids := '{}';
     else
@@ -39,18 +54,24 @@ begin
                   else true end;
     end if;
     l_msg := 'report_rps_s3 for ' || in_start_date_id::text || ' - ' || in_end_date_id::text ||
-             case when l_is_multileg then '. multilegs' else '. single' end ||'. accounts - '||substr(l_account_ids::text, 1, 50);
+             case when l_is_multileg then '. multilegs' else '. single' end || '. accounts - ' ||
+             substr(l_account_ids::text, 1, 50);
 
     select nextval('public.load_timing_seq') into l_load_id;
     l_step_id := 1;
     select public.load_log(l_load_id, l_step_id, l_msg || ' STARTED ===', 0, 'O')
     into l_step_id;
 
+    select coalesce(min(create_date_id), to_char(current_date, 'YYYYMMDD')::int4)
+    into l_min_gtc_date_id
+    from dwh.gtc_order_status gtc
+    where case when l_account_ids = '{}' then true else account_id = any (l_account_ids) end;
+
     -- header
-drop table if exists t_report;
+    drop table if exists t_report;
     create temp table t_report
 --          on commit drop
-        as
+    as
     select 'H'                                                                                        as record_type,
            0::int8                                                                                    as order_id,
            null                                                                                       as time_id,
@@ -61,10 +82,10 @@ drop table if exists t_report;
            to_char(clock_timestamp(), 'YYYYMMDD') || 'T' || to_char(clock_timestamp(), 'HH24MISSFF3') as rec;
 
     raise notice 'temp table created - %', clock_timestamp();
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
     ----Parent/Street orders----
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
     select 'NO'                                      as record_type,
@@ -106,7 +127,7 @@ drop table if exists t_report;
                        end
                end || '|' ||
            case
-               when not l_is_multileg then coalesce(cl.exchange_id, 'DFIN')
+               when not l_is_multileg then coalesce(exc.mic_code, 'DFIN')
                else
                    case
                        when cl.parent_order_id is null then 'DFIN'
@@ -128,7 +149,7 @@ drop table if exists t_report;
                else
                    case when cl.multileg_reporting_type = '3' then '' else cl.order_qty::text end
                end || '|' || --order_volume
-           coalesce(to_char(cl.price, 'FM99990D0099'),'') || '|' ||
+           coalesce(to_char(cl.price, 'FM99990D0099'), '') || '|' ||
            coalesce(to_char(cl.stop_price, 'FM99990D0099'), '') || '|' ||
            tif.tif_short_name || '|' ||
            case
@@ -201,7 +222,8 @@ drop table if exists t_report;
              left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
              left join lateral (select *
                                 from dwh.d_exchange exc
-                                where exc.exchange_id = cl.exchange_id and exc.is_active
+                                where exc.exchange_id = cl.exchange_id
+                                  and exc.is_active
                                 limit 1) exc on true
     where true
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
@@ -218,10 +240,10 @@ drop table if exists t_report;
     select public.load_log(l_load_id, l_step_id, l_msg || ' Parent/Street added', l_row_cnt, 'O')
     into l_step_id;
 
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
 
 
     drop table if exists t_orders;
@@ -265,16 +287,20 @@ drop table if exists t_report;
     where true
       and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.create_date_id < in_start_date_id
-      and gtc.close_date_id is null
-      and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case
+              when gtc.close_date_id is null then true
+              when gtc.close_date_id >= in_end_date_id then true
+              else false end
       and cl.trans_type <> 'F'
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
-      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
+      and create_date_id >= l_min_gtc_date_id;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' open gtc added', l_row_cnt, 'O')
     into l_step_id;
 
+    /*
     insert into t_orders
     select cl.create_date_id,
            cl.parent_order_id,
@@ -300,53 +326,56 @@ drop table if exists t_report;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' close today gtc added', l_row_cnt, 'O')
     into l_step_id;
-
+*/
     create index on t_orders (create_date_id);
     create index on t_orders (order_id);
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' indexed', 0, 'O')
     into l_step_id;
 
-    insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
-    with base as (select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
-                         cl.parent_order_id,
-                         cl.order_id,
-                         cl.process_time,
-                         cl.client_order_id,
-                         ex.exec_type,
-                         cl.multileg_reporting_type,
-                         i.instrument_type_id,
-                         i.display_instrument_id,
-                         oc.opra_symbol,
-                         ex.exec_time,
-                         ex.exec_id,
-                         ex.last_qty,
-                         ex.last_px,
-                         ex.exchange_id
-                  from dwh.execution ex
-                           join lateral
-                      (select *
-                       from t_orders cl
-                       where cl.create_date_id <= ex.exec_date_id
-                         and cl.order_id = ex.order_id
-                       limit 1) cl on true
-                      and case
-                              when l_is_multileg then cl.parent_order_id is null
-                              else cl.parent_order_id is not null end
-                           inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
-                           left join lateral (select opra_symbol, option_series_id
-                                              from dwh.d_option_contract oc
-                                              where oc.instrument_id = i.instrument_id
-                                              limit 1) oc on true
-                           left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
-                  where true
-                    and ex.exec_date_id between in_start_date_id and in_end_date_id
-                    and ex.exec_type in ('4', '8', 'F')
+    drop table if exists t_base;
+    create temp table t_base as
+    select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
+           cl.parent_order_id,
+           cl.order_id,
+           cl.process_time,
+           cl.client_order_id,
+           ex.exec_type,
+           cl.multileg_reporting_type,
+           i.instrument_type_id,
+           i.display_instrument_id,
+           oc.opra_symbol,
+           ex.exec_time,
+           ex.exec_id,
+           ex.last_qty,
+           ex.last_px,
+           ex.exchange_id
+    from dwh.execution ex
+             join lateral
+        (select *
+         from t_orders cl
+         where cl.create_date_id <= ex.exec_date_id
+           and cl.order_id = ex.order_id
+         limit 1) cl on true
+        and case
+                when l_is_multileg then cl.parent_order_id is null
+                else cl.parent_order_id is not null end
+             inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
+             left join lateral (select opra_symbol, option_series_id
+                                from dwh.d_option_contract oc
+                                where oc.instrument_id = i.instrument_id
+                                limit 1) oc on true
+             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
+    where true
+      and ex.exec_date_id between in_start_date_id and in_end_date_id
+      and ex.exec_type in ('4', '8', 'F')
 --                     and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
-                    and cl.trans_type <> 'F'
-                    and case
-                            when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-                            else cl.multileg_reporting_type = '1' end)
+      and cl.trans_type <> 'F'
+      and case
+              when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+              else cl.multileg_reporting_type = '1' end;
+
+    insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
     --order activity: cancel
     select 'A'                                  as record_type,
            coalesce(parent_order_id, order_id)  as order_id,
@@ -369,7 +398,7 @@ drop table if exists t_report;
            '' || '|' || --[12]
            '' || '|' || --[13]
            '' --[14]
-    from base
+    from t_base
     where tp = 2
       and case when l_is_multileg then parent_order_id is null else true end
 
@@ -406,7 +435,7 @@ drop table if exists t_report;
            '' || '|' || --[21]
            '' || '|' || --[22]
            '' --[23]
-    from base
+    from t_base
     where tp = 3
       and case
               when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
@@ -416,10 +445,10 @@ drop table if exists t_report;
     select public.load_log(l_load_id, l_step_id, l_msg || ' Cancels added', l_row_cnt, 'O')
     into l_step_id;
 
-	select count(*)
-	into l_row_cnt
-	from t_report;
-	raise notice 't_report has - %', l_row_cnt;
+    select count(*)
+    into l_row_cnt
+    from t_report;
+    raise notice 't_report has - %', l_row_cnt;
 
     return query
         select case
@@ -448,10 +477,131 @@ drop table if exists t_report;
               from t_report
 
               order by order_id, time_id, record_id, record_type_id) x;
-        get diagnostics l_row_cnt = row_count;
+    get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' COMPLETED ===', l_row_cnt, 'O')
     into l_step_id;
 
 end;
 $function$
 ;
+
+
+select * from dwh.client_order
+where client_order_id = 'BAAA0450-20260122'
+
+select * from dwh.gtc_order_status
+where order_id = 414703178692936385;
+
+    select
+        gtc.close_date_id,
+
+        cl.create_date_id,
+           cl.parent_order_id,
+           cl.order_id,
+           cl.process_time,
+           cl.client_order_id,
+           cl.instrument_id,
+           cl.account_id,
+           cl.trans_type,
+           cl.multileg_reporting_type
+    from dwh.client_order cl
+             join dwh.gtc_order_status gtc using (order_id, create_date_id)
+    where true
+      and case when :l_account_ids = '{}' then true else gtc.account_id = any (:l_account_ids) end
+      and cl.create_date_id < :in_start_date_id
+      and case
+              when gtc.close_date_id is null then true
+              when gtc.close_date_id >= :in_end_date_id then true
+              else false end
+      and cl.trans_type <> 'F'
+      and case when :in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
+      and case when :in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
+    and cl.client_order_id = 'BAAA0450-20260122'
+    ;
+select * from
+
+select * from t_orders
+where client_order_id = 'BAAA0450-20260122'
+
+
+select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
+                         cl.parent_order_id,
+                         cl.order_id,
+                         cl.process_time,
+                         cl.client_order_id,
+                         ex.exec_type,
+                         cl.multileg_reporting_type,
+                         i.instrument_type_id,
+                         i.display_instrument_id,
+                         oc.opra_symbol,
+                         ex.exec_time,
+                         ex.exec_id,
+                         ex.last_qty,
+                         ex.last_px,
+                         ex.exchange_id
+                  from dwh.execution ex
+                           join lateral
+                      (select *
+                       from t_orders cl
+                       where true
+                  and cl.create_date_id <= ex.exec_date_id
+                         and cl.order_id = ex.order_id
+                       and client_order_id = 'BAAA0450-20260122'
+                       limit 1) cl on true
+                      and case
+                              when :l_is_multileg then cl.parent_order_id is null
+                              else cl.parent_order_id is not null end
+                           inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id
+                           left join lateral (select opra_symbol, option_series_id
+                                              from dwh.d_option_contract oc
+                                              where oc.instrument_id = i.instrument_id
+                                              limit 1) oc on true
+                           left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
+                  where true
+                    and ex.exec_date_id between :in_start_date_id and :in_end_date_id
+                    and ex.exec_type in ('4', '8', 'F')
+--                     and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+                    and cl.trans_type <> 'F'
+                    and case
+                            when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+                            else cl.multileg_reporting_type = '1' end
+
+
+
+ select 'T'                                 as record_type,
+           coalesce(parent_order_id, order_id) as order_id,
+           to_char(exec_time, 'HH24MISSFF3')   as time_id,
+           client_order_id                     as record_id,
+           2                                   as record_type_id,
+           'T' || '|' ||
+           order_id::text || '|' ||
+           order_id::text || '_' || exec_id::text || '|' ||
+           '' || '|' ||
+           '' || '|' ||
+           instrument_type_id || '|' ||
+           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
+           '|' ||
+           '' || '|' || --SYMBOL_EXCHANGE
+           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
+           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' || --ACTION_DATETIME
+           last_qty || '|' ||
+           to_char(last_px, 'fm99990d0099') || '|' ||
+           exchange_id || '|' ||
+           '' || '|' || --[12]
+           '' || '|' || --[13]
+--            case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
+           '' || '|' || --[15]
+           '' || '|' || --[16]
+           '' || '|' || --[17]
+           '' || '|' || --[18]
+           '' || '|' || --[19]
+           '' || '|' || --[20]
+           '' || '|' || --[21]
+           '' || '|' || --[22]
+           '' --[23]
+    from t_base
+    where tp = 3
+      and client_order_id = 'BAAA0450-20260122'
+      and case
+              when :l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
+              else multileg_reporting_type = '1' end;
