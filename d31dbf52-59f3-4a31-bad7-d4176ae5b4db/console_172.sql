@@ -605,3 +605,5 @@ select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
       and case
               when :l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
               else multileg_reporting_type = '1' end;
+
+
