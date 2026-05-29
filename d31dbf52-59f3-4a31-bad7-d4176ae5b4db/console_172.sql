@@ -466,4 +466,5 @@ begin
 end;
 $function$
 ;
-
+select * from t_base
+where client_order_id = BAAA0450-20260122
