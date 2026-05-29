@@ -15,6 +15,7 @@ CREATE OR REPLACE FUNCTION trash.so_report_rps_s3(in_start_date_id integer, in_e
                                                   in_is_multi_leg character DEFAULT 'N'::bpchar,
                                                   in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                   in_exclude_blaze boolean DEFAULT true,
+                                                  in_actual_exchange boolean default false
 )
     RETURNS TABLE
             (
@@ -267,7 +268,8 @@ begin
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
-      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
+      and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
+      and cl.time_in_force_id not in ('1', '6');
 
     get diagnostics l_row_cnt = row_count;
 
@@ -296,7 +298,8 @@ begin
       and cl.trans_type <> 'F'
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end
-      and create_date_id >= l_min_gtc_date_id;
+      and create_date_id >= l_min_gtc_date_id
+      and cl.time_in_force_id in ('1', '6');
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' open gtc added', l_row_cnt, 'O')
