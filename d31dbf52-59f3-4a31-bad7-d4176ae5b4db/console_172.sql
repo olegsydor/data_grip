@@ -1,3 +1,5 @@
+alter function dash360.so_report_rps_s3 rename to report_rps_s3
+
 drop table t_os;
 
 create temp table t_os as
