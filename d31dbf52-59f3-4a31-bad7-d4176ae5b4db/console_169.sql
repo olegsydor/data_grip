@@ -1,5 +1,9 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
-report_fintech_s3_master_file
+select ret_row
+from dash360.report_fintech_s3_master_file(in_start_date_id := 20260401, in_end_date_id := 20260401,
+                                           in_strategies := '{"SENSOR"}')
+
+
 CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                                 in_instrument_type character DEFAULT NULL::bpchar,
