@@ -657,31 +657,43 @@ select
                                null, --[47]
                                null --[48]
                                ], '|', '')           as REC
-select
-    exc.mic_code, exc.eq_mpid, cl.exchange_id, cl.*
+select case
+           when ((:l_is_multileg and cl.multileg_reporting_type = '3') or
+                 (not :l_is_multileg and cl.parent_order_id is null)) then 'NO'
+           else 'RO'
+           end,
+--        case
+--            when cl.parent_order_id is null then 'NO'
+--            else 'RO'
+--            end,
+       case when parent_order_id is null then 'parent' else 'street' end as tp,
+       cl.client_order_id,
+       exc.mic_code,
+       exc.eq_mpid,
+       cl.exchange_id,
+       cl.ex_destination,
+       cl.*
 from dwh.client_order cl
-             inner join dwh.d_account ac on ac.account_id = cl.account_id
-             inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
-             left join lateral (select po.sub_strategy_desc
-                                from dwh.client_order po
-                                where po.order_id = cl.parent_order_id
-                                  and po.create_date_id <= cl.create_date_id
-                                limit 1) po on true
-             left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id and oc.is_active
-             left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
-             left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
-             left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-             left join lateral (select *
-                                from dwh.d_exchange exc
-                                where exc.exchange_id = cl.exchange_id
-                                  and exc.is_active
-                                limit 1) exc on true
-    where true
-      and cl.client_order_id = '00214105960ESNY1'
-              and case
-              when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end
+         inner join dwh.d_account ac on ac.account_id = cl.account_id
+         inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
+         left join lateral (select po.sub_strategy_desc
+                            from dwh.client_order po
+                            where po.order_id = cl.parent_order_id
+                              and po.create_date_id <= cl.create_date_id
+                            limit 1) po on true
+         left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id and oc.is_active
+         left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
+         left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+         left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
+         left join lateral (select *
+                            from dwh.d_exchange exc
+                            where exc.exchange_id = cl.exchange_id
+                              and exc.is_active
+                            limit 1) exc on true
+where true
+  and cl.client_order_id in ('00214105910ESNY1', 'BCAA1086-20260127', 'BCAA1097-20260127')
+  and case
+          when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+          else cl.multileg_reporting_type = '1' end
+      and case when :l_is_multileg then cl.parent_order_id is null else true end
 
-
-O|RO|00214105910ESNY1|416550869289618525|00214105910ESNY1||416550869289618524|SGAS|DFIN|||O|CME   261218C00300000||S|20260127T073000038|LMT|3|-1.00||GTD|20260319T210000000|0||0||0|0|0|0|0|0|0|0|||||ALGO|||||||||
-O|RO|00214105910ESNY1|416550869289618526|00214105910ESNY1||416550869289618524|SGAS|DFIN|||O|CME   260320C00280000||B|20260127T073000038|LMT|3|-1.00||GTD|20260319T210000000|0||0||0|0|0|0|0|0|0|0|||||ALGO|||||||||
