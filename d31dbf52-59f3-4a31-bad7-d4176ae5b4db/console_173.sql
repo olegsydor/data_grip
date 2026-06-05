@@ -15,18 +15,17 @@
 
 -- DROP FUNCTION data_marts.dash360_reports_sor_strategy_data(_varchar, _int8, varchar, int4, int4, _varchar, _varchar);
 select *
-from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{30150}', in_instrument_type_id := 'O',
-                                              in_start_status_date_id := 20260527, in_end_status_date_id := 20260527);
-
+from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{63109}',
+                                              in_start_status_date_id := 20260605, in_end_status_date_id := 20260605);
 
 -- DROP FUNCTION dash360.report_perf_xtx_sor_child_orders(_varchar, _int8, varchar, int4, int4, _varchar, _varchar);
 select * from dwh.d_exchange
 CREATE OR REPLACE FUNCTION dash360.report_perf_xtx_sor_child_orders(in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                                     in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                    in_instrument_type_id character varying DEFAULT NULL::character varying(1),
+--                                                                     in_instrument_type_id character varying DEFAULT NULL::character varying(1),
                                                                     in_start_status_date_id integer DEFAULT NULL::integer,
                                                                     in_end_status_date_id integer DEFAULT NULL::integer,
-                                                                    in_sub_strategies character varying[] DEFAULT '{}'::character varying[],
+--                                                                     in_sub_strategies character varying[] DEFAULT '{}'::character varying[],
                                                                     in_exchange_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
@@ -36,7 +35,7 @@ CREATE OR REPLACE FUNCTION dash360.report_perf_xtx_sor_child_orders(in_trading_f
                 "Event Date"       text,
                 "Routed Time"      text,
                 "Street Cl Ord ID" character varying,
-                "Side"             character,
+                "Side"             text,
                 "Parent Ord Qty"   integer,
                 "Child Ord Qty"    integer,
                 "Symbol"           character varying,
@@ -70,23 +69,22 @@ begin
     into l_step_id;
 
     RETURN QUERY
-        select f_par.client_order_id                       as "Parent Cl Ord ID",
-               acc.account_demo_mnemonic                   as "Account",
-               osd.order_status_description                as "Ord Status",
-               to_char(f_str.routed_time, 'DD-MM-YYYY')    as "Event Date",
-               to_char(f_str.routed_time, 'HH24:MI:SS.MS') as "Routed Time",
-               f_str.client_order_id                       as "Street Cl Ord ID",
-               f_par.side                                  as "Side",
-               f_par.order_qty                             as "Parent Ord Qty",
-               f_str.order_qty                             as "Child Ord Qty",
-               i.display_instrument_id                     as "Symbol",
-               i.last_trade_date::timestamp                as "Exp Date",
-               f_str.order_price                           as "Price",
-               f_str.day_avg_px                            as "Avg Px",
-               f_str.day_cum_qty                           as "Ex Qty",
-               f_str.day_leaves_qty                        as "Lvs Qty",
-               real_exch.exchange_name                     as "Exchange Name"
-        select *
+        select f_par.client_order_id                                                                    as "Parent Cl Ord ID",
+               acc.account_demo_mnemonic                                                                as "Account",
+               osd.order_status_description                                                             as "Ord Status",
+               to_char(f_str.routed_time, 'DD-MM-YYYY')                                                 as "Event Date",
+               to_char(f_str.routed_time, 'HH24:MI:SS.MS')                                              as "Routed Time",
+               f_str.client_order_id                                                                    as "Street Cl Ord ID",
+               case when f_par.side = '1' then 'Buy' when f_par.side in ('2', '5', '6') then 'Sell' end as "Side",
+               f_par.order_qty                                                                          as "Parent Ord Qty",
+               f_str.order_qty                                                                          as "Child Ord Qty",
+               i.display_instrument_id                                                                  as "Symbol",
+               i.last_trade_date::timestamp                                                             as "Exp Date",
+               f_str.order_price                                                                        as "Price",
+               f_str.day_avg_px                                                                         as "Avg Px",
+               f_str.day_cum_qty                                                                        as "Ex Qty",
+               f_str.day_leaves_qty                                                                     as "Lvs Qty",
+               real_exch.exchange_name                                                                  as "Exchange Name"
         from data_marts.f_yield_capture f_str
                  inner join data_marts.f_yield_capture f_par on f_par.order_id = f_str.parent_order_id and
                                                                 f_par.status_date_id between in_start_status_date_id and in_end_status_date_id and
@@ -94,11 +92,11 @@ begin
                  inner join dwh.d_account acc on (acc.account_id = f_par.account_id)
                  inner join dwh.d_instrument i on (i.instrument_id = f_par.instrument_id)
                  inner join dwh.d_target_strategy dss on f_par.sub_strategy_id = dss.target_strategy_id
+                 join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
+                                                                  sdrc.strategy_decision_reason_code =
+                                                                  f_str.strategy_decision_reason_code
                  left join dwh.d_order_type ot on ot.order_type_id = f_par.order_type_id
                  left join dwh.d_time_in_force tif on tif.is_active and tif.tif_id = f_par.time_in_force_id
-            --                  left join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
---                                                                        sdrc.strategy_decision_reason_code =
---                                                                        f_str.strategy_decision_reason_code
                  left join dwh.d_exchange exch on (f_str.exchange_unq_id = exch.exchange_unq_id)
                  left join dwh.d_exchange real_exch
                            on (exch.real_exchange_id = real_exch.exchange_id and real_exch.is_active)
@@ -131,14 +129,11 @@ begin
           and f_str.status_date_id between in_start_status_date_id and in_end_status_date_id
           and case when in_trading_firm_ids <> '{}' then acc.trading_firm_id = any (in_trading_firm_ids) else true end
           and case when in_account_ids <> '{}' then f_par.account_id = any (in_account_ids) else true end
-          and case when in_sub_strategies <> '{}' then dss.target_strategy_name = any (in_sub_strategies) else true end
-           and dss.target_strategy_name = 'RETAILNML'
-           and exec_time::time between '09:30'::time and '16:00'::time
-
-
-          and case
-                  when in_instrument_type_id is not null then i.instrument_type_id = in_instrument_type_id
-                  else true end
+          and dss.target_strategy_name = 'RETAILNML'
+          and f_par.exec_time::time between '09:30'::time and '16:00'::time
+          and i.instrument_type_id = 'E'
+          and sdrc.strategy_user_data in
+              ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
           and case when in_exchange_ids <> '{}' then real_exch.exchange_id = any (in_exchange_ids) else true end;
 
     get diagnostics l_row_cnt = row_count;
@@ -251,3 +246,7 @@ begin
 end;
 $function$
 ;
+
+
+select * from dwh.d_strategy_decision_reason_code
+where strategy_user_data in ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
