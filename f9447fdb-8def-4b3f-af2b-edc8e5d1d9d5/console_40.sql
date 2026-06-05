@@ -44,3 +44,6 @@ and db_field_name ilike '%elliot%'
 
 
 select jsonb_pretty('{"noAllocs": 1, "tradeDate": 20260514, "processTime": "2026-05-14T16:00:51.686", "AllocInstrId": -122499, "instrumentTypeId": "O", "allocationEntries": [{"clrFirm": "551", "allocQty": 110, "EquityBRID": null, "OptionBRID": "70001229", "subAccount": null, "salesTrader": "anthony.reinen", "actionableId": "SUS", "allocAccount": null, "sgMintAccount": null, "individualAllocID": 608517, "AllocEntryCCRURate": null, "ElliotCounterpartyCode": "SUSQUEHAFIUS", "AllocEntryCCRUTotalAmount": null}]}'::jsonb)
+
+
+

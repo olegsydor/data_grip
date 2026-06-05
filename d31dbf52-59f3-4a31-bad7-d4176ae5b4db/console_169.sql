@@ -198,7 +198,10 @@ begin
                                    when '6' then 'SSE' end, -- ORDER_ACTION
                                to_char(cl.process_time, 'YYYYMMDD') || 'T' ||
                                to_char(cl.process_time, 'HH24MISSFF3'), -- ORDER_DATETIME
-                               ot.order_type_short_name, -- ORDER_TYPE
+                               case
+                                   when ot.order_type_short_name in ('LOC', 'LOO', 'LMT') then 'LMT'
+                                   when ot.order_type_short_name in ('MOC', 'MOO', 'MKT') then 'MKT'
+                                   else ot.order_type_short_name end, -- ORDER_TYPE
                                case when cl.multileg_reporting_type != '3' then cl.order_qty::text end, -- ORDER_VOLUME
                                to_char(cl.price, 'FM99990D0099'), -- LIMIT_PRICE
                                to_char(cl.stop_price, 'FM99990D0099'), -- STOP_PRICE
