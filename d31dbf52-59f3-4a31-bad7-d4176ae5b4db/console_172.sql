@@ -657,22 +657,23 @@ select
                                null, --[47]
                                null --[48]
                                ], '|', '')           as REC
-select case
-           when ((:l_is_multileg and cl.multileg_reporting_type = '3') or
-                 (not :l_is_multileg and cl.parent_order_id is null)) then 'NO'
-           else 'RO'
-           end,
+-- select
+-- --     case
+-- --            when ((:l_is_multileg and cl.multileg_reporting_type = '3') or
+-- --                  (not :l_is_multileg and cl.parent_order_id is null)) then 'NO'
+-- --            else 'RO'
+-- --            end,
 --        case
 --            when cl.parent_order_id is null then 'NO'
 --            else 'RO'
 --            end,
-       case when parent_order_id is null then 'parent' else 'street' end as tp,
-       cl.client_order_id,
-       exc.mic_code,
-       exc.eq_mpid,
-       cl.exchange_id,
-       cl.ex_destination,
-       cl.*
+--        case when parent_order_id is null then 'parent' else 'street' end as tp,
+--        cl.client_order_id,
+--        exc.mic_code,
+--        exc.eq_mpid,
+--        cl.exchange_id,
+--        cl.ex_destination,
+--        cl.*
 from dwh.client_order cl
          inner join dwh.d_account ac on ac.account_id = cl.account_id
          inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
