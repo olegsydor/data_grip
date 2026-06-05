@@ -695,5 +695,5 @@ where true
   and case
           when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
           else cl.multileg_reporting_type = '1' end
-      and case when :l_is_multileg then cl.parent_order_id is null else true end
+--       and case when :l_is_multileg then cl.parent_order_id is null else true end
 
