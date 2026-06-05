@@ -1,17 +1,3 @@
--- data_marts.dash360_reports_sor_strategy_data -> dash360.report_perf_xtx_sor_child_orders
-
--- Strategy Step
--- Sec Type
--- Root
--- Ex Dest - Cust
--- TIF
--- Ord Type
--- Client ID
--- Bid Qty
--- Bid Px
--- Ask Qty
--- Ask Px
--- Strategy
 
 -- DROP FUNCTION data_marts.dash360_reports_sor_strategy_data(_varchar, _int8, varchar, int4, int4, _varchar, _varchar);
 select *
@@ -22,10 +8,8 @@ from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{63109}',
 select * from dwh.d_exchange
 CREATE OR REPLACE FUNCTION dash360.report_perf_xtx_sor_child_orders(in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                                     in_account_ids bigint[] DEFAULT '{}'::bigint[],
---                                                                     in_instrument_type_id character varying DEFAULT NULL::character varying(1),
                                                                     in_start_status_date_id integer DEFAULT NULL::integer,
                                                                     in_end_status_date_id integer DEFAULT NULL::integer,
---                                                                     in_sub_strategies character varying[] DEFAULT '{}'::character varying[],
                                                                     in_exchange_ids character varying[] DEFAULT '{}'::character varying[])
     RETURNS TABLE
             (
@@ -134,7 +118,8 @@ begin
           and i.instrument_type_id = 'E'
           and sdrc.strategy_user_data in
               ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
-          and case when in_exchange_ids <> '{}' then real_exch.exchange_id = any (in_exchange_ids) else true end;
+          and case when in_exchange_ids <> '{}' then real_exch.exchange_id = any (in_exchange_ids) else true end
+          and f_str.order_price >= 1;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -148,38 +133,27 @@ $function$
 
 -- DROP FUNCTION data_marts.dash360_reports_sor_parent_orders(_varchar, _int8, varchar, int4, int4, _varchar);
 select *
-from dash360.report_perf_xtx_sor_parent_orders(in_account_ids := '{30150}', in_instrument_type_id := 'O',
-                                              in_start_status_date_id := 20260527, in_end_status_date_id := 20260527);
+from dash360.report_perf_xtx_sor_parent_orders(in_account_ids := '{63109}',
+                                              in_start_status_date_id := 20260604, in_end_status_date_id := 20260604);
 
 CREATE OR REPLACE FUNCTION dash360.report_perf_xtx_sor_parent_orders(in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                                      in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                     in_instrument_type_id character varying DEFAULT NULL::character varying(1),
                                                                      in_start_status_date_id integer DEFAULT NULL::integer,
-                                                                     in_end_status_date_id integer DEFAULT NULL::integer,
-                                                                     in_sub_strategies character varying[] DEFAULT '{}'::character varying[])
+                                                                     in_end_status_date_id integer DEFAULT NULL::integer
+)
     RETURNS TABLE
             (
-                client_order_id       character varying,
-                status_date_id        integer,
-                routed_time           timestamp without time zone,
-                account_name          character varying,
---                 sec_type                character,
-                side                  character,
-                order_qty             integer,
-                day_cum_qty           integer,
-                display_instrument_id character varying,
---                 last_trade_date         timestamp without time zone,
-                order_price           numeric,
---                 order_end_time          timestamp without time zone,
-                avg_px                numeric
---                 ex_destination          character varying,
---                 tif                     character varying,
---                 symbol                  character varying,
---                 order_type_name         character varying,
---                 client_id               character varying,
---                 open_close              character,
---                 multileg_reporting_type character,
---                 sub_strategy            character varying
+
+                "Cl Ord ID"     character varying,
+                "Creation Date" text,
+                "Creation Time" text,
+                "Account"       character varying,
+                "Side"          text,
+                "Ord Qty"       integer,
+                "Ex Qty"        integer,
+                "Symbol"        character varying,
+                "Price"         numeric,
+                "Avg Px"        numeric
             )
     LANGUAGE plpgsql
     COST 1
@@ -201,42 +175,34 @@ begin
 
     return query
         select f_par.client_order_id,
-               f_par.status_date_id,
-               f_par.routed_time,
-               acc.account_name,
---                f_par.instrument_type_id    sec_type,
-               f_par.side,
-               f_par.order_qty,
-               f_par.day_cum_qty,
-               i.display_instrument_id,
---                i.last_trade_date,
-               f_par.order_price,
---                f_par.order_end_time,
-               f_par.day_avg_px as avg_px
-        --                co.ex_destination,
---                tif.tif_short_name          tif,
---                i.symbol,
---                ot.order_type_name,
---                f_par.client_id,
---                co.open_close,
---                f_par.multileg_reporting_type,
---                dss.target_strategy_name as sub_strategy
+               to_char(f_par.routed_time, 'DD-MM-YYYY')                                                 as "Creation Date",
+               to_char(f_par.routed_time, 'HH24:MI:SS.MS')                                              as "Creation Time",
+               acc.account_demo_mnemonic                                                                as "Account",
+               case when f_par.side = '1' then 'Buy' when f_par.side in ('2', '5', '6') then 'Sell' end as "Side",
+               f_par.order_qty                                                                          as "Ord Qty",
+               f_par.day_cum_qty                                                                        as "Ex Qty",
+               i.display_instrument_id                                                                  as "Symbol",
+               f_par.order_price                                                                        as "Price",
+               f_par.day_avg_px                                                                         as "Avg Px"
         from data_marts.f_yield_capture f_par
                  inner join dwh.d_account acc on acc.is_active and acc.account_id = f_par.account_id
                  inner join dwh.d_instrument i on i.instrument_id = f_par.instrument_id
+                 join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
+                                                                  sdrc.strategy_decision_reason_code =
+                                                                  f_par.strategy_decision_reason_code
                  left join dwh.d_target_strategy dss on f_par.sub_strategy_id = dss.target_strategy_id
                  left join dwh.client_order co on co.order_id = f_par.order_id
-        --                  left join dwh.d_time_in_force tif on tif.is_active and tif_id = f_par.time_in_force_id
---                  left join dwh.d_order_type ot on ot.order_type_id = f_par.order_type_id
         where f_par.parent_order_id is null
           and f_par.multileg_reporting_type in ('1', '2')
           and f_par.status_date_id between in_start_status_date_id and in_end_status_date_id
           and case when in_trading_firm_ids <> '{}' then acc.trading_firm_id = any (in_trading_firm_ids) else true end
           and case when in_account_ids <> '{}' then acc.account_id = any (in_account_ids) else true end
-          and case when in_sub_strategies <> '{}' then dss.target_strategy_name = any (in_sub_strategies) else true end
-          and case
-                  when in_instrument_type_id is not null then i.instrument_type_id = in_instrument_type_id
-                  else true end;
+          and dss.target_strategy_name = 'RETAILNML'
+          and f_par.exec_time::time between '09:30'::time and '16:00'::time
+          and i.instrument_type_id = 'E'
+          and sdrc.strategy_user_data in
+              ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
+          and f_par.order_price >= 1;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -249,4 +215,36 @@ $function$
 
 
 select * from dwh.d_strategy_decision_reason_code
-where strategy_user_data in ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
+where strategy_user_data in ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order');
+
+
+  select acc.account_id,
+         f_par.client_order_id,
+               to_char(f_par.routed_time, 'DD-MM-YYYY')                                                 as "Creation Date",
+               to_char(f_par.routed_time, 'HH24:MI:SS.MS')                                              as "Creation Time",
+               acc.account_demo_mnemonic                                                                as "Account",
+               case when f_par.side = '1' then 'Buy' when f_par.side in ('2', '5', '6') then 'Sell' end as "Side",
+               f_par.order_qty                                                                          as "Ord Qty",
+               f_par.day_cum_qty                                                                        as "Ex Qty",
+               i.display_instrument_id                                                                  as "Symbol",
+               f_par.order_price                                                                        as "Price",
+               f_par.day_avg_px                                                                         as "Avg Px"
+        from data_marts.f_yield_capture f_par
+                 inner join dwh.d_account acc on acc.is_active and acc.account_id = f_par.account_id
+                 inner join dwh.d_instrument i on i.instrument_id = f_par.instrument_id
+                 join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
+                                                                  sdrc.strategy_decision_reason_code =
+                                                                  f_par.strategy_decision_reason_code
+                 left join dwh.d_target_strategy dss on f_par.sub_strategy_id = dss.target_strategy_id
+                 left join dwh.client_order co on co.order_id = f_par.order_id
+        where f_par.parent_order_id is null
+          and f_par.multileg_reporting_type in ('1', '2')
+          and f_par.status_date_id between :in_start_status_date_id and :in_end_status_date_id
+--           and case when in_trading_firm_ids <> '{}' then acc.trading_firm_id = any (in_trading_firm_ids) else true end
+--           and case when in_account_ids <> '{}' then acc.account_id = any (in_account_ids) else true end
+          and dss.target_strategy_name = 'RETAILNML'
+          and f_par.exec_time::time between '09:30'::time and '16:00'::time
+          and i.instrument_type_id = 'E'
+          and sdrc.strategy_user_data in
+              ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
+          and f_par.order_price >= 1;

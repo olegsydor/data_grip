@@ -481,3 +481,39 @@ begin
 end ;
 $function$
 ;
+
+
+-----------------------------
+
+select case
+           when cl.parent_order_id is null then 'DFIN'
+           when cl.parent_order_id is not null and not :in_actual_exchange then 'DFIN'
+           when cl.multileg_reporting_type = '3' then 'DFIN'
+           else coalesce(exc.mic_code, exc.eq_mpid)
+           end
+        ,
+       cl.order_id
+from dwh.client_order cl
+         inner join dwh.d_account ac on ac.account_id = cl.account_id
+         inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
+         left join lateral (select po.sub_strategy_desc
+                            from dwh.client_order po
+                            where po.order_id = cl.parent_order_id
+                              and po.create_date_id <= cl.create_date_id
+                            limit 1) po on true
+         left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id and oc.is_active
+         left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
+         left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
+         left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
+         left join lateral (select *
+                            from dwh.d_exchange exc
+                            where exc.exchange_id = cl.exchange_id
+                              and exc.is_active
+                            limit 1) exc on true
+where true
+  and cl.create_date_id between :in_start_date_id and :in_end_date_id
+  and cl.trans_type <> 'F'
+  and parent_order_id is not null
+  and cl.multileg_reporting_type <> '3'
+  and coalesce(exc.mic_code, exc.eq_mpid) is null
+and cl.exchange_id <> 'BLAZE'
