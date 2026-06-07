@@ -1,5 +1,19 @@
 -- DROP FUNCTION dash360.report_rps_s3(int4, int4, _int4, bpchar, _varchar, bool, bool);
 
+select *
+from dash360.report_rps_s3_SG(in_start_date_id := 20260127, in_end_date_id := 20260127, in_is_multi_leg := 'Y',
+                              in_trading_firm_ids := '{socgen01,LPTF286,socgenpsc}');
+
+select *
+from dash360.report_rps_s3_SG(in_start_date_id := 20260127, in_end_date_id := 20260127, in_is_multi_leg := 'N',
+                              in_trading_firm_ids := '{socgen01,LPTF286,socgenpsc}');
+
+
+select * from dwh.d_trading_firm
+    where trading_firm_name in ('Societe Generale Financial PSC')
+
+
+
 CREATE OR REPLACE FUNCTION dash360.report_rps_s3_SG(in_start_date_id integer, in_end_date_id integer,
                                                     in_account_ids integer[] DEFAULT '{}'::integer[],
                                                     in_is_multi_leg character DEFAULT 'N'::bpchar,
@@ -228,9 +242,9 @@ begin
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and cl.trans_type <> 'F'
 --       and case when l_is_multileg then cl.parent_order_id is null else true end
---       and case
---               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
---               else cl.multileg_reporting_type = '1' end
+      and case
+              when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+              else cl.multileg_reporting_type = '1' end
       and case when in_exclude_blaze then coalesce(cl.ex_destination, '') not ilike 'blaze' else true end
       and case when in_exclude_blaze then coalesce(cl.exchange_id, '') not ilike 'blaze' else true end;
     get diagnostics l_row_cnt = row_count;
@@ -351,10 +365,10 @@ begin
       and ex.exec_type in ('4', '8', 'F')
 --                     and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
---       and case
---               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
---               else cl.multileg_reporting_type = '1' end
---     ;
+      and case
+              when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+              else cl.multileg_reporting_type = '1' end
+    ;
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' t_base created', 0, 'O')
     into l_step_id;
@@ -433,9 +447,9 @@ begin
                                ], '|', '')
     from t_base
     where tp = 3
---       and case
---               when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
---               else multileg_reporting_type = '1' end
+      and case
+              when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
+              else multileg_reporting_type = '1' end
     ;
 
     get diagnostics l_row_cnt = row_count;
