@@ -1,6 +1,6 @@
 select * from dash360.report_fintech_eod_sqpt_orders(20260605, 20260605)
 -- https://dashfinancial.atlassian.net/browse/DEVREQ-8392
-CREATE FUNCTION dash360.report_fintech_eod_sqpt_orders(in_start_date_id integer, in_end_date_id integer)
+CREATE or replace FUNCTION dash360.report_fintech_eod_sqpt_orders(in_start_date_id integer, in_end_date_id integer)
     RETURNS TABLE
             (
                 "date"              text,
@@ -57,7 +57,7 @@ begin
                    'yyyy-mm-dd"D"hh24:mi:ss.us')                                              as "EndTime", -- ??
            coalesce(par.client_order_id, cl.client_order_id)                                  as "ParentOrderID",
            cl.parent_order_id                                                                 as "BrokerRootOrderID",
-           cl.parent_order_id                                                                 as "BrokerAlgoOrderID",
+           cl.order_id                                                                        as "BrokerAlgoOrderID",
            i.instrument_type_id                                                               as "SecurityType",
            target_strategy_name                                                               as "Algo",
            oc.opra_symbol                                                                     as "Symbol",
@@ -122,4 +122,16 @@ begin
 
 end;
 
-$function$
+$function$;
+
+
+select ex.*, cl.* from dwh.client_order cl
+                      left join lateral (select ee.exec_time
+                            from dwh.execution ee
+                            where ee.order_id = cl.order_id
+                              and ee.exec_date_id  = cl.create_date_id
+                              and ((exec_type = 'F' and ee.leaves_qty = 0)
+                                or exec_type in ('3', '4', '5', '8', 'C'))
+                            order by ee.exec_id
+        ) ex on true
+where cl.order_id = 464483241166558841
