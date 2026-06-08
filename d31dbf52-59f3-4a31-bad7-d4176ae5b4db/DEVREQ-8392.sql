@@ -99,16 +99,17 @@ begin
                                 where exc.exchange_id = cl.exchange_id
                                   and exc.is_active
                                 limit 1) exc on true
-             left join lateral (select sum(last_qty) over p          as sum_last_qty,
-                                       first_value(exec_type) over p as exec_type,
-                                       first_value(exec_time) over p as exec_time,
-                                       first_value(avg_px) over p    as avg_px
-                                from dwh.execution ex
-                                where ex.order_id = cl.order_id
-                                  and exec_date_id >= cl.create_date_id
-                                  and ex.exec_type not in ('a', 'A', 'S', '0')
-                                window p as (partition by order_id order by exec_time desc)
-                                limit 1) ex on true
+left join lateral (select sum(last_qty) over () as sum_last_qty,
+                                   last_value(exec_type) over p                                           as exec_type,
+                                   last_value(exec_time) over p                                           as exec_time,
+                                   last_value(avg_px) over p                                              as avg_px,
+                                   last_value(leaves_qty) over p                                          as leaves_qty
+                            from dwh.execution ex
+                            where ex.order_id = cl.order_id
+                              and exec_date_id >= cl.create_date_id
+                            window p as (partition by ex.order_id order by exec_time desc)
+    limit 1
+    ) ex on true
     where true
           and cl.account_id = any (l_account_ids)
       and cl.create_date_id between in_start_date_id and in_end_date_id
@@ -125,13 +126,44 @@ end;
 $function$;
 
 
-select ex.*, cl.* from dwh.client_order cl
-                      left join lateral (select ee.exec_time
-                            from dwh.execution ee
-                            where ee.order_id = cl.order_id
-                              and ee.exec_date_id  = cl.create_date_id
-                              and ((exec_type = 'F' and ee.leaves_qty = 0)
-                                or exec_type in ('3', '4', '5', '8', 'C'))
-                            order by ee.exec_id
-        ) ex on true
-where cl.order_id = 464483241166558841
+select cl.order_cancel_time, ex.*, cl.*
+from dwh.client_order cl
+         left join lateral (select sum(last_qty) over () as sum_last_qty,
+                                   last_value(exec_type) over p                                           as exec_type,
+                                   last_value(exec_time) over p                                           as exec_time,
+                                   last_value(avg_px) over p                                              as avg_px,
+                                   last_value(leaves_qty) over p                                          as leaves_qty
+                            from dwh.execution ex
+                            where ex.order_id = cl.order_id
+                              and exec_date_id >= cl.create_date_id
+                            window p as (partition by ex.order_id order by exec_time desc)
+             limit 1
+    ) ex on true
+--                       left join lateral (select ee.exec_time
+--                             from dwh.execution ee
+--                             where ee.order_id = cl.order_id
+--                               and ee.exec_date_id  = cl.create_date_id
+--                               and ((exec_type = 'F' and ee.leaves_qty = 0)
+--                                 or exec_type in ('3', '4', '5', '8', 'C'))
+--                             order by ee.exec_id
+--         ) ex on true
+--                   join lateral (select ex.exec_id as exec_id,
+--                                       ex.avg_px,
+--                                       ex.leaves_qty,
+--                                       ex.order_status,
+--                                       ex.exec_type,
+--                                       case when exec_type in ('3', '4', '5', '8', 'C') then ex.exec_time end as cancel_time
+--                                from dwh.execution ex
+--                                where cl.order_id = ex.order_id
+--                                  and ex.order_status <> '3'
+--                                  and ex.exec_date_id >= cl.create_date_id
+--                                and ((ex.exec_type = 'F' and ex.leaves_qty = 0)
+--                                  or ex.exec_type in ('3', '4', '5', '8', 'C'))
+--                                order by ex.exec_time desc
+--                                limit 1) ex on true
+where cl.order_id = 464483241166558841;
+
+select * from dwh.execution
+where order_id = 464483241166558841;
+
+select * from dwh.d_exec_type

@@ -231,19 +231,41 @@ where strategy_user_data in ('Maker/Taker order', 'Conditional Primary Peg order
         from data_marts.f_yield_capture f_par
                  inner join dwh.d_account acc on acc.is_active and acc.account_id = f_par.account_id
                  inner join dwh.d_instrument i on i.instrument_id = f_par.instrument_id
-                 join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
+                 left join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
                                                                   sdrc.strategy_decision_reason_code =
                                                                   f_par.strategy_decision_reason_code
                  left join dwh.d_target_strategy dss on f_par.sub_strategy_id = dss.target_strategy_id
                  left join dwh.client_order co on co.order_id = f_par.order_id
-        where f_par.parent_order_id is null
-          and f_par.multileg_reporting_type in ('1', '2')
+        where true
+            and f_par.parent_order_id is null
+--           and f_par.multileg_reporting_type in ('1', '2')
           and f_par.status_date_id between :in_start_status_date_id and :in_end_status_date_id
 --           and case when in_trading_firm_ids <> '{}' then acc.trading_firm_id = any (in_trading_firm_ids) else true end
 --           and case when in_account_ids <> '{}' then acc.account_id = any (in_account_ids) else true end
           and dss.target_strategy_name = 'RETAILNML'
           and f_par.exec_time::time between '09:30'::time and '16:00'::time
           and i.instrument_type_id = 'E'
-          and sdrc.strategy_user_data in
-              ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
+--           and sdrc.strategy_user_data in
+--               ('Maker/Taker order', 'Conditional Primary Peg order', 'Dark IOC Primary Peg order')
           and f_par.order_price >= 1;
+
+select *
+ from  data_marts.f_yield_capture  f_par
+        inner  join  dwh.d_account  acc  on  acc.is_active  and  acc.account_id=f_par.account_id
+        inner  join  dwh.d_instrument  i  on  i.instrument_id=f_par.instrument_id
+        left  join  dwh.d_target_strategy  dss  on  f_par.sub_strategy_id  =  dss.target_strategy_id
+        left  join  dwh.client_order  co  on  co.order_id  =  f_par.order_id
+        left  join  dwh.d_time_in_force  tif  on  tif.is_active  and  tif_id=f_par.time_in_force_id
+        left  join  dwh.d_order_type  ot  on  ot.order_type_id=f_par.order_type_id
+ left join dwh.d_strategy_decision_reason_code sdrc on sdrc.is_active and
+                                                                  sdrc.strategy_decision_reason_code =
+                                                                  f_par.strategy_decision_reason_code
+        where  f_par.parent_order_id  is  null
+                    and  f_par.multileg_reporting_type  in  ('1',  '2')
+                    and  f_par.status_date_id  between :in_start_status_date_id and :in_end_status_date_id
+
+
+
+select *
+from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{63109}',
+                                              in_start_status_date_id := 20260605, in_end_status_date_id := 20260605);
