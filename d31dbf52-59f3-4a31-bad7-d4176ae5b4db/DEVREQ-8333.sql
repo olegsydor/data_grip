@@ -1,3 +1,5 @@
+-- https://dashfinancial.atlassian.net/browse/DEVREQ-8333
+
 select *
 from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{63109}',
                                               in_start_status_date_id := 20260605, in_end_status_date_id := 20260605);
