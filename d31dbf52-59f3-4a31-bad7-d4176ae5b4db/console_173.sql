@@ -1,5 +1,3 @@
-
--- DROP FUNCTION data_marts.dash360_reports_sor_strategy_data(_varchar, _int8, varchar, int4, int4, _varchar, _varchar);
 select *
 from dash360.report_perf_xtx_sor_child_orders(in_account_ids := '{63109}',
                                               in_start_status_date_id := 20260605, in_end_status_date_id := 20260605);
@@ -131,7 +129,6 @@ $function$
 ;
 
 
--- DROP FUNCTION data_marts.dash360_reports_sor_parent_orders(_varchar, _int8, varchar, int4, int4, _varchar);
 select *
 from dash360.report_perf_xtx_sor_parent_orders(in_account_ids := '{63109}',
                                               in_start_status_date_id := 20260604, in_end_status_date_id := 20260604);
