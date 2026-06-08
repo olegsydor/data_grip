@@ -1,4 +1,5 @@
-select * from dash360.report_fintech_eod_sqpt_orders(20260605, 20260605)
+select *
+from dash360.report_fintech_eod_sqpt_orders(20260605, 20260605);
 -- https://dashfinancial.atlassian.net/browse/DEVREQ-8392
 CREATE or replace FUNCTION dash360.report_fintech_eod_sqpt_orders(in_start_date_id integer, in_end_date_id integer)
     RETURNS TABLE
@@ -53,8 +54,9 @@ begin
     return query
     select to_char(cl.create_time, 'dd-mm-yy')                                                as date,
            to_char(cl.create_time, 'yyyy-mm-dd"D"hh24:mi:ss.us')                              as "NewAckTime",
-           to_char(case when ex.exec_type = '4' then cl.order_cancel_time else ex.exec_time end,
-                   'yyyy-mm-dd"D"hh24:mi:ss.us')                                              as "EndTime", -- ??
+--            to_char(case when ex.exec_type = '4' then cl.order_cancel_time else ex.exec_time end,
+--                    'yyyy-mm-dd"D"hh24:mi:ss.us')                                              as "EndTime", -- ??
+           to_char(ex.exec_time, 'yyyy-mm-dd"D"hh24:mi:ss.us')                                as "EndTime", -- ??
            coalesce(par.client_order_id, cl.client_order_id)                                  as "ParentOrderID",
            cl.parent_order_id                                                                 as "BrokerRootOrderID",
            cl.order_id                                                                        as "BrokerAlgoOrderID",
@@ -163,7 +165,8 @@ from dwh.client_order cl
 --                                limit 1) ex on true
 where cl.order_id = 464483241166558841;
 
-select * from dwh.execution
-where order_id = 464483241166558841;
+select ex.* from dwh.client_order cl
+    join dwh.execution ex on ex.order_id = cl.order_id
+where cl.parent_order_id = 464483241166558841;
 
 select * from dwh.d_exec_type
