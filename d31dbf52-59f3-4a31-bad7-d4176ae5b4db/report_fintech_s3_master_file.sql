@@ -1,21 +1,22 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
 select ret_row
-from dash360.report_fintech_s3_master_file(in_start_date_id := 20260401, in_end_date_id := 20260401,
-                                           in_strategies := '{"SENSOR"}')
+from dash360.report_fintech_s3_master_file(in_start_date_id := 20260601, in_end_date_id := 20260601, in_account_ids := '{14861}', in_instrument_type := null,
+                                           in_strategies := '{"SENSOR"}');
 
 
-CREATE or replace FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
-                                                                in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                in_instrument_type character DEFAULT NULL::bpchar,
-                                                                in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                                in_strategies character varying[] DEFAULT NULL::character varying(128)[])
+-- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
+
+CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
+                                                                 in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                                 in_instrument_type character DEFAULT 'E'::bpchar,
+                                                                 in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
+                                                                 in_strategies character varying[] DEFAULT NULL::character varying(128)[])
     RETURNS TABLE
             (
                 ret_row text
             )
     LANGUAGE plpgsql
-AS
-$function$
+AS $function$
     -- 2024-04-23 SO: https://dashfinancial.atlassian.net/browse/DS-8251 added in_trading_firm_ids as an input parameter
     -- SO 20240523 https://dashfinancial.atlassian.net/browse/DEVREQ-4264 add coalesce to account\trading firm input parameters
     -- SO 20250219 https://dashfinancial.atlassian.net/browse/DS-9608 Performance improvement
@@ -115,6 +116,8 @@ begin
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and cl.trans_type <> 'F'
       and cl.parent_order_id is not null;
+      --and cl.price < 1000000;
+
     get diagnostics l_row_cnt = row_count;
 
     select public.load_log(l_load_id, l_step_id, l_msg || ' Street orders with correct sub_strategy calculated',
@@ -172,7 +175,8 @@ begin
                    else tf.cat_imid
                    end, -- ORIG_FIRM
                */
-                               tf.trading_firm_demo_mnemonic, -- ORIG_FIRM
+                               --tf.trading_firm_demo_mnemonic, -- ORIG_FIRM
+                               ac.account_demo_mnemonic, -- ORIG_FIRM
                                case
                                    when cl.multileg_reporting_type = '3' then ac.eq_mpid
                                    when cl.parent_order_id is null then ac.eq_mpid
@@ -182,7 +186,8 @@ begin
                                fmj.tag_109, -- FIRM_TRADER_ID
                --ac.account_name, -- ORDER_ACCOUNT_ID
 --                               ac.account_algo_alias, --ORDER_ACCOUNT_ID
-                               ac.account_demo_mnemonic, --ORDER_ACCOUNT_ID
+                               --ac.account_demo_mnemonic, --ORDER_ACCOUNT_ID
+                               tf.trading_firm_demo_mnemonic, --ORDER_ACCOUNT_ID
                                case
                                    when cl.multileg_reporting_type != '3' then di.instrument_type_id
                                    end, -- SECURITY_TYPE
@@ -203,8 +208,8 @@ begin
                                    when ot.order_type_short_name in ('MOC', 'MOO', 'MKT') then 'MKT'
                                    else ot.order_type_short_name end, -- ORDER_TYPE
                                case when cl.multileg_reporting_type != '3' then cl.order_qty::text end, -- ORDER_VOLUME
-                               to_char(cl.price, 'FM99990D0099'), -- LIMIT_PRICE
-                               to_char(cl.stop_price, 'FM99990D0099'), -- STOP_PRICE
+                               to_char(cl.price, 'FM99999990D0099'), -- LIMIT_PRICE
+                               to_char(cl.stop_price, 'FM99999990D0099'), -- STOP_PRICE
                                tif.tif_short_name, -- TIME_IN_FORCE
                                case
                                    when cl.time_in_force_id = '6' then concat_ws('T',
@@ -235,13 +240,13 @@ begin
                                    when cl.is_held = 'Y' then '1'
                                    else '0' end, --	NOT_HELD_IND
                                case
-                                   when ot.order_type_id = 'O' then '1'
+                                   when ot.order_type_id in ('O', 'L') then '1'
                                    when tif.tif_id = '2' then '1'
-                                   else '0' end, --	FILL_AT_OPEN_IND: If Order_Type = Market on_Open or if TimeInForce = On Open set to 1 otherwise set to 0
+                                   else '0' end, --	FILL_AT_OPEN_IND: If Order_Type = Market/Limit on_Open or if TimeInForce = On Open set to 1 otherwise set to 0
                                case
-                                   when ot.order_type_id = '5' then '1'
+                                   when ot.order_type_id in ('5', 'B') then '1'
                                    when tif.tif_id = '7' then '1'
-                                   else '0' end, --	FILL_AT_CLOSE_IND:  If Order_Type = Market on_Close or if TimeInForce = On Close set to 1 otherwise set to 0
+                                   else '0' end, --	FILL_AT_CLOSE_IND:  If Order_Type = Market/Limit on_Close or if TimeInForce = On Close set to 1 otherwise set to 0
                                '0', --	MANUAL_IND
                                null, --	OPTION_STRIKE_PRICE
                                null, --	OPTIONS_UNDER_SYMBOL
@@ -309,20 +314,20 @@ begin
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-             left join lateral (select po.sub_strategy_desc
-                                from dwh.client_order po
-                                where po.order_id = cl.parent_order_id
-                                  and po.create_date_id <= cl.create_date_id
-                                limit 1) po on true
+--             left join lateral (select po.sub_strategy_desc
+--                                from dwh.client_order po
+--                                where po.order_id = cl.parent_order_id
+--                                  and po.create_date_id <= cl.create_date_id
+--                                limit 1) po on true
              left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
              left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
              left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
              left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-             left join lateral (select exc.mic_code, exc.eq_mpid
-                                from dwh.d_exchange exc
-                                where exc.exchange_id = cl.exchange_id
-                                  and exc.is_active
-                                limit 1) exc on true
+--             left join lateral (select exc.mic_code, exc.eq_mpid
+--                                from dwh.d_exchange exc
+--                                where exc.exchange_id = cl.exchange_id
+--                                  and exc.is_active
+--                                limit 1) exc on true
              left join lateral (select fmj.fix_message ->> '109'  as tag_109,
                                        fmj.fix_message ->> '111'  as tag_111,
                                        fmj.fix_message ->> '9000' as tag_9000,
@@ -554,7 +559,7 @@ begin
                                    when 'O' then opra_symbol end, --SYMBOL_EXCHANGE
                                concat_ws('T', to_char(exec_time, 'YYYYMMDD'), to_char(exec_time, 'HH24MISSFF3')),--ACTION_DATETIME
                                last_qty::text, --ACTION_VOLUME
-                               to_char(last_px, 'fm99990d0099'), --ACTION_PRICE
+                               to_char(last_px, 'FM99999990D0099'), --ACTION_PRICE
 --                               exchange_id, --ACTION_FIRM
                                contra_broker, --ACTION_FIRM
                                null, --ACTION_PART_NUMBER
@@ -671,57 +676,21 @@ begin
 end ;
 $function$
 ;
-
-
-create temp table tmp_repo_ltl as
-select *
-from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260512,
-        in_end_date_id := 20260512,
-        in_instrument_type := 'E',
-        in_account_ids := '{63109,63384}',
-        in_strategies := '{"SENSOR"}'
-     );
-
-insert into tmp_repo
-select *, 'old' as tp, 20260212 as date_id
-from trash.report_fintech_s3_master_file_(
-        in_start_date_id := 20260212,
-        in_end_date_id := 20260212,
-        in_instrument_type := 'E',
-        in_trading_firm_ids := '{ctctrad01}',
-        in_strategies := '{"SENSORDARK"}'
-     );
-
-
-create temp table t_os as
-select *, 'old' as tp, 20260121 as date_id
-from dash360.report_fintech_s3_master_file(
-        in_start_date_id := 20260520,
-        in_end_date_id := 20260520,
-        in_instrument_type := 'E',
-        in_trading_firm_ids := '{ctctrad01}',
-        in_strategies := '{"SENSORDARK"}'
-     );
-
-insert into tmp_repo
-select *, 'old' as tp, 20260511 as date_id
-from trash.report_fintech_s3_master_file_(
-        in_start_date_id := 20260511,
-        in_end_date_id := 20260511,
-        in_instrument_type := 'E',
-        in_trading_firm_ids := '{ctctrad01}',
-        in_strategies := '{"SENSORDARK"}'
-     );
-
-
-select ret_row
-from tmp_report
-where tp = 'new'
-except
-select ret_row
-from tmp_report
-where tp = 'exc'
-
-select * from dwh.d_account
-    where account_name in ('FUTCRET', 'MIRARET')
+--------------------------------------------------------------
+drop table if exists t_parent_orders_sub_str;
+    create temp table t_parent_orders_sub_str as
+    select order_id, cl.multileg_reporting_type, di.*, cl.*
+    from dwh.client_order cl
+             inner join dwh.d_account ac on ac.account_id = cl.account_id
+             join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+             inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+    where true
+--       and cl.create_date_id between in_start_date_id and in_end_date_id
+--       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
+--       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
+--       and case
+--               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
+--               else cl.sub_strategy_id = any (l_sub_strategy_ids) end
+      and cl.trans_type <> 'F'
+      and cl.parent_order_id is null
+    and cl.client_order_id = 'CG11C5EPMFE';
