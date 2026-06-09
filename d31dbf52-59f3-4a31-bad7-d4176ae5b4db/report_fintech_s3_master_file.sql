@@ -1,6 +1,6 @@
 -- DROP FUNCTION dash360.report_fintech_s3_master_file(int4, int4, _int8, bpchar, _varchar, _varchar);
 select ret_row
-from dash360.report_fintech_s3_master_file(in_start_date_id := 20260601, in_end_date_id := 20260601, in_account_ids := '{14861}', in_instrument_type := null,
+from dash360.report_fintech_s3_master_file(in_start_date_id := 20260601, in_end_date_id := 20260601, in_account_ids := '{68847}', in_instrument_type := 'E',
                                            in_strategies := '{"SENSOR"}');
 
 
@@ -8,7 +8,7 @@ from dash360.report_fintech_s3_master_file(in_start_date_id := 20260601, in_end_
 
 CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                  in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                                 in_instrument_type character DEFAULT 'E'::bpchar,
+                                                                 in_instrument_type character DEFAULT null::bpchar,
                                                                  in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
                                                                  in_strategies character varying[] DEFAULT NULL::character varying(128)[])
     RETURNS TABLE
@@ -56,7 +56,7 @@ begin
     l_step_id := 1;
 
     select public.load_log(l_load_id, l_step_id,
-                           'report_fintech_s3_master_file for ' || in_start_date_id::text || '-' ||
+                           l_msg ||' for ' || in_start_date_id::text || '-' ||
                            in_end_date_id::text ||
                            case in_instrument_type
                                when 'E' then '. Equities'
@@ -90,7 +90,8 @@ begin
               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
               else cl.sub_strategy_id = any (l_sub_strategy_ids) end
       and cl.trans_type <> 'F'
-      and cl.parent_order_id is null;
+      and cl.parent_order_id is null
+    and cl.multileg_reporting_type = '1';
 
     get diagnostics l_row_cnt = row_count;
 
@@ -115,6 +116,7 @@ begin
       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
       and cl.trans_type <> 'F'
+      and cl.multileg_reporting_type = '1'
       and cl.parent_order_id is not null;
       --and cl.price < 1000000;
 
@@ -685,12 +687,18 @@ drop table if exists t_parent_orders_sub_str;
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              inner join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
     where true
---       and cl.create_date_id between in_start_date_id and in_end_date_id
---       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
---       and case when in_instrument_type is null then true else di.instrument_type_id = in_instrument_type end
---       and case
---               when coalesce(l_sub_strategy_ids, '{}') = '{}' then true
---               else cl.sub_strategy_id = any (l_sub_strategy_ids) end
+       and cl.create_date_id between 20260601 and 20260601
+--        and cl.account_id in (68847, 63384)
+--       and di.instrument_type_id = 'E'
+      and cl.sub_strategy_id = 0
       and cl.trans_type <> 'F'
       and cl.parent_order_id is null
     and cl.client_order_id = 'CG11C5EPMFE';
+--     and cl.multileg_reporting_type = '1'
+
+
+                select array_agg(target_strategy_id)
+        from dwh.d_target_strategy
+        where target_strategy_name = 'SENSOR'
+
+     20260601, in_end_date_id := 20260601, in_account_ids := '{14861}'
