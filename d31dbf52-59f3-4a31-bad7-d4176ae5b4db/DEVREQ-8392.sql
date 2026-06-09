@@ -170,3 +170,6 @@ select ex.* from dwh.client_order cl
 where cl.parent_order_id = 464483241166558841;
 
 select * from dwh.d_exec_type
+
+
+grant select on all tables in schema dwh, data_marts to oharam
