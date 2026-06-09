@@ -387,10 +387,42 @@ from trash.allocations_snapshot(in_date_id := 20260608, in_account_ids := '{2637
 
 
 CREATE FUNCTION trash.allocations_instruction_trades(in_alloc_instr_id integer)
- RETURNS TABLE(date_id integer, trade_record_id bigint, account_id integer, instrument_id bigint, side character, open_close character, avg_px numeric, exec_qty integer, display_instrument_id character varying, last_trade_date date, instrument_type_id character, cmta character varying, exec_broker character varying, principal_amount numeric, client_commission_rate numeric, blaze_account_alias character varying, street_exec_time timestamp without time zone, expiration_date timestamp without time zone, opt_customer_firm character, reported_status character, reported_time timestamp without time zone, claimed_by integer, claim_status character, is_prev_reported boolean, client_commission_amount numeric, client_order_id character varying, client_order_status character)
- LANGUAGE plpgsql
- COST 1
-AS $function$
+    RETURNS TABLE
+            (
+                date_id                  integer,
+                trade_record_id          bigint,
+                account_id               integer,
+                instrument_id            bigint,
+                side                     character,
+                open_close               character,
+                avg_px                   numeric,
+                exec_qty                 integer,
+                display_instrument_id    character varying,
+                last_trade_date          date,
+                instrument_type_id       character,
+                cmta                     character varying,
+                exec_broker              character varying,
+                principal_amount         numeric,
+                client_commission_rate   numeric,
+                blaze_account_alias      character varying,
+                street_exec_time         timestamp without time zone,
+                expiration_date          timestamp without time zone,
+                opt_customer_firm        character,
+                reported_status          character,
+                reported_time            timestamp without time zone,
+                claimed_by               integer,
+                claim_status             character,
+                is_prev_reported         boolean,
+                client_commission_amount numeric,
+                client_order_id          character varying,
+                client_order_status      character,
+                broker_commission_rate   numeric,
+                broker_commission_amount numeric
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
     --l_date_id := in_date_id;
     --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
     -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
@@ -399,6 +431,7 @@ AS $function$
     -- OS 20260309 https://dashfinancial.atlassian.net/browse/DS-11204 Support client_order_id in Allocation Procedures
     -- OS 20260317 https://dashfinancial.atlassian.net/browse/DS-11268 Support client_order_status for Allocation Instructions - allocation_snapshot, allocation_instruction_trades, allocation_insttuction_delete
     -- SO 20260414 https://dashfinancial.atlassian.net/browse/DS-11390 Return client_order_status for Trade Records from OMS (OMS_EDW) as filled (2)
+    -- SO 20260609 https://dashfinancial.atlassian.net/browse/DS-11642 Add broker commissions rate and amount
 declare
     l_date_id integer;
 begin
@@ -426,7 +459,7 @@ begin
                    when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
                    else tr.last_qty * tr.last_px
                    end                                                                          as principal_amount,
-               CCRU.rate                                                                        as client_commission_rate,
+               CCRU.ccru_rate                                                                   as client_commission_rate,
                tr.blaze_account_alias,
                coalesce(tr.street_trade_record_time, tr.trade_record_time)                      as street_exec_time,
                ----------------
@@ -453,7 +486,7 @@ begin
                null::int4                                                                       as claimed_by,
                null::character                                                                  as claim_status,
                case when tr.is_billed = 'R' then true else false end                            as is_prev_reported,
-               CCRU.amount                                                                      as client_commission_amount,
+               CCRU.ccru_amount                                                                 as client_commission_amount,
                tr.client_order_id,
                case
                    when tr.subsystem_id is distinct from 'OMS_EDW' then
@@ -462,7 +495,9 @@ begin
                         where fpo.status_date_id = l_date_id
                           and fpo.parent_order_id = tr.order_id
                         limit 1)
-                   else '2' end::character                                                      as client_order_status
+                   else '2' end::character                                                      as client_order_status,
+               CCRU.brok_rate                                                                   as broker_commission_rate,
+               CCRU.brok_amount                                                                 as broker_commission_amount
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
@@ -480,22 +515,97 @@ begin
 
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
-                 left join lateral (select L1.rate, l1.amount
-                                    from (SELECT row_number()
-                                                 over (partition by tl.trade_record_id , tl.book_record_type_id , tl.billing_entity order by cr.priority ) as rn,
+            --                  left join lateral (select L1.rate, l1.amount
+--                                     from (SELECT row_number()
+--                                                  over (partition by tl.trade_record_id , tl.book_record_type_id , tl.billing_entity order by cr.priority ) as rn,
+--                                                  tl.rate,
+--                                                  tl.amount
+--                                           FROM genesis2.trade_level_book_record tl
+--                                                    inner join genesis2.book_record_creator cr
+--                                                               on tl.book_record_creator_id = cr.book_record_creator_id
+--                                           WHERE tl.date_id = l_date_id
+--                                             AND tl.book_record_type_id = 'CCRU'
+--                                             and tl.trade_record_id = tr.trade_record_id) L1
+--                                     where rn = 1) CCRU_ on true
+
+                 left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                           max(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                           max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                           max(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                                    from (SELECT tl.trade_record_id,
+                                                 book_record_type_id,
+                                                 row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
                                                  tl.rate,
                                                  tl.amount
                                           FROM genesis2.trade_level_book_record tl
                                                    inner join genesis2.book_record_creator cr
                                                               on tl.book_record_creator_id = cr.book_record_creator_id
                                           WHERE tl.date_id = l_date_id
-                                            AND tl.book_record_type_id = 'CCRU'
+                                            AND book_record_type_id in ('CCRU', 'BROK')
                                             and tl.trade_record_id = tr.trade_record_id) L1
-                                    where rn = 1) CCRU on true
+                                    where rn = 1) ccru on true
+
         where tr.is_busted = 'N'
           and tr.date_id = l_date_id
           and a.alloc_instr_id = in_alloc_instr_id;
 
+end;
+$function$
+;
+select * from trash.allocations_instruction_trades(-125858);
+
+
+CREATE FUNCTION dash360.trade_record_update_brok(in_user_id integer, in_date_id integer,
+                                                 in_trade_record_id bigint, in_rate numeric,
+                                                 in_amount numeric,
+                                                 in_load_batch_id integer DEFAULT NULL::integer,
+                                                 in_book_record_creator_id character varying DEFAULT 'MAN'::character varying)
+    RETURNS integer
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    -- SY DS-2914 On conflich has been implemented due to miration to native parititoning
+-- AK DS-10934 Add new parameter to procedure dash360.trade_record_update_ccru to add new param to se book_record_creator_id (SGDD or other)
+-- SO 20260609 https://dashfinancial.atlassian.net/browse/DS-11642 Add broker commissions rate and amount
+declare
+    l_date_id       int;
+    l_load_batch_id int;
+begin
+
+    l_date_id := in_date_id;
+    if in_load_batch_id is null
+    then
+        select nextval('load_batch_load_batch_id_seq'::regclass) into l_load_batch_id;
+    else
+        l_load_batch_id := in_load_batch_id;
+    end if;
+
+
+    insert into trade_level_book_record (trade_record_id, book_record_type_id, amount, book_record_creator_id, date_id,
+                                         rate, load_batch_id, user_id, create_time, billing_entity)
+    values (in_trade_record_id, 'BROK', in_amount, in_book_record_creator_id, l_date_id, in_rate, l_load_batch_id,
+            in_user_id, clock_timestamp(), '-1')
+    on conflict (trade_record_id, book_record_type_id, book_record_creator_id, billing_entity, date_id)
+        do update set amount        = EXCLUDED.amount,
+                      rate          = EXCLUDED.rate,
+                      load_batch_id = EXCLUDED.load_batch_id,
+                      user_id       = EXCLUDED.user_id,
+                      create_time   = EXCLUDED.create_time;
+
+    perform genesis2.etl_subscribe(in_load_batch_id => l_load_batch_id, in_row_cnt => 1,
+                                   in_subscription_name => 'big_data.flat_trade_record',
+                                   in_source_table_name => 'trade_level_book_record', in_date_id => l_date_id);
+
+    return l_load_batch_id;
+
+
+exception
+    when others then
+        RAISE notice '% %', sqlstate, sqlerrm;
+        raise;
+        return -2;
 end;
 $function$
 ;
