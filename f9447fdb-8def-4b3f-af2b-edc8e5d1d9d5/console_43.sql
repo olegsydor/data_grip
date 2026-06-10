@@ -1,4 +1,6 @@
-CREATE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+drop function dash360.allocations_snapshot;
+
+CREATE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                            in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                            in_reported_status character DEFAULT NULL::character(1),
                                            in_hide_non_customer_bphops boolean DEFAULT false,
@@ -382,11 +384,11 @@ $function$
 ;
 
 select *
-from trash.allocations_snapshot(in_date_id := 20260608, in_account_ids := '{263743, 11448}',
+from dash360.allocations_snapshot(in_date_id := 20260608, in_account_ids := '{263743, 11448}',
                                 in_hide_non_customer_bphops := 'False', in_client_order_states := '{2}');
 
-
-CREATE FUNCTION trash.allocations_instruction_trades(in_alloc_instr_id integer)
+drop function dash360.allocations_instruction_trades;
+CREATE FUNCTION dash360.allocations_instruction_trades(in_alloc_instr_id integer)
     RETURNS TABLE
             (
                 date_id                  integer,
@@ -553,7 +555,7 @@ begin
 end;
 $function$
 ;
-select * from trash.allocations_instruction_trades(-125858);
+select * from dash360.allocations_instruction_trades(-125858);
 
 
 CREATE FUNCTION dash360.trade_record_update_brok(in_user_id integer, in_date_id integer,
