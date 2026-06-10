@@ -1,7 +1,9 @@
  select *
 from dash360.report_rps_s3_sg2(in_start_date_id := 20260127, in_end_date_id := 20260127, in_account_ids := '{14765}',
-                            in_is_multi_leg := 'N', in_exclude_blaze := false);
+                            in_is_multi_leg := 'Y', in_exclude_blaze := false, in_actual_exchange:=true);
 
+select * from dwh.client_order
+where client_order_id = '00214105960ESNY1';
 
 CREATE or replace FUNCTION dash360.report_rps_s3_sg2(in_start_date_id integer, in_end_date_id integer,
                                                  in_account_ids integer[] DEFAULT '{}'::integer[],
@@ -83,7 +85,7 @@ begin
            1                                         as record_type_id,
            array_to_string(ARRAY ['O' , -- || '|' ||
                                case
-                                   when ((l_is_multileg and cl.multileg_reporting_type in ('2', '3')) or
+                                   when ((l_is_multileg and cl.multileg_reporting_type in ('3')) or
                                          (cl.parent_order_id is null)) then 'NO'
                                    else 'RO'
                                    end , -- || '|' ||
@@ -92,7 +94,6 @@ begin
                                case
                                    when l_is_multileg and cl.multileg_reporting_type = '2' then cl.client_order_id::text
                                    when not l_is_multileg then coalesce(cl.parent_order_id::text, '')
-                                   else ''
                                    end , -- || '|' || --source_parent_id
                                coalesce(cl.orig_order_id::text, '') , -- || '|' ||
                --
@@ -105,18 +106,18 @@ begin
                                            when cl.multileg_reporting_type = '2' then cl.multileg_order_id::text
                                            end
                                    end , -- || '|' || --
---            case
---                when not l_is_multileg then ac.broker_dealer_mpid
---                else
---                    case
---                        when cl.parent_order_id is null and ac.broker_dealer_mpid = 'NONE' then ''
---                        when cl.parent_order_id is null then ac.broker_dealer_mpid
---                        else 'DFIN'
---                        end
---                end , -- || '|' ||
+                               case
+                                   when not l_is_multileg then ac.broker_dealer_mpid
+                                   else
+                                       case
+                                           when cl.parent_order_id is null and ac.broker_dealer_mpid = 'NONE' then ''
+                                           when cl.parent_order_id is null then ac.broker_dealer_mpid
+                                           else 'DFIN'
+                                           end
+                                   end, --
 
                                case
-                                   when ((l_is_multileg and cl.multileg_reporting_type in ('2', '3')) or
+                                   when ((l_is_multileg and cl.multileg_reporting_type in ('3')) or
                                          (cl.parent_order_id is null)) then 'DFIN'
                                    else case
                                             when in_actual_exchange then coalesce(exc.mic_code, exc.eq_mpid)
@@ -130,14 +131,6 @@ begin
 --                                            when cl.parent_order_id is null then 'DFIN'
 --                                            else coalesce(exc.mic_code, exc.eq_mpid) end
 --                                    end , -- || '|' ||               
-                               case
-                                   when not l_is_multileg then 'DFIN'
-                                   else
-                                       case
-                                           when cl.parent_order_id is null then 'DFIN'
-                                           else coalesce(exc.mic_code, exc.eq_mpid, '') end
-                                   end
-                               , -- || '|' ||
                                null , -- || '|' ||
                                null , -- || '|' ||
                                case cl.multileg_reporting_type
@@ -245,7 +238,7 @@ begin
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and cl.trans_type <> 'F'
-      and case when l_is_multileg then cl.parent_order_id is null else true end
+--       and case when l_is_multileg then cl.parent_order_id is null else true end
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end
@@ -391,22 +384,22 @@ begin
            to_char(process_time, 'HH24MISSFF3') as time_id,
            client_order_id                      as record_id,
            3                                    as record_type_id,
+           array_to_string(ARRAY [
            'A' , -- || '|' ||
            order_id::text , -- || '|' ||
-           case exec_type when '4' then 'c' when '8' then 'RJ' else '' end , -- || '|' || --EVENT
-           '' , -- || '|' || --SYSTEM_ID
+           case exec_type when '4' then 'c' when '8' then 'RJ' end , -- || '|' || --EVENT
+           null , -- || '|' || --SYSTEM_ID
            case multileg_reporting_type when '3' then '' else coalesce(instrument_type_id, '') end , -- || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' , -- || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') , -- || '|' ||
-           '' , -- || '|' || --DESCRIPTION
-           '' , -- || '|' || --[10]
-           '' , -- || '|' || --[11]
-           '' , -- || '|' || --[12]
-           '' , -- || '|' || --[13]
-           '' --[14]
+           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, -- ||  '|' ||
+           null , -- || '|' || --SYMBOL_EXCHANGE
+           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' || coalesce(to_char(exec_time, 'HH24MISSFF3'), '') , -- || '|' ||
+           null , -- || '|' || --DESCRIPTION
+           null , -- || '|' || --[10]
+           null , -- || '|' || --[11]
+           null , -- || '|' || --[12]
+           null , -- || '|' || --[13]
+           null --[14]
+    ], '|', '')           as REC
     from base
     where tp = 2
       and case when l_is_multileg then parent_order_id is null else true end
@@ -418,32 +411,32 @@ begin
            to_char(exec_time, 'HH24MISSFF3')   as time_id,
            client_order_id                     as record_id,
            2                                   as record_type_id,
+           array_to_string(ARRAY [
            'T' , -- || '|' ||
            order_id::text , -- || '|' ||
            order_id::text || '_' || exec_id::text , -- || '|' ||
-           '' , -- || '|' ||
-           '' , -- || '|' ||
+           null , -- || '|' ||
+           null , -- || '|' ||
            instrument_type_id , -- || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' , -- || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') , -- || '|' || --ACTION_DATETIME
-           last_qty , -- || '|' ||
+           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end, -- ||'|' ||
+           null , -- || '|' || --SYMBOL_EXCHANGE
+           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' || coalesce(to_char(exec_time, 'HH24MISSFF3'), '') , -- || '|' || --ACTION_DATETIME
+           last_qty::text , -- || '|' ||
            to_char(last_px, 'fm99990d0099') , -- || '|' ||
            exchange_id , -- || '|' ||
-           '' , -- || '|' || --[12]
-           '' , -- || '|' || --[13]
-           case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end , -- || '|' || --[14]
-           '' , -- || '|' || --[15]
-           '' , -- || '|' || --[16]
-           '' , -- || '|' || --[17]
-           '' , -- || '|' || --[18]
-           '' , -- || '|' || --[19]
-           '' , -- || '|' || --[20]
-           '' , -- || '|' || --[21]
-           '' , -- || '|' || --[22]
-           '' --[23]
+           null , -- || '|' || --[12]
+           null , -- || '|' || --[13]
+           case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX'  end , -- || '|' || --[14]
+           null , -- || '|' || --[15]
+           null , -- || '|' || --[16]
+           null , -- || '|' || --[17]
+           null , -- || '|' || --[18]
+           null , -- || '|' || --[19]
+           null , -- || '|' || --[20]
+           null , -- || '|' || --[21]
+           null , -- || '|' || --[22]
+           null --[23]
+    ], '|', '')           as REC
     from base
     where tp = 3
       and case
