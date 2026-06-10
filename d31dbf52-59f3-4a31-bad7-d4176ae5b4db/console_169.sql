@@ -592,20 +592,33 @@ select 'NO'                                      as record_type,
 
 
 
-select multileg_reporting_type, parent_order_id, client_order_id, order_id, cl.* from dwh.client_order cl
-    where true
+select multileg_reporting_type as tp,
+       parent_order_id,
+       client_order_id,
+       order_id,
+       cl.*
+from dwh.client_order cl
+where true
 --         and order_id = 416550869289618526
-and client_order_id ='00214105910ESNY1'
-
-select multileg_reporting_type, parent_order_id, client_order_id, order_id, cl.* from dwh.client_order cl
+  and client_order_id = '00214105910ESNY1'
+and case
+              when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+              else cl.multileg_reporting_type = '1' end
+union all
+select multileg_reporting_type as tp,
+       parent_order_id,
+       client_order_id,
+       order_id,
+       cl.*
+from dwh.client_order cl
 --          join dwh.execution ex using (order_id)
-    where parent_order_id in (416550869289618525, 416550869289618526, 416550869289618524)
-;
+where parent_order_id in (416550869289618525, 416550869289618526, 416550869289618524)
+and case
+              when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+              else cl.multileg_reporting_type = '1' end
 
 
 select ex.*, cl.* from dwh.client_order cl
          join dwh.execution ex using (order_id)
     where client_order_id ='00214105910ESNY1'
-
-select cl.* from dwh.client_order cl
-    where cl.client_order_id = 'BLAA0850-20260127';
+and parent_order_id in (416550869289618525, 416550869289618526, 416550869289618524)
