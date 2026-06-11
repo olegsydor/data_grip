@@ -274,29 +274,32 @@ $function$;
 
 
 
-select * from dwh.d_liquidity_indicator
+select * from dwh.d_liquidity_indicator;
+
+select *
+from dash360.report_fintech_eod_sqpt_fills(20260610, 20260610);
+
 
 CREATE or replace FUNCTION dash360.report_fintech_eod_sqpt_fills(in_start_date_id integer, in_end_date_id integer)
     RETURNS TABLE
             (
-                "date"                 text,
-                "NewAckTime"           text,
-                "EndTime"              text,
-                "BrokerRootOrderID"    int8,
-                "BrokerAlgoOrderID"    int8,
-                "BrokerAlgoSubOrderID" int8,
-                "SubOrderID"           varchar(256),
-                "SubOrderVID"          varchar(256),
-                "ExchOrderID"          varchar,
-                "DestinationID"        varchar,
-                "OrderType"            varchar(255),
-                "TimeInForce"          varchar(255),
-                "LimitPrice"           numeric,
-                "OrderSize"            int4,
-                "Filled"               numeric,
-                "AverageFillPx"        numeric,
-                "MIC"                  varchar,
-                "ParentOrderID"        varchar(256)
+                "Date"                         text,
+                "TradeTime"                    text,
+                "BrokerRootOrderID"            int8,
+                "SubOrderID"                   varchar(256),
+                "SubOrderVID"                  varchar(256),
+                "MIC"                          varchar,
+                "FillQty"                      int8,
+                "FillPx"                       numeric,
+                "ExecID"                       int8,
+                "ExchExecID"                   varchar(128),
+                "RootExecID"                   int8,
+                "NativeLiquidityIndicator"     int2,
+                "NormalizedLiquidityIndicator" varchar(256),
+                "Fee"                          numeric,
+                "BrokerAlgoOrderID"            int8,
+                "BrokerAlgoSubOrderID"         int8,
+                "ParentOrderID"                varchar(256)
             )
     LANGUAGE plpgsql
 AS
@@ -322,64 +325,50 @@ begin
     where trading_firm_id = 'sqpt';
 
     return query
-        select to_char(cl.create_time, 'dd-mm-yy')                   as date,
+        select to_char(cl.create_time, 'dd-mm-yy')                 as "Date",
                to_char(ex.exec_time, 'yyyy-mm-dd"D"hh24:mi:ss.us') as "TradeTime",
-               cl.parent_order_id                                    as "BrokerRootOrderID",
-               cl.client_order_id                                    as "SubOrderID",
-               null::varchar(256)                                    as "SubOrderVID",
-               exc.mic_code                                          as "MIC",
-               ex.last_qty as "FillQty",
-               ex.last_px as "FillPx",
-               ex.exec_id as "ExecID",
-               ex.exch_exec_id as "ExchExecID",
-               ex.first_exec_id as "RootExecID",
-li.liquidity_indicator_type_id as "NativeLiquidityIndicator",
-li.description as "NormalizedLiquidityIndicator",
-
-
-               to_char(cl.create_time, 'yyyy-mm-dd"D"hh24:mi:ss.us') as "NewAckTime",
-               to_char(ex.exec_time, 'yyyy-mm-dd"D"hh24:mi:ss.us')   as "EndTime",
-
-               cl.parent_order_id                                    as "BrokerAlgoOrderID",
-               cl.order_id                                           as "BrokerAlgoSubOrderID",
-               cl.exch_order_id                                      as "ExchOrderID",
-               cl.exchange_id                                        as "DestinationID",
-               ot.order_type_name                                    as "OrderType",
-               tif.tif_name                                          as "TimeInForce",
-               cl.price                                              as "LimitPrice",
-               cl.order_qty                                          as "OrderSize",
---                ex.sum_last_qty                                       as "Filled",
-               ex.avg_px                                             as "AverageFillPx",
-
-               par.client_order_id                                   as "ParentOrderID"
+               cl.parent_order_id                                  as "BrokerRootOrderID",
+               cl.client_order_id                                  as "SubOrderID",
+               null::varchar(256)                                  as "SubOrderVID",
+               exc.mic_code                                        as "MIC",
+               ex.last_qty                                         as "FillQty",
+               ex.last_px                                          as "FillPx",
+               ex.exec_id                                          as "ExecID",
+               ex.exch_exec_id                                     as "ExchExecID",
+               ex.first_exec_id                                    as "RootExecID",
+               li.liquidity_indicator_type_id                      as "NativeLiquidityIndicator",
+               li.description                                      as "NormalizedLiquidityIndicator",
+               null::numeric                                       as "Fee",
+               cl.parent_order_id                                  as "BrokerAlgoOrderID",
+               cl.order_id                                         as "BrokerAlgoSubOrderID",
+               par.client_order_id                                 as "ParentOrderID"
         from dwh.client_order cl
-            join lateral(select
-                             first_value(exec_id)   over (order by exec_id) as first_exec_id,
-                             * from dwh.execution ex
-                                    where ex.order_id = cl.order_id                                       and exec_date_id >= cl.create_date_id
-                ) ex on true
-
+                 join lateral (select first_value(exec_id) over (order by exec_id) as first_exec_id,
+                                      last_qty,
+                                      exec_id,
+                                      last_px,
+                                      exch_exec_id,
+                                      exec_time
+                               from dwh.execution ex
+                               where ex.order_id = cl.order_id
+                                 and exec_date_id >= cl.create_date_id
+            ) ex on true
                  inner join dwh.d_account ac on ac.account_id = cl.account_id
                  inner join dwh.d_instrument i on i.instrument_id = cl.instrument_id and i.is_active
-            left join lateral (select *
+                 left join lateral (select client_order_id
                                     from dwh.client_order par
                                     where par.order_id = cl.parent_order_id
                                     limit 1) par on true and cl.parent_order_id is not null
-
-            --              left join dwh.d_option_contract oc on oc.instrument_id = i.instrument_id and oc.is_active
---              left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
                  left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
                  left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
                  left join dwh.d_target_strategy dts on (dts.target_strategy_id = cl.sub_strategy_id)
-                 left join lateral (select *
+                 left join lateral (select real_exchange_id, mic_code
                                     from dwh.d_exchange exc
                                     where exc.exchange_id = cl.exchange_id
                                       and exc.is_active
                                     limit 1) exc on true
-left join dwh.d_liquidity_indicator li
-          on li.exchange_id = exc.real_exchange_id and li.is_active
-
-
+                 left join dwh.d_liquidity_indicator li
+                           on li.exchange_id = exc.real_exchange_id and li.is_active
         where true
           and cl.account_id = any (l_account_ids)
           and cl.create_date_id between in_start_date_id and in_end_date_id
