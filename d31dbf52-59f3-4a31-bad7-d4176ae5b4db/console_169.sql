@@ -77,7 +77,7 @@ begin
            1                                         as record_type_id,
            'O' || '|' ||
            case
-               when ((l_is_multileg and cl.multileg_reporting_type = '3') or
+               when ((l_is_multileg and cl.multileg_reporting_type in('2', '3')) or
                      (not l_is_multileg and cl.parent_order_id is null)) then 'NO'
                else 'RO'
                end || '|' ||
@@ -449,65 +449,66 @@ select 'NO'                                      as record_type,
            to_char(cl.process_time, 'HH24MISSFF3')   as time_id,
            cl.client_order_id                        as record_id,
            1                                         as record_type_id,
-           'O' || '|' ||
+           '----',
+           'O' , -- || '|' ||
            case
-               when ((l_is_multileg and cl.multileg_reporting_type = '3') or
-                     (not l_is_multileg and cl.parent_order_id is null)) then 'NO'
+               when ((:l_is_multileg and cl.multileg_reporting_type = '3') or
+                     (not :l_is_multileg and cl.parent_order_id is null)) then 'NO'
                else 'RO'
-               end || '|' ||
-           cl.client_order_id || '|' ||
-           cl.order_id::text || '|' || --source_order_id
+               end , -- || '|' ||
+           cl.client_order_id , -- || '|' ||
+           cl.order_id::text , -- || '|' || --source_order_id
            case
-               when l_is_multileg and cl.multileg_reporting_type = '2' then cl.client_order_id::text
-               when not l_is_multileg then coalesce(cl.parent_order_id::text, '')
+               when :l_is_multileg and cl.multileg_reporting_type = '2' then cl.client_order_id::text
+               when not :l_is_multileg then coalesce(cl.parent_order_id::text, '')
                else ''
-               end || '|' || --source_parent_id
-           coalesce(cl.orig_order_id::text, '') || '|' ||
+               end , -- || '|' || --source_parent_id
+           coalesce(cl.orig_order_id::text, '') , -- || '|' ||
                --
            case
-               when not l_is_multileg
+               when not :l_is_multileg
                    then ''
                else
                    case
                        when cl.multileg_reporting_type = '3' then cl.order_id::text
                        when cl.multileg_reporting_type = '2' then cl.multileg_order_id::text
                        end
-               end || '|' || --
+               end , -- || '|' || --
            case
-               when not l_is_multileg then ac.broker_dealer_mpid
+               when not :l_is_multileg then ac.broker_dealer_mpid
                else
                    case
                        when cl.parent_order_id is null and ac.broker_dealer_mpid = 'NONE' then ''
                        when cl.parent_order_id is null then ac.broker_dealer_mpid
                        else 'DFIN'
                        end
-               end || '|' ||
+               end , -- || '|' ||
            case
-               when not l_is_multileg then 'DFIN'
+               when not :l_is_multileg then 'DFIN'
                else
                    case
                        when cl.parent_order_id is null then 'DFIN'
                        else coalesce(exc.mic_code, exc.eq_mpid, '') end
                end
-               || '|' ||
-           '' || '|' ||
-           '' || '|' ||
-           case cl.multileg_reporting_type when '3' then '' else i.instrument_type_id end || '|' ||
+               , -- || '|' ||
+           '' , -- || '|' ||
+           '' , -- || '|' ||
+           case cl.multileg_reporting_type when '3' then '' else i.instrument_type_id end , -- || '|' ||
            case i.instrument_type_id when 'E' then i.display_instrument_id when 'O' then oc.opra_symbol else '' end ||
            '|' ||
-           '' || '|' || --primary  Exchange
+           '' , -- || '|' || --primary  Exchange
            case cl.side when '1' then 'B' when '2' then 'S' when '5' then 'SS' when '6' then 'SSE' else '' end ||
            '|' || --OrderAction
-           to_char(cl.process_time, 'YYYYMMDD') || 'T' || to_char(cl.process_time, 'HH24MISSFF3') || '|' ||
-           ot.order_type_short_name || '|' || --order_type
+           to_char(cl.process_time, 'YYYYMMDD') || 'T' || to_char(cl.process_time, 'HH24MISSFF3') , -- || '|' ||
+           ot.order_type_short_name , -- || '|' || --order_type
            case
-               when not l_is_multileg then cl.order_qty::text
+               when not :l_is_multileg then cl.order_qty::text
                else
                    case when cl.multileg_reporting_type = '3' then '' else cl.order_qty::text end
-               end || '|' || --order_volume
-           coalesce(to_char(cl.price, 'FM99990D0099'), '') || '|' ||
-           coalesce(to_char(cl.stop_price, 'FM99990D0099'), '') || '|' ||
-           tif.tif_short_name || '|' ||
+               end , -- || '|' || --order_volume
+           coalesce(to_char(cl.price, 'FM99990D0099'), '') , -- || '|' ||
+           coalesce(to_char(cl.stop_price, 'FM99990D0099'), '') , -- || '|' ||
+           tif.tif_short_name , -- || '|' ||
            case
                when not :l_is_multileg then
                    coalesce(to_char(cl.expire_time, 'YYYYMMDD'), '') || 'T' ||
@@ -525,43 +526,43 @@ select 'NO'                                      as record_type,
                             limit 1)
                        else ''
                        end
-               end || '|' || --22
-           '0' || '|' || --PRE_MARKET_IND
-           '' || '|' ||
-           '0' || '|' || --POST_MARKET_IND
-           '' || '|' ||
+               end , -- || '|' || --22
+           '0' , -- || '|' || --PRE_MARKET_IND
+           '' , -- || '|' ||
+           '0' , -- || '|' || --POST_MARKET_IND
+           '' , -- || '|' ||
            case
                when cl.parent_order_id is null then case cl.sub_strategy_desc when 'DMA' then '1' else '0' end
                else case po.sub_strategy_desc when 'DMA' then '1' else '0' end
-               end || '|' || --DIRECTED_ORDER_IND
+               end , -- || '|' || --DIRECTED_ORDER_IND
            case
                when (cl.parent_order_id is null or :l_is_multileg)
                    then case cl.sub_strategy_desc when 'SMOKE' then '1' else '0' end
                else case po.sub_strategy_desc when 'SMOKE' then '1' else '0' end
-               end || '|' || --NON_DISPLAY_IND
-           '0' || '|' || --DO_NOT_REDUCE
-           case cl.exec_instruction when 'G' then '1' else '0' end || '|' ||
-           case cl.exec_instruction when '1' then '1' else '0' end || '|' || --NOT_HELD_IND  [31]
-           '0' || '|' || --[32]
-           '0' || '|' || --[33]
-           '0' || '|' || --[34]
-           '' || '|' || --[35]
-           '' || '|' || --[36]
-           '' || '|' || --[37]
-           '' || '|' || --[38]
+               end , -- || '|' || --NON_DISPLAY_IND
+           '0' , -- || '|' || --DO_NOT_REDUCE
+           case cl.exec_instruction when 'G' then '1' else '0' end , -- || '|' ||
+           case cl.exec_instruction when '1' then '1' else '0' end , -- || '|' || --NOT_HELD_IND  [31]
+           '0' , -- || '|' || --[32]
+           '0' , -- || '|' || --[33]
+           '0' , -- || '|' || --[34]
+           '' , -- || '|' || --[35]
+           '' , -- || '|' || --[36]
+           '' , -- || '|' || --[37]
+           '' , -- || '|' || --[38]
            case
                when :l_is_multileg then coalesce(cl.ex_destination, '')
-               else '' end || '|' || --[39]
+               else '' end , -- || '|' || --[39]
            case
                when (:l_is_multileg and cl.multileg_reporting_type = '3') then coalesce(cl.no_legs::text, '')
-               else '' end || '|' || --[40]
-           '' || '|' || --[41]
-           '' || '|' || --[42]
-           '' || '|' || --[43]
-           '' || '|' || --[44]
-           '' || '|' || --[45]
-           '' || '|' || --[46]
-           '' || '|' || --[47]
+               else '' end , -- || '|' || --[40]
+           '' , -- || '|' || --[41]
+           '' , -- || '|' || --[42]
+           '' , -- || '|' || --[43]
+           '' , -- || '|' || --[44]
+           '' , -- || '|' || --[45]
+           '' , -- || '|' || --[46]
+           '' , -- || '|' || --[47]
            '' --[48]
                                                      as REC
     from dwh.client_order cl
@@ -585,40 +586,89 @@ select 'NO'                                      as record_type,
       and cl.account_id = any ('{14765}')
       and cl.create_date_id between :in_start_date_id and :in_end_date_id
       and cl.trans_type <> 'F'
-      and case when :l_is_multileg then cl.parent_order_id is null else true end
+--       and case when :l_is_multileg then cl.parent_order_id is null else true end
       and case
               when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end;
 
 
-
-select multileg_reporting_type as tp,
-       parent_order_id,
-       client_order_id,
-       order_id,
-       cl.*
+drop table if exists tmp_base;
+create temp table tmp_base as
+-- head and legs
+select 'NO'                    as nr,
+ cl.create_date_id,
+           cl.parent_order_id,
+           cl.order_id,
+           cl.process_time,
+           cl.client_order_id,
+           cl.instrument_id,
+           cl.account_id,
+           cl.trans_type,
+           cl.multileg_reporting_type,
+           cl.multileg_order_id,
+           cl.time_in_force_id
 from dwh.client_order cl
 where true
 --         and order_id = 416550869289618526
-  and client_order_id = '00214105910ESNY1'
-and case
-              when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end
-union all
-select multileg_reporting_type as tp,
-       parent_order_id,
-       client_order_id,
-       order_id,
-       cl.*
+  and client_order_id = '00214105960ESNY1'
+  and parent_order_id is null
+  and cl.time_in_force_id not in ('1', '6')
+  and case
+          when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+          else cl.multileg_reporting_type = '1' end;
+
+
+insert into tmp_base
+-- head and legs
+select 'NO' as nr,
+       cl.create_date_id,
+       cl.parent_order_id,
+       cl.order_id,
+       cl.process_time,
+       cl.client_order_id,
+       cl.instrument_id,
+       cl.account_id,
+       cl.trans_type,
+       cl.multileg_reporting_type,
+       cl.multileg_order_id,
+       cl.time_in_force_id
 from dwh.client_order cl
---          join dwh.execution ex using (order_id)
-where parent_order_id in (416550869289618525, 416550869289618526, 416550869289618524)
-and case
-              when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end
+         join dwh.gtc_order_status gtc using (create_date_id, order_id)
+where true
+--         and order_id = 416550869289618526
+  and cl.client_order_id = '00214105960ESNY1'
+  and cl.parent_order_id is null
+  and cl.time_in_force_id in ('1', '6')
+  and cl.create_date_id < :in_start_date_id
+  and case
+          when gtc.close_date_id is null then true
+          when gtc.close_date_id > :in_end_date_id then true
+          else false end
+  and case
+          when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
+          else cl.multileg_reporting_type = '1' end;
 
 
-select ex.*, cl.* from dwh.client_order cl
-         join dwh.execution ex using (order_id)
-    where client_order_id ='00214105910ESNY1'
-and parent_order_id in (416550869289618525, 416550869289618526, 416550869289618524)
+insert into tmp_base
+-- streets of legs
+select 'RO',
+       cl.create_date_id,
+       cl.parent_order_id,
+       cl.order_id,
+       cl.process_time,
+       cl.client_order_id,
+       cl.instrument_id,
+       cl.account_id,
+       cl.trans_type,
+       cl.multileg_reporting_type,
+       cl.multileg_order_id,
+       cl.time_in_force_id
+from dwh.client_order cl
+         join tmp_base tmp on tmp.order_id = cl.parent_order_id
+where true
+  and cl.parent_order_id is not null
+  and case
+          when :l_is_multileg then cl.multileg_reporting_type in ('2')
+          else cl.multileg_reporting_type = '1' end;
+
+select * from tmp_base
