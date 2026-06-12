@@ -993,7 +993,7 @@ begin
                   else true end;
     end if;
     l_msg := 'report_rps_s3 for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
-             case when l_is_multileg then '. Multilegs' else '. Single' end || '. Accounts  -  ' ||
+             case when l_is_multileg then '. Multilegs' else '. Single' end || '. Accounts - ' ||
              substr(l_account_ids::text, 1, 50);
 
     select nextval('public.load_timing_seq') into l_load_id;
@@ -1035,22 +1035,24 @@ begin
     where true
 --       and client_order_id = '00214105960ESNY1'
       and cl.create_date_id between in_start_date_id and in_end_date_id
+      and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
-      and parent_order_id is null
+
       and cl.time_in_force_id not in ('1', '6')
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end
-      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
-      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
+      and case when in_exclude_blaze then cl.ex_destination is distinct from 'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from 'blaze' else true end;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || '  daily orders added  ===', l_row_cnt, 'O')
     into l_step_id;
 
--- gtc parent orders
-    insert into tmp_base
+    -- gtc parent orders
 -- head and legs
+    drop table if exists tmp_base_gtc;
+    create temp table tmp_base_gtc as
     select 'NO' as noro,
            cl.create_date_id,
            cl.parent_order_id,
@@ -1070,26 +1072,27 @@ begin
 --         and order_id = 416550869289618526
 --       and cl.client_order_id = '00214105960ESNY1'
       and cl.parent_order_id is null
+      and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
+      and case when l_account_ids = '{}' then true else gtc.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
       and gtc.create_date_id > l_gtc_min_date_id
       and cl.time_in_force_id in ('1', '6')
       and cl.create_date_id < in_start_date_id
-      and case
-              when gtc.close_date_id is null then true
-              when gtc.close_date_id > in_end_date_id then true
-              else false end
+      and (gtc.close_date_id is null or gtc.close_date_id > in_end_date_id)
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end
-      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
-      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
+      and case when in_exclude_blaze then cl.ex_destination is distinct from 'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from 'blaze' else true end;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || '  gtc orders added  ===', l_row_cnt, 'O')
     into l_step_id;
 
-    insert into tmp_base
+
 -- streets of legs
+    drop table if exists tmp_base_str;
+    create temp table tmp_base_str as
     select 'RO',
            cl.create_date_id,
            cl.parent_order_id,
@@ -1107,16 +1110,21 @@ begin
              join tmp_base tmp on tmp.order_id = cl.parent_order_id
     where true
       and cl.parent_order_id is not null
+      and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.create_date_id >= tmp.create_date_id
       and cl.create_date_id > l_gtc_min_date_id
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2')
               else cl.multileg_reporting_type = '1' end
-      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
-      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
+      and case when in_exclude_blaze then cl.ex_destination is distinct from 'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from 'blaze' else true end;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || '  street orders added  ===', l_row_cnt, 'O')
     into l_step_id;
+
+    insert into tmp_base
+    select *
+    from tmp_base_str;
 
     create index on tmp_base (order_id, create_date_id);
 
@@ -1133,7 +1141,7 @@ begin
                                cl.client_order_id,
                                cl.order_id::text, --source_order_id
                                case
-                                   when tmp_base.noro = 'NO' then cl.client_order_id
+                                   when tmp_base.noro = 'NO' then ''--cl.client_order_id
                                    else tmp_base.parent_client_order_id end,
                                cl.orig_order_id::text,
                                case
