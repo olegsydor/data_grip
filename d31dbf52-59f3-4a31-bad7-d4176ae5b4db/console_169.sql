@@ -937,7 +937,17 @@ where true
     into l_step_id;;
 
 
-
+  select array_agg(account_id)
+--         into l_account_ids
+        from dwh.d_account
+        where true
+          and case
+                  when coalesce(:in_trading_firm_ids, '{}') <> '{}'::varchar[]
+                      then trading_firm_id = ANY (:in_trading_firm_ids)
+                  else true end
+          and case
+                  when coalesce(:in_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (:in_account_ids)
+                  else true end;
 ---------------------
 CREATE OR REPLACE FUNCTION trash.so_report_rps_s3_sg(in_start_date_id integer, in_end_date_id integer,
                                                      in_account_ids integer[] DEFAULT '{}'::integer[],
@@ -958,12 +968,13 @@ $function$
     --  SO  20260108  https://dashfinancial.atlassian.net/browse/DEVREQ-7409  Add  a  new  parameter:  Exclude  S3  EOD  Blaze  Orders  (as  well  as  BLAZE  as  exchange_id)
     --  SO 20260601 https://dashfinancial.atlassian.net/browse/DS-11581
 declare
-    l_is_multileg boolean := case when in_is_multi_leg = 'N' then false else true end;
-    l_account_ids int4[];
-    l_load_id     int;
-    l_row_cnt     int;
-    l_step_id     int;
-    l_msg         text;
+    l_is_multileg     boolean := case when in_is_multi_leg = 'N' then false else true end;
+    l_account_ids     int4[];
+    l_load_id         int;
+    l_row_cnt         int;
+    l_step_id         int;
+    l_msg             text;
+    l_gtc_min_date_id int4    := to_char(current_date - interval '1 year', 'YYYYMMDD')::int4;
 begin
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
@@ -981,8 +992,8 @@ begin
                   when coalesce(in_account_ids, '{}') <> '{}'::integer[] then account_id = ANY (in_account_ids)
                   else true end;
     end if;
-    l_msg := 'report_rps_s3  for  ' || in_start_date_id::text || '  -  ' || in_end_date_id::text ||
-             case when l_is_multileg then '.  multilegs' else '.  single' end || '.  accounts  -  ' ||
+    l_msg := 'report_rps_s3 for ' || in_start_date_id::text || '-' || in_end_date_id::text ||
+             case when l_is_multileg then '. Multilegs' else '. Single' end || '. Accounts  -  ' ||
              substr(l_account_ids::text, 1, 50);
 
     select nextval('public.load_timing_seq') into l_load_id;
@@ -1002,13 +1013,12 @@ begin
            'V2.0.4' || '|' ||
            to_char(clock_timestamp(), 'YYYYMMDD') || 'T' || to_char(clock_timestamp(), 'HH24MISSFF3') as rec;
 
-
     -- orders
 -- daily parent orders
     drop table if exists tmp_base;
     create temp table tmp_base as
 -- head and legs
-    select 'NO' as nr,
+    select 'NO' as noro,
            cl.create_date_id,
            cl.parent_order_id,
            null as parent_client_order_id,
@@ -1023,18 +1033,25 @@ begin
            cl.time_in_force_id
     from dwh.client_order cl
     where true
-      and client_order_id = '00214105960ESNY1'
+--       and client_order_id = '00214105960ESNY1'
+      and cl.create_date_id between in_start_date_id and in_end_date_id
+      and cl.trans_type <> 'F'
       and parent_order_id is null
       and cl.time_in_force_id not in ('1', '6')
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end;
+              else cl.multileg_reporting_type = '1' end
+      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
 
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || '  daily orders added  ===', l_row_cnt, 'O')
+    into l_step_id;
 
 -- gtc parent orders
     insert into tmp_base
 -- head and legs
-    select 'NO' as nr,
+    select 'NO' as noro,
            cl.create_date_id,
            cl.parent_order_id,
            null as parent_client_order_id,
@@ -1051,8 +1068,10 @@ begin
              join dwh.gtc_order_status gtc using (create_date_id, order_id)
     where true
 --         and order_id = 416550869289618526
-      and cl.client_order_id = '00214105960ESNY1'
+--       and cl.client_order_id = '00214105960ESNY1'
       and cl.parent_order_id is null
+      and cl.trans_type <> 'F'
+      and gtc.create_date_id > l_gtc_min_date_id
       and cl.time_in_force_id in ('1', '6')
       and cl.create_date_id < in_start_date_id
       and case
@@ -1061,8 +1080,13 @@ begin
               else false end
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
-              else cl.multileg_reporting_type = '1' end;
+              else cl.multileg_reporting_type = '1' end
+      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
 
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || '  gtc orders added  ===', l_row_cnt, 'O')
+    into l_step_id;
 
     insert into tmp_base
 -- streets of legs
@@ -1083,10 +1107,16 @@ begin
              join tmp_base tmp on tmp.order_id = cl.parent_order_id
     where true
       and cl.parent_order_id is not null
+      and cl.create_date_id >= tmp.create_date_id
+      and cl.create_date_id > l_gtc_min_date_id
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2')
-              else cl.multileg_reporting_type = '1' end;
-
+              else cl.multileg_reporting_type = '1' end
+      and case when in_exclude_blaze then cl.ex_destination is distinct from  'blaze' else true end
+      and case when in_exclude_blaze then cl.exchange_id is distinct from  'blaze' else true end;
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || '  street orders added  ===', l_row_cnt, 'O')
+    into l_step_id;
 
     create index on tmp_base (order_id, create_date_id);
 
@@ -1097,23 +1127,24 @@ begin
            to_char(cl.process_time, 'HH24MISSFF3')   as time_id,
            cl.client_order_id                        as record_id,
            1                                         as record_type_id,
-           array_to_string(ARRAY [
-                               'O', -- || '|' ||
-                               tmp_base.nr,
-                               cl.client_order_id, -- || '|' ||
-                               cl.order_id::text, -- || '|' || --source_order_id
+           array_to_string(array [
+                               'O',
+                               tmp_base.noro,
+                               cl.client_order_id,
+                               cl.order_id::text, --source_order_id
                                case
-                                   when tmp_base.nr = 'NO' then cl.client_order_id
-                                   else tmp_base.parent_client_order_id end, -- || '|' ||
+                                   when tmp_base.noro = 'NO' then cl.client_order_id
+                                   else tmp_base.parent_client_order_id end,
                                cl.orig_order_id::text,
                                case
                                    when not l_is_multileg
                                        then null
                                    when cl.multileg_reporting_type = '3' then cl.order_id::text
-                                   when tmp_base.nr = 'NO' and cl.multileg_reporting_type = '2'
+                                   when tmp_base.noro = 'NO' and cl.multileg_reporting_type = '2'
                                        then cl.multileg_order_id::text
-                                   when tmp_base.nr = 'RO' and cl.multileg_reporting_type = '2' then cl.parent_order_id::text
-                                   end, -- || '|' || --
+                                   when tmp_base.noro = 'RO' and cl.multileg_reporting_type = '2'
+                                       then cl.parent_order_id::text
+                                   end,
                                case
                                    when not l_is_multileg then ac.broker_dealer_mpid
                                    else
@@ -1122,23 +1153,23 @@ begin
                                            when cl.parent_order_id is null then ac.broker_dealer_mpid
                                            else 'DFIN'
                                            end
-                                   end, -- || '|' ||
+                                   end, -- 
                                case
-                                   when nr = 'NO' then 'DFIN'
+                                   when noro = 'NO' then 'DFIN'
                                    when in_actual_exchange then coalesce(exc.mic_code, exc.eq_mpid)
                                    else 'DFIN'
-                                   end, -- || '|' ||
-                               null, -- || '|' ||
-                               null, -- || '|' ||
+                                   end, -- 
+                               null, -- 
+                               null, -- 
                                case cl.multileg_reporting_type
                                    when '3' then ''
-                                   else i.instrument_type_id end, -- || '|' ||
+                                   else i.instrument_type_id end, -- 
                                case i.instrument_type_id
                                    when 'E' then i.display_instrument_id
                                    when 'O' then oc.opra_symbol
                                    else '' end ||
                                '|' ||
-                               '', -- || '|' || --primary  Exchange
+                               '', --  --primary  Exchange
                                case cl.side
                                    when '1' then 'B'
                                    when '2' then 'S'
@@ -1147,16 +1178,16 @@ begin
                                    else '' end ||
                                '|' || --OrderAction
                                to_char(cl.process_time, 'YYYYMMDD') || 'T' ||
-                               to_char(cl.process_time, 'HH24MISSFF3'), -- || '|' ||
-                               ot.order_type_short_name, -- || '|' || --order_type
+                               to_char(cl.process_time, 'HH24MISSFF3'), -- 
+                               ot.order_type_short_name, --  --order_type
                                case
                                    when not l_is_multileg then cl.order_qty::text
                                    else
                                        case when cl.multileg_reporting_type = '3' then '' else cl.order_qty::text end
-                                   end, -- || '|' || --order_volume
-                               coalesce(to_char(cl.price, 'FM99990D0099'), ''), -- || '|' ||
-                               coalesce(to_char(cl.stop_price, 'FM99990D0099'), ''), -- || '|' ||
-                               tif.tif_short_name, -- || '|' ||
+                                   end, --  --order_volume
+                               coalesce(to_char(cl.price, 'FM99990D0099'), ''), -- 
+                               coalesce(to_char(cl.stop_price, 'FM99990D0099'), ''), -- 
+                               tif.tif_short_name, -- 
                                case
                                    when not l_is_multileg then
                                        coalesce(to_char(cl.expire_time, 'YYYYMMDD'), '') || 'T' ||
@@ -1174,46 +1205,46 @@ begin
                                                 limit 1)
                                            else ''
                                            end
-                                   end, -- || '|' || --22
-                               '0', -- || '|' || --PRE_MARKET_IND
-                               null, -- || '|' ||
-                               '0', -- || '|' || --POST_MARKET_IND
-                               null, -- || '|' ||
+                                   end, --22
+                               '0', --PRE_MARKET_IND
+                               null,
+                               '0', --POST_MARKET_IND
+                               null,
                                case
                                    when cl.parent_order_id is null
                                        then case cl.sub_strategy_desc when 'DMA' then '1' else '0' end
                                    else case po.sub_strategy_desc when 'DMA' then '1' else '0' end
-                                   end, -- || '|' || --DIRECTED_ORDER_IND
+                                   end, --  --DIRECTED_ORDER_IND
                                case
                                    when (cl.parent_order_id is null or l_is_multileg)
                                        then case cl.sub_strategy_desc when 'SMOKE' then '1' else '0' end
                                    else case po.sub_strategy_desc when 'SMOKE' then '1' else '0' end
-                                   end, -- || '|' || --NON_DISPLAY_IND
-                               '0', -- || '|' || --DO_NOT_REDUCE
-                               case cl.exec_instruction when 'G' then '1' else '0' end, -- || '|' ||
-                               case cl.exec_instruction when '1' then '1' else '0' end, -- || '|' || --NOT_HELD_IND  [31]
-                               '0', -- || '|' || --[32]
-                               '0', -- || '|' || --[33]
-                               '0', -- || '|' || --[34]
-                               null, -- || '|' || --[35]
-                               null, -- || '|' || --[36]
-                               null, -- || '|' || --[37]
-                               null, -- || '|' || --[38]
+                                   end, --NON_DISPLAY_IND
+                               '0', --DO_NOT_REDUCE
+                               case cl.exec_instruction when 'G' then '1' else '0' end,
+                               case cl.exec_instruction when '1' then '1' else '0' end, --NOT_HELD_IND  [31]
+                               '0', -- [32]
+                               '0', -- [33]
+                               '0', -- [34]
+                               null, -- [35]
+                               null, -- [36]
+                               null, -- [37]
+                               null, -- [38]
                                case
                                    when l_is_multileg then coalesce(cl.ex_destination, '')
-                                   else '' end, -- || '|' || --[39]
+                                   end, -- [39]
                                case
                                    when (l_is_multileg and cl.multileg_reporting_type = '3')
                                        then coalesce(cl.no_legs::text, '')
-                                   else '' end, -- || '|' || --[40]
-                               null, -- || '|' || --[41]
-                               null, -- || '|' || --[42]
-                               null, -- || '|' || --[43]
-                               null, -- || '|' || --[44]
-                               null, -- || '|' || --[45]
-                               null, -- || '|' || --[46]
-                               null, -- || '|' || --[47]
-                               null --[48]
+                                   else '' end, -- [40]
+                               null, -- [41]
+                               null, -- [42]
+                               null, -- [43]
+                               null, -- [44]
+                               null, -- [45]
+                               null, -- [46]
+                               null, -- [47]
+                               null -- [48]
                                ], '|', '')           as REC
     from dwh.client_order cl
              join tmp_base using (create_date_id, order_id)
@@ -1234,11 +1265,8 @@ begin
                                   and exc.is_active
                                 limit 1) exc on true
     where true;
-
-
     get diagnostics l_row_cnt = row_count;
-
-    select public.load_log(l_load_id, l_step_id, l_msg || '  Parent/Street  added', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg || ' orders part of report created  ===', l_row_cnt, 'O')
     into l_step_id;
 
     drop table if exists tmp_exec;
@@ -1269,7 +1297,10 @@ begin
     where true
       and ex.exec_date_id between in_start_date_id and in_end_date_id
       and ex.exec_type in ('4', '8', 'F')
-      and cl.nr = 'RO';
+      and cl.noro = 'RO';
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || ' events added  ===', l_row_cnt, 'O')
+    into l_step_id;
 
 
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
@@ -1279,30 +1310,33 @@ begin
            to_char(process_time, 'HH24MISSFF3') as time_id,
            client_order_id                      as record_id,
            3                                    as record_type_id,
-           'A' || '|' ||
-           order_id::text || '|' ||
-           case exec_type when '4' then 'c' when '8' then 'RJ' else '' end || '|' || --EVENT
-           '' || '|' || --SYSTEM_ID
-           case multileg_reporting_type when '3' then '' else coalesce(instrument_type_id, '') end || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' ||
-           '' || '|' || --DESCRIPTION
-           '' || '|' || --[10]
-           '' || '|' || --[11]
-           '' || '|' || --[12]
-           '' || '|' || --[13]
-           '' --[14]
+           array_to_string(array [
+                               'A' ,
+                               order_id::text ,
+                               case exec_type when '4' then 'c' when '8' then 'RJ' end , --EVENT
+                               null , --SYSTEM_ID
+                               case multileg_reporting_type
+                                   when '3' then ''
+                                   else coalesce(instrument_type_id, '') end , -- 
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
+                               null , --  --SYMBOL_EXCHANGE
+                               to_char(exec_time, 'YYYYMMDD') || 'T' || to_char(exec_time, 'HH24MISSFF3'),
+                               null , -- DESCRIPTION
+                               null , -- [10]
+                               null , -- [11]
+                               null , -- [12]
+                               null , -- [13]
+                               null -- [14]
+                               ], '|', '')
     from tmp_exec
     where tp = 2
 --      and case when l_is_multileg then parent_order_id is null else true end
     ;
 
     get diagnostics l_row_cnt = row_count;
-    select public.load_log(l_load_id, l_step_id, l_msg || ' Events added', l_row_cnt, 'O')
+    select public.load_log(l_load_id, l_step_id, l_msg || ' Events part of report added  ===', l_row_cnt, 'O')
     into l_step_id;
+
 
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
 
@@ -1311,32 +1345,33 @@ begin
            to_char(exec_time, 'HH24MISSFF3')   as time_id,
            client_order_id                     as record_id,
            2                                   as record_type_id,
-           'T' || '|' ||
-           order_id::text || '|' ||
-           order_id::text || '_' || exec_id::text || '|' ||
-           '' || '|' ||
-           '' || '|' ||
-           instrument_type_id || '|' ||
-           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
-           '|' ||
-           '' || '|' || --SYMBOL_EXCHANGE
-           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
-           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' || --ACTION_DATETIME
-           last_qty || '|' ||
-           to_char(last_px, 'fm99990d0099') || '|' ||
-           exchange_id || '|' ||
-           '' || '|' || --[12]
-           '' || '|' || --[13]
-           case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
-           '' || '|' || --[15]
-           '' || '|' || --[16]
-           '' || '|' || --[17]
-           '' || '|' || --[18]
-           '' || '|' || --[19]
-           '' || '|' || --[20]
-           '' || '|' || --[21]
-           '' || '|' || --[22]
-           '' --[23]
+           array_to_string(array [
+                               'T' ,
+                               order_id::text ,
+                               order_id::text || '_' || exec_id::text ,
+                               null ,
+                               null , -- 
+                               instrument_type_id , -- 
+                               case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
+                               null , --  --SYMBOL_EXCHANGE
+                               to_char(exec_time, 'YYYYMMDD') || 'T' ||
+                               to_char(exec_time, 'HH24MISSFF3'), -- ACTION_DATETIME
+                               last_qty::text, -- 
+                               to_char(last_px, 'fm99990d0099') , -- 
+                               exchange_id , -- 
+                               null , --  --[12]
+                               null , --  --[13]
+                               case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' end , --  --[14]
+                               null , -- [15]
+                               null , -- [16]
+                               null , -- [17]
+                               null , -- [18]
+                               null , -- [19]
+                               null , -- [20]
+                               null , -- [21]
+                               null , -- [22]
+                               null -- [23]
+                               ], '|', '')
     from tmp_exec
     where tp = 3
     --      and case
@@ -1347,6 +1382,11 @@ begin
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || '  Cancels  added', l_row_cnt, 'O')
     into l_step_id;
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || ' Cancels part of report added  ===', l_row_cnt, 'O')
+    into l_step_id;
+
 
     return query
         select case
