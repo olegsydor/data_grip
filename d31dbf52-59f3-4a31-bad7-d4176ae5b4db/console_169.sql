@@ -831,3 +831,107 @@ O|RO|BLAA0850-20260127|416581788804274496|00214105960ESNY1||416581788804274495|D
 O|RO|BLAA0853-20260127|416581788822101199|00214105960ESNY1||416581788822101198|DFIN|XCBO|||O|SPXW  260128P06875000||S|20260127T093005126|LMT|6|1.25||Day||0||0||0|0|0|0|0|0|0|0|||||W|||||||||
 O|RO|BLAA0850-20260127|416581788804274497|00214105960ESNY1||416581788804274495|DFIN|XCBO|||O|SPXW  260128P06895000||B|20260127T093005121|LMT|14|1.25||Day||0||0||0|0|0|0|0|0|0|0|||||W|||||||||
 O|RO|BLAA0853-20260127|416581788822101200|00214105960ESNY1||416581788822101198|DFIN|XCBO|||O|SPXW  260128P06895000||B|20260127T093005126|LMT|6|1.25||Day||0||0||0|0|0|0|0|0|0|0|||||W|||||||||
+
+
+create index on tmp_base (order_id, create_date_id);
+
+    drop table if exists tmp_exec;
+create temp table if not exists tmp_exec as
+select case when ex.exec_type in ('4', '8') then 2 else 3 end as tp,
+       cl.parent_order_id,
+       cl.order_id,
+       cl.process_time,
+       cl.client_order_id,
+       ex.exec_type,
+       cl.multileg_reporting_type,
+       i.instrument_type_id,
+       i.display_instrument_id,
+       oc.opra_symbol,
+       ex.exec_time,
+       ex.exec_id,
+       ex.last_qty,
+       ex.last_px,
+       ex.exchange_id
+from tmp_base as cl
+         join dwh.execution ex on ex.order_id = cl.order_id
+         join dwh.d_instrument i on i.instrument_id = cl.instrument_id
+         left join lateral (select opra_symbol, option_series_id
+                            from dwh.d_option_contract oc
+                            where oc.instrument_id = i.instrument_id
+                            limit 1) oc on true
+         left join dwh.d_option_series os on os.option_series_id = oc.option_series_id
+where true
+  and ex.exec_date_id between :in_start_date_id and :in_end_date_id
+  and ex.exec_type in ('4', '8', 'F')
+  and cl.nr = 'RO';
+--
+
+     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
+    --order  activity:  cancel
+    select 'A'                                  as record_type,
+           coalesce(parent_order_id, order_id)  as order_id,
+           to_char(process_time, 'HH24MISSFF3') as time_id,
+           client_order_id                      as record_id,
+           3                                    as record_type_id,
+           'A' || '|' ||
+           order_id::text || '|' ||
+           case exec_type when '4' then 'c' when '8' then 'RJ' else '' end || '|' || --EVENT
+           '' || '|' || --SYSTEM_ID
+           case multileg_reporting_type when '3' then '' else coalesce(instrument_type_id, '') end || '|' ||
+           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
+           '|' ||
+           '' || '|' || --SYMBOL_EXCHANGE
+           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
+           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' ||
+           '' || '|' || --DESCRIPTION
+           '' || '|' || --[10]
+           '' || '|' || --[11]
+           '' || '|' || --[12]
+           '' || '|' || --[13]
+           '' --[14]
+    from tmp_exec
+    where tp = 2
+      and case when l_is_multileg then parent_order_id is null else true end
+
+    union all
+
+    select 'T'                                 as record_type,
+           coalesce(parent_order_id, order_id) as order_id,
+           to_char(exec_time, 'HH24MISSFF3')   as time_id,
+           client_order_id                     as record_id,
+           2                                   as record_type_id,
+           'T' || '|' ||
+           order_id::text || '|' ||
+           order_id::text || '_' || exec_id::text || '|' ||
+           '' || '|' ||
+           '' || '|' ||
+           instrument_type_id || '|' ||
+           case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol else '' end ||
+           '|' ||
+           '' || '|' || --SYMBOL_EXCHANGE
+           coalesce(to_char(exec_time, 'YYYYMMDD'), '') || 'T' ||
+           coalesce(to_char(exec_time, 'HH24MISSFF3'), '') || '|' || --ACTION_DATETIME
+           last_qty || '|' ||
+           to_char(last_px, 'fm99990d0099') || '|' ||
+           exchange_id || '|' ||
+           '' || '|' || --[12]
+           '' || '|' || --[13]
+           case when :l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' else '' end || '|' || --[14]
+           '' || '|' || --[15]
+           '' || '|' || --[16]
+           '' || '|' || --[17]
+           '' || '|' || --[18]
+           '' || '|' || --[19]
+           '' || '|' || --[20]
+           '' || '|' || --[21]
+           '' || '|' || --[22]
+           '' --[23]
+    from tmp_exec
+    where tp = 3
+      and case
+              when l_is_multileg then (multileg_reporting_type = '2' and parent_order_id is null)
+              else multileg_reporting_type = '1' end;
+
+    get diagnostics l_row_cnt = row_count;
+    select public.load_log(l_load_id, l_step_id, l_msg || '  Cancels  added', l_row_cnt, 'O')
+    into l_step_id;
