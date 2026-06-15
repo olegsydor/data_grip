@@ -87,7 +87,6 @@ begin
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
-
       and cl.time_in_force_id not in ('1', '6')
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
@@ -139,6 +138,12 @@ begin
     select public.load_log(l_load_id, l_step_id, l_msg || '  gtc orders added  ===', l_row_cnt, 'O')
     into l_step_id;
 
+    insert into tmp_base
+    select *
+    from tmp_base_gtc;
+
+    analyse tmp_base;
+    create index on tmp_base (order_id, create_date_id);
 
 -- streets of legs
     drop table if exists tmp_base_str;
@@ -177,6 +182,11 @@ begin
     from tmp_base_str;
 
     create index on tmp_base (order_id, create_date_id);
+
+    /*
+     4) On the NO record, we only require the ORDER_DATETIME, the net LIMIT_PRICE, number of legs in a CLIENT_TEXT field, and the Route Destination in a CLIENT_TEXT field.
+    On the NO record, we will disregard security type, symbol, order action, order type, order volume and the many conditions and modifiers.
+     */
 
 ----Parent/Street  orders----
     insert into t_report (record_type, order_id, time_id, record_id, record_type_id, rec)
@@ -219,29 +229,33 @@ begin
                                    end, -- [9]
                                null, -- [10]
                                null, -- [11]
-                               case cl.multileg_reporting_type
-                                   when '3' then null
-                                   else i.instrument_type_id end, -- [12]
-                               case i.instrument_type_id
-                                   when 'E' then i.display_instrument_id
-                                   when 'O' then oc.opra_symbol
-                                   else '' end , -- [13]
+                               case when noro = 'RO' then cl.multileg_reporting_type end, -- [12]
+                               case
+                                   when noro = 'RO' and i.instrument_type_id = 'E' then i.display_instrument_id
+                                   when noro = 'RO' and i.instrument_type_id = 'O' then oc.opra_symbol
+                                   end , -- [13]
                                null, -- [14] primary  Exchange
-                               case cl.side
-                                   when '1' then 'B'
-                                   when '2' then 'S'
-                                   when '5' then 'SS'
-                                   when '6' then 'SSE'
-                                    end, -- [15] OrderAction
+                               case
+                                   when noro = 'RO' then
+                                       case cl.side
+                                           when '1' then 'B'
+                                           when '2' then 'S'
+                                           when '5' then 'SS'
+                                           when '6' then 'SSE'
+                                           end end, -- [15] OrderAction
                                to_char(cl.process_time, 'YYYYMMDD') || 'T' ||
                                to_char(cl.process_time, 'HH24MISSFF3'), -- [16]
-                               ot.order_type_short_name, -- [17] order_type
+                               case when noro = 'RO' then ot.order_type_short_name end, -- [17] order_type
                                case
-                                   when not l_is_multileg then cl.order_qty::text
-                                   else
-                                       case when cl.multileg_reporting_type = '3' then '' else cl.order_qty::text end
-                                   end, -- [18] order_volume
-                               case when cl.side = '1' then '-' else '' end || to_char(cl.price, 'FM99990D0099'), -- [19]
+                                   when noro = 'RO' then case
+                                                             when not l_is_multileg then cl.order_qty::text
+                                                             else
+                                                                 case
+                                                                     when cl.multileg_reporting_type = '3' then ''
+                                                                     else cl.order_qty::text end
+                                       end end, -- [18] order_volume
+                               case when cl.side = '1' then '-' else '' end ||
+                               to_char(cl.price, 'FM99990D0099'), -- [19]
                                to_char(cl.stop_price, 'FM99990D0099'), -- [20]
                                tif.tif_short_name, -- [21]
                                case
