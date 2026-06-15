@@ -80,8 +80,42 @@ from base
                               and tr.date_id = :in_date_id
                               and di.instrument_type_id = 'O'
                               and tr.is_busted = 'N'
-                              and coalesce(tr.is_billed, 'N') != 'R' --Unreported
+                              and tr.is_billed is distinct from 'R' --Unreported
 --                               and ac.opt_report_to_mpid = 'MLCB'     --PTA Trades
                               and di.instrument_id = base.instrument_id
     ) tr on true
 where tr."Quantity" is distinct from base."Quantity"
+
+create temp table t_base as
+SELECT t1.instrument_id,
+       sum(t1.last_qty * (case when t1.side = '1' then 1.0 else -1.0 end)) as "Quantity"
+FROM occ_data.occ_trade_data t1
+--                        join instrument di on di.instrument_id = t1.instrument_id
+WHERE true
+  and date_id = :in_date_id
+--   and t1.instrument_id = 186495473
+  and trade_type = '0'
+  AND NOT EXISTS (SELECT null
+                  FROM genesis2.occ_data.occ_trade_data_matching t2
+                  WHERE t2.date_id = :in_date_id
+                    AND t2.trade_id = t1.trade_id)
+group by t1.instrument_id
+having sum(t1.last_qty * (case when t1.side = '1' then 1.0 else -1.0 end)) <> 0;
+
+
+select sum(tr.last_qty * (case when tr.side = '1' then 1.0 else -1.0 end)) as "Quantity",
+       di.instrument_id
+from genesis2.trade_record tr
+--                                      join genesis2.account ac on (ac.account_id = tr.account_id)
+         join genesis2.instrument di on (di.instrument_id = tr.instrument_id)
+where true
+  and tr.date_id = :in_date_id
+  and di.instrument_type_id = 'O'
+  and tr.is_busted = 'N'
+  and tr.is_billed is distinct from 'R' --Unreported
+--                               and ac.opt_report_to_mpid = 'MLCB'     --PTA Trades
+and di.instrument_id in (select instrument_id from t_base)
+group by di.instrument_id
+
+
+select * from t_base
