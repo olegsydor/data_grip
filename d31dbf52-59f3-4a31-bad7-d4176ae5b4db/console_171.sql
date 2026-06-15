@@ -973,7 +973,7 @@ where true
 --       and case when :l_account_ids = '{}' then true else cl.account_id = any (:l_account_ids) end
       and cl.trans_type <> 'F'
       and cl.time_in_force_id not in ('1', '6')
-      and cl.client_order_id = '00214105960ESNY1'
+      and cl.client_order_id = 'BLAA0850-20260127'
       and case
               when :l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end

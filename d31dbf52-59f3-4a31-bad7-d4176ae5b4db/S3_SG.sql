@@ -84,6 +84,7 @@ begin
     from dwh.client_order cl
     where true
 --       and client_order_id = '00214105960ESNY1'
+      and cl.parent_order_id is null
       and cl.create_date_id between in_start_date_id and in_end_date_id
       and case when l_account_ids = '{}' then true else cl.account_id = any (l_account_ids) end
       and cl.trans_type <> 'F'
