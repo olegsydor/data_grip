@@ -297,8 +297,8 @@ begin
                                null, --	CAT_CHILD_IND
                                null --	CAT_MODIFY_REQ_DATETIME
                                ], '|', '')           as REC
-    from t_parent_orders_sub_str ord
-             join dwh.client_order cl on ord.order_id = cl.order_id
+    from dwh.client_order cl
+             join lateral(select null from t_parent_orders_sub_str ord where ord.order_id = cl.order_id limit 1) ord on true
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
@@ -676,3 +676,36 @@ begin
 end ;
 $function$
 ;
+
+
+create temp table tmp_os as
+select cl.parent_order_id,
+       cl.order_id,
+       cl.process_time,
+       cl.client_order_id,
+       cl.multileg_reporting_type,
+       cl.orig_order_id,
+       ac.account_demo_mnemonic,
+       ac.eq_mpid,
+       cl.exchange_id,
+       tf.trading_firm_demo_mnemonic, --ORDER_ACCOUNT_ID
+       di.instrument_type_id,
+       di.symbol,
+       cl.side,
+       cl.price,
+       cl.stop_price,
+       cl.time_in_force_id,
+       cl.expire_time,
+       cl.sub_strategy_desc,
+       cl.exec_instruction,
+       cl.is_held
+from dwh.client_order cl
+         join lateral(select null from t_parent_orders_sub_str ord where ord.order_id = cl.order_id limit 1) ord on true
+         inner join dwh.d_account ac on ac.account_id = cl.account_id
+         join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
+         join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
+where true
+  and cl.create_date_id between :in_start_date_id and :in_end_date_id
+--       and case when l_account_ids = '{}'::int8[] then true else cl.account_id = any (l_account_ids) end
+  and di.instrument_type_id = 'E'
+  and cl.trans_type <> 'F';

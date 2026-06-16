@@ -1,6 +1,10 @@
 -- DROP FUNCTION dash360.report_fintech_eod_sqpt_slices(int4, int4);
 
-
+select *
+from trash.so_report_rps_s3_sg(in_start_date_id := 20260127, in_end_date_id := 20260127,
+--                            in_account_ids := '{14765,77005}',
+                               in_is_multi_leg := 'Y', in_exclude_blaze := false, in_actual_exchange := true,
+                               in_trading_firm_ids := '{socgen01,LPTF286,socgenpsc}');
 CREATE OR REPLACE FUNCTION dash360.report_fintech_eod_sqpt_slices(in_start_date_id integer, in_end_date_id integer)
 --  RETURNS TABLE(date text, "NewAckTime" text, "EndTime" text, "BrokerRootOrderID" bigint, "BrokerAlgoOrderID" bigint, "BrokerAlgoSubOrderID" bigint, "SubOrderID" character varying, "SubOrderVID" character varying, "ExchOrderID" character varying, "DestinationID" character varying, "OrderType" character varying, "TimeInForce" character varying, "LimitPrice" numeric, "OrderSize" integer, "Filled" numeric, "AverageFillPx" numeric, "MIC" character varying, "ParentOrderID" character varying)
     returns table
