@@ -1,3 +1,7 @@
+select * from dwh.d_account
+    where d_account.trading_firm_id like 'socgen%'
+        and d_account.is_active
+
 drop function trash.so_report_rps_s3_sg;
 
  select *

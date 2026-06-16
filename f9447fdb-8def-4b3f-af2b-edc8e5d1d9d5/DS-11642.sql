@@ -1402,7 +1402,7 @@ select manual_broker
           and trade_record_id = 2348069241
           and manual_broker is not null;
 
-
+SELECT * FROM dash360.allocations_instruction_trades(-126572)
 select * from dash360.allocations_instruction_commission_rate(-126289, 20260612)
 -- DROP FUNCTION dash360.allocations_instruction_commission_rate(int4, int4);
 
@@ -1493,7 +1493,7 @@ where false
                ccr.brok_amount                                               as broker_commission_rate,
                case
                    when array_length(ccr.manual_broker, 1) > 1 then '-'
-                   else ccr.client_order_id[1] end                           as manual_broker_code
+                   else ccr.manual_broker[1] end                           as manual_broker_code
 
         from allocation_instruction a
                  inner join instrument i on (a.instrument_id = i.instrument_id)
@@ -1555,3 +1555,10 @@ where false
 end;
 $function$
 ;
+
+
+SELECT *
+FROM dash360.allocations_instruction_commission_rate(
+    in_alloc_instr_id := -126571,
+    in_date_id := 20260615
+);
