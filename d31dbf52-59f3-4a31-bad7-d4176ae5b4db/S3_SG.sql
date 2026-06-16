@@ -300,9 +300,10 @@ begin
                                null, -- [36]
                                null, -- [37]
                                null, -- [38]
-                               case
-                                   when l_is_multileg then cl.ex_destination
-                                   end, -- [39]
+--                                case
+--                                    when l_is_multileg then cl.ex_destination
+--                                    end, -- [39]
+                               cof.customer_or_firm_name, -- [39] Client wants to add account capacity in location 39 CLIENT_TEXT field
                                case
                                    when (l_is_multileg and cl.multileg_reporting_type = '3')
                                        then cl.no_legs::text
@@ -334,6 +335,7 @@ begin
                                 where exc.exchange_id = cl.exchange_id
                                   and exc.is_active
                                 limit 1) exc on true
+             left join dwh.d_customer_or_firm cof on cof.customer_or_firm_id = cl.customer_or_firm_id
     where true;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg || ' orders part of report created  ===', l_row_cnt, 'O')

@@ -124,11 +124,12 @@ begin
 
     get diagnostics l_row_cnt = row_count;
 
+    analyse t_parent_orders_sub_str;
+
     select public.load_log(l_load_id, l_step_id, l_msg || ' Street orders with correct sub_strategy calculated',
                            l_row_cnt, 'O')
     into l_step_id;
 
-    -- header
     drop table if exists t_report;
     create temp table t_report
 --          on commit drop
@@ -296,25 +297,15 @@ begin
                                null, --	CAT_CHILD_IND
                                null --	CAT_MODIFY_REQ_DATETIME
                                ], '|', '')           as REC
-    from dwh.client_order cl
-             join t_parent_orders_sub_str using (order_id)
+    from t_parent_orders_sub_str ord
+             join dwh.client_order cl on ord.order_id = cl.order_id
              inner join dwh.d_account ac on ac.account_id = cl.account_id
              join dwh.d_trading_firm tf on tf.trading_firm_id = ac.trading_firm_id
              join dwh.d_instrument di on di.instrument_id = cl.instrument_id and di.is_active
-        --             left join lateral (select po.sub_strategy_desc
---                                from dwh.client_order po
---                                where po.order_id = cl.parent_order_id
---                                  and po.create_date_id <= cl.create_date_id
---                                limit 1) po on true
              left join dwh.d_option_contract oc on oc.instrument_id = di.instrument_id and oc.is_active
              left join dwh.d_option_series os on os.option_series_id = oc.option_series_id and os.is_active
              left join dwh.d_order_type ot on ot.order_type_id = cl.order_type_id
              left join dwh.d_time_in_force tif on tif.tif_id = cl.time_in_force_id
-        --             left join lateral (select exc.mic_code, exc.eq_mpid
---                                from dwh.d_exchange exc
---                                where exc.exchange_id = cl.exchange_id
---                                  and exc.is_active
---                                limit 1) exc on true
              left join lateral (select fmj.fix_message ->> '109'  as tag_109,
                                        fmj.fix_message ->> '111'  as tag_111,
                                        fmj.fix_message ->> '9000' as tag_9000,
