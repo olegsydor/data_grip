@@ -545,6 +545,7 @@ end;
 $function$
 ;
 select * from dash360.allocations_instruction_trades(-125858);
+SELECT * FROM dash360.allocations_instruction_trades(-126562)
 
 
 CREATE FUNCTION dash360.trade_record_update_brok(in_user_id integer, in_date_id integer,
@@ -621,7 +622,7 @@ begin
           and manual_broker is not null
         limit 1;
     else
-        select fmj.fix_message ->> '10658'
+        select fmj.fix_message ->> '10568'
         into l_manual_broker
         from staging.fix_message_json fmj
         where fmj.date_id = in_date_id
@@ -1339,3 +1340,63 @@ begin
 end;
 $function$
 ;
+
+
+select
+    tr.subsystem_id,
+    tr.date_id,
+    tr.trade_record_id,
+    tr.trade_fix_message_id,
+genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
+                                          in_trade_record_id := tr.trade_record_id,
+                                          in_fix_message_id := tr.trade_fix_message_id)         as manual_broker_code
+        from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
+                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select to_report, bar.db_create_time
+                                    from dash_reporting.bofa_allocation_report bar
+                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bar.date_id = ai2tr.date_id
+                                    limit 1) bar on true
+
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                           max(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                           max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                           max(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                                    from (SELECT tl.trade_record_id,
+                                                 book_record_type_id,
+                                                 row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 tl.rate,
+                                                 tl.amount
+                                          FROM genesis2.trade_level_book_record tl
+                                                   inner join genesis2.book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          WHERE tl.date_id = :l_date_id
+                                            AND book_record_type_id in ('CCRU', 'BROK')
+                                            and tl.trade_record_id = tr.trade_record_id) L1
+                                    where rn = 1) ccru on true
+
+        where tr.is_busted = 'N'
+          and tr.date_id = :l_date_id
+          and a.alloc_instr_id = :in_alloc_instr_id;
+
+SELECT * FROM dash360.allocations_instruction_trades(-126562);
+
+select * from staging.fix_message_json
+where fix_message_id in (468106720364724266,468106814854004781,468128809381527929)
+
+select manual_broker
+
+        from staging.trade_record_blaze7
+        where date_id = 20260615
+          and trade_record_id = 2348069241
+          and manual_broker is not null
