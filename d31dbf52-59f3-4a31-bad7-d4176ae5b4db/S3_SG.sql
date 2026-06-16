@@ -24,7 +24,7 @@ declare
     l_row_cnt         int;
     l_step_id         int;
     l_msg             text;
-    l_gtc_min_date_id int4    := to_char(current_date - interval '1 year', 'YYYYMMDD')::int4;
+    l_gtc_min_date_id int4    := to_char(to_date(in_start_date_id::text, 'YYYYMMDD') - interval '1 year', 'YYYYMMDD')::int4;
 begin
 
     if coalesce(in_account_ids, '{}') = '{}' and coalesce(in_trading_firm_ids, '{}') = '{}' then
@@ -127,8 +127,8 @@ begin
       and cl.trans_type <> 'F'
       and gtc.create_date_id > l_gtc_min_date_id
       and cl.time_in_force_id in ('1', '6')
-      and cl.create_date_id < in_start_date_id
-      and (gtc.close_date_id is null or gtc.close_date_id > in_end_date_id)
+      and cl.create_date_id <= in_start_date_id
+      and (gtc.close_date_id is null or gtc.close_date_id >= in_end_date_id)
       and case
               when l_is_multileg then cl.multileg_reporting_type in ('2', '3')
               else cl.multileg_reporting_type = '1' end
