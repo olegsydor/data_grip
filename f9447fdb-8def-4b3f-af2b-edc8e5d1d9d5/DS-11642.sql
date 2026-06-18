@@ -1559,6 +1559,188 @@ $function$
 
 SELECT *
 FROM dash360.allocations_instruction_commission_rate(
-    in_alloc_instr_id := -126571,
+    in_alloc_instr_id := -126572,
     in_date_id := 20260615
 );
+
+
+select '{"side": "2", "avgPx": 7.250000, "orders": [{"clOrdId": "1_6260617"}, {"clOrdId": "1_a260617"}], "symbol": "TSLA", "trades": [{"lastQty": 3, "legRefId": "1", "dashExecId": "pikroetg0g00", "chainExecId": null, "secondaryExchExecId": "Manual Report"}, {"lastQty": 2, "legRefId": "1", "dashExecId": "pikroetg0g00", "chainExecId": null, "secondaryExchExecId": "Manual Report"}, {"lastQty": 6, "legRefId": "1", "dashExecId": "piks8rhk0g00", "chainExecId": null, "secondaryExchExecId": "Manual Report"}], "noExecs": 3, "secType": "OPT", "BROKRate": 1.1022600000000000, "CCRURate": 1.3334700000000000, "noAllocs": 2, "noOrders": 2, "strikePx": 402.5000, "totalQty": 11, "putOrCall": "1", "tradeDate": 20260617, "maturityDay": "18", "processTime": "2026-06-17T07:45:59.301", "AllocInstrId": -126782, "BROKTotalAmount": 12.12486000, "CCRUTotalAmount": 14.66817000, "instrumentTypeId": "O", "allocationEntries": [{"clrFirm": "333", "allocQty": 8, "actionableId": "OCCID_SAB", "allocAccount": "TESTOCC", "individualAllocID": 613121, "AllocEntryBROKRate": 1.1022600000000000, "AllocEntryCCRURate": 1.3334700000000000, "AllocEntryBROKTotalAmount": 8.8180800000000000, "AllocEntryCCRUTotalAmount": 10.6677600000000000}, {"clrFirm": "333", "allocQty": 3, "actionableId": "OCCID_SAB", "allocAccount": "TESTOCC", "individualAllocID": 613120, "AllocEntryBROKRate": 1.1022600000000000, "AllocEntryCCRURate": 1.3334700000000000, "AllocEntryBROKTotalAmount": 3.3067800000000000, "AllocEntryCCRUTotalAmount": 4.0004100000000000}], "maturityMonthYear": "202606", "clearingSumbittedAway": "N"}'::jsonb;
+
+
+
+select sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as ccru_rate,
+       sum(ccru_amount)                                              as ccru_amount,
+       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as brok_rate,
+       sum(brok_amount)                                              as brok_amount
+from genesis2.alloc_instr2trade_record alt
+         inner join genesis2.trade_record tr
+                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+         left join lateral (
+    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
+           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
+           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
+           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
+    from (select rate,
+                 tl.amount,
+                 book_record_type_id,
+                 row_number()
+                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+          from genesis2.trade_level_book_record tl
+                   inner join genesis2.book_record_creator cr
+                              on tl.book_record_creator_id = cr.book_record_creator_id
+          where tl.date_id = :in_date_id
+            AND tl.book_record_type_id in ('BROK', 'CCRU')
+            and tl.trade_record_id = tl.trade_record_id
+          and tl.trade_record_id in (2348108028,2348108029,2348108030)
+          ) l0
+    where true
+      and (l0.rn = 1 or l0.rn is null)
+    ) l1 on true
+where alt.alloc_instr_id = -126782;
+--                                  and tr.is_busted = 'N'
+--                                   and case when ai.is_deleted = 'Y' then true else tr.is_busted = 'N' end
+
+
+select sum(/*coalesce(*/ l1.rate /*,0)*/ * tr.last_qty) /
+       nullif(sum(tr.last_qty), 0)            as rate,
+       sum(amount)                            as amount,
+       array_agg(distinct tr.client_order_id) as client_order_id,
+       array_agg(distinct tr.trade_record_id)
+from alloc_instr2trade_record alt
+         inner join trade_record tr
+                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+         left join lateral (select rate,
+                                   tl.amount,
+                                   row_number()
+                                   over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+                            from trade_level_book_record tl
+                                     inner join book_record_creator cr
+                                                on tl.book_record_creator_id = cr.book_record_creator_id
+                            where tl.date_id = :in_date_id
+                              AND tl.book_record_type_id = 'CCRU'
+                              and tl.trade_record_id = alt.trade_record_id) l1
+                   on true
+where alt.alloc_instr_id = -126782
+  and (l1.rn = 1 or l1.rn is null);
+
+
+select
+    array_agg(tr.trade_record_id),
+
+    sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as ccru_rate,
+                                       max(ccru_amount)                                              as ccru_amount,
+                                       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as brok_rate,
+                                       max(brok_amount)                                              as brok_amount
+                                from genesis2.alloc_instr2trade_record alt
+                                         inner join genesis2.trade_record tr
+                                                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+                                         left join lateral (
+                                    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
+                                           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
+                                           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
+                                           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
+                                    from (select rate,
+                                                 tl.amount,
+                                                 book_record_type_id,
+                                                 row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+                                          from genesis2.trade_level_book_record tl
+                                                   inner join genesis2.book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          where tl.date_id = :in_date_id
+                                            AND tl.book_record_type_id in ('CCRU', 'BROK')
+                                            and tl.trade_record_id in (2348108029,2348108028,2348108030)--= tl.trade_record_id
+                                          ) l0
+                                    where true
+                                      and (l0.rn = 1 or l0.rn is null)
+                                    ) l1 on true
+                                where alt.alloc_instr_id = -126782
+--                                  and tr.is_busted = 'N'
+                                  and case when ai.is_deleted = 'Y' then true else tr.is_busted = 'N' end;
+
+
+select ai.is_deleted, ccr.*
+from genesis2.allocation_instruction ai
+             join genesis2.instrument di on di.instrument_id = ai.instrument_id
+             left join lateral (select sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as ccru_rate,
+                                       max(ccru_amount)                                              as ccru_amount,
+                                       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0) as brok_rate,
+                                       max(brok_amount)                                              as brok_amount
+                                select *
+                                from genesis2.alloc_instr2trade_record alt
+                                         inner join genesis2.trade_record tr
+                                                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+                                         left join lateral (
+                                    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
+                                           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
+                                           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
+                                           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
+                                    from (select rate,
+                                                 tl.amount,
+                                                 book_record_type_id,
+                                                 row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
+                                          from genesis2.trade_level_book_record tl
+                                                   inner join genesis2.book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          where tl.date_id = :in_date_id
+                                            AND tl.book_record_type_id in ('CCRU', 'BROK')
+                                            and tl.trade_record_id = alt.trade_record_id
+--                                           and tl.trade_record_id in (2348108028,2348108029,2348108030)
+                                          ) l0
+                                    where true
+                                      and (l0.rn = 1 or l0.rn is null)
+                                    ) l1 on true
+                                where alt.alloc_instr_id = -126782
+--                                  and tr.is_busted = 'N'
+                                  and case when ai.is_deleted = 'Y' then true else tr.is_busted = 'N' end
+--                                   and (l1.rn = 1 or l1.rn is null)
+        ) ccr on true
+
+             join lateral (select count(*) as alloc_cnt,
+                                  jsonb_agg(jsonb_build_object('allocAccount', ac.opt_occ_id,
+                                                               'allocQty', aie.alloc_qty,
+                                                               'clrFirm', ca.clearing_account_number,
+                                                               'actionableId', aie.occ_actionable_id,
+                                                               'individualAllocID', aie.allocation_instruction_entry_id,
+                                                               'AllocEntryCCRURate', ccr.ccru_rate,
+                                                               'AllocEntryCCRUTotalAmount',
+                                                               ccr.ccru_amount * 1.0 * aie.alloc_qty / total_qty,
+                                                               'AllocEntryBROKRate', ccr.brok_rate,
+                                                               'AllocEntryBROKTotalAmount',
+                                                               ccr.brok_amount * 1.0 * aie.alloc_qty / total_qty
+                                            ))
+                                           as entries
+                           from genesis2.allocation_instruction_entry aie
+                                    left join genesis2.clearing_account ca
+                                              on (ca.clearing_account_id = aie.clearing_account_id
+                                                  )
+                                    join genesis2.account ac on ac.account_id = ai.account_id
+                           where aie.alloc_instr_id =-126782
+                             and aie.date_id = ai.date_id
+                           limit 1) aie on true
+             join lateral (select count(*)                                                              as trade_cnt,
+                                  jsonb_agg(distinct jsonb_build_object('clOrdId', tr.client_order_id)) as cl_ords,
+                                  jsonb_agg(jsonb_build_object('dashExecId', tr.exch_exec_id,
+                                                               'secondaryExchExecId', tr.secondary_exch_exec_id,
+                                                               'lastQty', tr.last_qty,
+                                                               'legRefId', tr.leg_ref_id,
+                                                               'chainExecId', fmj.chain_exec_id)
+                                  )                                                                     as trades
+                           from genesis2.alloc_instr2trade_record aitr
+                                    join genesis2.trade_record tr
+                                         on tr.trade_record_id = aitr.trade_record_id and tr.date_id = aitr.date_id
+                                    left join lateral (select fix_message ->> '10710' as chain_exec_id
+                                                       from staging.fix_message_json fmj
+                                                       where fmj.date_id = aitr.date_id
+                                                         and fmj.fix_message_id = tr.trade_fix_message_id
+                                                       limit 1) fmj on true
+                           where aitr.alloc_instr_id = ai.alloc_instr_id
+                             and aitr.date_id = ai.date_id
+--                             and is_busted = 'N'
+                           limit 1) aitr on true
+
+--              left join genesis2.option_contract oc on di.instrument_id = oc.instrument_id
+--              left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+    where true
+      and ai.alloc_instr_id = -126782

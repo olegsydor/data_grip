@@ -7,7 +7,7 @@ from trash.report_fintech_s3_master_file(
      );
 
 
-CREATE OR REPLACE FUNCTION trash.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
+CREATE OR REPLACE FUNCTION dash360.report_fintech_s3_master_file(in_start_date_id integer, in_end_date_id integer,
                                                                in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                                in_instrument_type character DEFAULT 'E'::bpchar,
                                                                in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
