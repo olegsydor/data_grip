@@ -423,7 +423,7 @@ begin
                                'T' ,
                                order_id::text ,
 --                                order_id::text || '_' || exec_id::text ,
-                               order_id::text || '_' || coalesce(exch_exec_id, secondary_exch_exec_id, ''),
+                               order_id::text || '_' || coalesce(secondary_exch_exec_id, exch_exec_id, ''),
                                null ,
                                null , -- 
                                instrument_type_id , -- 
