@@ -1220,4 +1220,5 @@ select 'NO'                                      as record_type,
 
 select to_char(to_date(:in_start_date_id::text, 'YYYYMMDD') - interval '1 year', 'YYYYMMDD')::int4;
 
-select secondary_exch_exec_id from dwh.execution;
+select * from dwh.execution
+    where exec_id in (416587733039385527,416587733039385530)
