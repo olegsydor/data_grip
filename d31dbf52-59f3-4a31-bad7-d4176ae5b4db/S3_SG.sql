@@ -357,7 +357,8 @@ begin
            ex.exec_id,
            ex.last_qty,
            ex.last_px,
-           ex.exchange_id
+           ex.exchange_id,
+           ex.secondary_exch_exec_id
     from tmp_base as cl
              join dwh.execution ex on ex.order_id = cl.order_id
              join dwh.d_instrument i on i.instrument_id = cl.instrument_id
@@ -420,7 +421,8 @@ begin
            array_to_string(array [
                                'T' ,
                                order_id::text ,
-                               order_id::text || '_' || exec_id::text ,
+--                                order_id::text || '_' || exec_id::text ,
+                               order_id::text || '_' || secondary_exch_exec_id ,
                                null ,
                                null , -- 
                                instrument_type_id , -- 
