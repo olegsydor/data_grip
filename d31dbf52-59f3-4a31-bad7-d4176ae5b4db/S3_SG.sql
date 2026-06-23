@@ -509,3 +509,5 @@ $function$
 
 
 
+-- DROP FUNCTION loader.check_loading(int4);
+
