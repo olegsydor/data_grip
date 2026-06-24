@@ -427,137 +427,136 @@ $function$
 
 
 ---------------
+select db_create_time,
+       alloc_drop_msg_status,
+       alloc_drop_msg_reject_reason, * from t_oa
+    where reported_status is not null
 drop table t_oa;
 create temp table t_oa as
- select tr.date_id::int4,
-               tr.trade_record_id::int8,
-               tr.account_id::int4,
-               tr.instrument_id::int8,
-               tr.side::character,
-               tr.open_close::character,
-               tr.last_px                                                                               as avg_px,
-               tr.last_qty::int4                                                                        as exec_qty,
-               i.display_instrument_id,
-               i.last_trade_date::date,
-               i.instrument_type_id::character,
-               null::int4                                                                               as alloc_instr_id,
-               null::timestamp without time zone                                                        as alloc_time,
-               false                                                                                    as is_allocated,
-               false                                                                                    as is_bundle,
-               tr.cmta::character varying,
-               tr.exec_broker::character varying,
-               case i.instrument_type_id
-                   when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
-                   else tr.last_qty * tr.last_px
-                   end                                                                                  as principal_amount,
-               CCRU.ccru_rate                                                                           as client_commission_rate,
-               null::character varying                                                                  as user_name,
-               tr.blaze_account_alias::character varying,
-               coalesce(tr.street_trade_record_time, tr.trade_record_time)::timestamp without time zone as street_exec_time,
-               ----------------
-               i.last_trade_date                                                                        as expiration_date,
-               tr.opt_customer_firm::character,
-               coalesce(nullif(tr.is_billed, 'N'), rep.to_report)::character                            as reported_status,
+select tr.date_id::int4,
+       tr.trade_record_id::int8,
+       tr.account_id::int4,
+       tr.instrument_id::int8,
+       tr.side::character,
+       tr.open_close::character,
+       tr.last_px                                                                               as avg_px,
+       tr.last_qty::int4                                                                        as exec_qty,
+       i.display_instrument_id,
+       i.last_trade_date::date,
+       i.instrument_type_id::character,
+       null::int4                                                                               as alloc_instr_id,
+       null::timestamp without time zone                                                        as alloc_time,
+       false                                                                                    as is_allocated,
+       false                                                                                    as is_bundle,
+       tr.cmta::character varying,
+       tr.exec_broker::character varying,
+       case i.instrument_type_id
+           when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
+           else tr.last_qty * tr.last_px
+           end                                                                                  as principal_amount,
+       CCRU.ccru_rate                                                                           as client_commission_rate,
+       null::character varying                                                                  as user_name,
+       tr.blaze_account_alias::character varying,
+       coalesce(tr.street_trade_record_time, tr.trade_record_time)::timestamp without time zone as street_exec_time,
+       ----------------
+       i.last_trade_date                                                                        as expiration_date,
+       tr.opt_customer_firm::character,
+       coalesce(nullif(tr.is_billed, 'N'), rep.to_report)::character                            as reported_status,
 
-               case
-                   when coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R' then
-                       coalesce((select bar.db_create_time
-                                 from dash_reporting.bofa_allocation_report bar
-                                          join genesis2.alloc_instr2trade_record aitr
-                                               on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
-                                          join genesis2.trade_record tri
-                                               on tri.date_id = bar.date_id and
-                                                  tri.trade_record_id = aitr.trade_record_id
-                                 where true
---                           and tri.exch_exec_id = tr.exch_exec_id
-                                   and tri.exec_id = tr.exec_id
-                                   and tri.is_billed = 'R'
-                                   and tri.date_id = tr.date_id
-                                   and tri.date_id = :in_date_id
-                                 order by 1
-                                 limit 1),
-                                rep.db_create_time) end                                                 as reported_time,
 
-               bas.claimed_by::int4                                                                     as claimed_by,
-               bas.claim_status::character                                                              as claim_status,
-               case when tr.is_billed = 'R' then true end                                               as is_prev_reported,
-               msg.db_create_time                                                                       as db_create_time,
-               msg.drop_message_status                                                                  as alloc_drop_msg_status,
-               msg.drop_message_reject_reason                                                           as alloc_drop_msg_reject_reason,
-               CCRU.ccru_amount                                                                         as client_commission_amount,
-               tr.client_order_id                                                                       as client_order_id,
---                (case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end)::character    as client_order_status,
-               null::character                                                                          as clearing_submitted_away,
-               CCRU.brok_rate                                                                           as broker_commission_rate,
-               CCRU.brok_amount                                                                         as broker_commission_amount,
-               genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
-                                          in_exec_id := tr.exec_id,
-                                          in_fix_message_id := tr.trade_fix_message_id)                 as manual_broker_code
+               coalesce(x.db_create_time,
+                        rep.db_create_time)                                                  as reported_time,
+
+       bas.claimed_by::int4                                                                     as claimed_by,
+       bas.claim_status::character                                                              as claim_status,
+       case when tr.is_billed = 'R' then true end                                               as is_prev_reported,
+       msg.db_create_time                                                                       as db_create_time,
+       msg.drop_message_status                                                                  as alloc_drop_msg_status,
+       msg.drop_message_reject_reason                                                           as alloc_drop_msg_reject_reason,
+       CCRU.ccru_amount                                                                         as client_commission_amount,
+       tr.client_order_id                                                                       as client_order_id,
+               (case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end)::character    as client_order_status,
+       null::character                                                                          as clearing_submitted_away,
+       CCRU.brok_rate                                                                           as broker_commission_rate,
+       CCRU.brok_amount                                                                         as broker_commission_amount
+--        ,
+--        genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
+--                                   in_exec_id := tr.exec_id,
+--                                   in_fix_message_id := tr.trade_fix_message_id)                 as manual_broker_code
 -- drop table t_ai;
--- create temp table t_ai as
--- select tr.*
-        from genesis2.trade_record tr
-                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-                 left join t_alloc_instr2trade_record as allocated_trades
-                           on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
-                 left join lateral (select rep.to_report, rep.db_create_time
-                                    from t_trade_record rep
-                                    where rep.trade_record_id = tr.trade_record_id
-                                    limit 1) rep on true
-                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
-                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
-                 left join lateral (select bas.claimed_by, bas.claim_status
-                                    from dash_reporting.bofa_allocation_instruction_status bas
-                                    where bas.alloc_instr_id = allocated_trades.alloc_instr_id
-                                      and bas.date_id = allocated_trades.date_id
-                                      and 1 = 2
-                                    limit 1) bas on true
+--  create temp table t_ai as
+--  select tr.*
+--  , chain_id
 
-                 left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
-                                           sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
-                                           max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
-                                           sum(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
-                                    from (SELECT tl.trade_record_id,
-                                                 book_record_type_id,
-                                                 row_number()
-                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
-                                                 tl.rate,
-                                                 tl.amount
-                                          FROM genesis2.trade_level_book_record tl
-                                                   inner join genesis2.book_record_creator cr
-                                                              on tl.book_record_creator_id = cr.book_record_creator_id
-                                          WHERE tl.date_id = :in_date_id
-                                            AND book_record_type_id in ('CCRU', 'BROK')
-                                            and tl.trade_record_id = tr.trade_record_id) L1
-                                    where rn = 1) ccru on true
+from genesis2.trade_record tr
+         inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+         left join t_alloc_instr2trade_record as allocated_trades
+                   on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
+         left join lateral (select rep.to_report, rep.db_create_time
+                            from t_trade_record rep
+                            where rep.trade_record_id = tr.trade_record_id
+                            limit 1) rep on true
+         left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+         left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+         left join lateral (select bas.claimed_by, bas.claim_status
+                            from dash_reporting.bofa_allocation_instruction_status bas
+                            where bas.alloc_instr_id = allocated_trades.alloc_instr_id
+                              and bas.date_id = allocated_trades.date_id
+                              and false
+                            limit 1) bas on true
 
-
-                 left join lateral (select *
-                                    from genesis2.alloc_drop_message_status msg
-                                    where msg.alloc_instr_id = allocated_trades.alloc_instr_id
-                                      and msg.drop_message_type = 'N'
-                                    limit 1) msg on true
-                 left join lateral (select fix_message ->> '10707' as chain_id
-                                    from staging.fix_message_json fmj
-                                    where fmj.date_id = tr.date_id
-                                      and fmj.fix_message_id = tr.trade_fix_message_id
-                                    limit 1) fmj on :in_hide_non_customer_bphops
---                  left join lateral (select fpo.order_status
---                                     from staging.f_parent_order fpo
---                                     where fpo.status_date_id = :in_date_id
---                                       and fpo.parent_order_id = tr.order_id
---                                     limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
-        where tr.date_id = :in_date_id
-          and case when coalesce(:in_account_ids, '{}') = '{}' then false else tr.account_id = any (:in_account_ids) end
-          and tr.is_busted = 'N'
+         left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                   sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                   max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                   sum(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                            from (SELECT tl.trade_record_id,
+                                         book_record_type_id,
+                                         row_number()
+                                         over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                         tl.rate,
+                                         tl.amount
+                                  FROM genesis2.trade_level_book_record tl
+                                           inner join genesis2.book_record_creator cr
+                                                      on tl.book_record_creator_id = cr.book_record_creator_id
+                                  WHERE tl.date_id = :in_date_id
+                                    AND book_record_type_id in ('CCRU', 'BROK')
+                                    and tl.trade_record_id = tr.trade_record_id) L1
+                            where rn = 1) ccru on true
+         left join lateral (select msg.db_create_time, msg.drop_message_status, msg.drop_message_reject_reason
+                            from genesis2.alloc_drop_message_status msg
+                            where msg.alloc_instr_id = allocated_trades.alloc_instr_id
+                              and msg.drop_message_type = 'N'
+                              and false
+                            limit 1) msg on true
+         left join lateral (select fix_message ->> '10707' as chain_id
+                            from staging.fix_message_json fmj
+                            where fmj.date_id = tr.date_id
+                              and fmj.fix_message_id = tr.trade_fix_message_id
+                            limit 1) fmj on :in_hide_non_customer_bphops
+                 left join lateral (select fpo.order_status
+                                    from staging.f_parent_order fpo
+                                    where fpo.status_date_id = :in_date_id
+                                      and fpo.parent_order_id = tr.order_id
+                                    limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
+left join lateral (select min(bar.db_create_time) as db_create_time
+                         from genesis2.alloc_instr2trade_record aitr
+                                  join dash_reporting.bofa_allocation_report bar
+                                       on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                         where true
+                           and aitr.trade_record_id = tr.trade_record_id
+--                                  order by bar.db_create_time
+                         limit 1) x on true and coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R'
+where tr.date_id = :in_date_id
+  and case when coalesce(:in_account_ids, '{}') = '{}' then false else tr.account_id = any (:in_account_ids) end
+  and tr.is_busted = 'N'
 --and false
-          and allocated_trades.alloc_instr_id is NULL
+  and allocated_trades.alloc_instr_id is NULL
           and case
                   when in_reported_status = 'R' then rep.to_report = 'R'
                   when in_reported_status = 'U' then rep.to_report in ('U', 'C')
                   when in_reported_status is null then true end
           and case
-                  when in_hide_non_customer_bphops and (chain_id is not null and chain_id != tr.client_order_id)
+                  when in_hide_non_customer_bphops and chain_id is not null and chain_id != tr.client_order_id
                       then false
                   else true end
           and case
