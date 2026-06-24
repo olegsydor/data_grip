@@ -148,3 +148,7 @@ select null
                         join genesis2.alloc_drop_message_status adms on adms.alloc_instr_id = aitr.alloc_instr_id
                where aitr.trade_record_id in (in_trade_record_ids)
                  and aitr.date_id = in_date_id
+
+select dash360.get_data_for_allocation_drop_sg(ai.alloc_instr_id), * from genesis2.allocation_instruction ai
+         where date_id = 20260623;
+select * from dash360.get_data_for_allocation_drop_sg(-127278)
