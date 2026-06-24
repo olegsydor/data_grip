@@ -102,22 +102,29 @@ begin
     into l_step_id;
 
 
-    drop table if exists t_trade_record;
-    create temp table t_trade_record
-    as
-    select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
-                                                                              br.to_report,
-                                                                              br.alloc_instr_id,
-                                                                              br.db_create_time,
-                                                                              'B' as alloc_rep_type
-    from dash_reporting.bofa_allocation_report br
-             join genesis2.alloc_instr2trade_record atr
-                  on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
-    where br.date_id = in_date_id
-    union all
-    select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
-    from dash_reporting.bofa_trade_record btr
-    where btr.date_id = in_date_id;
+drop table if exists t_trade_record;
+create temp table t_trade_record
+as
+select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
+                                                                          br.to_report,
+                                                                          br.alloc_instr_id,
+                                                                          br.db_create_time,
+                                                                          'B'     as alloc_rep_type,
+                                                                          case
+                                                                              when br.to_report is distinct from 'U'
+                                                                                  then br.to_report
+                                                                              when staging.get_fully_reported_trade(br.alloc_instr_id, br.date_id) = 1 -- means that only one value is possible in related trade_records and it can be only R
+                                                                                  then 'U'
+                                                                              else 'W'
+                                                                              end as to_report_mod
+from dash_reporting.bofa_allocation_report br
+         join genesis2.alloc_instr2trade_record atr
+              on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
+where br.date_id = :in_date_id
+union all
+select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type, to_report
+from dash_reporting.bofa_trade_record btr
+where btr.date_id = :in_date_id;
 
     get diagnostics l_row_cnt = row_count;
 
@@ -588,22 +595,23 @@ drop table if exists t_trade_record;
 create temp table t_trade_record
 as
 select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
+                                                                          br.to_report,
+                                                                          br.alloc_instr_id,
+                                                                          br.db_create_time,
+                                                                          'B'     as alloc_rep_type,
                                                                           case
                                                                               when br.to_report is distinct from 'U'
                                                                                   then br.to_report
                                                                               when staging.get_fully_reported_trade(br.alloc_instr_id, br.date_id) = 1 -- means that only one value is possible in related trade_records and it can be only R
                                                                                   then 'U'
                                                                               else 'W'
-                                                                              end as to_report,
-                                                                          br.alloc_instr_id,
-                                                                          br.db_create_time,
-                                                                          'B'     as alloc_rep_type
+                                                                              end as to_report_mod
 from dash_reporting.bofa_allocation_report br
          join genesis2.alloc_instr2trade_record atr
               on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
 where br.date_id = :in_date_id
 union all
-select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
+select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type, to_report
 from dash_reporting.bofa_trade_record btr
 where btr.date_id = :in_date_id;
 
@@ -661,7 +669,7 @@ select ai.date_id,
            else ccr.manual_broker[1] end                 as manual_broker_code
 from genesis2.allocation_instruction ai
          inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
-         left join lateral (select to_report,
+         left join lateral (select to_report_mod,
                                    rep.db_create_time
                             from t_trade_record rep
                             where rep.alloc_instr_id = ai.alloc_instr_id
@@ -742,50 +750,57 @@ select * from genesis2.allocation_instruction
 where date_id = 20260623
 --
 select sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                       as ccru_rate,
-                                   case
-                                       when count(distinct tr.blaze_account_alias) = 1
-                                           then max(tr.blaze_account_alias)
-                                       when count(distinct tr.blaze_account_alias) > 1 then '-'
-                                       end                                                                             as blaze_account_alias,
-                                   string_agg(distinct tr.exec_broker, ', ')                                           as exec_broker,
-                                   sum(ccru_amount)                                                                    as ccru_amount,
-                                   array_agg(distinct tr.client_order_id)                                              as client_order_id,
---                                    array_agg(distinct fpo.order_status)                                                as order_status,
-                                   sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                       as brok_rate,
-                                   sum(brok_amount)                                                                    as brok_amount,
-                                   array_agg(distinct
-                                             genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id,
-                                                                        in_date_id := tr.date_id,
-                                                                        in_exec_id := tr.exec_id,
-                                                                        in_fix_message_id := tr.trade_fix_message_id)) as manual_broker
-select *
+       case
+           when count(distinct tr.blaze_account_alias) = 1
+               then max(tr.blaze_account_alias)
+           when count(distinct tr.blaze_account_alias) > 1 then '-'
+           end                                                                             as blaze_account_alias,
+       string_agg(distinct tr.exec_broker, ', ')                                           as exec_broker,
+       sum(ccru_amount)                                                                    as ccru_amount,
+       array_agg(distinct tr.client_order_id)                                              as client_order_id,
+       case when array_length(fpo.order_status, 1) > 1 then order_status[1] else '-' end                                                as order_status,
+       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                       as brok_rate,
+       sum(brok_amount)                                                                    as brok_amount,
+       array_agg(distinct
+                 genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id,
+                                            in_date_id := tr.date_id,
+                                            in_exec_id := tr.exec_id,
+                                            in_fix_message_id := tr.trade_fix_message_id)) as manual_broker
+
 from genesis2.alloc_instr2trade_record alt
-                                     inner join genesis2.trade_record tr
-                                                on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+         inner join genesis2.trade_record tr
+                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+         left join lateral (select array_agg(distinct case when tr.subsystem_id = 'OMS_EDW' then fpo.order_status else '2' end) as order_status
+                            from staging.f_parent_order fpo
+                            where fpo.status_date_id = :in_date_id
+                              and fpo.parent_order_id = tr.order_id limit 1) fpo on true
+         left join lateral (
+    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
+           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
+           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
+           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
+    from (select tl.trade_record_id,
+                 tl.rate,
+                 tl.amount,
+                 tl.book_record_type_id,
+                 row_number()
+                 over (partition by tl.trade_record_id , tl.book_record_type_id , tl.billing_entity order by cr.priority ) as rn
+          from genesis2.trade_level_book_record tl
+                   inner join genesis2.book_record_creator cr
+                              on tl.book_record_creator_id = cr.book_record_creator_id
+          where tl.date_id = :in_date_id
+            AND tl.book_record_type_id in ('CCRU', 'BROK')
+--             and tl.trade_record_id in (5154689282)--,5154689283,5154689284,5154689285,5154689286,5154689287,5154689288)
+                                        and tl.trade_record_id =  alt.trade_record_id
+         ) l0
+    where true
+      and (l0.rn = 1 or l0.rn is null)
+    ) l1 on true
 
-                                     left join lateral (
-                                select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
-                                       sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
-                                       max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
-                                       sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
-                                from (select rate,
-                                             tl.amount,
-                                             book_record_type_id,
-                                             row_number()
-                                             over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
-                                      from genesis2.trade_level_book_record tl
-                                               inner join genesis2.book_record_creator cr
-                                                          on tl.book_record_creator_id = cr.book_record_creator_id
-                                      where tl.date_id = :in_date_id
-                                        AND tl.book_record_type_id in ('CCRU', 'BROK')
-                                        and tl.trade_record_id = alt.trade_record_id) l0
-                                where true
-                                  and (l0.rn = 1 or l0.rn is null)
-                                ) l1 on true
-
-                            where alt.alloc_instr_id = -346611120
-                              and tr.is_busted = 'N'
+where true
+  and alt.alloc_instr_id = -346611120
+  and tr.is_busted = 'N'
 --                               and (l1.rn = 1 or l1.rn is null)
-                              and alt.date_id = :in_date_id
-                              and tr.date_id = :in_date_id
-                            limit 1
+  and alt.date_id = :in_date_id
+  and tr.date_id = :in_date_id
+limit 1
