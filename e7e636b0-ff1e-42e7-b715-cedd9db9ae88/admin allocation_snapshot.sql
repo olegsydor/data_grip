@@ -582,8 +582,34 @@ where tr.date_id = :in_date_id
   and case
           when in_client_order_states is null then true
           else fpo.order_status is not null and fpo.order_status = any (in_client_order_states) end;
+----------------------------------------------------------------------
 
+drop table if exists t_trade_record;
+create temp table t_trade_record
+as
+select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
+                                                                          case
+                                                                              when br.to_report is distinct from 'U'
+                                                                                  then br.to_report
+                                                                              when staging.get_fully_reported_trade(br.alloc_instr_id, br.date_id) = 1 -- means that only one value is possible in related trade_records and it can be only R
+                                                                                  then 'U'
+                                                                              else 'W'
+                                                                              end as to_report,
+                                                                          br.alloc_instr_id,
+                                                                          br.db_create_time,
+                                                                          'B'     as alloc_rep_type
+from dash_reporting.bofa_allocation_report br
+         join genesis2.alloc_instr2trade_record atr
+              on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
+where br.date_id = :in_date_id
+union all
+select btr.trade_record_id, to_report, 0, btr.db_create_time, 'T' as alloc_rep_type
+from dash_reporting.bofa_trade_record btr
+where btr.date_id = :in_date_id;
 
+select staging.get_fully_reported_trade(rep.alloc_instr_id, in_date_id)
+
+create temp table t_os as
 select ai.date_id,
        null::int8                                        as trade_record_id,
        ai.account_id::int4,
@@ -610,7 +636,7 @@ select ai.date_id,
        ccr.blaze_account_alias::character varying,
        null::timestamp without time zone                 as street_exec_time,
        -------
-       i.last_trade_date,
+       i.last_trade_date                                 as expiration_date,
        null::character                                   as opt_customer_or_firm,
        rep.to_report::character                          as reported_status,
        rep.db_create_time                                as reported_time,
@@ -624,24 +650,18 @@ select ai.date_id,
        case
            when array_length(ccr.client_order_id, 1) > 1 then '-'
            else ccr.client_order_id[1] end               as client_order_id,
-       case
-           when array_length(ccr.order_status, 1) > 1 then '-'
-           else ccr.order_status[1] end ::char           as client_order_status,
+--        case
+--            when array_length(ccr.order_status, 1) > 1 then '-'
+--            else ccr.order_status[1] end ::char           as client_order_status,
        ai.clearing_submitted_away                        as clearing_submitted_away,
        ccr.brok_rate                                     as broker_commission_rate,
-       ccr.brok_amount                                   as broker_commission_rate,
+       ccr.brok_amount                                   as broker_commission_amount,
        case
            when array_length(ccr.manual_broker, 1) > 1 then '-'
            else ccr.manual_broker[1] end                 as manual_broker_code
 from genesis2.allocation_instruction ai
          inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
-         left join lateral (select case
-                                       when rep.to_report = 'U' and
-                                            staging.get_fully_reported_trade(rep.alloc_instr_id, in_date_id) =
-                                            1 -- means that only one value is possible in related trade_records and it can be only R
-                                           then 'U'
-                                       when rep.to_report = 'U' then 'W'
-                                       else rep.to_report end as to_report,
+         left join lateral (select to_report,
                                    rep.db_create_time
                             from t_trade_record rep
                             where rep.alloc_instr_id = ai.alloc_instr_id
@@ -665,7 +685,7 @@ from genesis2.allocation_instruction ai
                                    string_agg(distinct tr.exec_broker, ', ')                                           as exec_broker,
                                    sum(ccru_amount)                                                                    as ccru_amount,
                                    array_agg(distinct tr.client_order_id)                                              as client_order_id,
-                                   array_agg(distinct fpo.order_status)                                                as order_status,
+--                                    array_agg(distinct fpo.order_status)                                                as order_status,
                                    sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                       as brok_rate,
                                    sum(brok_amount)                                                                    as brok_amount,
                                    array_agg(distinct
@@ -690,30 +710,29 @@ from genesis2.allocation_instruction ai
                                       from genesis2.trade_level_book_record tl
                                                inner join genesis2.book_record_creator cr
                                                           on tl.book_record_creator_id = cr.book_record_creator_id
-                                      where tl.date_id = in_date_id
+                                      where tl.date_id = :in_date_id
                                         AND tl.book_record_type_id in ('CCRU', 'BROK')
                                         and tl.trade_record_id = alt.trade_record_id) l0
                                 where true
                                   and (l0.rn = 1 or l0.rn is null)
                                 ) l1 on true
-                                     left join lateral (select distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end
-                                                        from staging.f_parent_order fpo
-                                                        where fpo.status_date_id = in_date_id
-                                                          and fpo.parent_order_id = tr.order_id) fpo on true
+
                             where alt.alloc_instr_id = ai.alloc_instr_id
                               and tr.is_busted = 'N'
 --                               and (l1.rn = 1 or l1.rn is null)
-                              and alt.date_id = in_date_id
-                              and tr.date_id = in_date_id
+                              and alt.date_id = :in_date_id
+                              and tr.date_id = :in_date_id
                             limit 1
     ) ccr on true
-
+    --          left join lateral (select array_agg(distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end) as order_status
+--                             from staging.f_parent_order fpo
+--                             where fpo.status_date_id = :in_date_id
+--                               and fpo.parent_order_id = tr.order_id) fpo on true
          left join lateral (select *
                             from genesis2.alloc_drop_message_status msg
                             where msg.alloc_instr_id = ai.alloc_instr_id
                               and msg.drop_message_type = 'N'
                             limit 1) msg on true
-
-where ai.date_id = in_date_id
-  and case when coalesce(in_account_ids, '{}') = '{}' then false else ai.account_id = any (in_account_ids) end
+where ai.date_id = :in_date_id
+  and case when coalesce(:in_account_ids, '{}') = '{}' then false else ai.account_id = any (:in_account_ids) end
   and ai.is_deleted = 'N'

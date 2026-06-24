@@ -131,3 +131,20 @@ exception
 end;
 $function$
 ;
+
+
+ if exists (select null
+               from genesis2.alloc_instr2trade_record aitr
+                        join genesis2.alloc_drop_message_status adms on adms.alloc_instr_id = aitr.alloc_instr_id
+               where aitr.trade_record_id in (in_trade_record_ids)
+                 and aitr.date_id = in_date_id
+    ) then
+       STOP
+    end if;
+
+
+select null
+               from genesis2.alloc_instr2trade_record aitr
+                        join genesis2.alloc_drop_message_status adms on adms.alloc_instr_id = aitr.alloc_instr_id
+               where aitr.trade_record_id in (in_trade_record_ids)
+                 and aitr.date_id = in_date_id
