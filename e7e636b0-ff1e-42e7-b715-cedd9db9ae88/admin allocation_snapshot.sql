@@ -594,18 +594,19 @@ where tr.date_id = :in_date_id
 drop table if exists t_trade_record;
 create temp table t_trade_record
 as
-select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id) atr.trade_record_id,
-                                                                          br.to_report,
-                                                                          br.alloc_instr_id,
-                                                                          br.db_create_time,
-                                                                          'B'     as alloc_rep_type,
-                                                                          case
-                                                                              when br.to_report is distinct from 'U'
-                                                                                  then br.to_report
-                                                                              when staging.get_fully_reported_trade(br.alloc_instr_id, br.date_id) = 1 -- means that only one value is possible in related trade_records and it can be only R
-                                                                                  then 'U'
-                                                                              else 'W'
-                                                                              end as to_report_mod
+select distinct on (atr.trade_record_id, br.to_report, br.alloc_instr_id)
+       atr.trade_record_id,
+       br.to_report,
+       br.alloc_instr_id,
+       br.db_create_time,
+       'B'     as alloc_rep_type,
+       case
+           when br.to_report is distinct from 'U'
+               then br.to_report
+           when staging.get_fully_reported_trade(br.alloc_instr_id, br.date_id) = 1 -- means that only one value is possible in related trade_records and it can be only R
+               then 'U'
+           else 'W'
+           end as to_report_mod
 from dash_reporting.bofa_allocation_report br
          join genesis2.alloc_instr2trade_record atr
               on atr.alloc_instr_id = br.alloc_instr_id and atr.date_id = br.date_id
@@ -646,7 +647,7 @@ select ai.date_id,
        -------
        i.last_trade_date                                 as expiration_date,
        null::character                                   as opt_customer_or_firm,
-       rep.to_report::character                          as reported_status,
+       rep.to_report_mod::character                      as reported_status,
        rep.db_create_time                                as reported_time,
        bas.claimed_by                                    as claimed_by,
        bas.claim_status                                  as claim_status,
@@ -732,10 +733,10 @@ from genesis2.allocation_instruction ai
                               and tr.date_id = :in_date_id
                             limit 1
     ) ccr on true
-    --          left join lateral (select array_agg(distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end) as order_status
---                             from staging.f_parent_order fpo
---                             where fpo.status_date_id = :in_date_id
---                               and fpo.parent_order_id = tr.order_id) fpo on true
+             left join lateral (select array_agg(distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end) as order_status
+                            from staging.f_parent_order fpo
+                            where fpo.status_date_id = :in_date_id
+                              and fpo.parent_order_id = tr.order_id limit 1) fpo on true
          left join lateral (select *
                             from genesis2.alloc_drop_message_status msg
                             where msg.alloc_instr_id = ai.alloc_instr_id
