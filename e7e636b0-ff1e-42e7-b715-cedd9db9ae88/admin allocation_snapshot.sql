@@ -761,19 +761,25 @@ create index on tmp_ai (alloc_instr_id);
 EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 drop table if exists tmp_sum;
 create temp table tmp_sum as
-select l1.ccru_rate,
+select ai.alloc_instr_id,
+       tr.trade_record_id,
+       tr.order_id,
+       tr.exec_id,
+       tr.trade_fix_message_id,
+       l0.rate,
+       l0.amount,
+       l0.billing_entity,
+       l0.book_record_type_id,
+       l0.priority,
        tr.last_qty,
-       tr.blaze_account_alias        as blaze_account_alias,
-       tr.exec_broker                as exec_broker,
-       ccru_amount                   as ccru_amount,
-       tr.client_order_id            as client_order_id,
-       fpo.order_status              as order_status,
-       l1.brok_rate,
-       brok_amount                   as brok_amount,
-
-       case
-           when tr.subsystem_id = 'OMS_EDW' then bl7.manual_broker
-           else fx.manual_broker end as manual_broker
+       tr.blaze_account_alias as blaze_account_alias,
+       tr.exec_broker         as exec_broker,
+       tr.client_order_id     as client_order_id,
+       tr.subsystem_id
+--        fpo.order_status              as order_status,
+--        case
+--            when tr.subsystem_id = 'OMS_EDW' then bl7.manual_broker
+--            else fx.manual_broker end as manual_broker
 from tmp_ai ai
          join genesis2.alloc_instr2trade_record alt using (alloc_instr_id, date_id)
          join lateral (select *
@@ -781,12 +787,12 @@ from tmp_ai ai
                        where alt.trade_record_id = tr.trade_record_id
                          and alt.date_id = tr.date_id
                        limit 1) tr on true
-         left join lateral (select fpo.order_status
+    /*
+    left join lateral (select fpo.order_status
                             from staging.f_parent_order fpo
                             where fpo.status_date_id = :in_date_id
                               and fpo.parent_order_id = tr.order_id
                               and tr.subsystem_id is distinct from 'OMS_EDW'
-
                             limit 1) fpo on true
          left join lateral ( select manual_broker
                              from staging.trade_record_blaze7
@@ -799,51 +805,24 @@ from tmp_ai ai
                              where fmj.date_id = :in_date_id
                                and fmj.fix_message_id = tr.trade_fix_message_id
                              limit 1) fx on true
+*/
+         left join lateral (select tl.rate,
+                                   tl.amount,
+                                   tl.book_record_type_id,
+                                   tl.billing_entity,
+                                   cr.priority
+                            from genesis2.trade_level_book_record tl
+                                     inner join genesis2.book_record_creator cr
+                                                on tl.book_record_creator_id = cr.book_record_creator_id
+                            where tl.date_id = :in_date_id
+                              AND tl.book_record_type_id in ('CCRU', 'BROK')
+                              and tl.trade_record_id = alt.trade_record_id) l0 on true
 
-         left join lateral (
-    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
-           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
-           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
-           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
-    from (select rate,
-                 tl.amount,
-                 book_record_type_id,
-                 row_number()
-                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
-          from genesis2.trade_level_book_record tl
-                   inner join genesis2.book_record_creator cr
-                              on tl.book_record_creator_id = cr.book_record_creator_id
-          where tl.date_id = :in_date_id
-            AND tl.book_record_type_id in ('CCRU', 'BROK')
-            and tl.trade_record_id = alt.trade_record_id) l0
-    where true
-      and (l0.rn = 1 or l0.rn is null)
-    ) l1 on true
 where true
   and tr.is_busted = 'N'
   and alt.date_id = :in_date_id
-  and tr.date_id = :in_date_id
-group by alt.alloc_instr_id
+  and tr.date_id = :in_date_id;
+-- group by alt.alloc_instr_id
 
-declare
-    l_manual_broker character varying;
-begin
-    if in_subsystem_id = 'OMS_EDW' then
-        select manual_broker
-        into l_manual_broker
-        from staging.trade_record_blaze7
-        where date_id = in_date_id
-          -- SY and trade_record_id = in_trade_record_id
-		  and exec_id = in_exec_id
-          and manual_broker is not null
-        limit 1;
-    else
-        select fmj.fix_message ->> '10568'
-        into l_manual_broker
-        from staging.fix_message_json fmj
-        where fmj.date_id = in_date_id
-          and fmj.fix_message_id = in_fix_message_id;
-    end if;
-    return l_manual_broker;
-end;
-
+select distinct order_id, subsystem_id
+from tmp_sum
