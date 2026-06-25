@@ -825,22 +825,51 @@ where true
 -- group by alt.alloc_instr_id
 
 create temp table t_res as
-select order_id, subsystem_id, trade_record_id, fpo.order_status, bl7.manual_broker, fx.manual_broker as fx_manual_broker
+select order_id, subsystem_id, trade_record_id,
+--        fpo.order_status,
+       bl7.manual_broker, fx.manual_broker as fx_manual_broker
 from tmp_sum tr
-left join lateral (select fpo.order_status
-                            from staging.f_parent_order fpo
-                            where fpo.status_date_id = :in_date_id
-                              and fpo.parent_order_id = tr.order_id
-                              and tr.subsystem_id is distinct from 'OMS_EDW'
-                            limit 1) fpo on true
-         left join lateral ( select manual_broker
+-- left join lateral (select fpo.order_status
+--                             from staging.f_parent_order fpo
+--                             where fpo.status_date_id = :in_date_id
+--                               and fpo.parent_order_id = tr.order_id
+--                               and tr.subsystem_id is distinct from 'OMS_EDW'
+--                             limit 1) fpo on true
+         left join lateral ( select distinct manual_broker
                              from staging.trade_record_blaze7
                              where date_id = :in_date_id
                                and exec_id = tr.exec_id
                                and manual_broker is not null
-                             limit 1 ) bl7 on true
-         left join lateral ( select fmj.fix_message ->> '10568' as manual_broker
+                             limit 2 ) bl7 on true
+         left join lateral ( select distinct fmj.fix_message ->> '10568' as manual_broker
                              from staging.fix_message_json fmj
                              where fmj.date_id = :in_date_id
                                and fmj.fix_message_id = tr.trade_fix_message_id
-                             limit 1) fx on true
+                             limit 2) fx on true
+
+create temp table t_os as
+with base as (select alloc_instr_id,
+                     subsystem_id,
+                     array_agg(trade_record_id)      as blaze_trade_record,
+                     array_agg(exec_id)              as blaze_exec_id,
+                     array_agg(trade_fix_message_id) as trade_fix_message_id
+              from tmp_sum tr
+              group by alloc_instr_id, subsystem_id)
+select *
+from base
+         left join lateral (select distinct manual_broker as bl_manual_broker
+                            from staging.trade_record_blaze7
+                            where date_id = :in_date_id
+                              and exec_id = any (blaze_exec_id)
+                              and manual_broker is not null
+                            limit 2
+    ) bl7 on true and subsystem_id = 'OMS_EDW'
+         left join lateral ( select distinct fmj.fix_message ->> '10568' as manual_broker
+                             from staging.fix_message_json fmj
+                             where fmj.date_id = :in_date_id
+                               and fmj.fix_message_id = any (trade_fix_message_id)
+                             limit 2) fx on true and subsystem_id != 'OMS_EDW'
+
+;
+select * from t_os
+where manual_broker is not null
