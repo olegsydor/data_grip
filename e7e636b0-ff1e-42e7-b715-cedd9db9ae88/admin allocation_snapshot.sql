@@ -1,10 +1,10 @@
 -- DROP FUNCTION trash.admin_allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
 
-CREATE FUNCTION trash.admin_allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                 in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
-                                                 in_reported_status character DEFAULT NULL::character(1),
-                                                 in_hide_non_customer_bphops boolean DEFAULT false,
-                                                 in_client_order_states character[] DEFAULT NULL::character(1)[])
+CREATE FUNCTION dash360.admin_allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+                                                   in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
+                                                   in_reported_status character DEFAULT NULL::character(1),
+                                                   in_hide_non_customer_bphops boolean DEFAULT false,
+                                                   in_client_order_states character[] DEFAULT NULL::character(1)[])
     RETURNS TABLE
             (
                 date_id                    integer,
@@ -194,7 +194,8 @@ begin
                                and bl.exec_id = tr.exec_id
                                and bl.manual_broker is not null
                              limit 1)
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts) then fmj.manual_broker_code::character varying end
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then fmj.manual_broker_code::character varying end
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join t_alloc_instr2trade_record as allocated_trades
@@ -247,13 +248,19 @@ begin
                                     where fpo.status_date_id = in_date_id
                                       and fpo.parent_order_id = tr.order_id
                                     limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
-                 left join lateral (select min(bar.db_create_time) as db_create_time
-                                    from genesis2.alloc_instr2trade_record aitr
-                                             join dash_reporting.bofa_allocation_report bar
-                                                  on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+            --                  left join lateral (select min(bar.db_create_time) as db_create_time
+--                                     from genesis2.alloc_instr2trade_record aitr
+--                                              join dash_reporting.bofa_allocation_report bar
+--                                                   on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+--                                     where true
+--                                       and aitr.trade_record_id = tr.trade_record_id
+-- --                                  order by bar.db_create_time
+--                                     limit 1) x on true and coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R'
+                 left join lateral (select min(ttr.db_create_time) as db_create_time
+                                    from t_trade_record ttr
                                     where true
-                                      and aitr.trade_record_id = tr.trade_record_id
---                                  order by bar.db_create_time
+                                      and ttr.trade_record_id = tr.trade_record_id
+--                                  order by db_create_time
                                     limit 1) x on true and coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R'
         where tr.date_id = in_date_id
           and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end

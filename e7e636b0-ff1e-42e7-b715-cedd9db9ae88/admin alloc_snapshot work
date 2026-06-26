@@ -52,9 +52,9 @@ select date_id,
        broker_commission_amount,
        manual_broker_code
 from t_new
-   where alloc_instr_id = any('{-347257044,-347588710}')
--- except
-union all
+--    where alloc_instr_id = any('{-347257044,-347588710}')
+except
+-- union all
 select date_id,
        trade_record_id,
        account_id,
@@ -94,7 +94,7 @@ select date_id,
        broker_commission_amount,
        manual_broker_code
 from t_old
-  where alloc_instr_id = any('{-347257044, -347588710}')
+--   where alloc_instr_id = any('{-347257044, -347588710}')
 ;
                             ) x
 
@@ -804,7 +804,7 @@ select tr.date_id::int4,
        msg.drop_message_reject_reason                                                           as alloc_drop_msg_reject_reason,
        CCRU.ccru_amount                                                                         as client_commission_amount,
        tr.client_order_id                                                                       as client_order_id,
---                (case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end)::character    as client_order_status,
+       (case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end)::character    as client_order_status,
        null::character                                                                          as clearing_submitted_away,
        CCRU.brok_rate                                                                           as broker_commission_rate,
        CCRU.brok_amount                                                                         as broker_commission_amount,
@@ -822,7 +822,7 @@ select tr.date_id::int4,
                      from staging.fix_message_json fmj
                      where fmj.date_id = tr.date_id
                        and fmj.fix_message_id = tr.trade_fix_message_id
-                     limit 1) end
+                     limit 1) end as manual_broker_code
 from genesis2.trade_record tr
          inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
          left join t_alloc_instr2trade_record as allocated_trades
@@ -869,16 +869,16 @@ from genesis2.trade_record tr
                               and fmj.fix_message_id = tr.trade_fix_message_id
                             limit 1) fmj on :in_hide_non_customer_bphops
 
-    --                  left join lateral (select fpo.order_status
---                                     from staging.f_parent_order fpo
---                                     where fpo.status_date_id = :in_date_id
---                                       and fpo.parent_order_id = tr.order_id
---                                     limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
+                     left join lateral (select fpo.order_status
+                                    from staging.f_parent_order fpo
+                                    where fpo.status_date_id = :in_date_id
+                                      and fpo.parent_order_id = tr.order_id
+                                    limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
          left join lateral (select min(db_create_time) as db_create_time
                             from t_trade_record
                             where true
                               and trade_record_id = tr.trade_record_id
-                                 order by db_create_time
+
                             limit 1) x on true and coalesce(nullif(tr.is_billed, 'N'), rep.to_report) = 'R'
 where tr.date_id = :in_date_id
   and case when coalesce(:in_account_ids, '{}') = '{}' then false else tr.account_id = any (:in_account_ids) end
@@ -886,3 +886,5 @@ where tr.date_id = :in_date_id
 --and false
   and allocated_trades.alloc_instr_id is NULL;
 
+select * from tmp_tr
+where manual_broker_code is not null
