@@ -151,4 +151,15 @@ select null
 
 select dash360.get_data_for_allocation_drop_sg(ai.alloc_instr_id), * from genesis2.allocation_instruction ai
          where date_id = 20260623;
-select * from dash360.get_data_for_allocation_drop_sg(-127278)
+
+select * from dash360.get_data_for_allocation_drop_sg(-127278) ;
+
+update trash.ind;
+set "DASH Liq Ind Type" = case "DASH Liq Ind Type"
+    when 'Auction' then 4
+    when 'Remove Liquidity' then 2
+    when 'Add Liquidity' then 1
+    when 'Route Away' then 3
+when 'Conditional'then 8
+    when 'Neither Added Nor Removed Liquidity' then 0
+end
