@@ -55,4 +55,58 @@ where true
   and co.parent_order_id is null
   and case when :in_instrument_type_id is null then true else i.instrument_type_id = :in_instrument_type_id end
 group by "Period", "Account", "Capacity", "Trading Firm";
+---
 
+drop table if exists trash.fintech_adh_parent_order_count
+create table trash.fintech_adh_parent_order_count
+(
+    status_date_id        int4,
+    period                date,
+    trading_firm_name     varchar,
+    account_name          varchar,
+    customer_or_firm_name varchar,
+    cum_qty               int8,
+    order_count           int8,
+    instrument_type_id    char
+);
+create index on trash.fintech_adh_parent_order_count (status_date_id, period,trading_firm_name, account_name, customer_or_firm_name, instrument_type_id);
+
+select * from trash.fintech_adh_parent_order_count;
+
+select * from trash.load_fintech_adh_parent_order_count(in_date_id := 20260701);
+
+create or replace function trash.load_fintech_adh_parent_order_count(in_date_id int4)
+    returns int4
+    language plpgsql
+as
+$$
+declare
+    l_row_count int4;
+begin
+    if exists (select null from trash.fintech_adh_parent_order_count where status_date_id = in_date_id) then
+        delete from trash.fintech_adh_parent_order_count where status_date_id = in_date_id;
+    end if;
+
+    insert into trash.fintech_adh_parent_order_count(status_date_id, period, trading_firm_name, account_name,
+                                                     customer_or_firm_name, cum_qty, order_count, instrument_type_id)
+    select in_date_id,
+           o."StatusDate"::date               as "Period",
+           tf.trading_firm_name::varchar      as "Trading Firm",
+           a.account_name::varchar            as "Account",
+           cf.customer_or_firm_name::varchar  as "Capacity",
+           sum(coalesce(o."CumQty", 0))::int8 as "Qty",
+           count(distinct o."ClOrdID")        as "Parent Order Count",
+           "InstrumentType"
+    from dwh.historic_order_details_storage o
+             join dwh.d_account a on (a.account_id = o."AccountID")
+             join dwh.d_trading_firm tf on (tf.trading_firm_unq_id = a.trading_firm_unq_id)
+             left join dwh.d_customer_or_firm cf on (cf.customer_or_firm_id = o."CustomerOrFirm")
+    where true
+      and "Status_Date_id" >= in_date_id
+      and "Status_Date_id" <= in_date_id
+      and o."CustomerOrderID" is null
+    group by in_date_id, "Period", "Account", "Capacity", "Trading Firm", "InstrumentType";
+    get diagnostics l_row_count = row_count;
+    return l_row_count;
+end;
+$$
