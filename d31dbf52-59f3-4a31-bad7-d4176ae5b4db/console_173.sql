@@ -1,5 +1,5 @@
 create temp table t_02 as
-     insert into t_01
+--      insert into t_01
 select o."StatusDate"::date               as "Period",
            tf.trading_firm_name::varchar      as "Trading Firm",
            a.account_name::varchar            as "Account",
@@ -24,4 +24,4 @@ union all
 select * from t_01
           where "Trading Firm" = 'Piper Sandler & Co' and "Account" = 'PIPR_5976'
 /*
-припущення: запускати поденно і в репорті використовувати group by 
+припущення: запускати поденно і в репорті використовувати group by
