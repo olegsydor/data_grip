@@ -73,6 +73,18 @@ create index on trash.fintech_adh_parent_order_count (status_date_id, period,tra
 
 select * from trash.fintech_adh_parent_order_count;
 
+create temp table t_os as
+select period,
+       trading_firm_name,
+       account_name,
+       customer_or_firm_name,
+       sum(cum_qty) as cum_qty,
+       sum(order_count) as order_count
+from trash.fintech_adh_parent_order_count
+where status_date_id between 20260101 and 202603331
+group by period, trading_firm_name, account_name, customer_or_firm_name;
+
+
 select * from trash.load_fintech_adh_parent_order_count(in_date_id := 20260701);
 
 create or replace function trash.load_fintech_adh_parent_order_count(in_date_id int4)
