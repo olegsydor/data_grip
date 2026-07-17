@@ -1,16 +1,9 @@
-CREATE OR REPLACE FUNCTION trash.so_report_rps_s3_sg(in_start_date_id integer, in_end_date_id integer,
-                                                     in_account_ids integer[] DEFAULT '{}'::integer[],
-                                                     in_is_multi_leg character DEFAULT 'N'::bpchar,
-                                                     in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
-                                                     in_exclude_blaze boolean DEFAULT true,
-                                                     in_actual_exchange boolean default false)
-    RETURNS TABLE
-            (
-                ret_row text
-            )
-    LANGUAGE plpgsql
-AS
-$function$
+-- DROP FUNCTION trash.so_report_rps_s3_sg(int4, int4, _int4, bpchar, _varchar, bool, bool);
+
+CREATE OR REPLACE FUNCTION trash.so_report_rps_s3_sg(in_start_date_id integer, in_end_date_id integer, in_account_ids integer[] DEFAULT '{}'::integer[], in_is_multi_leg character DEFAULT 'N'::bpchar, in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[], in_exclude_blaze boolean DEFAULT true, in_actual_exchange boolean DEFAULT false)
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
     --  2024-04-23  SO:  https://dashfinancial.atlassian.net/browse/DS-8251  added  in_trading_firm_ids  as  an  input  parameter
     --  SO  20240523  https://dashfinancial.atlassian.net/browse/DEVREQ-4264  add  coalesce  to  account\trading  firm  input  parameters
     --  SO  20250219  https://dashfinancial.atlassian.net/browse/DS-9608  Performance  improvement
@@ -220,10 +213,14 @@ begin
                                    when not l_is_multileg
                                        then null
                                    when cl.multileg_reporting_type = '3' then cl.order_id::text
-                                   when tmp_base.noro = 'NO' and cl.multileg_reporting_type = '2'
-                                       then cl.multileg_order_id::text
-                                   when tmp_base.noro = 'RO' and cl.multileg_reporting_type = '2'
-                                       then cl.parent_order_id::text
+                                   when cl.multileg_reporting_type = '2' then cl.multileg_order_id::text
+
+--                                   when cl.multileg_reporting_type = '3' then cl.order_id::text
+                                  when tmp_base.noro = 'NO' and cl.multileg_reporting_type = '2'
+                                      then cl.multileg_order_id::text
+                                  when tmp_base.noro = 'RO' and cl.multileg_reporting_type = '2'
+                                      then cl.parent_order_id::text
+
                                    end, -- [7]
                                case
                                    when not l_is_multileg then ac.broker_dealer_mpid
@@ -241,7 +238,7 @@ begin
                                    end, -- [9]
                                null, -- [10]
                                null, -- [11]
-                               case when noro = 'RO' then cl.multileg_reporting_type end, -- [12]
+                               case when noro = 'RO' then i.instrument_type_id end, -- [12]
                                case
                                    when noro = 'RO' and i.instrument_type_id = 'E' then i.display_instrument_id
                                    when noro = 'RO' and i.instrument_type_id = 'O' then oc.opra_symbol
@@ -266,10 +263,10 @@ begin
                                                                      when cl.multileg_reporting_type = '3' then ''
                                                                      else cl.order_qty::text end
                                        end end, -- [18] order_volume
-                               case when cl.side = '1' then '-' else '' end ||
+--                               case when cl.side = '1' then '-' else '' end,
                                to_char(cl.price, 'FM99990D0099'), -- [19]
                                to_char(cl.stop_price, 'FM99990D0099'), -- [20]
-                               tif.tif_short_name, -- [21]
+                               case when cl.time_in_force_id not in ('2', '7') then tif.tif_short_name end, -- [21]
                                case
                                    when not l_is_multileg then
                                        coalesce(to_char(cl.expire_time, 'YYYYMMDD'), '') || 'T' ||
@@ -303,9 +300,18 @@ begin
                                    end, -- [28] NON_DISPLAY_IND
                                '0', -- [29] DO_NOT_REDUCE
                                case cl.exec_instruction when 'G' then '1' else '0' end, -- [30]
-                               case cl.exec_instruction when '1' then '1' else '0' end, -- [31] NOT_HELD_IND
-                               '0', -- [32]
-                               '0', -- [33]
+                               case
+                                   when cl.exec_instruction = '1' then '1'
+                                   when cl.is_held = 'Y' then '1'
+                                   else '0' end, -- [31] NOT_HELD_IND
+                               case
+                                   when ot.order_type_id in ('O', 'L') then '1'
+                                   when tif.tif_id = '2' then '1'
+                                   else '0' end, -- [32]
+                               case
+                                   when ot.order_type_id in ('5', 'B') then '1'
+                                   when tif.tif_id = '7' then '1'
+                                   else '0' end, -- [33]
                                '0', -- [34]
                                null, -- [35]
                                null, -- [36]
@@ -398,11 +404,12 @@ begin
            array_to_string(array [
                                'A' ,
                                order_id::text ,
-                               case exec_type when '4' then 'c' when '8' then 'RJ' end , --EVENT
+                               case exec_type when '4' then 'C' when '8' then 'RJ' end , --EVENT
                                null , --SYSTEM_ID
-                               case multileg_reporting_type
-                                   when '3' then ''
-                                   else coalesce(instrument_type_id, '') end , -- 
+--                               case multileg_reporting_type
+--                                   when '3' then null
+--                                   else instrument_type_id end , --
+                               instrument_type_id,
                                case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
                                null , --  --SYMBOL_EXCHANGE
                                to_char(exec_time, 'YYYYMMDD') || 'T' || to_char(exec_time, 'HH24MISSFF3'),
@@ -436,15 +443,15 @@ begin
 --                                order_id::text || '_' || exec_id::text ,
                                order_id::text || '_' || coalesce(secondary_exch_exec_id, exch_exec_id, ''),
                                null ,
-                               null , -- 
-                               instrument_type_id , -- 
+                               null , --
+                               instrument_type_id , --
                                case instrument_type_id when 'E' then display_instrument_id when 'O' then opra_symbol end,
                                null , --  --SYMBOL_EXCHANGE
                                to_char(exec_time, 'YYYYMMDD') || 'T' ||
                                to_char(exec_time, 'HH24MISSFF3'), -- ACTION_DATETIME
-                               last_qty::text, -- 
-                               to_char(last_px, 'fm99990d0099') , -- 
-                               exchange_id , -- 
+                               last_qty::text, --
+                               to_char(last_px, 'fm99990d0099') , --
+                               exchange_id , --
                                null , --  --[12]
                                null , --  --[13]
                                case when l_is_multileg and multileg_reporting_type = '2' then 'COMPLEX' end , --  --[14]
@@ -506,8 +513,4 @@ begin
 
 end;
 $function$
-
-
-
--- DROP FUNCTION loader.check_loading(int4);
-
+;
