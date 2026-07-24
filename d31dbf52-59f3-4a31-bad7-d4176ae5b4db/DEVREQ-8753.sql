@@ -83,3 +83,5 @@ $function$
 select to_char(round(100.0 * 500 / 500, 2), '990.99%')
 
 ' 100.00%'
+
+
