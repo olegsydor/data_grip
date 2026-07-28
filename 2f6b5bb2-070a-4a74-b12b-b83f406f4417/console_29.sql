@@ -80,25 +80,20 @@ with base as (select (jsonb_array_elements(info -> 'pets')) ->> 'name' as pets_n
               from training.users)
 select left(pets_name, 1)                      as first_letter,
        count(*)                                as pet_count,
-       string_agg(user_name, ', ' order by id) as user_names
+       string_agg(distinct user_name, ', ' order by user_name) as user_names
 from base
 group by left(pets_name, 1)
 order by 2 desc, 1 asc;
 
-
 with base as (select (jsonb_array_elements(info -> 'pets')) ->> 'name' as pets_name, info ->> 'name' as user_name, id
               from training.users)
-
-select left(pets_name, 1)                   as first_letter,
-       count(*)                             as pet_count,
-       string_agg(
-               (select user_name
-                from base as b1
-                where b1.user_name = base.user_name
-                order by id), ', ') as user_names
+select left(pets_name, 1)              as first_letter,
+       count(*)                        as pet_count,
+       string_agg(usr.user_name, ', ') as user_names
 from base
+         left join lateral (select distinct id, user_name
+                            from base bu
+                            where bu.pets_name = base.pets_name
+                            order by id) usr on true
 group by left(pets_name, 1)
-order by 2 desc, 1;
-
-select * from
-training.users
+order by 2 desc, 1 asc;
