@@ -29,15 +29,15 @@ create table training.users
 );
 
 INSERT INTO training.users (id, info) VALUES
-(1, '{
-  "name": "Alice",
+(6, '{
+  "name": "Andrew",
   "pets": [
     {
-      "name": "Buddy",
+      "name": "Anton",
       "type": "dog"
     },
     {
-      "name": "Mittens",
+      "name": "Tom",
       "type": "cat"
     }
   ]
@@ -83,4 +83,22 @@ select left(pets_name, 1)                      as first_letter,
        string_agg(user_name, ', ' order by id) as user_names
 from base
 group by left(pets_name, 1)
-order by 2 desc, 1 asc
+order by 2 desc, 1 asc;
+
+
+with base as (select (jsonb_array_elements(info -> 'pets')) ->> 'name' as pets_name, info ->> 'name' as user_name, id
+              from training.users)
+, nm as (select distinct on (id) user_name
+                from base as b1
+                where b1.user_name = base.user_name
+                order by id, user_name)
+select left(pets_name, 1)                   as first_letter,
+       count(*)                             as pet_count,
+       string_agg(
+               (), ', ') as user_names
+from base
+group by left(pets_name, 1)
+order by 2 desc, 1;
+
+select * from
+training.users
