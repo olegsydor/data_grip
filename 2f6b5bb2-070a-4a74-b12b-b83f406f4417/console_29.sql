@@ -28,8 +28,59 @@ create table training.users
     info jsonb
 );
 
-insert into training.users
-values ('Oleh', '{
-  "Archi": "Dog",
-  "Timosha": "Cat"
-}')
+INSERT INTO training.users (id, info) VALUES
+(1, '{
+  "name": "Alice",
+  "pets": [
+    {
+      "name": "Buddy",
+      "type": "dog"
+    },
+    {
+      "name": "Mittens",
+      "type": "cat"
+    }
+  ]
+}'::jsonb),
+
+(2, '{
+  "name": "Bob",
+  "pets": [
+    {
+      "name": "Goldie",
+      "type": "fish"
+    }
+  ]
+}'::jsonb),
+
+(3, '{
+  "name": "Charlie",
+  "pets": []
+}'::jsonb),
+
+(4, '{
+  "name": "Diana",
+  "pets": [
+    {
+      "name": "Coco",
+      "type": "parrot"
+    },
+    {
+      "name": "Max",
+      "type": "dog"
+    },
+    {
+      "name": "Snow",
+      "type": "rabbit"
+    }
+  ]
+}'::jsonb);
+
+with base as (select (jsonb_array_elements(info -> 'pets')) ->> 'name' as pets_name, info ->> 'name' as user_name, id
+              from training.users)
+select left(pets_name, 1)                      as first_letter,
+       count(*)                                as pet_count,
+       string_agg(user_name, ', ' order by id) as user_names
+from base
+group by left(pets_name, 1)
+order by 2 desc, 1 asc
