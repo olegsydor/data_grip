@@ -13,3 +13,11 @@ where true
                     and pr.parameter_mode = 'IN')
   and parameter_mode = 'IN'
   and routines.routine_schema in ('dash360', 'dash_reporting');
+
+
+SELECT * FROM (SELECT pid, state, application_name, user, wait_event, query_start::timestamp AS query_start, age(clock_timestamp(), query_start) AS age, usename, query, state FROM pg_stat_activity WHERE true AND state IN ('active', 'idle in transaction') AND query NOT ILIKE '%pg_stat_activity%' UNION ALL SELECT NULL, NULL, NULL AS application_name, NULL, NULL, NULL AS query_start, NULL AS age, NULL, NULL, NULL) x WHERE query ILIKE '%.run_f_parent_order_process%' ORDER BY CASE WHEN coalesce(application_name, 'Sydor') ILIKE '%Sydor%' THEN 0 ELSE 1 END, query_start NULLS LAST
+
+
+select * from staging.find_in_load_timing('run_f_parent_order_process', 60*21*1)
+where true
+order by 1 desc, 2 desc;
