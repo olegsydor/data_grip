@@ -56,3 +56,7 @@ select * from genesis2.load_blaze_lifecycle_order();
 
 select * from genesis2.blaze_lifecycle_order
 WHERE parent_order_id = 647855791876882432 AND lifecycle_orderid = 647855791876882432
+
+
+select order_id, lifecycle_orderid, lifecycle_orderid_status, exec_id
+from staging.v_lifecycle_order vl;
