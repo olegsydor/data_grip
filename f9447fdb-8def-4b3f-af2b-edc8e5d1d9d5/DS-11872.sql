@@ -1,3 +1,4 @@
+-- https://dashfinancial.atlassian.net/browse/DS-11872
 drop foreign table staging.v_lifecycle_order;
 
 IMPORT FOREIGN SCHEMA blaze7 LIMIT TO (v_lifecycle_order)
