@@ -1,8 +1,10 @@
-create function staging.so_sync_test(in_table text, in_date_id int)
-    returns int
-    language plpgsql
-as
-$$
+-- DROP FUNCTION staging.so_sync_test(text, int4);
+
+CREATE OR REPLACE FUNCTION staging.so_sync_test(in_table text, in_date_id integer, in_env text)
+    RETURNS integer
+    LANGUAGE plpgsql
+AS
+$function$
 begin
     if in_table = 'TORDER' then
         WITH src AS
@@ -38,7 +40,7 @@ begin
                                torder.pg_order_id                                                                AS order_id
                         FROM staging.so_edw_blaze7_torder AS torder
                         WHERE COALESCE(order_trade_date_id, 0) between in_date_id and public.get_dateid(public.get_business_date(in_date_id::text::date, 1))
-                          and upper(torder.pg_entity) = 'UAT'
+                          and upper(torder.pg_entity) = in_env
                         ORDER BY trim(torder.systemorderid)) l2)
         INSERT
         INTO staging.sync_test_calculated_metrics (source_name, table_name, date_id, pg_db_updated_time,
@@ -135,11 +137,11 @@ begin
                                tlegs.filled::int                                                                     AS filled,
                                tlegs.stockfilled::int                                                                AS stockfilled,
                                tlegs.optionfilled::int                                                               AS optionfilled
-                        FROM staging.so_edw_blaze7_tlegs_edw AS tlegs
+                        FROM staging.so_edw_blaze7_tlegs AS tlegs
                         --	WHERE COALESCE(tlegs.date_id, 0) = &p_date_id
 --	WHERE COALESCE(tlegs.order_trade_date_id, 0) = &p_date_id
                         WHERE COALESCE(tlegs.order_trade_date_id, 0) between in_date_id and public.get_dateid(public.get_business_date(in_date_id::text::date, 1))
-                          and upper(tlegs.pg_entity) = 'UAT'
+                          and upper(tlegs.pg_entity) = in_env
                         ORDER BY trim(tlegs.cl_ord_id), tlegs.legrefid) l2)
 
         INSERT
@@ -206,7 +208,7 @@ begin
                         --	WHERE COALESCE(date_id, 0) = &p_date_id
 --	WHERE COALESCE(order_trade_date_id, 0) = &p_date_id
                         WHERE COALESCE(order_trade_date_id, 0) between in_date_id and public.get_dateid(public.get_business_date(in_date_id::text::date, 1))
-                          and upper(tordermisc1.pg_entity) = 'UAT'
+                          and upper(tordermisc1.pg_entity) = in_env
                         ORDER BY pg_ord_id) l2)
 
         INSERT
@@ -250,7 +252,7 @@ begin
 
                         from staging.so_edw_blaze7_tprice as tp
                         where coalesce(date_id, 0) = in_date_id
-                          and upper(tp.pg_entity) = 'UAT'
+                          and upper(tp.pg_entity) = in_env
                         order by coalesce(tp.exec_id, '')) l2)
         INSERT
         INTO staging.sync_test_calculated_metrics (source_name, table_name, date_id, pg_db_updated_time,
@@ -311,9 +313,9 @@ begin
                                round(treports.price::NUMERIC, 2)                                            AS price,
                                treports.userid::int::double precision                                       AS userid,   --!!
                                (('x'::TEXT || lpad(md5(trim(treports.exec_id)), 32, '0'))::BIT(64))::bigint AS cl_ord_id
-                        FROM staging.so_edw_blaze7_treports_edw AS treports
+                        FROM staging.so_edw_blaze7_treports AS treports
                         WHERE COALESCE(date_id, 0) = in_date_id
-                          and upper(treports.pg_entity) = 'UAT'
+                          and upper(treports.pg_entity) = in_env
                         ORDER BY trim(treports.exec_id)) l2)
 
         INSERT
@@ -369,33 +371,5 @@ begin
         return 1;
     end if;
 end;
-$$;
-
-select * from staging.so_sync_test('TORDER', 20260807, 'PROD1');
-select * from staging.so_sync_test('TORDERMISC', 20260807, 'PROD1');
-select * from staging.so_sync_test('TLEG', 20260807, 'PROD1');
-select * from staging.so_sync_test('TREPORT', 20260807, 'PROD1');
-select * from staging.so_sync_test('TPRICE', 20260807, 'PROD1');
-
-select table_name, date_id, metric_cnt_rows, metric_name_01, metric_value_01, metric_name_02, metric_value_02, metric_name_03, metric_value_03, metric_name_04, metric_value_04, metric_name_05, metric_value_05, metric_name_06, metric_value_06, metric_name_07, metric_value_07, metric_name_08, metric_value_08, metric_name_09, metric_value_09, metric_name_10, metric_value_10, metric_name_11, metric_value_11, metric_name_12, metric_value_12, metric_name_13, metric_value_13, metric_name_14, metric_value_14, metric_name_15, metric_value_15, metric_name_16, metric_value_16, metric_name_17, metric_value_17, metric_name_18, metric_value_18, metric_name_19, metric_value_19, metric_name_20, metric_value_20, metric_name_21, metric_value_21, metric_name_22, metric_value_22, metric_name_23, metric_value_23, metric_name_24, metric_value_24, metric_name_25, metric_value_25, metric_name_26, metric_value_26, metric_name_27, metric_value_27, metric_name_28, metric_value_28, metric_name_29, metric_value_29, metric_name_30, metric_value_30, metric_name_31, metric_value_31, metric_name_32, metric_value_32, metric_name_33, metric_value_33, metric_name_34, metric_value_34, metric_name_35, metric_value_35, metric_name_36, metric_value_36, metric_name_37, metric_value_37, metric_name_38, metric_value_38, metric_name_39, metric_value_39, metric_name_40, metric_value_40, metric_name_41, metric_value_41, metric_name_42, metric_value_42, metric_name_43, metric_value_43, metric_name_44, metric_value_44, metric_name_45, metric_value_45, metric_name_46, metric_value_46, metric_name_47, metric_value_47, metric_name_48, metric_value_48, metric_name_49, metric_value_49, metric_name_50, metric_value_50
-from staging.sync_test_calculated_metrics
-where source_name = 'BLAZE7_EDW_SO'
-and date_id = 20260807
--- and table_name = 'BLAZE7_TREPORTS'
-except
--- union all
-select table_name, date_id, metric_cnt_rows, metric_name_01, metric_value_01, metric_name_02, metric_value_02, metric_name_03, metric_value_03, metric_name_04, metric_value_04, metric_name_05, metric_value_05, metric_name_06, metric_value_06, metric_name_07, metric_value_07, metric_name_08, metric_value_08, metric_name_09, metric_value_09, metric_name_10, metric_value_10, metric_name_11, metric_value_11, metric_name_12, metric_value_12, metric_name_13, metric_value_13, metric_name_14, metric_value_14, metric_name_15, metric_value_15, metric_name_16, metric_value_16, metric_name_17, metric_value_17, metric_name_18, metric_value_18, metric_name_19, metric_value_19, metric_name_20, metric_value_20, metric_name_21, metric_value_21, metric_name_22, metric_value_22, metric_name_23, metric_value_23, metric_name_24, metric_value_24, metric_name_25, metric_value_25, metric_name_26, metric_value_26, metric_name_27, metric_value_27, metric_name_28, metric_value_28, metric_name_29, metric_value_29, metric_name_30, metric_value_30, metric_name_31, metric_value_31, metric_name_32, metric_value_32, metric_name_33, metric_value_33, metric_name_34, metric_value_34, metric_name_35, metric_value_35, metric_name_36, metric_value_36, metric_name_37, metric_value_37, metric_name_38, metric_value_38, metric_name_39, metric_value_39, metric_name_40, metric_value_40, metric_name_41, metric_value_41, metric_name_42, metric_value_42, metric_name_43, metric_value_43, metric_name_44, metric_value_44, metric_name_45, metric_value_45, metric_name_46, metric_value_46, metric_name_47, metric_value_47, metric_name_48, metric_value_48, metric_name_49, metric_value_49, metric_name_50, metric_value_50 from staging.sync_test_calculated_metrics
-where source_name = 'BLAZE7_EDW_UAT'
-and date_id = 20260803
--- and table_name = 'BLAZE7_TREPORTS'
-
-
-SELECT tordermisc1.pg_order_id                 AS pg_ord_id,
-                               round(tordermisc1.acctcomm::NUMERIC, 8) AS acctcomm
-                        FROM staging.so_edw_blaze7_tordermisc1 AS tordermisc1
-                        --	WHERE COALESCE(date_id, 0) = &p_date_id
---	WHERE COALESCE(order_trade_date_id, 0) = &p_date_id
-                        WHERE true
-    and COALESCE(order_trade_date_id, 0) between :in_date_id and public.get_dateid(public.get_business_date(:in_date_id::text::date, 1))
-                          and upper(tordermisc1.pg_entity) = :in_env
-                        ORDER BY pg_ord_id
+$function$
+;
