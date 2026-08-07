@@ -1,6 +1,7 @@
--- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_snapshot___(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+drop FUNCTION trash.allocations_snapshot;
+
+CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                            in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
                                                            in_reported_status character DEFAULT NULL::character(1),
                                                            in_hide_non_customer_bphops boolean DEFAULT false,
@@ -46,7 +47,7 @@ CREATE OR REPLACE FUNCTION dash360.allocations_snapshot___(in_account_ids bigint
                 broker_commission_rate     numeric,
                 broker_commission_amount   numeric,
                 manual_broker_code         character varying,
-                lifecycle_order_id         int8,
+                lifecycle_order_id         character varying,
                 lifecycle_order_state      char(1)
             )
     LANGUAGE plpgsql
@@ -202,18 +203,18 @@ begin
                -- LIFECYCLE
                case
                    when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
-                       then lc.lifecycle_orderid
+                       then lc.lifecycle_orderid::character varying
                    when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
-                       then fmjo.lifecycleorderid::int8 end                                             as lifecycle_order_id,
+                       then fmjo.lifecycleorderid::character varying end                                             as lifecycle_order_id,
                case
                    when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
-                       then lc.lifecycle_orderid_status
+                       then lc.lifecycle_orderid_status::char(1)
                    when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
-                       then (select lifecycle_orderid_status
+                       then (select lifecycle_orderid_status::char(1)
                              from genesis2.blaze_lifecycle_order
-                             WHERE parent_order_id = fmjo.lifecycleorderid
+                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
                              limit 1)
-                   end                                                                                  as lifecycle_order_id
+                   end                                                                                  as lifecycle_order_state
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join t_alloc_instr2trade_record as allocated_trades
@@ -353,8 +354,12 @@ begin
                case
                    when array_length(ccr.manual_broker, 1) > 1 then '-'
                    else ccr.manual_broker[1] end                 as manual_broker_code,
-               0::int8,
-               ''::char(1)
+               case
+                   when array_length(ccr.lifecycle_order_id, 1) > 1 then '-'
+                   else ccr.lifecycle_order_id[1] end            as lifecycle_order_id,
+               case
+                   when array_length(ccr.lifecycle_order_state, 1) > 1 then '-'::char(1)
+                   else ccr.lifecycle_order_state[1] end         as lifecycle_order_state
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join lateral (select to_report_mod,
@@ -392,7 +397,23 @@ begin
                                                                           in_subsystem_id := tr.subsystem_id,
                                                                           in_date_id := tr.date_id,
                                                                           in_exec_id := tr.exec_id,
-                                                                          in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker
+                                                                          in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker,
+                                           array_agg(distinct case
+                                                                  when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                                                                      then lc.lifecycle_orderid::character varying
+                                                                  when not (tr.subsystem_id = 'OMS_EDW') and
+                                                                       tr.account_id = any (l_sg_accounts)
+                                                                      then fmjo.lifecycleorderid end)                  as lifecycle_order_id,
+                                           array_agg(distinct case
+                                                                  when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                                                                      then lc.lifecycle_orderid_status::char(1)
+                                                                  when not (tr.subsystem_id = 'OMS_EDW') and
+                                                                       tr.account_id = any (l_sg_accounts)
+                                                                      then (select lifecycle_orderid_status::char(1)
+                                                                            from genesis2.blaze_lifecycle_order
+                                                                            WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                                                                            limit 1)
+                                               end)                                                                          as lifecycle_order_state
                                     from genesis2.alloc_instr2trade_record alt
                                              inner join genesis2.trade_record tr
                                                         on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
@@ -420,6 +441,15 @@ begin
                                                                 from staging.f_parent_order fpo
                                                                 where fpo.status_date_id = in_date_id
                                                                   and fpo.parent_order_id = tr.order_id) fpo on true
+                                                     left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                                    from genesis2.blaze_lifecycle_order bl
+                                    where bl.parent_order_id = tr.order_id
+                                    limit 1) lc on true
+                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.order_fix_message_id
+                                    limit 1) fmjo on true
                                     where alt.alloc_instr_id = ai.alloc_instr_id
                                       and tr.is_busted = 'N'
 --                               and (l1.rn = 1 or l1.rn is null)
@@ -481,8 +511,39 @@ select --alt.alloc_instr_id,
                                       in_subsystem_id := tr.subsystem_id,
                                       in_date_id := tr.date_id,
                                       in_exec_id := tr.exec_id,
-                                      in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker
--- select distinct alt.alloc_instr_id
+                                      in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker,
+    array_agg(distinct case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+                       then lc.lifecycle_orderid
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+                       then fmjo.lifecycleorderid::int8 end ) as lifecycle_order_id,
+    array_agg(distinct case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+                       then lc.lifecycle_orderid_status
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+                       then (select lifecycle_orderid_status
+                             from genesis2.blaze_lifecycle_order
+                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                             limit 1)
+                   end     )  as lifecycle_order_state
+
+
+/*
+                case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then fmjo.lifecycleorderid::int8 end                                             as lifecycle_order_id,
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid_status
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then (select lifecycle_orderid_status
+                             from genesis2.blaze_lifecycle_order
+                             WHERE parent_order_id = fmjo.lifecycleorderid
+                             limit 1)
+                   end                                                                                  as lifecycle_order_state
+ */
 from genesis2.alloc_instr2trade_record alt
 
          inner join genesis2.trade_record tr
@@ -511,6 +572,15 @@ from genesis2.alloc_instr2trade_record alt
                             from staging.f_parent_order fpo
                             where fpo.status_date_id = :in_date_id
                               and fpo.parent_order_id = tr.order_id) fpo on true
+                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                                    from genesis2.blaze_lifecycle_order bl
+                                    where bl.parent_order_id = tr.order_id
+                                    limit 1) lc on true
+                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.order_fix_message_id
+                                    limit 1) fmjo on true
 where alt.alloc_instr_id = -132958
 --                                                                    in (-132977,-132976,-132975,-132974,-132973,-132972,-132971,-132970,-132969,-132968,-132967,-132966,-132965,-132964,-132963,-132962,-132961,-132960,-132959,-132958)
   and tr.is_busted = 'N'
@@ -519,3 +589,69 @@ where alt.alloc_instr_id = -132958
   and tr.date_id = :in_date_id
 --                                     group by alt.alloc_instr_id
                                     limit 1
+
+
+--
+
+ select tr.date_id::int4,
+               tr.trade_record_id::int8,
+                  case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+                       then lc.lifecycle_orderid::character varying
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+                       then fmjo.lifecycleorderid::character varying end                                             as lifecycle_order_id,
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+                       then lc.lifecycle_orderid_status::character varying
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+                       then (select lifecycle_orderid_status::char(1)
+                             from genesis2.blaze_lifecycle_order
+                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                             limit 1)
+                   end                                                                                  as lifecycle_order_state
+        from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+
+
+                 left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                           sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                           max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                           sum(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                                    from (SELECT tl.trade_record_id,
+                                                 book_record_type_id,
+                                                 row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 tl.rate,
+                                                 tl.amount
+                                          FROM genesis2.trade_level_book_record tl
+                                                   inner join genesis2.book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          WHERE tl.date_id = :in_date_id
+                                            AND book_record_type_id in ('CCRU', 'BROK')
+                                            and tl.trade_record_id = tr.trade_record_id) L1
+                                    where rn = 1) ccru on true
+                 left join lateral (select fix_message ->> '10707' as chain_id,
+                                           fix_message ->> '10568' as manual_broker_code
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.trade_fix_message_id
+                                    limit 1) fmj on true
+
+                 left join lateral (select fpo.order_status
+                                    from staging.f_parent_order fpo
+                                    where fpo.status_date_id = :in_date_id
+                                      and fpo.parent_order_id = tr.order_id
+                                    limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
+
+                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                                    from genesis2.blaze_lifecycle_order bl
+                                    where bl.parent_order_id = tr.order_id
+                                    limit 1) lc on true
+                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.order_fix_message_id
+                                    limit 1) fmjo on true
+        where tr.date_id = :in_date_id

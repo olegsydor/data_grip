@@ -15,7 +15,7 @@
       and to_report in ('R'); -- {-132959,-132959,-132959,-132960,-132961,-132962,-132963,-132964,-132964,-132965,-132967,-132968,-132969,-132970,-132971,-132972,-132973,-132974,-132975,-132976,-132977,-132977}
 
     -- get the list of all BUSTED alloc_instr_id_reported in the chain of the reported records;
-    select array_agg(alloc_instr_id)
+    select coalesce(array_agg(alloc_instr_id), '{}'::int8[])
 --     into l_alloc_instr_id_busted
     from dash_reporting.bofa_allocation_report
     where date_id between :in_start_date_id and :in_end_date_id
