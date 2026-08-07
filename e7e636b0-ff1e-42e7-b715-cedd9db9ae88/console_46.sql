@@ -3,9 +3,34 @@ select * from genesis2.rt_clearing_trade_record where date_id = 20260805 and cli
 
 select * from genesis2.trade_record
 where date_id = 20260805
-  and client_order_id in ('ER-20260805-48385','ER-20260805-57792')
-and secondary_exch_exec_id = '4087427';
+--    and client_order_id in ('ER-20260805-48385','ER-20260805-57792')
+-- and secondary_exch_exec_id = '4087427';
+and trade_record_id between 5304351380 - :incr and 5304351380 + :incr
+and orig_trade_record_id is not null
+;
 
+2026-08-05 10:28:12.582784
+
+select * from staging.trade_record_blaze7
+where true
+and trade_record_id = 5304351380;
+
+select * from etl_subscriptions
+where load_batch_id = 5304351380;
+
+
+select * from exchange
+where exchange_id = 'NITEL'
+
+
+select * from staging.d_exchange
+where exchange_id = 'NITEL'
+
+select * from instrument
+where instrument_id = 128126584
+
+select * from staging.d_instrument
+where instrument_id = 128126584
 
 select *
     from genesis2.trade_record tr
@@ -30,6 +55,7 @@ select *
       and client_order_id in ('ER-20260805-48385','ER-20260805-57792')
 --       and tr.trade_record_id in (5303994560, 5304351380)
       and tr.date_id = :f_date_id;
+
 
 
 select *
