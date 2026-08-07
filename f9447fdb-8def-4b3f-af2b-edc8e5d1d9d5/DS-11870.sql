@@ -206,8 +206,9 @@ begin
                case
                    when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
                        then lc.lifecycle_orderid_status
---                    when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
---                        then fmj.manual_broker_code::character varying
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then (select lifecycle_orderid_status from genesis2.blaze_lifecycle_order
+                         WHERE parent_order_id = fmjo.lifecycleorderid limit 1)
                    end as lifecycle_order_id
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
