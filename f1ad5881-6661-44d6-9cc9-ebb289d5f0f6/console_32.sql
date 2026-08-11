@@ -390,6 +390,7 @@ and date_id = 20260803
 -- and table_name = 'BLAZE7_TREPORTS'
 
 
+
 SELECT tordermisc1.pg_order_id                 AS pg_ord_id,
                                round(tordermisc1.acctcomm::NUMERIC, 8) AS acctcomm
                         FROM staging.so_edw_blaze7_tordermisc1 AS tordermisc1
