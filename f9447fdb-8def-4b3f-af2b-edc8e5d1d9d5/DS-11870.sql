@@ -1,4 +1,5 @@
-
+select * from trash.allocations_snapshot(in_date_id := 20260807);
+select * from dash360.allocations_snapshot(in_date_id := 20260807), in_hide_non_customer_bphops := true);
 drop FUNCTION trash.allocations_snapshot;
 
 CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
@@ -215,6 +216,7 @@ begin
                              WHERE parent_order_id = fmjo.lifecycleorderid::int8
                              limit 1)
                    end                                                                                  as lifecycle_order_state
+--         select *
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  left join t_alloc_instr2trade_record as allocated_trades
@@ -283,7 +285,7 @@ begin
                                       and fmj.fix_message_id = tr.order_fix_message_id
                                     limit 1) fmjo on true
         where tr.date_id = in_date_id
-          and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end
+--           and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end
           and tr.is_busted = 'N'
 --and false
           and allocated_trades.alloc_instr_id is NULL
@@ -465,7 +467,7 @@ begin
                                     limit 1) msg on true
 
         where ai.date_id = in_date_id
-          and case when coalesce(in_account_ids, '{}') = '{}' then false else ai.account_id = any (in_account_ids) end
+          and case when coalesce(in_account_ids, '{}') = '{}' then true else ai.account_id = any (in_account_ids) end
           and ai.is_deleted = 'N'
 --and false
           and case
