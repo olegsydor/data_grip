@@ -75,6 +75,8 @@ $function$
     -- SO 20260609 https://dashfinancial.atlassian.net/browse/DS-11642 Add broker commissions rate and amount
     -- SO 20260612 https://dashfinancial.atlassian.net/browse/DS-11642 Add manual broker
     -- SO 20270720 https://dashfinancial.atlassian.net/browse/DS-11700 Performance improvement
+    -- SO 20280810 https://dashfinancial.atlassian.net/browse/DS-11870 Adjust allocation procedures to Lifecycle Order ID and Lifecycle Order Status
+    -- SO 20260812 https://dashfinancial.atlassian.net/browse/DS-11887 Implement filtering out values by BlazeIsLinked (FIX 10579) and BlazeIsPartOfStitchedOrder (10585) in allocation snapshot
 declare
     l_load_id     int;
     l_step_id     int;
@@ -258,7 +260,9 @@ begin
                                       and false
                                     limit 1) msg on true
                  left join lateral (select fix_message ->> '10707' as chain_id,
-                                           fix_message ->> '10568' as manual_broker_code
+                                           fix_message ->> '10568' as manual_broker_code,
+                                           fix_message ->> '10579' as blaze_is_linked,
+                                           fix_message ->> '10585' as blaze_is_part_of_stitched_order
                                     from staging.fix_message_json fmj
                                     where fmj.date_id = tr.date_id
                                       and fmj.fix_message_id = tr.trade_fix_message_id
@@ -295,6 +299,9 @@ begin
                   when in_reported_status is null then true end
           and case
                   when in_hide_non_customer_bphops and (chain_id is not null and chain_id != tr.client_order_id)
+                      then false
+                  when in_hide_non_customer_bphops and (blaze_is_linked is not distinct from 'Y' or
+                  blaze_is_part_of_stitched_order is not distinct from 'Y')
                       then false
                   else true end
           and case
