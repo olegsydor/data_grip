@@ -399,4 +399,14 @@ SELECT tordermisc1.pg_order_id                 AS pg_ord_id,
                         WHERE true
     and COALESCE(order_trade_date_id, 0) between :in_date_id and public.get_dateid(public.get_business_date(:in_date_id::text::date, 1))
                           and upper(tordermisc1.pg_entity) = :in_env
-                        ORDER BY pg_ord_id
+                        ORDER BY pg_ord_id;
+
+
+select *
+from trash.so_report_rps_s3_sg(in_start_date_id := 20260501, in_end_date_id := 20260501,
+                               in_is_multi_leg := 'Y', in_exclude_blaze := true, in_actual_exchange := true,
+                               in_trading_firm_ids := '{socgen01,LPTF286,socgenpsc}');
+select *
+from trash.so_report_rps_s3_sg(in_start_date_id := 20260501, in_end_date_id := 20260501,
+                               in_is_multi_leg := 'N', in_exclude_blaze := true, in_actual_exchange := true,
+                               in_trading_firm_ids := '{socgen01,LPTF286,socgenpsc}');
