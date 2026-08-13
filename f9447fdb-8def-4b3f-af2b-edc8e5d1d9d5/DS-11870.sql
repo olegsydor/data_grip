@@ -49,8 +49,7 @@ CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DE
                 broker_commission_amount   numeric,
                 manual_broker_code         character varying,
                 lifecycle_order_id         character varying,
-                lifecycle_order_state      char(1),
-                blaze_order_owner          text
+                lifecycle_order_state      char(1)
             )
     LANGUAGE plpgsql
     COST 1
@@ -218,12 +217,7 @@ begin
                              from genesis2.blaze_lifecycle_order
                              WHERE parent_order_id = fmjo.lifecycleorderid::int8
                              limit 1)
-                   end                                                                                  as lifecycle_order_state,
-               case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
-                       then oms.blaze_order_owner
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts) then fmj.order_owner
-                   end
+                   end                                                                                  as lifecycle_order_state
 --         select *
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -268,8 +262,7 @@ begin
                  left join lateral (select fix_message ->> '10707' as chain_id,
                                            fix_message ->> '10568' as manual_broker_code,
                                            fix_message ->> '10579' as blaze_is_linked,
-                                           fix_message ->> '10585' as blaze_is_part_of_stitched_order,
-                                           fix_message ->> '10582' as order_owner
+                                           fix_message ->> '10585' as blaze_is_part_of_stitched_order
                                     from staging.fix_message_json fmj
                                     where fmj.date_id = tr.date_id
                                       and fmj.fix_message_id = tr.trade_fix_message_id
@@ -295,13 +288,7 @@ begin
                                     where fmj.date_id = tr.date_id
                                       and fmj.fix_message_id = tr.order_fix_message_id
                                     limit 1) fmjo on true
-                 left join lateral (select bl.blaze_order_owner
-                                    from staging.trade_record_blaze7 bl
-                                    where bl.date_id = tr.date_id
-                                      and bl.trade_record_id = tr.trade_record_id
-                                      and bl.blaze_order_owner is not null
-                                    limit 1) oms
-                           on true and tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+
         where tr.date_id = in_date_id
 --           and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end
           and tr.is_busted = 'N'
@@ -382,12 +369,7 @@ begin
                    else ccr.lifecycle_order_id[1] end            as lifecycle_order_id,
                case
                    when array_length(ccr.lifecycle_order_state, 1) > 1 then '-'::char(1)
-                   else ccr.lifecycle_order_state[1] end         as lifecycle_order_state,
-               case
-                   when ccr.subsystem_id = 'OMS_EDW'
-                       then oms.blaze_order_owner
-                   else fmj.order_owner
-                   end
+                   else ccr.lifecycle_order_state[1] end         as lifecycle_order_state
         from genesis2.allocation_instruction ai
                  inner join genesis2.instrument i on (ai.instrument_id = i.instrument_id)
                  left join lateral (select to_report_mod,
@@ -441,10 +423,7 @@ begin
                                                                             from genesis2.blaze_lifecycle_order
                                                                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
                                                                             limit 1)
-                                               end)                                                                          as lifecycle_order_state,
-                                           (array_agg(tr.trade_record_id order by tr.trade_record_id))[1]                    as trade_record_id,
-                                           (array_agg(tr.subsystem_id order by tr.trade_record_id))[1]                       as subsystem_id,
-                                           (array_agg(tr.trade_fix_message_id order by tr.trade_record_id))[1]               as order_fix_message_id
+                                               end)                                                                          as lifecycle_order_state
                                     from genesis2.alloc_instr2trade_record alt
                                              inner join genesis2.trade_record tr
                                                         on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
@@ -494,20 +473,6 @@ begin
                                     where msg.alloc_instr_id = ai.alloc_instr_id
                                       and msg.drop_message_type = 'N'
                                     limit 1) msg on true
-
-                 left join lateral (select bl.blaze_order_owner
-                                    from staging.trade_record_blaze7 bl
-                                    where bl.date_id = ai.date_id
-                                      and bl.trade_record_id = ccr.trade_record_id
-                                      and bl.blaze_order_owner is not null
-                                    limit 1) oms
-                           on true and ccr.subsystem_id = 'OMS_EDW' and ai.account_id = any (l_sg_accounts)
-                 left join lateral (select fmj.fix_message ->> '10582' as order_owner
-                                    from staging.fix_message_json fmj
-                                    where fmj.fix_message_id = ccr.order_fix_message_id
-                                      and fmj.date_id = ai.date_id
-                                    limit 1) fmj
-                           on true and not (ccr.subsystem_id = 'OMS_EDW' and ai.account_id = any (l_sg_accounts))
 
         where ai.date_id = in_date_id
           and case when coalesce(in_account_ids, '{}') = '{}' then true else ai.account_id = any (in_account_ids) end
