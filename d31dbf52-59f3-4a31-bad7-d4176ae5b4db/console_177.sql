@@ -222,3 +222,17 @@ select * from (
 	union all
 	select null, null, null as application_name, null, null, null as query_start, null as age, null, null, null) x
 	order by case when coalesce(application_name, 'Sydor') ilike '%Sydor%' then 0 else 1 end,  query_start nulls last;
+
+
+
+select * from dwh.flat_trade_record
+    where exch_exec_id = '7210679533941' -- 5327423362
+and date_id = 20260812;
+
+select * from staging.trade_level_book_record
+where trade_record_id = 5327423362
+and date_id = 20260812;
+
+select * from staging.dash_trade_record_daily_mira
+where trade_record_id = 5327423362
+and date_id >= 20260811;
