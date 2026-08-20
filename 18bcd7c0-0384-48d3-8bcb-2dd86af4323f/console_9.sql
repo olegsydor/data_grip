@@ -13,4 +13,4 @@ and end_processing < (fl.date_id::text::date + '1 hour'::interval * tm.hr)
 group by dl.date_id, tm.hr)
 select date_id, hr, to_char(sm, 'FM9,999,999,990') from grp
 where hr = 17
-order by sm desc
+order by sm desc;
