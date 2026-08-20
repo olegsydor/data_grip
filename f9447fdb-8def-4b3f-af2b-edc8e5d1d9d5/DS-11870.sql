@@ -2,9 +2,9 @@ select * from trash.allocations_snapshot(in_date_id := 20260807);
 select * from dash360.allocations_snapshot(in_date_id := 20260807), in_hide_non_customer_bphops := true);
 drop FUNCTION trash.allocations_snapshot;
 
--- DROP FUNCTION trash.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
+-- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
 
-CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                       in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                       in_reported_status character DEFAULT NULL::character(1),
                                                       in_hide_non_customer_bphops boolean DEFAULT false,
@@ -494,6 +494,13 @@ $function$
 ;
 
 -- DROP FUNCTION dash360.allocations_instruction_trades(int4);
+create temp table tmp_os as
+select (dash360.allocations_instruction_trades(-134211)).*
+from genesis2.allocation_instruction
+where date_id = 20260818
+
+select * from tmp_os
+where lifecycle_order_id is not null
 
 CREATE OR REPLACE FUNCTION dash360.allocations_instruction_trades(in_alloc_instr_id integer)
     RETURNS TABLE
@@ -528,8 +535,8 @@ CREATE OR REPLACE FUNCTION dash360.allocations_instruction_trades(in_alloc_instr
                 broker_commission_rate   numeric,
                 broker_commission_amount numeric,
                 manual_broker_code       character varying,
-                lifecycle_order_id         character varying,
-                lifecycle_order_state      character
+                lifecycle_order_id       character varying,
+                lifecycle_order_state    character
             )
     LANGUAGE plpgsql
     COST 1
@@ -545,14 +552,22 @@ $function$
     -- SO 20260414 https://dashfinancial.atlassian.net/browse/DS-11390 Return client_order_status for Trade Records from OMS (OMS_EDW) as filled (2)
     -- SO 20260609 https://dashfinancial.atlassian.net/browse/DS-11642 Add broker commissions rate and amount
     -- SO 20260616 https://dashfinancial.atlassian.net/browse/DS-11642 Add manual_broker_code
+    -- SO 20280810 https://dashfinancial.atlassian.net/browse/DS-11870 Adjust allocation procedures to Lifecycle Order ID and Lifecycle Order Status
 declare
-    l_date_id integer;
+    l_date_id     integer;
+    l_sg_accounts int8[];
 begin
 
     select ai.date_id
     from genesis2.allocation_instruction ai
     where ai.alloc_instr_id = in_alloc_instr_id
     into l_date_id;
+
+    select array_agg(ac.account_id)
+    into l_sg_accounts
+    from account ac
+             join staging.sg_trading_firm using (trading_firm_id)
+    where ac.is_deleted = 'N';
 
     return query
         select tr.date_id,
@@ -614,7 +629,22 @@ begin
                genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
                    --SY  in_trade_record_id := tr.trade_record_id,
                                           in_exec_id := tr.exec_id,
-                                          in_fix_message_id := tr.trade_fix_message_id)         as manual_broker_code
+                                          in_fix_message_id := tr.trade_fix_message_id)         as manual_broker_code,
+               -- LIFECYCLE
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid::character varying
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then fmjo.lifecycleorderid::character varying end                        as lifecycle_order_id,
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid_status::char(1)
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then (select lifecycle_orderid_status::char(1)
+                             from genesis2.blaze_lifecycle_order
+                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                             limit 1)
+                   end                                                                          as lifecycle_order_state
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                  inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
@@ -649,6 +679,15 @@ begin
                                             AND book_record_type_id in ('CCRU', 'BROK')
                                             and tl.trade_record_id = tr.trade_record_id) L1
                                     where rn = 1) ccru on true
+                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                                    from genesis2.blaze_lifecycle_order bl
+                                    where bl.parent_order_id = tr.order_id
+                                    limit 1) lc on true
+                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.order_fix_message_id
+                                    limit 1) fmjo on true
 
         where tr.is_busted = 'N'
           and tr.date_id = l_date_id
@@ -657,3 +696,348 @@ begin
 end;
 $function$
 ;
+
+
+-- DROP FUNCTION dash360.allocations_instruction_delete(int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.allocations_instruction_delete(in_alloc_instr_id integer, in_user_id integer)
+    RETURNS TABLE
+            (
+                date_id                  integer,
+                trade_record_id          bigint,
+                account_id               integer,
+                instrument_id            bigint,
+                side                     character,
+                open_close               character,
+                avg_px                   numeric,
+                exec_qty                 bigint,
+                display_instrument_id    character varying,
+                last_trade_date          date,
+                instrument_type_id       character,
+                cmta                     character varying,
+                exec_broker              character varying,
+                principal_amount         numeric,
+                client_commission_rate   numeric,
+                blaze_account_alias      character varying,
+                orig_trade_record_id     bigint,
+                street_exec_time         timestamp without time zone,
+                opt_customer_firm        character,
+                reported_status          character,
+                reported_time            timestamp without time zone,
+                client_commission_amount numeric,
+                client_order_id          character varying,
+                client_order_status      character,
+                broker_commission_rate   numeric,
+                broker_commission_amount numeric,
+                manual_broker_code       character varying,
+                lifecycle_order_id       character varying,
+                lifecycle_order_state    character
+            )
+    LANGUAGE plpgsql
+AS
+$function$
+    # variable_conflict use_column
+
+    -- SY 20210531 DS-3420 return type has been changed from id into query
+-- The logic to modify trade_record has been implemented
+-- SY 20210617 https://dashfinancial.atlassian.net/browse/DS-3642 CMTA field has been added to revertion process
+-- VP 20231130 https://dashfinancial.atlassian.net/browse/DS-7591 Added field street_exec_time
+-- SO 20250116 https://dashfinancial.atlassian.net/browse/DS-9407 Add new fields is_prev_reported, opt_customer_firm
+-- SO 20250528 https://dashfinancial.atlassian.net/browse/DS-10041 Added status='U' for deleted instruction
+-- SO 20261112 https://dashfinancial.atlassian.net/browse/DS-11248 Support client_order_id in dash360.allocations_instruction_delete()
+-- SO 20260317 https://dashfinancial.atlassian.net/browse/DS-11268 Support client_order_status for Allocation Instructions - allocation_snapshot, allocation_instruction_trades, allocation_insttuction_delete
+-- SO 20260414 https://dashfinancial.atlassian.net/browse/DS-11390 Return client_order_status for Trade Records from OMS (OMS_EDW) as filled (2)
+-- SY 20260617 https://dashfinancial.atlassian.net/browse/DS-11676 BROK immeiate inheritance has been added
+-- 																   Three new fields have been aded to the output
+-- SY 20260707 https://dashfinancial.atlassian.net/browse/DS-11722 Inherit CCRU using current book_record_creator instead on MAN
+    -- SO 20280810 https://dashfinancial.atlassian.net/browse/DS-11870 Adjust allocation procedures to Lifecycle Order ID and Lifecycle Order Status
+
+declare
+    l_user_id              int;
+    l_system_id            varchar;
+    l_revert_vector        jsonb;
+    l_new_trade_record_ids bigint[];
+    l_date_id              int;
+    l_load_batch_id        bigint;
+    l_step_id              int;
+    l_row_cnt              int;
+    l_sg_accounts          int8[];
+
+begin
+    l_step_id := 0;
+
+    select nextval('load_batch_load_batch_id_seq') into l_load_batch_id;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocations_instruction_delete STARTED =====', 0,
+                             'S'::char)
+    into l_step_id;
+
+    with ct as ( update genesis2.allocation_instruction ai
+        set
+            is_deleted = 'Y',
+            delete_time = 'now'::timestamp,
+            deleted_by_user_id = in_user_id,
+            status = 'U'
+        where alloc_instr_id = in_alloc_instr_id
+        returning ai.created_by_user_id, ai.created_by_subsystem_id, ai.date_id)
+    select ct.created_by_user_id, ct.created_by_subsystem_id, ct.date_id
+    into l_user_id, l_system_id, l_date_id
+    from ct;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'genesis2.allocation_instruction updated', 0, 'S'::char)
+    into l_step_id;
+
+
+--  raise info '%: l_user_id=%, l_system_id=%, date_id = %', clock_timestamp(),l_user_id, l_system_id, l_date_id ;
+
+    if l_user_id is null and l_system_id = 'RPS'
+    then
+        l_new_trade_record_ids := array []::bigint[];
+    else
+        /* UNALLOCATE MANUAL ALLOCATION with reverting trade_record changes*/
+        select ('{' || string_agg('"' || tr.trade_record_id || '":[{"clearing_account_number":"' ||
+                                  coalesce(orig_tr.clearing_account_number, 'NULL') || '"
+															  , "account_nickname":"' ||
+                                  coalesce(orig_tr.account_nickname, 'NULL') || '"
+															  , "street_account_name":"' ||
+                                  coalesce(orig_tr.street_account_name, 'NULL') || '"
+															  , "cmta":"' || coalesce(orig_tr.cmta, 'NULL') || '"
+		      												  , "allocation_avg_price":"NULL"
+															  , "trade_record_reason":"U"
+															  , "user_id":' || in_user_id || '}]', ',') || '}')::jsonb
+        into l_revert_vector
+        from alloc_instr2trade_record aitr
+                 inner join trade_record tr on aitr.trade_record_id = tr.trade_record_id and tr.is_busted = 'N' and
+                                               tr.date_id = aitr.date_id and trade_record_reason = 'L'
+                 inner join trade_record orig_tr
+                            on tr.orig_trade_record_id = orig_tr.trade_record_id and tr.date_id = orig_tr.date_id
+        where aitr.alloc_instr_id = in_alloc_instr_id
+          and aitr.date_id = l_date_id;
+
+        select genesis2.load_log(l_load_batch_id::int, l_step_id, 'l_revert_vector defined ', 0, 'S'::char)
+        into l_step_id;
+
+        raise info 'Revert vector is %', l_revert_vector;
+
+        if l_revert_vector is not null
+        then
+            l_new_trade_record_ids := dash360.ptm_process_trades(l_date_id, in_user_id, l_revert_vector);
+--        then l_new_trade_record_ids:=trash.so_ptm_process_trades(l_date_id, in_user_id, l_revert_vector);
+
+            select genesis2.load_log(l_load_batch_id::int, l_step_id, 'cardinality(l_new_trade_record_ids): ',
+                                     cardinality(l_new_trade_record_ids), 'S'::char)
+            into l_step_id;
+
+            perform dash360.trade_record_update_ccru(in_user_id =>in_user_id, in_date_id => l_date_id,
+                                                     in_trade_record_id =>l.trade_record_id, in_rate => l.rate,
+                                                     in_amount=>l.amount, in_load_batch_id =>l_load_batch_id::int,
+                                                     in_book_record_creator_id=>l.book_record_creator_id)
+            from (select tr.trade_record_id::bigint,
+                         tlbr.rate,
+                         tr.last_qty * tlbr.rate                                                                                 as amount,
+                         tlbr.book_record_creator_id,
+                         row_number()
+                         over (partition by tr.trade_record_id, tlbr.trade_record_id, tlbr.billing_entity order by brc.priority) as rn
+                  from genesis2.trade_record tr
+                           inner join genesis2.trade_level_book_record tlbr
+                                      on tlbr.date_id = tr.date_id and
+                                         tlbr.trade_record_id = tr.orig_trade_record_id and
+                                         book_record_type_id = 'CCRU'
+                           inner join genesis2.book_record_creator brc
+                                      on tlbr.book_record_creator_id = brc.book_record_creator_id
+                  where tr.date_id = l_date_id
+                    and tr.trade_record_id = any (array [l_new_trade_record_ids])) l
+            where rn = 1;
+
+            GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+            select genesis2.load_log(l_load_batch_id::int, l_step_id, 'CCRU Inherited', l_row_cnt, 'I'::char)
+            into l_step_id;
+
+            INSERT INTO genesis2.trade_level_book_record (trade_record_id, book_record_type_id, amount,
+                                                          book_record_creator_id,
+                                                          date_id, rate, load_batch_id, schedule_rate_type, user_id,
+                                                          billing_entity, create_time)
+            Select l.trade_record_id,
+                   book_record_type_id,
+                   amount,
+                   book_record_creator_id,
+                   l.date_id,
+                   rate,
+                   load_batch_id,
+                   schedule_rate_type,
+                   user_id,
+                   billing_entity,
+                   now()
+            from (select tr.trade_record_id,
+                         tlbr.book_record_type_id,
+                         tr.last_qty * tlbr.rate                                                                                 as amount,
+                         tlbr.book_record_creator_id,
+                         tlbr.date_id,
+                         tlbr.rate,
+                         l_load_batch_id                                                                                         as load_batch_id,
+                         tlbr.schedule_rate_type,
+                         in_user_id                                                                                              as user_id,
+                         tlbr.billing_entity,
+                         row_number()
+                         over (partition by tr.trade_record_id, tlbr.trade_record_id, tlbr.billing_entity order by brc.priority) as rn
+                  from genesis2.trade_record tr
+                           inner join genesis2.trade_level_book_record tlbr on tlbr.date_id = tr.date_id and
+                                                                               tlbr.trade_record_id =
+                                                                               tr.orig_trade_record_id and
+                                                                               book_record_type_id = 'BROK'
+                           inner join genesis2.book_record_creator brc
+                                      on tlbr.book_record_creator_id = brc.book_record_creator_id
+                  where tr.date_id = l_date_id
+                    and tr.trade_record_id = any (l_new_trade_record_ids)) l
+            where rn = 1
+            on conflict (trade_record_id, book_record_type_id, book_record_creator_id, billing_entity, date_id)
+                do update set amount        = EXCLUDED.amount,
+                              rate          = EXCLUDED.rate,
+                              load_batch_id = EXCLUDED.load_batch_id,
+                              user_id       = EXCLUDED.user_id,
+                              create_time   = EXCLUDED.create_time;
+
+            GET DIAGNOSTICS l_row_cnt = ROW_COUNT;
+
+            select genesis2.load_log(l_load_batch_id::int, l_step_id, 'BROK Inherited', l_row_cnt, 'I'::char)
+            into l_step_id;
+
+
+        else
+            select array_agg(trade_record_id::bigint)
+            into l_new_trade_record_ids
+            from alloc_instr2trade_record a
+            where a.date_id = l_date_id
+              and a.alloc_instr_id = in_alloc_instr_id;
+        end if;
+        select genesis2.load_log(l_load_batch_id::int, l_step_id, 'After IF ', 0, 'S'::char)
+        into l_step_id;
+
+    end if;
+
+    select genesis2.load_log(l_load_batch_id::int, l_step_id, 'allocations_instruction_delete returning query', 0,
+                             'S'::char)
+    into l_step_id;
+
+    select array_agg(ac.account_id)
+    into l_sg_accounts
+    from account ac
+             join staging.sg_trading_firm using (trading_firm_id)
+    where ac.is_deleted = 'N';
+
+    return query
+        select tr.date_id,
+               tr.trade_record_id::bigint,
+               tr.account_id::integer,
+               tr.instrument_id::bigint,
+               tr.side,
+               tr.open_close,
+               tr.last_px                                                               as avg_px,
+               tr.last_qty::bigint                                                      as exec_qty,
+               i.display_instrument_id2,
+               i.last_trade_date::date,
+               i.instrument_type_id,
+               tr.cmta,
+               tr.exec_broker,
+               case i.instrument_type_id
+                   when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
+                   else tr.last_qty * tr.last_px
+                   end                                                                  as principal_amount,
+               CCRU.client_commission_rate,
+               tr.blaze_account_alias,
+               tr.orig_trade_record_id::bigint,
+               coalesce(tr.street_trade_record_time, tr.trade_record_time)              as street_exec_time,
+               tr.opt_customer_firm,
+               case when tr.is_billed = 'R' then 'R'::char end                          as reported_status,
+               case
+                   when true
+                       and tr.is_billed = 'R'
+                       then (select bar.db_create_time
+                             from dash_reporting.bofa_allocation_report bar
+                                      join genesis2.alloc_instr2trade_record aitr
+                                           on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                      join genesis2.trade_record tri
+                                           on tri.date_id = bar.date_id and tri.trade_record_id = aitr.trade_record_id
+                             where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                               and tri.exec_id = tr.exec_id
+                               and tri.is_billed = 'R'
+                             order by 1
+                             limit 1) end                                               as reported_time,
+               CCRU.client_commission_amount,
+               tr.client_order_id,
+               case
+                   when tr.subsystem_id is distinct from 'OMS_EDW' then
+                       (select fpo.order_status
+                        from staging.f_parent_order fpo
+                        where fpo.status_date_id = l_date_id
+                          and fpo.parent_order_id = tr.order_id
+                        limit 1)
+                   else '2' end::character                                              as client_order_status,
+               CCRU.broker_rate,
+               CCRU.broker_amount,
+               genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
+                                          in_exec_id := tr.exec_id,
+                                          in_fix_message_id := tr.trade_fix_message_id) as manual_broker_code,
+               -- LIFECYCLE
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid::character varying
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then fmjo.lifecycleorderid::character varying end                as lifecycle_order_id,
+               case
+                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
+                       then lc.lifecycle_orderid_status::char(1)
+                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
+                       then (select lifecycle_orderid_status::char(1)
+                             from genesis2.blaze_lifecycle_order
+                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                             limit 1)
+                   end                                                                  as lifecycle_order_state
+        from genesis2.trade_record tr
+                 inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+                 left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+                 left join lateral (select sum(case book_record_type_id when 'CCRU' then L1.rate else null end)   as client_commission_rate,
+                                           sum(case book_record_type_id when 'CCRU' then L1.amount else null end) as client_commission_amount,
+                                           sum(case book_record_type_id when 'BROK' then L1.rate else null end)   as broker_rate,
+                                           sum(case book_record_type_id when 'BROK' then L1.amount else null end) as broker_amount
+                                    from (SELECT row_number()
+                                                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                                 tl.rate,
+                                                 tl.amount,
+                                                 tl.book_record_type_id
+                                          FROM trade_level_book_record tl
+                                                   inner join book_record_creator cr
+                                                              on tl.book_record_creator_id = cr.book_record_creator_id
+                                          WHERE tl.date_id = l_date_id
+                                            AND book_record_type_id in ('CCRU', 'BROK')
+                                            and tl.trade_record_id = tr.trade_record_id) L1
+                                    where rn = 1) CCRU on true
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                                    from genesis2.blaze_lifecycle_order bl
+                                    where bl.parent_order_id = tr.order_id
+                                    limit 1) lc on true
+                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
+                                    from staging.fix_message_json fmj
+                                    where fmj.date_id = tr.date_id
+                                      and fmj.fix_message_id = tr.order_fix_message_id
+                                    limit 1) fmjo on true
+        where tr.is_busted = 'N'
+          and tr.date_id = l_date_id
+          and tr.trade_record_id = any (l_new_trade_record_ids);
+
+end ;
+
+$function$
+;
+
+
+select * from genesis2.alloc_instr2trade_record
+where trade_record_id in (2348250141, 2348250144)
