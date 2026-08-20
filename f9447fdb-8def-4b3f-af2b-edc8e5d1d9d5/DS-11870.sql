@@ -2,8 +2,10 @@ select * from trash.allocations_snapshot(in_date_id := 20260807);
 select * from dash360.allocations_snapshot(in_date_id := 20260807), in_hide_non_customer_bphops := true);
 drop FUNCTION trash.allocations_snapshot;
 
+-- DROP FUNCTION trash.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
+
 CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
-                                                      in_date_id integer DEFAULT get_dateid(CURRENT_DATE),
+                                                      in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                       in_reported_status character DEFAULT NULL::character(1),
                                                       in_hide_non_customer_bphops boolean DEFAULT false,
                                                       in_client_order_states character[] DEFAULT NULL::character(1)[])
@@ -49,7 +51,7 @@ CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DE
                 broker_commission_amount   numeric,
                 manual_broker_code         character varying,
                 lifecycle_order_id         character varying,
-                lifecycle_order_state      char(1)
+                lifecycle_order_state      character
             )
     LANGUAGE plpgsql
     COST 1
@@ -290,7 +292,7 @@ begin
                                     limit 1) fmjo on true
 
         where tr.date_id = in_date_id
---           and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end
+          and case when coalesce(in_account_ids, '{}') = '{}' then false else tr.account_id = any (in_account_ids) end
           and tr.is_busted = 'N'
 --and false
           and allocated_trades.alloc_instr_id is NULL
@@ -491,222 +493,145 @@ end ;
 $function$
 ;
 
+-- DROP FUNCTION dash360.allocations_instruction_trades(int4);
 
--------------------
+CREATE OR REPLACE FUNCTION dash360.allocations_instruction_trades(in_alloc_instr_id integer)
+    RETURNS TABLE
+            (
+                date_id                  integer,
+                trade_record_id          bigint,
+                account_id               integer,
+                instrument_id            bigint,
+                side                     character,
+                open_close               character,
+                avg_px                   numeric,
+                exec_qty                 integer,
+                display_instrument_id    character varying,
+                last_trade_date          date,
+                instrument_type_id       character,
+                cmta                     character varying,
+                exec_broker              character varying,
+                principal_amount         numeric,
+                client_commission_rate   numeric,
+                blaze_account_alias      character varying,
+                street_exec_time         timestamp without time zone,
+                expiration_date          timestamp without time zone,
+                opt_customer_firm        character,
+                reported_status          character,
+                reported_time            timestamp without time zone,
+                claimed_by               integer,
+                claim_status             character,
+                is_prev_reported         boolean,
+                client_commission_amount numeric,
+                client_order_id          character varying,
+                client_order_status      character,
+                broker_commission_rate   numeric,
+                broker_commission_amount numeric,
+                manual_broker_code       character varying,
+                lifecycle_order_id         character varying,
+                lifecycle_order_state      character
+            )
+    LANGUAGE plpgsql
+    COST 1
+AS
+$function$
+    --l_date_id := in_date_id;
+    --VP 20231101 https://dashfinancial.atlassian.net/browse/DS-7479
+    -- OS 20241227 https://dashfinancial.atlassian.net/browse/DS-9337 Add new input and output parameters
+    -- OS 20250116 https://dashfinancial.atlassian.net/browse/DS-9337 changes in report_time using is_billed in trade_record
+    -- OS 20260123 no ticket yet added client_commission_amount
+    -- OS 20260309 https://dashfinancial.atlassian.net/browse/DS-11204 Support client_order_id in Allocation Procedures
+    -- OS 20260317 https://dashfinancial.atlassian.net/browse/DS-11268 Support client_order_status for Allocation Instructions - allocation_snapshot, allocation_instruction_trades, allocation_insttuction_delete
+    -- SO 20260414 https://dashfinancial.atlassian.net/browse/DS-11390 Return client_order_status for Trade Records from OMS (OMS_EDW) as filled (2)
+    -- SO 20260609 https://dashfinancial.atlassian.net/browse/DS-11642 Add broker commissions rate and amount
+    -- SO 20260616 https://dashfinancial.atlassian.net/browse/DS-11642 Add manual_broker_code
+declare
+    l_date_id integer;
+begin
 
-select sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                     as ccru_rate,
-       case
-           when count(distinct tr.blaze_account_alias) = 1
-               then max(tr.blaze_account_alias)
-           when count(distinct tr.blaze_account_alias) > 1 then '-'
-           end                                                                           as blaze_account_alias,
-       string_agg(distinct tr.exec_broker, ', ')                                         as exec_broker,
-       sum(ccru_amount)                                                                  as ccru_amount,
-       array_agg(distinct tr.client_order_id)                                            as client_order_id,
-       array_agg(distinct fpo.order_status)                                              as order_status,
-       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                     as brok_rate,
-       sum(brok_amount)                                                                  as brok_amount,
-       array_agg(distinct case
-                              when tr.account_id = any (:l_sg_accounts)
-                                  then genesis2.get_manual_broker(
-                                      in_subsystem_id := tr.subsystem_id,
-                                      in_date_id := tr.date_id,
-                                      in_exec_id := tr.exec_id,
-                                      in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker,
-       array_agg(distinct case
-                              when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                                  then lc.lifecycle_orderid::character varying
-                              when not (tr.subsystem_id = 'OMS_EDW') and
-                                   tr.account_id = any (:l_sg_accounts)
-                                  then fmjo.lifecycleorderid end)                        as lifecycle_order_id,
-       array_agg(distinct case
-                              when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                                  then lc.lifecycle_orderid_status::char(1)
-                              when not (tr.subsystem_id = 'OMS_EDW') and
-                                   tr.account_id = any (:l_sg_accounts)
-                                  then (select lifecycle_orderid_status::char(1)
-                                        from genesis2.blaze_lifecycle_order
-                                        WHERE parent_order_id = fmjo.lifecycleorderid::int8
-                                        limit 1)
-           end)                                                                          as lifecycle_order_state,
-       (array_agg(tr.trade_record_id order by tr.trade_record_id))[1]                    as trade_record_id,
-       (array_agg(tr.subsystem_id order by tr.trade_record_id))[1]                       as subsystem_id,
-       (array_agg(tr.trade_fix_message_id order by tr.trade_record_id))[1]               as order_fix_message_id
-from genesis2.alloc_instr2trade_record alt
-         inner join genesis2.trade_record tr
-                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
+    select ai.date_id
+    from genesis2.allocation_instruction ai
+    where ai.alloc_instr_id = in_alloc_instr_id
+    into l_date_id;
 
-         left join lateral (
-    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
-           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
-           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
-           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
-    from (select rate,
-                 tl.amount,
-                 book_record_type_id,
-                 row_number()
-                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
-          from genesis2.trade_level_book_record tl
-                   inner join genesis2.book_record_creator cr
-                              on tl.book_record_creator_id = cr.book_record_creator_id
-          where tl.date_id = :in_date_id
-            AND tl.book_record_type_id in ('CCRU', 'BROK')
-            and tl.trade_record_id = alt.trade_record_id) l0
-    where true
-      and (l0.rn = 1 or l0.rn is null)
-    ) l1 on true
-         left join lateral (select distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end as order_status
-                            from staging.f_parent_order fpo
-                            where fpo.status_date_id = :in_date_id
-                              and fpo.parent_order_id = tr.order_id) fpo on true
-         left join lateral (select lifecycle_orderid, lifecycle_orderid_status
-                            from genesis2.blaze_lifecycle_order bl
-                            where bl.parent_order_id = tr.order_id
-                            limit 1) lc on true
-         left join lateral (select fix_message ->> '10609' as lifecycleorderid
-                            from staging.fix_message_json fmj
-                            where fmj.date_id = tr.date_id
-                              and fmj.fix_message_id = tr.order_fix_message_id
-                            limit 1) fmjo on true
-where alt.alloc_instr_id = -132958
-  and tr.is_busted = 'N'
---                               and (l1.rn = 1 or l1.rn is null)
-  and alt.date_id = :in_date_id
-  and tr.date_id = :in_date_id
-
-select order_id, *
-from genesis2.trade_record tr
-where true
-  and tr.date_id >= 20260801
-  and tr.account_id = any
-      ('{265273,264817,263290,263297,263298,263300,263303,263301,263743,263289,263296,263299,263815,264145,263330,264228,263346,263347,263732,263718,263368,263873,263378,263382,263395,263744,263288,263354,263376,263408,263409,263410,263411,263412,263426,263427,263428,263430,263471,263472,263489,263490,263492,263493,263433,263434,263403,263404,263405,263494,263495,263496,263500,263501,263563,263565,263566,263567,263568,263571,263572,263598,263597,263599,263600,263601,263606,263607,263618,263619,263620,263621,263629,263632,263633,263672,263684,263714,263715,263716,263717,263719,263720,263721,263722,263725,263727,263728,263729,263730,263731,263747,263765,263766,263767,263792,263803,263804,263805,263806,263807,263808,263810,263819,263822,263823,263824,263825,263826,263827,263828,263848,263851,263852,263855,263857,263859,263860,263861,263863,263866,263867,263868,263870,263878,263885,263895,263896,263898,263902,263903,263904,263905,263915,263916,263917,263918,263919,263959,263964,263965,263992,264024,264084,264105,264106,264108,264109,264110,264111,264121,264123,264129,264140,264141,264144,264148,264149,264150,264169,264171,264172,264178,264179,264180,264207,264221,264222,264224,264225,263963,264227,264229,264230,264273,264274,264275,264276,264277,264283,264284,264373,264374,264375,264376,264533,264534,264556,264557,264558,264573,264574,264575,264593,264594,264595,264596,264597,264604,264608,264818,264879,264896,264894,264897,265065,265073,265074,265075,265093,265113,265115,265117,265118,263397,263399,265481,265513,265491,265492,265493,265494,265495,265496,265497,265498,265499,265500,265501,265502,265503,265504,265505,265506,265507,265508,265509,265510,265511,265512,265514,265515,265516,265517,265518,265519,265520,265521,265522,265523,265524,265525,265526,265527,265528,265529,265530,265531,265533,265534,265535,265536,265537,265538,265539,265540,265541,265542,265543,265544,265545,265547,265548,265549,265550,265551,265552,265546,265532,265553,265554,265555,265556,265557,265558,265559,265560,265561,265562,265563,265564,265565,265566,265567,265568,265569,265570,265571,265572,265573,265574,265575,265576,265577,265578,265579,265580,265581,265582,265583,265584,265585,265586,265587,265588,265589,265590,265591,265592,265593,265594,265595,265596,265597,265598,265599,265600,265601,265602,265603,265604,265605,265606,265607,265608,265609,265610,265611,265612,265613,265614,265615,265616,265617,265618,265619,265620,265621,265622,265623,265624,265625,265626,265627,265628,265629,265630,265631,265632,265633,265634,265635,265636,265637,265638,265639,265640,265641,265642,265643,265644,265645,265646,265647,265648,265649,265650,265651,265652,265653,265654,265655,265656,265657,265658,265659,265660,265661,265662,265663,265664,265665,265666,265667,265668,265669,265670,265671,265672,265673,265674,265675,265676,265677,265678,265679,265680,265681,265682,265683,265684,265685,265686,265687,265693,263435,263406,264793,264813,266093,266094,266095,264814,266293,266294,266296,266314,266317,266333,263832,266395,263302,266473,263774,263809,266393,266733,266753,266754,266756,266755,266759,266760,263776,263961,263980,264062,264107,264124,264196,264255,264280,264281,264282,264576,265114,266313,266315,266394,266433,266434,266793,263761,263762,264127,264216,263677,263680,263756,263757,263758,263760,263763,263752,263754,263764,263772,263681,264218,264633,265193,264158,264012,264013,264773,264774,264754,264755,265201,265214,265216,265694,265695,265696,265697,265698,265699,265700,265701,265702,265703,265704,265705,265706,265707,265708,265709,265710,265711,265712,265713,265714,265715,265716,265717,265718,265719,265720,265721,265722,265723,265724,265725,265726,265727,265728,265729,265730,265731,265732,265733,265734,265735,265736,265737,265738,265739,265740,265741,265742,265743,265744,265745,265746,265747,265748,265749,265750,265751,265752,265753,265754,265755,265756,265757,265758,265759,265760,265761,265762,265763,265764,265765,265766,265767,265768,265769,265770,265771,265772,265773,265774,265775,265776,265777,265778,265779,265780,265781,265782,265783,265784,265785,265786,265787,265788,265789,265790,265791,265792,265793,265794,265795,265796,265797,265798,265799,265800,265801,265802,265803,265804,265805,265806,265807,265808,265809,265810,265811,265812,265813,265814,265815,265816,265817,265818,265819,265820,265821,265822,265823,265824,265825,265826,265827,265828,265829,265830,265831,265832,265833,265834,265835,265836,265837,265838,265839,265840,265841,265842,265843,265844,265845,265846,265847,265848,265849,265850,265851,265852,265853,265854,265855,265856,265857,265858,265859,265860,265861,265862,265863,265864,265865,265866,265867,265868,265869,265870,265871,265872,265873,265874,265875,265876,265877,265878,265879,265880,265881,265882,265883,265884,265885,265886,265887,265888,265889,265890,265891,264120,264254,263957,264513,264514,264515,264733,263000,263001,263420,263674,263784,263785,263786,263787,263816,264023,264101,264253,264287,264673,264713,263817,264116,263627,264609,266097,266098,266099,266100,266101,266102,266103,266104,266105,266106,266107,266096,266108,266109,266110,266111,266112,266113,266114,266115,266116,266117,266118,266119,266120,266121,266122,266123,266124,266125,266126,266127,266128,266129,266130,266131,266132,266133,266134,266135,266136,266137,266138,266139,266140,266141,266142,266143,266144,266145,266146,266147,266148,266149,266150,266151,266152,266153,266154,266155,266156,266157,266158,266159,266160,266161,266162,266163,266164,266165,266166,266167,266168,266169,266170,266171,266172,266173,266174,266175,266176,266177,266178,266179,266180,266181,266182,266183,266184,266185,266186,266187,266188,266189,266190,266191,266192,266193,266194,266195,266196,266197,266198,266199,266200,266201,266202,266203,266204,266205,266206,266207,266208,266209,266210,266211,266212,266213,266214,266215,266216,266217,266218,266219,266220,266221,266222,266223,266224,266225,266226,266227,266228,266229,266230,266231,266232,266233,266234,266235,266236,266237,266238,266239,266240,266241,266242,266243,266244,266245,266246,266247,266248,266249,266250,266251,266262,266261,266260,266259,266258,266256,266255,266254,266252,266264,266265,266266,266267,266268,266269,266270,266271,266272,266273,266274,266275,266276,266277,266278,266279,266280,266263,266257,266253,264089,263768,263421,263015,263002,264151,264152,264153,263203,263270,263271,263358,263202,263201,263281,263294,263204,263205,263206,263207,263208,263209,263359,263360,263379,263396,263402,263564,263401,263361,263363,263645,263643,263644,263789,263795,263796,263797,263813,263814,263830,263831,264293,264294,264295,264296,264297,264413,264414,264433,264434,264654,264653,263362,264855,264016,264017,264018,264115,263700,263701,264098,266813,266853,266873,266874,266913}')
-  and tr.subsystem_id = 'OMS_EDW'
-  and is_busted = 'N';
-
-
-select --alt.alloc_instr_id,
-       sum(l1.ccru_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                     as ccru_rate,
-       case
-           when count(distinct tr.blaze_account_alias) = 1
-               then max(tr.blaze_account_alias)
-           when count(distinct tr.blaze_account_alias) > 1 then '-'
-           end                                                                           as blaze_account_alias,
-       string_agg(distinct tr.exec_broker, ', ')                                         as exec_broker,
-       sum(ccru_amount)                                                                  as ccru_amount,
-       array_agg(distinct tr.client_order_id)                                            as client_order_id,
-       array_agg(distinct fpo.order_status)                                              as order_status,
-       sum(l1.brok_rate * tr.last_qty) / nullif(sum(tr.last_qty), 0)                     as brok_rate,
-       sum(brok_amount)                                                                  as brok_amount,
-       array_agg(distinct case
-                              when tr.account_id = any (:l_sg_accounts)
-                                  then genesis2.get_manual_broker(
-                                      in_subsystem_id := tr.subsystem_id,
-                                      in_date_id := tr.date_id,
-                                      in_exec_id := tr.exec_id,
-                                      in_fix_message_id := tr.trade_fix_message_id) end) as manual_broker,
-    array_agg(distinct case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                       then lc.lifecycle_orderid
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
-                       then fmjo.lifecycleorderid::int8 end ) as lifecycle_order_id,
-    array_agg(distinct case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                       then lc.lifecycle_orderid_status
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
-                       then (select lifecycle_orderid_status
-                             from genesis2.blaze_lifecycle_order
-                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
-                             limit 1)
-                   end     )  as lifecycle_order_state
-
-
-/*
-                case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
-                       then lc.lifecycle_orderid
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
-                       then fmjo.lifecycleorderid::int8 end                                             as lifecycle_order_id,
+    return query
+        select tr.date_id,
+               tr.trade_record_id::bigint,
+               tr.account_id::integer,
+               tr.instrument_id::int8,
+               tr.side,
+               tr.open_close,
+               tr.last_px                                                                       as avg_px,
+               tr.last_qty                                                                      as exec_qty,
+               i.display_instrument_id,
+               i.last_trade_date::date,
+               i.instrument_type_id,
+               tr.cmta,
+               tr.exec_broker,
+               case i.instrument_type_id
+                   when 'O' then tr.last_qty * tr.last_px * os.contract_multiplier
+                   else tr.last_qty * tr.last_px
+                   end                                                                          as principal_amount,
+               CCRU.ccru_rate                                                                   as client_commission_rate,
+               tr.blaze_account_alias,
+               coalesce(tr.street_trade_record_time, tr.trade_record_time)                      as street_exec_time,
+               ----------------
+               i.last_trade_date                                                                as expiration_date,
+               tr.opt_customer_firm,
+--                coalesce(bar.to_report, btr.to_report)                      as reported_status,
+               case when tr.is_billed = 'R' then 'R'::char end                                  as reported_status,
                case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (l_sg_accounts)
-                       then lc.lifecycle_orderid_status
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (l_sg_accounts)
-                       then (select lifecycle_orderid_status
-                             from genesis2.blaze_lifecycle_order
-                             WHERE parent_order_id = fmjo.lifecycleorderid
-                             limit 1)
-                   end                                                                                  as lifecycle_order_state
- */
-from genesis2.alloc_instr2trade_record alt
-
-         inner join genesis2.trade_record tr
-                    on alt.trade_record_id = tr.trade_record_id and alt.date_id = tr.date_id
---  where alt.date_id = 20260807
-         left join lateral (
-    select max(case when book_record_type_id = 'CCRU' then l0.rate end)   as ccru_rate,
-           sum(case when book_record_type_id = 'CCRU' then l0.amount end) as ccru_amount,
-           max(case when book_record_type_id = 'BROK' then l0.rate end)   as brok_rate,
-           sum(case when book_record_type_id = 'BROK' then l0.amount end) as brok_amount
-    from (select rate,
-                 tl.amount,
-                 book_record_type_id,
-                 row_number()
-                 over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn
-          from genesis2.trade_level_book_record tl
-                   inner join genesis2.book_record_creator cr
-                              on tl.book_record_creator_id = cr.book_record_creator_id
-          where tl.date_id = :in_date_id
-            AND tl.book_record_type_id in ('CCRU', 'BROK')
-            and tl.trade_record_id = alt.trade_record_id) l0
-    where true
-      and (l0.rn = 1 or l0.rn is null)
-    ) l1 on true
-         left join lateral (select distinct case when tr.subsystem_id = 'OMS_EDW' then '2' else fpo.order_status end as order_status
-                            from staging.f_parent_order fpo
-                            where fpo.status_date_id = :in_date_id
-                              and fpo.parent_order_id = tr.order_id) fpo on true
-                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
-                                    from genesis2.blaze_lifecycle_order bl
-                                    where bl.parent_order_id = tr.order_id
-                                    limit 1) lc on true
-                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
-                                    from staging.fix_message_json fmj
-                                    where fmj.date_id = tr.date_id
-                                      and fmj.fix_message_id = tr.order_fix_message_id
-                                    limit 1) fmjo on true
-where alt.alloc_instr_id = -132958
---                                                                    in (-132977,-132976,-132975,-132974,-132973,-132972,-132971,-132970,-132969,-132968,-132967,-132966,-132965,-132964,-132963,-132962,-132961,-132960,-132959,-132958)
-  and tr.is_busted = 'N'
---                               and (l1.rn = 1 or l1.rn is null)
-  and alt.date_id = :in_date_id
-  and tr.date_id = :in_date_id
---                                     group by alt.alloc_instr_id
-                                    limit 1
-
-
---
-
- select tr.date_id::int4,
-               tr.trade_record_id::int8,
-                  case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                       then lc.lifecycle_orderid::character varying
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
-                       then fmjo.lifecycleorderid::character varying end                                             as lifecycle_order_id,
+                   when tr.is_billed = 'R' then coalesce(/*bar.db_create_time,*/ (select bar.db_create_time
+                                                                                  from dash_reporting.bofa_allocation_report bar
+                                                                                           join genesis2.alloc_instr2trade_record aitr
+                                                                                                on aitr.date_id = bar.date_id and aitr.alloc_instr_id = bar.alloc_instr_id
+                                                                                           join genesis2.trade_record tri
+                                                                                                on tri.date_id =
+                                                                                                   bar.date_id and
+                                                                                                   tri.trade_record_id =
+                                                                                                   aitr.trade_record_id
+                                                                                  where true
+--                           and tri.exch_exec_id = tr.exch_exec_id
+                                                                                    and tri.exec_id = tr.exec_id
+                                                                                    and tri.is_billed = 'R'
+                                                                                  order by 1
+                                                                                  limit 1)) end as reported_time,
+               null::int4                                                                       as claimed_by,
+               null::character                                                                  as claim_status,
+               case when tr.is_billed = 'R' then true else false end                            as is_prev_reported,
+               CCRU.ccru_amount                                                                 as client_commission_amount,
+               tr.client_order_id,
                case
-                   when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-                       then lc.lifecycle_orderid_status::character varying
-                   when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
-                       then (select lifecycle_orderid_status::char(1)
-                             from genesis2.blaze_lifecycle_order
-                             WHERE parent_order_id = fmjo.lifecycleorderid::int8
-                             limit 1)
-                   end                                                                                  as lifecycle_order_state
+                   when tr.subsystem_id is distinct from 'OMS_EDW' then
+                       (select fpo.order_status
+                        from staging.f_parent_order fpo
+                        where fpo.status_date_id = l_date_id
+                          and fpo.parent_order_id = tr.order_id
+                        limit 1)
+                   else '2' end::character                                                      as client_order_status,
+               CCRU.brok_rate                                                                   as broker_commission_rate,
+               CCRU.brok_amount                                                                 as broker_commission_amount,
+               genesis2.get_manual_broker(in_subsystem_id := tr.subsystem_id, in_date_id := tr.date_id,
+                   --SY  in_trade_record_id := tr.trade_record_id,
+                                          in_exec_id := tr.exec_id,
+                                          in_fix_message_id := tr.trade_fix_message_id)         as manual_broker_code
         from genesis2.trade_record tr
                  inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                 inner join genesis2.alloc_instr2trade_record ai2tr on (ai2tr.trade_record_id = tr.trade_record_id)
+                 inner join genesis2.allocation_instruction a on (a.alloc_instr_id = ai2tr.alloc_instr_id)
+                 left join lateral (select to_report, btr.db_create_time
+                                    from dash_reporting.bofa_trade_record btr
+                                    where btr.trade_record_id = tr.trade_record_id
+                                      and btr.date_id = tr.date_id
+                                    limit 1) btr on true
+                 left join lateral (select to_report, bar.db_create_time
+                                    from dash_reporting.bofa_allocation_report bar
+                                    where bar.alloc_instr_id = ai2tr.alloc_instr_id
+                                      and bar.date_id = ai2tr.date_id
+                                    limit 1) bar on true
+
                  left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
                  left join genesis2.option_series os on oc.option_series_id = os.option_series_id
-
-
                  left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
                                            sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
                                            max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
@@ -720,30 +645,15 @@ where alt.alloc_instr_id = -132958
                                           FROM genesis2.trade_level_book_record tl
                                                    inner join genesis2.book_record_creator cr
                                                               on tl.book_record_creator_id = cr.book_record_creator_id
-                                          WHERE tl.date_id = :in_date_id
+                                          WHERE tl.date_id = l_date_id
                                             AND book_record_type_id in ('CCRU', 'BROK')
                                             and tl.trade_record_id = tr.trade_record_id) L1
                                     where rn = 1) ccru on true
-                 left join lateral (select fix_message ->> '10707' as chain_id,
-                                           fix_message ->> '10568' as manual_broker_code
-                                    from staging.fix_message_json fmj
-                                    where fmj.date_id = tr.date_id
-                                      and fmj.fix_message_id = tr.trade_fix_message_id
-                                    limit 1) fmj on true
 
-                 left join lateral (select fpo.order_status
-                                    from staging.f_parent_order fpo
-                                    where fpo.status_date_id = :in_date_id
-                                      and fpo.parent_order_id = tr.order_id
-                                    limit 1) fpo on true and tr.subsystem_id is distinct from 'OMS_EDW'
+        where tr.is_busted = 'N'
+          and tr.date_id = l_date_id
+          and a.alloc_instr_id = in_alloc_instr_id;
 
-                 left join lateral (select lifecycle_orderid, lifecycle_orderid_status
-                                    from genesis2.blaze_lifecycle_order bl
-                                    where bl.parent_order_id = tr.order_id
-                                    limit 1) lc on true
-                 left join lateral (select fix_message ->> '10609' as lifecycleorderid
-                                    from staging.fix_message_json fmj
-                                    where fmj.date_id = tr.date_id
-                                      and fmj.fix_message_id = tr.order_fix_message_id
-                                    limit 1) fmjo on true
-        where tr.date_id = :in_date_id
+end;
+$function$
+;
