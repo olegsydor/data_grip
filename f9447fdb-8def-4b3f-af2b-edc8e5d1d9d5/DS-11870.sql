@@ -1,15 +1,15 @@
 select * from trash.allocations_snapshot(in_date_id := 20260807);
-select * from dash360.allocations_snapshot(in_date_id := 20260807), in_hide_non_customer_bphops := true);
+select * from dash360.allocations_snapshot(in_date_id := 20260807, in_lifecycle_order_states := '{N,F}'), in_hide_non_customer_bphops := true);
 drop FUNCTION trash.allocations_snapshot;
 
--- DROP FUNCTION trash.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
+-- DROP FUNCTION dash360.allocations_snapshot(_int8, int4, bpchar, bool, _bpchar);
 
-CREATE OR REPLACE FUNCTION trash.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
+CREATE OR REPLACE FUNCTION dash360.allocations_snapshot(in_account_ids bigint[] DEFAULT '{}'::bigint[],
                                                         in_date_id integer DEFAULT public.get_dateid(CURRENT_DATE),
                                                         in_reported_status character DEFAULT NULL::character(1),
                                                         in_hide_non_customer_bphops boolean DEFAULT false,
                                                         in_client_order_states character[] DEFAULT NULL::character(1)[],
-                                                        in_lifecycle_order_state character default null)
+                                                        in_lifecycle_order_states character[] default null::character(1)[])
     RETURNS TABLE
             (
                 date_id                    integer,
@@ -80,7 +80,7 @@ $function$
     -- SO 20270720 https://dashfinancial.atlassian.net/browse/DS-11700 Performance improvement
     -- SO 20280810 https://dashfinancial.atlassian.net/browse/DS-11870 Adjust allocation procedures to Lifecycle Order ID and Lifecycle Order Status
     -- SO 20260812 https://dashfinancial.atlassian.net/browse/DS-11887 Implement filtering out values by BlazeIsLinked (FIX 10579) and BlazeIsPartOfStitchedOrder (10585) in allocation snapshot
-    -- SO 20280821 https://dashfinancial.atlassian.net/browse/DS-11870 Adjust allocation procedures to filtering by Lifecycle Order Status
+    -- SO 20280821 https://dashfinancial.atlassian.net/browse/DS-11926 Adjust allocation procedures to filtering by Lifecycle Order Status
 declare
     l_load_id     int;
     l_step_id     int;
@@ -320,8 +320,8 @@ begin
                         else fpo.order_status is not null and fpo.order_status = any (in_client_order_states) end) x
         where true
           and case
-                  when in_lifecycle_order_state is null then true
-                  else lifecycle_order_state is not null and lifecycle_order_state = in_lifecycle_order_state end;
+                  when in_lifecycle_order_states is null then true
+                  else x.lifecycle_order_state is not null and x.lifecycle_order_state = any(in_lifecycle_order_states) end;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' trade_record part finished', l_row_cnt, 'O')
@@ -502,8 +502,8 @@ begin
                         when in_reported_status is null then true end) x
         where true
           and case
-                  when in_lifecycle_order_state is null then true
-                  else lifecycle_order_state is not null and lifecycle_order_state = in_lifecycle_order_state end;
+                  when in_lifecycle_order_states is null then true
+                  else x.lifecycle_order_state is not null and x.lifecycle_order_state = any(in_lifecycle_order_states) end;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' allocation_instruction part finished', l_row_cnt, 'O')
     into l_step_id;
