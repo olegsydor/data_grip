@@ -1259,3 +1259,5 @@ $function$
 
 select * from genesis2.alloc_instr2trade_record
 where trade_record_id in (2348250141, 2348250144)
+
+
