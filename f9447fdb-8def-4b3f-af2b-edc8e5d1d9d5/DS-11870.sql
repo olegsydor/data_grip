@@ -317,11 +317,11 @@ begin
                         else true end
                 and case
                         when in_client_order_states is null then true
-                        else fpo.order_status is not null and fpo.order_status = any (in_client_order_states) end) x
+                        else fpo.order_status is not null and fpo.order_status = any (in_client_order_states) end) xl
         where true
           and case
                   when in_lifecycle_order_states is null then true
-                  else x.lifecycle_order_state is not null and x.lifecycle_order_state = any(in_lifecycle_order_states) end;
+                  else xl.lifecycle_order_state is not null and xl.lifecycle_order_state = any(in_lifecycle_order_states) end;
 
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' trade_record part finished', l_row_cnt, 'O')
@@ -499,11 +499,11 @@ begin
                 and case
                         when in_reported_status = 'R' then rep.to_report = 'R'
                         when in_reported_status = 'U' then rep.to_report in ('U', 'C', 'W') -- C the same as U
-                        when in_reported_status is null then true end) x
+                        when in_reported_status is null then true end) xl
         where true
           and case
                   when in_lifecycle_order_states is null then true
-                  else x.lifecycle_order_state is not null and x.lifecycle_order_state = any(in_lifecycle_order_states) end;
+                  else xl.lifecycle_order_state is not null and xl.lifecycle_order_state = any(in_lifecycle_order_states) end;
     get diagnostics l_row_cnt = row_count;
     select public.load_log(l_load_id, l_step_id, l_msg_text || ' allocation_instruction part finished', l_row_cnt, 'O')
     into l_step_id;
