@@ -87,3 +87,4 @@ from genesis2.trade_record tr
 -- UAT
 -- DROP FUNCTION genesis2.load_away_trade(text, text);
 
+SELECT EXTRACT(EPOCH FROM now());
