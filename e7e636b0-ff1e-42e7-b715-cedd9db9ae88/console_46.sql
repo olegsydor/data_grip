@@ -80,3 +80,10 @@ from genesis2.trade_record tr
       and coalesce(tr.ex_destination, 'NONE') not in ('BRKPT', 'TRAFX', 'JSEB', 'RPTR', 'SQHT', 'CTDH', 'WEEDN')
       and client_order_id in ('ER-20260805-48385','ER-20260805-57792')
       and tr.date_id = :f_date_id;
+
+
+
+
+-- UAT
+-- DROP FUNCTION genesis2.load_away_trade(text, text);
+
