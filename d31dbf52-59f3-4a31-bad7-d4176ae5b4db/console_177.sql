@@ -236,3 +236,11 @@ and date_id = 20260812;
 select * from staging.dash_trade_record_daily_mira
 where trade_record_id = 5327423362
 and date_id >= 20260811;
+
+
+
+--create temp table tmp_tca as
+select * from staging.find_in_load_timing('dash360.report_obo_generic', 60*24*5)--localtimestamp - interval '500 minute', localtimestamp);
+where true
+--and load_timing_id in (302680907, 302680907, 302703950)
+order by 1 desc, 2 desc;
