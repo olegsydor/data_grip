@@ -51,6 +51,22 @@ end;
 $fn$;
 
 
+
+
+select * from genesis2.load_blaze_lifecycle_order('');
+select * from genesis2.load_blaze_lifecycle_order();
+
+
+select * from genesis2.blaze_lifecycle_order
+WHERE parent_order_id = 647855791876882432 AND lifecycle_orderid = 647855791876882432
+
+
+select order_id, lifecycle_orderid, lifecycle_orderid_status, exec_id
+from staging.v_lifecycle_order vl;
+
+
+-- DROP FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(int4, int4, _varchar, _int4);
+
 CREATE OR REPLACE FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(in_start_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
                                                                            in_end_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
                                                                            in_trading_firm_ids character varying[] DEFAULT '{}'::character varying[],
@@ -113,25 +129,31 @@ begin
     select --aie.allocation_instruction_entry_id         as "ITEM",
            concat_ws(' ', case when ai.side = '1' then 'BUY' when ai.side = any ('{"2", "5", "6"}') then 'SELL' end,
                      case when ai.open_close = 'O' then 'OPEN' when ai.open_close = 'C' then 'CLOSE' end)
-                                                       as "BUY/SELL",
-           aie.alloc_qty                               as "CONTRACTS",
-           gi.symbol                                   as "SYMBOL",
+                                                                                         as "BUY/SELL",
+           aie.alloc_qty                                                                 as "CONTRACTS",
+           gi.symbol                                                                     as "SYMBOL",
            concat_ws('', to_char(OC.MATURITY_YEAR, 'FM0000'), to_char(OC.MATURITY_MONTH, 'FM00'),
-                     to_char(OC.MATURITY_DAY, 'FM00')) as "MONTH",
-           oc.strike_price                             as "STRIKE",
-           oc.put_call                                 as "PUT/CALL",
-           ai.avg_px                                   as "AVG. PRICE",
-           ca.cmta                                     as "CONTRA PARTY",
-           aie.occ_actionable_id                       as "CUSTOMER",
+                     to_char(OC.MATURITY_DAY, 'FM00'))                                   as "MONTH",
+           oc.strike_price                                                               as "STRIKE",
+           case when oc.put_call = '0' then 'PUT' when oc.put_call = '1' then 'CALL' end as "PUT/CALL",
+           ai.avg_px                                                                     as "AVG. PRICE",
+           ca.cmta                                                                       as "CONTRA PARTY",
+           aie.occ_actionable_id                                                         as "CUSTOMER",
            --tr.sub_account as "MARKET MAKER"
-           null                                        as "MARKET MAKER",
-           'OC'                                        as "TRAILER CODE",
-           tr.opt_customer_firm                        as "FROM (C/F/M)",
-           tr.opt_customer_firm                        as "TO (C/F/M)",
-           '286'                                       as "FROM CLR NO",
+           null                                                                          as "MARKET MAKER",
+           'OC'                                                                          as "TRAILER CODE",
+           case
+               when tr.opt_customer_firm in ('1', '2', '3') then 'C'
+               when tr.opt_customer_firm in ('21', '22', '41', '42') then 'F'
+               when tr.opt_customer_firm in ('4', '61') then 'M' end                     as "FROM (C/F/M)",
+           case
+               when tr.opt_customer_firm in ('1', '2', '3') then 'C'
+               when tr.opt_customer_firm in ('21', '22', '41', '42') then 'F'
+               when tr.opt_customer_firm in ('4', '61') then 'M' end                     as "TO (C/F/M)",
+           '286'                                                                         as "FROM CLR NO",
            concat_ws(' ', case when ai.side = '1' then 'SELL' when ai.side = any ('{"2", "5", "6"}') then 'BUY' end,
                      case when ai.open_close = 'C' then 'OPEN' when ai.open_close = 'O' then 'CLOSE' end)
-                                                       as "BUY/SELL FROM",
+                                                                                         as "BUY/SELL FROM",
            tr.date_id
     from genesis2.allocation_instruction ai
              join genesis2.allocation_instruction_entry aie using (alloc_instr_id, date_id)
@@ -162,14 +184,3 @@ begin
 end;
 $function$
 ;
-
-select * from genesis2.load_blaze_lifecycle_order('');
-select * from genesis2.load_blaze_lifecycle_order();
-
-
-select * from genesis2.blaze_lifecycle_order
-WHERE parent_order_id = 647855791876882432 AND lifecycle_orderid = 647855791876882432
-
-
-select order_id, lifecycle_orderid, lifecycle_orderid_status, exec_id
-from staging.v_lifecycle_order vl;
