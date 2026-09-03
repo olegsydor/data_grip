@@ -65,7 +65,6 @@ select order_id, lifecycle_orderid, lifecycle_orderid_status, exec_id
 from staging.v_lifecycle_order vl;
 
 
--- DROP FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(int4, int4, _varchar, _int4);
 
 CREATE OR REPLACE FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(in_start_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
                                                                            in_end_date_id integer DEFAULT (to_char((CURRENT_DATE)::timestamp with time zone, 'YYYYMMDD'::text))::integer,
@@ -79,14 +78,14 @@ CREATE OR REPLACE FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(in_st
                 "SYMBOL"        character varying,
                 "MONTH"         text,
                 "STRIKE"        numeric,
-                "PUT/CALL"      character varying,
+                "PUT/CALL"      text,
                 "AVG. PRICE"    numeric,
                 "CONTRA PARTY"  character varying,
                 "CUSTOMER"      character varying,
                 "MARKET MAKER"  text,
                 "TRAILER CODE"  text,
-                "FROM (C/F/M)"  character,
-                "TO (C/F/M)"    character,
+                "FROM (C/F/M)"  text,
+                "TO (C/F/M)"    text,
                 "FROM CLR NO"   text,
                 "BUY/SELL FROM" text,
                 date_id         integer
@@ -143,13 +142,13 @@ begin
            null                                                                          as "MARKET MAKER",
            'OC'                                                                          as "TRAILER CODE",
            case
-               when tr.opt_customer_firm in ('1', '2', '3') then 'C'
-               when tr.opt_customer_firm in ('21', '22', '41', '42') then 'F'
-               when tr.opt_customer_firm in ('4', '61') then 'M' end                     as "FROM (C/F/M)",
+               when tr.capacity_group_id in ('1', '2', '3') then 'C'
+               when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
+               when tr.capacity_group_id in ('4', '61') then 'M' end                     as "FROM (C/F/M)",
            case
-               when tr.opt_customer_firm in ('1', '2', '3') then 'C'
-               when tr.opt_customer_firm in ('21', '22', '41', '42') then 'F'
-               when tr.opt_customer_firm in ('4', '61') then 'M' end                     as "TO (C/F/M)",
+               when tr.capacity_group_id in ('1', '2', '3') then 'C'
+               when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
+               when tr.capacity_group_id in ('4', '61') then 'M' end                     as "TO (C/F/M)",
            '286'                                                                         as "FROM CLR NO",
            concat_ws(' ', case when ai.side = '1' then 'SELL' when ai.side = any ('{"2", "5", "6"}') then 'BUY' end,
                      case when ai.open_close = 'C' then 'OPEN' when ai.open_close = 'O' then 'CLOSE' end)
@@ -162,11 +161,15 @@ begin
              join genesis2.clearing_account ca
                   on (aie.clearing_account_id = ca.clearing_account_id and ca.is_deleted = 'N')
 
-             join lateral (select tr.*
+             join lateral (select tr.date_id, cst.capacity_group_id
                            from genesis2.alloc_instr2trade_record aitr
                                     join genesis2.trade_record tr
                                          on (tr.date_id = aitr.date_id
                                              and tr.trade_record_id = aitr.trade_record_id)
+                                    left join lateral (select capacity_group_id
+                                                       from genesis2.customer_or_firm cst
+                                                       where cst.customer_or_firm_id = tr.opt_customer_firm
+                                                       limit 1) cst on true
                            where aitr.alloc_instr_id = ai.alloc_instr_id
                              and aitr.date_id = ai.date_id
                            order by trade_record_time
