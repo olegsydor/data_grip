@@ -79,7 +79,7 @@ CREATE OR REPLACE FUNCTION dash360.report_sg_middle_offic_ooc_alloc_report(in_st
                 "SYMBOL"        character varying,
                 "MONTH"         text,
                 "STRIKE"        numeric,
-                "PUT/CALL"      character,
+                "PUT/CALL"      character varying,
                 "AVG. PRICE"    numeric,
                 "CONTRA PARTY"  character varying,
                 "CUSTOMER"      character varying,
