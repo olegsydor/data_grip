@@ -141,14 +141,28 @@ begin
            --tr.sub_account as "MARKET MAKER"
            null                                                                          as "MARKET MAKER",
            'OC'                                                                          as "TRAILER CODE",
+        /*
+         case
+             when tr.capacity_group_id in ('1', '2', '3') then 'C'
+             when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
+             when tr.capacity_group_id in ('4', '61') then 'M' end                     as "FROM (C/F/M)",
+         case
+             when tr.capacity_group_id in ('1', '2', '3') then 'C'
+             when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
+             when tr.capacity_group_id in ('4', '61') then 'M' end                     as "TO (C/F/M)",
+         '286'                                                                         as "FROM CLR NO",
+         concat_ws(' ', case when ai.side = '1' then 'SELL' when ai.side = any ('{"2", "5", "6"}') then 'BUY' end,
+                   case when ai.open_close = 'C' then 'OPEN' when ai.open_close = 'O' then 'CLOSE' end)
+                                                                                       as "BUY/SELL FROM",
+      */
            case
-               when tr.capacity_group_id in ('1', '2', '3') then 'C'
-               when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
-               when tr.capacity_group_id in ('4', '61') then 'M' end                     as "FROM (C/F/M)",
+               when tr.opt_customer_firm in ('0', '8') then 'C'
+               when tr.opt_customer_firm = any ('{1,2,3,7,J,N}') then 'F'
+               when tr.opt_customer_firm in ('4', '5', 'Z') then 'M' end                 as "FROM (C/F/M)",
            case
-               when tr.capacity_group_id in ('1', '2', '3') then 'C'
-               when tr.capacity_group_id in ('21', '22', '41', '42') then 'F'
-               when tr.capacity_group_id in ('4', '61') then 'M' end                     as "TO (C/F/M)",
+               when tr.opt_customer_firm in ('0', '8') then 'C'
+               when tr.opt_customer_firm = any ('{1,2,3,7,J,N}') then 'F'
+               when tr.opt_customer_firm in ('4', '5', 'Z') then 'M' end                 as "TO (C/F/M)",
            '286'                                                                         as "FROM CLR NO",
            concat_ws(' ', case when ai.side = '1' then 'SELL' when ai.side = any ('{"2", "5", "6"}') then 'BUY' end,
                      case when ai.open_close = 'C' then 'OPEN' when ai.open_close = 'O' then 'CLOSE' end)
@@ -161,7 +175,7 @@ begin
              join genesis2.clearing_account ca
                   on (aie.clearing_account_id = ca.clearing_account_id and ca.is_deleted = 'N')
 
-             join lateral (select tr.date_id, cst.capacity_group_id
+             join lateral (select tr.date_id, cst.capacity_group_id, tr.opt_customer_firm
                            from genesis2.alloc_instr2trade_record aitr
                                     join genesis2.trade_record tr
                                          on (tr.date_id = aitr.date_id
