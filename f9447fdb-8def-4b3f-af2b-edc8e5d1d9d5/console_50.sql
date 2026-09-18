@@ -1,4 +1,12 @@
-select * from dash360.allocation_instruction_import;
+date_id
+
+account_id
+
+instrument_id
+
+side
+
+open_closeselect * from dash360.allocation_instruction_import;
 
 SELECT id, uploaded_by_user_id, processing_status, error_message, file_content, file_name
 FROM dash360.allocation_instruction_import;
@@ -49,4 +57,110 @@ CREATE TABLE dash360.allocation_instruction_import (
 );
 
 insert into dash360.allocation_instruction_import
-select * from tmp_aio
+select * from tmp_aio;
+
+select * from dash360.allocation_instruction_import_row;
+
+/*
+ Add procedure to retreive Trade Records for Allocation Instruction Groip from a file
+
+Inputs:
+
+date_id
+
+account_id
+
+instrument_id
+
+side
+
+open_close
+
+Outpu
+
+date_id
+
+account_id
+
+instrument_id
+
+side
+
+open_close
+
+last_qty
+
+last_px
+
+logic
+
+find all Trade Records by filters about that are
+
+is_busted == 'N'
+
+not allocated (is not present in AI2TR)
+ */
+
+
+drop function if exists dash360.get_trade_record_for_alloc_group;
+create or replace function dash360.get_trade_record_for_alloc_group(
+    in_date_id int4,
+    in_account_id int8,
+    in_instrument_id int8,
+    in_side bpchar(1),
+    in_open_close bpchar(1)
+)
+    returns table
+            (
+                date_id       int4,
+                account_id    int4,
+                instrument_id int4,
+                side          bpchar(1),
+                open_close    bpchar(1),
+                last_qty      int,
+                last_px       numeric
+            )
+    language sql
+as
+$$
+
+select tr.date_id,
+       tr.account_id,
+       tr.instrument_id,
+       tr.side,
+       tr.open_close,
+       tr.last_qty,
+       tr.last_px
+from genesis2.trade_record tr
+         left join genesis2.alloc_instr2trade_record aitr
+                   on aitr.date_id = tr.date_id and aitr.trade_record_id = tr.trade_record_id
+where tr.date_id = in_date_id
+  and tr.account_id = in_account_id
+  and tr.instrument_id = in_instrument_id
+  and tr.side = in_side
+  and tr.open_close = in_open_close
+  and tr.is_busted = 'N'
+  and aitr.date_id is null;
+$$;
+
+select tr.date_id,
+       tr.account_id,
+       tr.instrument_id,
+       tr.side,
+       tr.open_close,
+       tr.last_qty,
+       tr.last_px
+from genesis2.trade_record tr
+         left join genesis2.alloc_instr2trade_record aitr
+                   on aitr.date_id = tr.date_id and aitr.trade_record_id = tr.trade_record_id
+where tr.date_id = :in_date_id
+and aitr.date_id is null ;
+
+select *
+from dash360.get_trade_record_for_alloc_group(
+        in_date_id := 20260916,
+        in_account_id := 258490,
+        in_instrument_id := 181894648,
+        in_side := '1',
+        in_open_close := 'O'
+     )
