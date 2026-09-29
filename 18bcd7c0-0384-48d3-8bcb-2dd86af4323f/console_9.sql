@@ -84,55 +84,87 @@ order by 1;
 
 -- DROP FUNCTION inc_hft.zabbix_monitor_check_loading();
 
-CREATE OR REPLACE FUNCTION inc_hft.zabbix_monitor_check_loading()
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
+create or replace function loader.zabbix_monitor_check_loading()
+    returns integer
+    language plpgsql
+as
+$function$
     -- 20240215 SO https://dashfinancial.atlassian.net/browse/DS-7883
     -- 20240219 SO view with interval of dates was used to check if partition has been created
-/*
-the script checks:
-before 11 - the presence of the daily partition
-11-17 running of the incremental process: non-null count of rows in progress or recent run of the process even though the count of rows was 0
-17+ indicator of the finishing all processes and attaching partition
-if ok - returns 1 else -1
- */
+    -- 20260929 SO https://dashfinancial.atlassian.net/browse/DS-12092
+
 declare
-    l_sum         int4;
-    l_last_time   timestamp;
-    l_date_id     int4 := to_char(current_date, 'YYYYMMDD')::int4;
-    l_err_message text;
-    l_allow bool;
+    l_date_id int4 := to_char(current_date, 'YYYYMMDD')::int4;
+    l_allow   bool;
+    l_now     timestamptz;
 
 begin
-    select count(distinct regexp_match(file_name, '(.*)/log')) = 25
+    l_now := clock_timestamp();
+
+    -- We have 25 directories.
+    select count(distinct substring(
+            file_name from '/([^/]+)/log/[^/]+$'
+                          )) = 25
     into l_allow
     from loader.files
     where date_id = l_date_id;
 
     if not l_allow then
+        raise notice 'We don''t have 25 directories';
         return -1;
     end if;
 
+    -- We have the partition for today. If not - return alert
     select count(*) = 1
     into l_allow
     from inc_hft.v_partitions
     where date_from <= l_date_id
       and date_to > l_date_id;
+
     if not l_allow then
+        raise notice 'We don''t have the partition for today.';
         return -1;
     end if;
 
-    if current_time > '17:01'::time then
-        select count(*) = 1
+    -- We added at least something during the last 30 minutes.
+    if l_now::time between '11:00'::time and '16:30'::time then
+        select coalesce(sum(dl.loaded_rows)
+                        filter (where dl.end_processing is null or dl.end_processing >= l_now - interval '30 minutes'),
+                        0) > 0
         into l_allow
-        from staging.load_finish
-        where date_id = l_date_id;
+        from loader.daily_load dl
+        where dl.date_id = l_date_id;
+
         if l_allow then
             return 1;
         end if;
     end if;
 
+    -- We finished.
+    if l_now::time > time '17:01' and exists (select 1
+                                              from staging.load_finish
+                                              where date_id = l_date_id) then
+        return 1;
+    end if;
+
+    -- After 17:01 some processes are still in progress. If it is happens after 17:30 something doesn't look good
+    if l_now::time between '17:01'::time and '17:30'::time then
+        select count(1) > 1
+        into l_allow
+        from loader.daily_load
+        where date_id = l_date_id
+          and loading_status <> 'E';
+        if l_allow then
+            return 1;
+        end if;
+    end if;
+
+    -- Time between 16:30 and 17:00: can be added nothing so we just return 1
+    if l_now::time between '16:31'::time and '17:00'::time then
+        return 1;
+    end if;
+
+    return -1;
 end;
 $function$
 ;
@@ -142,4 +174,13 @@ select *
        from loader.files
          join loader.daily_load using (date_id, file_id)
 where date_id = to_char(current_date, 'YYYYMMDD')::int
-and loading_status <> 'E'
+and loading_status <> 'E';
+
+
+select count(distinct substring(
+           file_name from '/([^/]+)/log/[^/]+$'
+       )) = 25
+  from loader.files
+ where date_id = :l_date_id;
+
+select now()::time between '11:00'::time and '17:30'::time
