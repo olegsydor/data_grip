@@ -22,3 +22,29 @@ select case when date_id = to_char(current_date, 'YYYYMMDD')::int then true else
 from grp
 where true
 order by current_hour desc;
+
+
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'hft_fix_message_event_20260928';
+
+
+--Active processes
+SELECT pid, * --procpid, age(clock_timestamp(), query_start), usename, current_query
+FROM pg_stat_activity
+WHERE state = 'active'
+-- and application_name = 'psql'
+-- and query like '%public.check_timeout%'
+ORDER BY query_start desc;
+
+
+SELECT
+    activity.pid,
+    activity.usename,
+    activity.query,
+    blocking.pid AS blocking_id,
+    blocking.query AS blocking_query
+FROM pg_stat_activity AS activity
+JOIN pg_stat_activity AS blocking ON blocking.pid = ANY(pg_blocking_pids(activity.pid));
+
+select relid::regclass, index_relid::regclass, * from pg_stat_progress_create_index;
