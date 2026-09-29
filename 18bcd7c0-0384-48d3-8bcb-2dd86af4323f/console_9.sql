@@ -128,8 +128,8 @@ begin
         into l_allow
         from staging.load_finish
         where date_id = l_date_id;
-        if not l_allow then
-            return -1;
+        if l_allow then
+            return 1;
         end if;
     end if;
 
