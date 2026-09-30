@@ -164,3 +164,49 @@ from dash360.get_trade_record_for_alloc_group(
         in_side := '1',
         in_open_close := 'O'
      )
+
+
+
+CREATE OR REPLACE FUNCTION dash360.get_trade_record_for_alloc_group(in_date_id integer, in_account_id bigint,
+                                                                    in_instrument_id bigint, in_side character,
+                                                                    in_open_close character)
+    RETURNS TABLE
+            (
+                trade_record_id bigint,
+                date_id         integer,
+                account_id      integer,
+                instrument_id   integer,
+                side            character,
+                open_close      character,
+                last_qty        integer,
+                last_px         numeric
+            )
+    LANGUAGE sql
+AS
+$function$
+
+select tr.trade_record_id,
+       tr.date_id,
+       tr.account_id,
+       tr.instrument_id,
+       tr.side,
+       tr.open_close,
+       tr.last_qty,
+       tr.last_px
+from genesis2.trade_record tr
+where tr.date_id = in_date_id
+  and tr.account_id = in_account_id
+  and tr.instrument_id = in_instrument_id
+  and tr.side = in_side
+  and tr.open_close = in_open_close
+  and tr.is_busted = 'N'
+  and not exists (select null
+                  from genesis2.alloc_instr2trade_record aitr
+                           join genesis2.allocation_instruction ai
+                                using (alloc_instr_id, date_id)
+                  where aitr.date_id = tr.date_id
+                    and aitr.trade_record_id = tr.trade_record_id
+                    and ai.is_deleted <> 'Y')
+
+$function$
+;
