@@ -101,19 +101,6 @@ declare
 begin
     l_now := clock_timestamp();
 
-    -- We have 25 directories.
-    select count(distinct substring(
-            file_name from '/([^/]+)/log/[^/]+$'
-                          )) = 25
-    into l_allow
-    from loader.files
-    where date_id = l_date_id;
-
-    if not l_allow then
-        raise notice 'We don''t have 25 directories';
-        return -1;
-    end if;
-
     -- We have the partition for today. If not - return alert
     select count(*) = 1
     into l_allow
@@ -123,6 +110,22 @@ begin
 
     if not l_allow then
         raise notice 'We don''t have the partition for today.';
+        return -1;
+    end if;
+
+    -- Before 11 we return 1
+    if l_now::time < '11:00'::time then
+        return 1;
+    end if;
+
+    -- We have 25 directories.
+    select count(distinct regexp_match(file_name, '(.*)/log')) = 25
+    into l_allow
+    from loader.files
+    where date_id = l_date_id;
+
+    if not l_allow then
+        raise notice 'We don''t have 25 directories';
         return -1;
     end if;
 
