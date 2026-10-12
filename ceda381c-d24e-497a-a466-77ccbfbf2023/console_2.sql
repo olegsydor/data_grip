@@ -24,5 +24,6 @@ select  cl.order_id, cl.create_date_id, cl.fix_connection_id , cl.client_order_i
 where cl.create_date_id = 20251126
 
 select * from monitoring.error_tracking
-where db_host = 'catprod.dashops.net'xsw23edc
-and db_create_time::date > '2026-09-10'::date
+where db_host = 'catprod.dashops.net'
+and db_create_time::date > '2026-10-01'::date
+and error_text not ilike all(array['%func_call_analyze%'])
