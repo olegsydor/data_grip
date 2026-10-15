@@ -904,6 +904,21 @@ begin
                                                                 where fmj.date_id = tr.date_id
                                                                   and fmj.fix_message_id = tr.order_fix_message_id
                                                                 limit 1) fmjo on true
+
+                                             left join lateral (select coalesce(tag_10609::int8,
+                                                                                (select lifecycle_orderid
+                                                                                 from genesis2.blaze_lifecycle_order
+                                                                                 where routing_chain_id = tr.client_order_id
+                                                                                   and tr.client_order_id = tag_10707
+                                                                                 limit 1))
+                                                                           as lifecycleorderid
+                                                                from trash.get_repeating_tags(
+                                                                        in_fix_message_id := tr.order_fix_message_id,
+                                                                        in_date_id := tr.date_id,
+                                                                        in_client_order_id := tr.client_order_id,
+                                                                        in_cross_is_originator := tr.cross_is_originator)) fmjo
+                                                       on true
+
                                     where alt.alloc_instr_id = a.alloc_instr_id
                                       and tr.is_busted = 'N'
                                       and alt.date_id = in_date_id
@@ -1029,7 +1044,39 @@ where fmj.date_id = 20261009
 and fmj.fix_message_id in (511225838383750452,511221818295383500);
 
 
-create or replace function trash.get_repeating_tags(in_fix_message_id int8, in_client_order_id varchar(256), in_)
+create or replace function trash.get_repeating_tags(in_fix_message_id int8, in_date_id int4,
+                                                    in_client_order_id varchar(256), in_cross_is_originator char)
+    returns table
+            (
+                tag_10707 text,
+                tag_10609 text
+            )
+    language sql
+as
+$fx$
+select matched.obj ->> '10707' as tag_10707,
+       matched.obj ->> '10609' as tag_10609
+from staging.fix_message_json fmj
+         left join lateral (
+    select g.obj
+    from jsonb_array_elements(
+                 case
+                     when fmj.fix_message_jsonb ? '552' then fmj.fix_message_jsonb -> '552'
+                     else jsonb_build_array(fmj.fix_message_jsonb)
+                     end
+         ) as g(obj)
+    where not (fmj.fix_message_jsonb ? '552')
+       or (
+        g.obj ->> '11' = in_client_order_id
+            and g.obj ->> '10009' = in_cross_is_originator
+        )
+    ) matched on true
+where fmj.date_id = in_date_id
+  and fmj.fix_message_id = in_fix_message_id
+limit 1;
+$fx$
+;
+
 select fmj.fix_message_id,
        matched.obj ->> '10707' as tag_10707,
        matched.obj ->> '10609' as tag_10609
