@@ -998,3 +998,32 @@ where alt.alloc_instr_id = -141577
   and tr.is_busted = 'N'
   and alt.date_id = :in_date_id
   and tr.date_id = :in_date_id
+
+
+select (fix_message ->> '10609')::int8,
+                (select lifecycle_orderid
+                 from genesis2.blaze_lifecycle_order
+                 where routing_chain_id = tr.client_order_id
+                   and tr.client_order_id = fix_message ->> '10707'
+                 limit 1)
+           as lifecycleorderid
+from staging.fix_message_json fmj
+where fmj.date_id = 20261009
+                                            and fmj.fix_message_id = 511225838383750452
+limit 1;
+
+
+
+select ftr.order_id , ftr.client_order_id , ftr.order_fix_message_id, ftr.is_cross_order , fmj.fix_message ->> '10707' AS tag_10707, * from dwh.flat_trade_record ftr
+inner join fix_capture.fix_message_json fmj on fmj.fix_message_id = ftr.order_fix_message_id and fmj.date_id = ftr.date_id
+where ftr.date_id = 20261009
+and ftr.trade_record_id in (
+5519282182, 5519283182
+)
+
+
+
+
+select * from fix_capture.fix_message_json fmj
+where fmj.date_id = 20261009
+and fmj.fix_message_id in (511225838383750452,511221818295383500)
