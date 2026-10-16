@@ -1635,6 +1635,7 @@ $function$
 ;
 
 
+
 select *
 from dash360.allocations_snapshot(in_date_id := 20261015,
 --                                   in_lifecycle_order_states := '{F}',
@@ -2061,3 +2062,5 @@ begin
 end;
 $function$
 ;
+
+
