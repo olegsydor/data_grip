@@ -724,9 +724,9 @@ end;
 $function$
 ;
 
--- DROP FUNCTION dash360.allocations_instruction_commission_rate(int4, int4);
+-- DROP FUNCTION trash.allocations_instruction_commission_rate(int4, int4);
 
-CREATE OR REPLACE FUNCTION dash360.allocations_instruction_commission_rate(in_alloc_instr_id integer,
+CREATE OR REPLACE FUNCTION trash.allocations_instruction_commission_rate(in_alloc_instr_id integer,
                                                                            in_date_id integer DEFAULT get_dateid(CURRENT_DATE))
     RETURNS TABLE
             (
@@ -893,18 +893,6 @@ begin
                                                                 from genesis2.blaze_lifecycle_order bl
                                                                 where bl.parent_order_id = tr.order_id
                                                                 limit 1) lc on true
-                                             left join lateral (select coalesce((fix_message ->> '10609')::int8,
-                                                                                (select lifecycle_orderid
-                                                                                 from genesis2.blaze_lifecycle_order
-                                                                                 where routing_chain_id = tr.client_order_id
-                                                                                   and tr.client_order_id = fix_message ->> '10707'
-                                                                                 limit 1))
-                                                                           as lifecycleorderid
-                                                                from staging.fix_message_json fmj
-                                                                where fmj.date_id = tr.date_id
-                                                                  and fmj.fix_message_id = tr.order_fix_message_id
-                                                                limit 1) fmjo on true
-
                                              left join lateral (select coalesce(tag_10609::int8,
                                                                                 (select lifecycle_orderid
                                                                                  from genesis2.blaze_lifecycle_order
@@ -935,8 +923,7 @@ $function$
 ;
 
 
-select (dash360.allocations_instruction_commission_rate(alloc_instr_id, 20261012)).*,
- (dash360.allocations_instruction_trades(alloc_instr_id)).*
+select (trash.allocations_instruction_commission_rate(alloc_instr_id, 20261012)).*
 from allocation_instruction
 where date_id = 20261012;
 
