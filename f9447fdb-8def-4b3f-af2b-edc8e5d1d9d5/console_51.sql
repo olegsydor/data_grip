@@ -2064,3 +2064,25 @@ $function$
 ;
 
 
+
+
+
+select fmjo.* ,*
+              from genesis2.trade_record tr
+                       inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+                       left join lateral (select tag_10609::int8,
+                                                          (select lifecycle_orderid
+                                                           from genesis2.blaze_lifecycle_order
+                                                           where routing_chain_id = tr.client_order_id
+                                                             and tr.client_order_id = tag_10707
+                                                           limit 1)
+                                                     as lifecycleorderid
+                                          from dash360.get_repeating_tags(
+                                                  in_fix_message_id := tr.order_fix_message_id,
+                                                  in_date_id := tr.date_id,
+                                                  in_client_order_id := tr.client_order_id,
+                                                  in_cross_is_originator := tr.cross_is_originator)) fmjo
+                                 on true
+
+              where tr.date_id = 20261016
+and tr.trade_record_id = 2348458431
