@@ -1042,8 +1042,10 @@ create or replace function dash360.get_repeating_tags(in_fix_message_id int8, in
 as
 $fx$
     -- SO 20261016 https://dashfinancial.atlassian.net/browse/DS-12193 aux func to get the correct value of 2 tags of fix_message regarding passed input parameters
-select matched.obj ->> '10707' as tag_10707,
-       matched.obj ->> '10609' as tag_10609
+-- select matched.obj ->> '10707' as tag_10707,
+--        matched.obj ->> '10609' as tag_10609
+select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb ->> '10707') as tag_10707,
+       coalesce(matched.obj ->> '10609', fmj.fix_message_jsonb ->> '10609') as tag_10609
 from staging.fix_message_json fmj
          left join lateral (
     select g.obj
@@ -2067,7 +2069,7 @@ $function$
 
 
 
-select fmjo.* ,*
+select tr.client_order_id, tr.order_fix_message_id, tr.cross_is_originator, tr.is_cross_order,fmjo.* ,*
               from genesis2.trade_record tr
                        inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
                        left join lateral (select tag_10609::int8,
@@ -2086,3 +2088,21 @@ select fmjo.* ,*
 
               where tr.date_id = 20261016
 and tr.trade_record_id = 2348458431
+
+
+select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb->>'10707') as tag_10707,
+       coalesce(matched.obj ->> '10609', fmj.fix_message_jsonb->>'10609') as tag_10609,
+       fmj.fix_message_jsonb ? '552',
+       fmj.fix_message_jsonb -> '552',
+select fmj.*
+from staging.fix_message_json fmj
+
+where fmj.date_id = 20261016
+  and fmj.fix_message_id = 513796981887602588
+
+
+select *
+from genesis2.blaze_lifecycle_order
+where routing_chain_id = 'jeffcross115'
+  and true
+limit 1
