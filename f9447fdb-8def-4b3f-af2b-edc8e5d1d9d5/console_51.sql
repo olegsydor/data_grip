@@ -2078,7 +2078,7 @@ select
        fmjo.*,
        *
 from genesis2.trade_record tr
-         inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+--          inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
          left join lateral (select tag_10609::int8,
                                    (select lifecycle_orderid
                                     from genesis2.blaze_lifecycle_order
@@ -2093,23 +2093,28 @@ from genesis2.trade_record tr
                                     in_cross_is_originator := tr.cross_is_originator)) fmjo
                    on true
 
-where tr.date_id = 20261020
-  and tr.trade_record_id in (2348460821, 2348460820);
+where true
+--     and tr.date_id = 20261020
+  and tr.trade_record_id in (2348458053, 2348426789);
 
 
-select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb->>'10707') as tag_10707,
-       coalesce(matched.obj ->> '10609', fmj.fix_message_jsonb->>'10609') as tag_10609,
+select
+--     coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb->>'10707') as tag_10707,
+--        coalesce(matched.obj ->> '10609', fmj.fix_message_jsonb->>'10609') as tag_10609,
        fmj.fix_message_jsonb ? '552',
        fmj.fix_message_jsonb -> '552',
-select fmj.*
+       fmj.fix_message_jsonb->>'10707',
+       fmj.fix_message_jsonb->>'10609',
+fmj.*
 from staging.fix_message_json fmj
-where fmj.date_id = 20261016
-  and fmj.fix_message_id = 513796981887602588
+where true
+--     and fmj.date_id = 20261016
+  and fmj.fix_message_id = 513740159469239676
 
 
 select *
 from genesis2.blaze_lifecycle_order
-where routing_chain_id = 'jeffcross115'
+where routing_chain_id = 'gTD019Q9pZxW1'
   and true
 limit 1
 
