@@ -2067,27 +2067,34 @@ $function$
 
 
 
+select
+    not (tr.subsystem_id = 'OMS_EDW') as c1,
+    tr.account_id = any (:l_sg_accounts) as c2,
+    tr.order_id,
+       tr.client_order_id,
+       tr.order_fix_message_id,
+       tr.cross_is_originator,
+       tr.is_cross_order,
+       fmjo.*,
+       *
+from genesis2.trade_record tr
+         inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+         left join lateral (select tag_10609::int8,
+                                   (select lifecycle_orderid
+                                    from genesis2.blaze_lifecycle_order
+                                    where routing_chain_id = tr.client_order_id
+                                      and tr.client_order_id = tag_10707
+                                    limit 1)
+                                       as lifecycleorderid
+                            from dash360.get_repeating_tags(
+                                    in_fix_message_id := tr.order_fix_message_id,
+                                    in_date_id := tr.date_id,
+                                    in_client_order_id := tr.client_order_id,
+                                    in_cross_is_originator := tr.cross_is_originator)) fmjo
+                   on true
 
-
-select tr.order_id, tr.client_order_id, tr.order_fix_message_id, tr.cross_is_originator, tr.is_cross_order,fmjo.* ,*
-              from genesis2.trade_record tr
-                       inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-                       left join lateral (select tag_10609::int8,
-                                                          (select lifecycle_orderid
-                                                           from genesis2.blaze_lifecycle_order
-                                                           where routing_chain_id = tr.client_order_id
-                                                             and tr.client_order_id = tag_10707
-                                                           limit 1)
-                                                     as lifecycleorderid
-                                          from dash360.get_repeating_tags(
-                                                  in_fix_message_id := tr.order_fix_message_id,
-                                                  in_date_id := tr.date_id,
-                                                  in_client_order_id := tr.client_order_id,
-                                                  in_cross_is_originator := tr.cross_is_originator)) fmjo
-                                 on true
-
-              where tr.date_id = 20261016
-and tr.trade_record_id = 2348458431
+where tr.date_id = 20261020
+  and tr.trade_record_id in (2348460821, 2348460820);
 
 
 select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb->>'10707') as tag_10707,
@@ -2096,7 +2103,6 @@ select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb->>'10707') as tag
        fmj.fix_message_jsonb -> '552',
 select fmj.*
 from staging.fix_message_json fmj
-
 where fmj.date_id = 20261016
   and fmj.fix_message_id = 513796981887602588
 
@@ -2106,3 +2112,9 @@ from genesis2.blaze_lifecycle_order
 where routing_chain_id = 'jeffcross115'
   and true
 limit 1
+
+
+    select array_agg(ac.account_id)
+    from account ac
+             join staging.sg_trading_firm using (trading_firm_id)
+    where ac.is_deleted = 'N';
