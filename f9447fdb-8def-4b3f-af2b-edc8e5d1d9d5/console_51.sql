@@ -2114,7 +2114,7 @@ where true
 
 select *
 from genesis2.blaze_lifecycle_order
-where routing_chain_id = 'gTD019Q9pZxW1'
+where routing_chain_id = any('{f_1_3j261020,f_1_3i261020,f_1_3h261020,f_1_3g261020}')
   and true
 limit 1
 
