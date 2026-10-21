@@ -2148,9 +2148,11 @@ select not (tr.subsystem_id = 'OMS_EDW'),
            when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
                then (select lifecycle_orderid_status::char(1)
                      from genesis2.blaze_lifecycle_order
-                     WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                     WHERE lifecycleorderid = fmjo.lifecycleorderid::int8
+                     order by last_exec_id
                      limit 1)
-           end                                                   as lifecycle_order_state
+           end                                                   as lifecycle_order_state,
+    fmjo.lifecycleorderid
 --         select *
 from genesis2.trade_record tr
          inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
@@ -2203,7 +2205,7 @@ from genesis2.trade_record tr
                    on true
 
 where tr.date_id = :in_date_id
-  and tr.trade_record_id in (2348461743, 2348461719, 2348461593);
+  and tr.trade_record_id in (2348461593);
 
 select *
 from dash360.get_repeating_tags(
@@ -2235,9 +2237,27 @@ where fmj.date_id = 20261021
   and fmj.fix_message_id = 515676541182548346;
 
 
-967446721170784256
+select tag_10609::int8,
+       (select lifecycle_orderid
+        from genesis2.blaze_lifecycle_order
+        where routing_chain_id = 'jeff9'
+          and true
+        limit 1)
+from dash360.get_repeating_tags(
+        in_fix_message_id := 515670051483812970,
+        in_date_id := 20261021,
+        in_client_order_id := 'jeff9',
+        in_cross_is_originator := null)
 
+967446721170784256
+967404512232882176
 
 select lifecycle_orderid, lifecycle_orderid_status, *
 from genesis2.blaze_lifecycle_order bl
-where bl.parent_order_id in (967404512232882176, 967446721170784256)
+where lifecycle_orderid in (967404512232882176)
+
+
+
+select *
+from genesis2.blaze_lifecycle_order
+WHERE parent_order_id = 967404512232882176
