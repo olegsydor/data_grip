@@ -2119,7 +2119,125 @@ where routing_chain_id = any('{f_1_3j261020,f_1_3i261020,f_1_3h261020,f_1_3g2610
 limit 1
 
 
-    select array_agg(ac.account_id)
-    from account ac
-             join staging.sg_trading_firm using (trading_firm_id)
-    where ac.is_deleted = 'N';
+
+select not (tr.subsystem_id = 'OMS_EDW'),
+       tr.account_id = any (:l_sg_accounts),
+       tr.order_fix_message_id,
+       tr.client_order_id,
+       tr.order_id,
+       tr.cross_is_originator,
+       tr.date_id::int4,
+       tr.trade_record_id::int8,
+       tr.account_id::int4,
+       tr.instrument_id::int8,
+       tr.side::character,
+       tr.open_close::character,
+       tr.last_px                                                as avg_px,
+       tr.last_qty::int4                                         as exec_qty,
+       i.display_instrument_id,
+       i.last_trade_date::date,
+       i.instrument_type_id::character,
+       case
+           when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+               then lc.lifecycle_orderid::character varying
+           when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+               then fmjo.lifecycleorderid::character varying end as lifecycle_order_id,
+       case
+           when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+               then lc.lifecycle_orderid_status::char(1)
+           when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+               then (select lifecycle_orderid_status::char(1)
+                     from genesis2.blaze_lifecycle_order
+                     WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                     limit 1)
+           end                                                   as lifecycle_order_state
+--         select *
+from genesis2.trade_record tr
+         inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+
+         left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+         left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+         left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                   sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                   max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                   sum(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                            from (SELECT tl.trade_record_id,
+                                         book_record_type_id,
+                                         row_number()
+                                         over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                         tl.rate,
+                                         tl.amount
+                                  FROM genesis2.trade_level_book_record tl
+                                           inner join genesis2.book_record_creator cr
+                                                      on tl.book_record_creator_id = cr.book_record_creator_id
+                                  WHERE tl.date_id = :in_date_id
+                                    AND book_record_type_id in ('CCRU', 'BROK')
+                                    and tl.trade_record_id = tr.trade_record_id) L1
+                            where rn = 1) ccru on true
+
+         left join lateral (select fix_message ->> '10707' as chain_id,
+                                   fix_message ->> '10568' as manual_broker_code,
+                                   fix_message ->> '10579' as blaze_is_linked,
+                                   fix_message ->> '10585' as blaze_is_part_of_stitched_order
+                            from staging.fix_message_json fmj
+                            where fmj.date_id = tr.date_id
+                              and fmj.fix_message_id = tr.trade_fix_message_id
+                            limit 1) fmj on true
+
+         left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+                            from genesis2.blaze_lifecycle_order bl
+                            where bl.parent_order_id = tr.order_id
+                            limit 1) lc on true
+         left join lateral (select coalesce(tag_10609::int8,
+                                            (select lifecycle_orderid
+                                             from genesis2.blaze_lifecycle_order
+                                             where routing_chain_id = tr.client_order_id
+                                               and tr.client_order_id = tag_10707
+                                             limit 1))
+                                       as lifecycleorderid
+                            from dash360.get_repeating_tags(
+                                    in_fix_message_id := tr.order_fix_message_id,
+                                    in_date_id := tr.date_id,
+                                    in_client_order_id := tr.client_order_id,
+                                    in_cross_is_originator := tr.cross_is_originator)) fmjo
+                   on true
+
+where tr.date_id = :in_date_id
+  and tr.trade_record_id in (2348461743, 2348461719, 2348461593);
+
+select *
+from dash360.get_repeating_tags(
+        in_fix_message_id := 515676541182548346,
+        in_date_id := 20261021,
+        in_client_order_id := '1_1q261021',
+        in_cross_is_originator := null);
+
+
+ select matched.obj ->> '10707' as tag_10707,
+        matched.obj ->> '10609' as tag_10609,
+        fmj.*
+from staging.fix_message_json fmj
+         left join lateral (
+    select g.obj
+    from jsonb_array_elements(
+                 case
+                     when fmj.fix_message_jsonb ? '552' then fmj.fix_message_jsonb -> '552'
+                     else jsonb_build_array(fmj.fix_message_jsonb)
+                     end
+         ) as g(obj)
+    where not (fmj.fix_message_jsonb ? '552')
+       or (
+        g.obj ->> '11' = '1_1q261021'
+            and g.obj ->> '10009' = null
+        )
+    ) matched on true
+where fmj.date_id = 20261021
+  and fmj.fix_message_id = 515676541182548346;
+
+
+967446721170784256
+
+
+select lifecycle_orderid, lifecycle_orderid_status, *
+from genesis2.blaze_lifecycle_order bl
+where bl.parent_order_id in (967404512232882176, 967446721170784256)
