@@ -2260,4 +2260,12 @@ where lifecycle_orderid in (967404512232882176)
 
 select *
 from genesis2.blaze_lifecycle_order
-WHERE parent_order_id = 967404512232882176
+WHERE parent_order_id = 967404512232882176;
+
+
+select *--lifecycle_orderid_status::char(1)
+from genesis2.blaze_lifecycle_order
+-- WHERE parent_order_id = fmjo.lifecycleorderid::int8
+WHERE lifecycle_orderid = 967404512232882176--fmjo.lifecycleorderid::int8
+order by last_exec_id desc
+limit 1
