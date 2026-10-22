@@ -2205,7 +2205,7 @@ from genesis2.trade_record tr
                    on true
 
 where tr.date_id = :in_date_id
-  and tr.trade_record_id in (2348461492, 2348461487, 2348461486, 2348461491);
+  and tr.trade_record_id in (2348461492, 2348461493);
 
 select *
 from dash360.get_repeating_tags(
@@ -2234,7 +2234,7 @@ from staging.fix_message_json fmj
         )
     ) matched on true
 where fmj.date_id = 20261021
-  and fmj.fix_message_id = 515676541182548346;
+  and fmj.fix_message_id = 515633595802452431;
 
 
 select tag_10609::int8,
@@ -2254,7 +2254,8 @@ from dash360.get_repeating_tags(
 
 select lifecycle_orderid, lifecycle_orderid_status, *
 from genesis2.blaze_lifecycle_order bl
-where lifecycle_orderid in (967075637816737794)
+where lifecycle_orderid in (967075637816737794, 967075637816737796)
+
 
 
 
@@ -2269,3 +2270,29 @@ from genesis2.blaze_lifecycle_order
 WHERE lifecycle_orderid = 967404512232882176--fmjo.lifecycleorderid::int8
 order by last_exec_id desc
 limit 1
+
+select * from trade_record
+    where order_id in (515296445164686546,515633595802452121,515296445164686547,515633595802452122)
+
+
+2348461492, 2348461493
+
+
+select tag_10609::int8,
+                (select *
+                 from genesis2.blaze_lifecycle_order
+                 where routing_chain_id = 'jeffcross4'
+                   and true
+                 limit 1)
+
+from dash360.get_repeating_tags(
+        in_fix_message_id := 515633595802452431,
+        in_date_id := 20261021,
+        in_client_order_id := 'jeffcross4',
+        in_cross_is_originator := null)
+
+
+select         fmj.*
+from staging.fix_message_json fmj
+where fmj.date_id = 20261021
+  and fmj.fix_message_id = 515633595802452431;
