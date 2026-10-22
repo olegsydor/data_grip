@@ -36,6 +36,25 @@ select * from (select --DISTINCT ON (co.order_id, co.chain_order_id)
               ) x
 where routing_chain_id = 'jeffcross4'
 
+
+SELECT rep.exec_id,
+       CASE
+           WHEN ((rep.payload ->> 'OrderStatus'::text) = ANY
+                 (ARRAY ['2'::text, '4'::text, 'P'::text, '3'::text])) AND
+                (rep.payload ->> 'BlazeOrderStatus'::text) <> 't'::text THEN 'F'::text
+           ELSE 'N'::text
+           END AS lifecycle_orderid_status,
+    rep.payload ->> 'OrderStatus',
+    *
+FROM blaze7.order_report rep
+WHERE rep.order_id in (967075637816737794, 967404896619872258)
+  AND rep.leg_ref_id IS NULL
+  AND (rep.exec_type <> ALL ('{I,i}'::bpchar[]))
+ORDER BY rep.order_id, rep.exec_id DESC
+
+
+
+
 select * from blaze7.client_order
 where cl_ord_id in ('jeffcross4', 'jeffcrosscontra4')
 
