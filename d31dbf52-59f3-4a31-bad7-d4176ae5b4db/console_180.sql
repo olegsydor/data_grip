@@ -1,3 +1,43 @@
+select *
+from dash360.get_reping_rejection_message_information(in_rfr_id := '7200541824215', in_cons_message_id := 106129276501,
+                                       in_start_date_id := 20261002, in_end_date_id := 20261002);
+
+drop function dash360.get_reping_rejection_message_information;
+create function dash360.get_reping_rejection_message_information(in_rfr_id varchar(128), in_cons_message_id int8,
+                                                                 in_start_date_id int4 default null,
+                                                                 in_end_date_id int4 default null)
+    returns table
+            (
+                rejection_reason int2
+            )
+    language plpgsql
+as
+$fx$
+    -- SO 20261022 https://dashfinancial.atlassian.net/browse/DS-12202
+declare
+    l_start_date_id int4 := coalesce(in_start_date_id, to_char(current_date, 'YYYYMMDD')::int4);
+    l_end_date_id   int4 := coalesce(in_end_date_id, l_start_date_id);
+
+begin
+    return query
+        select srr.rejection_reason
+        from consolidator.solicit_reping_rejection as srr
+                 join lateral ( select null
+                                from consolidator.consolidator_message cm
+                                where cm.cons_message_id = srr.cons_message_id
+                                  and cm.date_id = srr.date_id
+                                  and cm.rfr_id = in_rfr_id
+                                  and cm.cons_message_id = in_cons_message_id
+                                  and cm.date_id between l_start_date_id and l_end_date_id
+                                  and cm.message_type = 15
+                                limit 1) cm on true
+        where srr.cons_message_id = in_cons_message_id
+          and srr.date_id between l_start_date_id and l_end_date_id;
+end;
+$fx$;
+
+
+
 drop function if exists dash360.get_order_finalized_message_information;
 create function dash360.get_order_finalized_message_information(in_rfr_id varchar(128), in_cons_message_id int8,
                                                                 in_start_date_id int4 default null,
