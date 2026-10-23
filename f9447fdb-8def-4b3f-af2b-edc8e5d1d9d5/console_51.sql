@@ -2145,7 +2145,7 @@ select not (tr.subsystem_id = 'OMS_EDW'),
                then fmjo.lifecycleorderid::character varying end as lifecycle_order_id,
        case
            when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
-               then lc.lifecycle_orderid_status::char(1)
+               then lcs.lifecycle_orderid_status::char(1)
            when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
                then (select lifecycle_orderid_status::char(1)
                      from genesis2.blaze_lifecycle_order blo
@@ -2153,11 +2153,10 @@ select not (tr.subsystem_id = 'OMS_EDW'),
                      order by last_exec_id desc
                      limit 1)
            end                                                   as lifecycle_order_state,
-    fmjo.lifecycleorderid
+       fmjo.lifecycleorderid
 --         select *
 from genesis2.trade_record tr
          inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
-
          left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
          left join genesis2.option_series os on oc.option_series_id = os.option_series_id
          left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
@@ -2187,11 +2186,16 @@ from genesis2.trade_record tr
                               and fmj.fix_message_id = tr.trade_fix_message_id
                             limit 1) fmj on true
 
-         left join lateral (select lifecycle_orderid, lifecycle_orderid_status
+         left join lateral (select lifecycle_orderid
                             from genesis2.blaze_lifecycle_order bl
-                            where bl.lifecycle_orderid = tr.order_id
+                            where bl.parent_order_id = tr.order_id
                             order by bl.last_exec_id desc
                             limit 1) lc on true
+         left join lateral (select lifecycle_orderid_status
+                            from genesis2.blaze_lifecycle_order bl
+                            where bl.lifecycle_orderid = lc.lifecycle_orderid
+                            order by bl.last_exec_id desc
+                            limit 1) lcs on true
          left join lateral (select coalesce(tag_10609::int8,
                                             (select lifecycle_orderid
                                              from genesis2.blaze_lifecycle_order
@@ -2205,7 +2209,6 @@ from genesis2.trade_record tr
                                     in_client_order_id := tr.client_order_id,
                                     in_cross_is_originator := tr.cross_is_originator)) fmjo
                    on true
-
 where tr.date_id = :in_date_id
   and tr.trade_record_id in (2348462849, 2348462850);
 
