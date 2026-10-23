@@ -2121,6 +2121,7 @@ limit 1
 
 
 select not (tr.subsystem_id = 'OMS_EDW'),
+       tr.subsystem_id,
        tr.account_id = any (:l_sg_accounts),
        tr.order_fix_message_id,
        tr.client_order_id,
@@ -2149,7 +2150,7 @@ select not (tr.subsystem_id = 'OMS_EDW'),
                then (select lifecycle_orderid_status::char(1)
                      from genesis2.blaze_lifecycle_order blo
                      WHERE blo.lifecycle_orderid = fmjo.lifecycleorderid::int8
-                     order by last_exec_id
+                     order by last_exec_id desc
                      limit 1)
            end                                                   as lifecycle_order_state,
     fmjo.lifecycleorderid
@@ -2188,7 +2189,8 @@ from genesis2.trade_record tr
 
          left join lateral (select lifecycle_orderid, lifecycle_orderid_status
                             from genesis2.blaze_lifecycle_order bl
-                            where bl.parent_order_id = tr.order_id
+                            where bl.lifecycle_orderid = tr.order_id
+                            order by bl.last_exec_id desc
                             limit 1) lc on true
          left join lateral (select coalesce(tag_10609::int8,
                                             (select lifecycle_orderid
@@ -2205,7 +2207,7 @@ from genesis2.trade_record tr
                    on true
 
 where tr.date_id = :in_date_id
-  and tr.trade_record_id in (2348461492, 2348461493);
+  and tr.trade_record_id in (2348462849, 2348462850);
 
 select *
 from dash360.get_repeating_tags(
