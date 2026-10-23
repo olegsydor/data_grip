@@ -197,3 +197,94 @@ alter function consolidator.get_order_finalized set schema dash360;
 alter function dash360.get_reping_rejection rename to get_reping_rejection_message_information;
 alter function dash360.get_ofp_trade_message rename to get_ofp_trade_message_information;
 alter function dash360.get_order_finalized rename to get_order_finalized_message_information;
+
+
+
+-- DROP FUNCTION dash360.get_ofp_trade_message_information(varchar, int8, int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.get_ofp_trade_message_information(in_rfr_id character varying, in_cons_message_id bigint, in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer)
+ RETURNS TABLE("Trade ID" bigint, "Request number" smallint, "Security type" character, "Symbol" character varying, "Call/Put identifier" character, "Expiration" integer, "Strike" numeric, "Buy/Sell indicator" character, "Volume" integer, "Price" numeric, "Open/close" character, "Exchange" smallint, "Trade time" timestamp without time zone, "Contra broker" character, "Contra trader" character, "Contra capacity" character, "Contra open/close" character, "Contra cross type" character, "Contra time in force" character, "Contra covered or uncovered" character, "Contra clearing account" character, "Contra market maker" character)
+ LANGUAGE plpgsql
+AS $function$
+    -- SO 20261023 https://dashfinancial.atlassian.net/browse/DS-12199
+declare
+    l_start_date_id int4 := coalesce(in_start_date_id, to_char(current_date, 'YYYYMMDD')::int4);
+    l_end_date_id   int4 := coalesce(in_end_date_id, l_start_date_id);
+begin
+    return query
+        select ofp.trade_id,
+               cm.request_number,
+               ofp.security_type,
+               ofp.symbol,
+               ofp.call_put_identifier,
+               ofp.expiration,
+               ofp.strike,
+               ofp.side,
+               ofp.volume,
+               ofp.price,
+               ofp.open_close,
+               ofp.exchange,
+               ofp.trade_time,
+               ofp.contra_broker,
+               ofp.contra_trader,
+               ofp.contra_capacity,
+               ofp.contra_open_close,
+               ofp.contra_cross_type,
+               ofp.contra_time_in_force,
+               ofp.contra_covered_or_uncovered,
+               ofp.contra_clearing_account,
+               ofp.contra_market_maker
+        from consolidator.ofp_trade as ofp
+                 join lateral ( select request_number
+                                from consolidator.consolidator_message cm
+                                where cm.cons_message_id = ofp.cons_message_id
+                                  and cm.date_id = ofp.date_id
+                                  and rfr_id = in_rfr_id
+                                  and cons_message_id = in_cons_message_id
+                                  and date_id between l_start_date_id and l_end_date_id
+                                  and message_type = 13
+                                limit 1) cm on true
+        where cons_message_id = in_cons_message_id
+          and date_id between l_start_date_id and l_end_date_id;
+
+end;
+$function$
+;
+
+
+-- DROP FUNCTION dash360.get_order_finalized_message_information(varchar, int8, int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.get_order_finalized_message_information(in_rfr_id character varying, in_cons_message_id bigint, in_start_date_id integer DEFAULT NULL::integer, in_end_date_id integer DEFAULT NULL::integer)
+ RETURNS TABLE("Timestamp" timestamp without time zone, "Order status" character, "Executed volume" integer, "Average price" numeric, "Cancel reason" smallint)
+ LANGUAGE plpgsql
+AS $function$
+    -- SO 20261023 https://dashfinancial.atlassian.net/browse/DS-12200
+declare
+    l_start_date_id int4 := coalesce(in_start_date_id, to_char(current_date, 'YYYYMMDD')::int4);
+    l_end_date_id   int4 := coalesce(in_end_date_id, l_start_date_id);
+begin
+    return query
+        select cm.message_timestamp,
+               of.order_status,
+               of.executed_volume,
+               of.avg_px,
+               of.cancel_reason
+        from consolidator.order_finilized as of
+                 join lateral ( select message_timestamp
+                                from consolidator.consolidator_message cm
+                                where cm.cons_message_id = of.cons_message_id
+                                  and cm.date_id = of.date_id
+                                  and rfr_id = in_rfr_id
+                                  and cons_message_id = in_cons_message_id
+                                  and date_id between l_start_date_id and l_end_date_id
+                                  and message_type = 16
+                                limit 1) cm on true
+        where cons_message_id = in_cons_message_id
+          and date_id between l_start_date_id and l_end_date_id;
+
+end;
+$function$
+;
+
+
+
