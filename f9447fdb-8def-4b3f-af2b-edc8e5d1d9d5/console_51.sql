@@ -2209,6 +2209,13 @@ from genesis2.trade_record tr
 where tr.date_id = :in_date_id
   and tr.trade_record_id in (2348462849, 2348462850);
 
+
+select *, lifecycle_orderid, lifecycle_orderid_status
+from genesis2.blaze_lifecycle_order bl
+where bl.parent_order_id in (967777604583047168, 967776664194924544)
+order by bl.last_exec_id desc;
+
+
 select *
 from dash360.get_repeating_tags(
         in_fix_message_id := 515676541182548346,
