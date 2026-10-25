@@ -156,3 +156,11 @@ from occ_trades otd
 order by i.display_instrument_id2 asc,
          otd.customer_acct_originator asc,
          otd.open_close desc
+
+
+BRK.B,BRK/B
+select replace(replace(:BaseCode,'.','/'),'-','/')
+
+select regexp_replace(:BaseCode, '.|-', '/', 'g')
+
+SELECT translate(:BaseCode, '.-', '//');
