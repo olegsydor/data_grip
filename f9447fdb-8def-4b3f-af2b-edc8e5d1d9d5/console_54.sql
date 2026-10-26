@@ -1,7 +1,7 @@
 -- https://dashfinancial.atlassian.net/browse/DS-12217
 -- OCC positions in Dash Account (v2)
 create or replace function occ_data.occ_position_in_dash_account(in_date_id int4 default to_char(current_date, 'YYYYMMDD')::int,
-                                                                 in_record_source varchar default null::varchar)
+                                                                 in_record_source varchar[] default null::varchar[])
     returns table
             (
                 "OCC Position"           text,
@@ -45,12 +45,12 @@ begin
                    otd.trade_id
             from occ_data.occ_trade_data as otd
             where otd.date_id = in_date_id
-              and case
-                      when in_record_source is null
-                          then otd.clearing_member_number = any ('{"00333","00733","333","733"}')
-                      when in_record_source like '%333%' then otd.clearing_member_number = any ('{"333","00333"}')
-                      when in_record_source like '%733%' then otd.clearing_member_number = any ('{"733","00733"}')
-                end
+              and (
+                (coalesce(cardinality(in_record_source), 0) = 0
+                    and otd.clearing_member_number = any (array ['00333', '00733', '333', '733']))
+                    or ('333' = any (in_record_source) and otd.clearing_member_number = any (array ['00333', '333']))
+                    or ('733' = any (in_record_source) and otd.clearing_member_number = any (array ['00733', '733']))
+                )
               and otd.gup_clearing_firm_originator is null
               and otd.trade_type = '0'
               and not exists (select null
@@ -59,14 +59,14 @@ begin
                                 and x.side = otd.side
                                 and x.trans_type = '1'
                                 and x.date_id = in_date_id
-                                and case
-                                        when in_record_source is null
-                                            then x.clearing_member_number = any ('{"00333","00733","333","733"}')
-                                        when in_record_source like '%333%'
-                                            then x.clearing_member_number = any ('{"333","00333"}')
-                                        when in_record_source like '%733%'
-                                            then x.clearing_member_number = any ('{"733","00733"}')
-                                  end
+                                and (
+                                  (coalesce(cardinality(in_record_source), 0) = 0
+                                      and x.clearing_member_number = any (array ['00333', '00733', '333', '733']))
+                                      or ('333' = any (in_record_source) and
+                                          x.clearing_member_number = any (array ['00333', '333']))
+                                      or ('733' = any (in_record_source) and
+                                          x.clearing_member_number = any (array ['00733', '733']))
+                                  )
                                 and x.gup_clearing_firm_originator is null))
        , occ_trade_data_matching_filtered as (select distinct on (otdm.trade_id) otdm.rpt_id,
                                                                                  otdm.date_id,
@@ -209,9 +209,29 @@ begin
 end;
 $fx$;
 
+select *
+from occ_data.occ_position_in_dash_account();
+
+select *
+from occ_data.occ_position_in_dash_account(in_record_source := '{"333","733"}');
+
+select *
+from occ_data.occ_position_in_dash_account(in_record_source := '{"733"}');
+
+select *
+from occ_data.occ_position_in_dash_account(in_record_source := '{"333"}');
+
+
+select *
+from occ_data.occ_position_in_dash_account(in_date_id := 20261026, in_record_source := '333');
+
+select *
+from occ_data.occ_position_in_dash_account();
 
 select *
 from occ_data.occ_position_in_dash_account();
 
 select to_char(i.last_trade_date, 'DDMONYYYY')
 from instrument i
+
+select '{1,2,3}'::int4[] && 7
