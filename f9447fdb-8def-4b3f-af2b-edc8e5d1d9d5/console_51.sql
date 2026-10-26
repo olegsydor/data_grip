@@ -2308,3 +2308,111 @@ select         fmj.*
 from staging.fix_message_json fmj
 where fmj.date_id = 20261021
   and fmj.fix_message_id = 515633595802452431;
+
+
+
+select tr.date_id::int4,
+       tr.trade_record_id::int8,
+       tr.account_id::int4,
+       tr.instrument_id::int8,
+       CCRU.ccru_amount                                          as client_commission_amount,
+       tr.client_order_id                                        as client_order_id,
+       null::character                                           as client_order_status,
+       null::character                                           as clearing_submitted_away,
+       CCRU.brok_rate                                            as broker_commission_rate,
+       CCRU.brok_amount                                          as broker_commission_amount,
+       case
+           when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+               then (select manual_broker::character varying
+                     from staging.trade_record_blaze7 as bl
+                     where bl.date_id = tr.date_id
+                       and bl.exec_id = tr.exec_id
+                       and bl.manual_broker is not null
+                     limit 1)
+           when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+               then fmj.manual_broker_code::character varying end,
+       -- LIFECYCLE
+       case
+           when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+               then lc.lifecycle_orderid::character varying
+           when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+               then fmjo.lifecycleorderid::character varying end as lifecycle_order_id,
+       case
+           when tr.subsystem_id = 'OMS_EDW' and tr.account_id = any (:l_sg_accounts)
+               then lcs.lifecycle_orderid_status::char(1)
+           when not (tr.subsystem_id = 'OMS_EDW') and tr.account_id = any (:l_sg_accounts)
+               then (select lifecycle_orderid_status::char(1)
+                     from genesis2.blaze_lifecycle_order blo
+                     -- WHERE parent_order_id = fmjo.lifecycleorderid::int8
+                     WHERE blo.lifecycle_orderid = fmjo.lifecycleorderid::int8
+                     order by blo.last_exec_id desc
+                     limit 1)
+           end                                                   as lifecycle_order_state
+--         select *
+from genesis2.trade_record tr
+         inner join genesis2.instrument i on (tr.instrument_id = i.instrument_id)
+    --                        left join t_alloc_instr2trade_record as allocated_trades
+--                                  on allocated_trades.trade_record_id = TR.TRADE_RECORD_ID
+--                        left join lateral (select rep.to_report, rep.db_create_time
+--                                           from t_trade_record rep
+--                                           where rep.trade_record_id = tr.trade_record_id
+--                                           limit 1) rep on true
+         left join genesis2.option_contract oc on i.instrument_id = oc.instrument_id
+         left join genesis2.option_series os on oc.option_series_id = os.option_series_id
+    --                        left join lateral (select bas.claimed_by, bas.claim_status
+--                                           from dash_reporting.bofa_allocation_instruction_status bas
+--                                           where bas.alloc_instr_id = allocated_trades.alloc_instr_id
+--                                             and bas.date_id = allocated_trades.date_id
+--                                             and false
+--                                           limit 1) bas on true
+
+         left join lateral (select max(case when book_record_type_id = 'CCRU' then L1.rate end)   as ccru_rate,
+                                   sum(case when book_record_type_id = 'CCRU' then l1.amount end) as ccru_amount,
+                                   max(case when book_record_type_id = 'BROK' then L1.rate end)   as brok_rate,
+                                   sum(case when book_record_type_id = 'BROK' then l1.amount end) as brok_amount
+                            from (SELECT tl.trade_record_id,
+                                         book_record_type_id,
+                                         row_number()
+                                         over (partition by tl.trade_record_id , book_record_type_id , billing_entity order by cr.priority ) as rn,
+                                         tl.rate,
+                                         tl.amount
+                                  FROM genesis2.trade_level_book_record tl
+                                           inner join genesis2.book_record_creator cr
+                                                      on tl.book_record_creator_id = cr.book_record_creator_id
+                                  WHERE tl.date_id = :in_date_id
+                                    AND book_record_type_id in ('CCRU', 'BROK')
+                                    and tl.trade_record_id = tr.trade_record_id) L1
+                            where rn = 1) ccru on true
+         left join lateral (select fix_message ->> '10707' as chain_id,
+                                   fix_message ->> '10568' as manual_broker_code,
+                                   fix_message ->> '10579' as blaze_is_linked,
+                                   fix_message ->> '10585' as blaze_is_part_of_stitched_order
+                            from staging.fix_message_json fmj
+                            where fmj.date_id = tr.date_id
+                              and fmj.fix_message_id = tr.trade_fix_message_id
+                            limit 1) fmj on true
+         left join lateral (select lifecycle_orderid
+                            from genesis2.blaze_lifecycle_order bl
+                            where bl.lifecycle_orderid = tr.order_id
+                            limit 1) lc on true
+         left join lateral (select lifecycle_orderid_status
+                            from genesis2.blaze_lifecycle_order bl
+                            where bl.lifecycle_orderid = lc.lifecycle_orderid
+                            order by bl.last_exec_id desc
+                            limit 1) lcs on true
+         left join lateral (select coalesce(tag_10609::int8,
+                                            (select lifecycle_orderid
+                                             from genesis2.blaze_lifecycle_order
+                                             where routing_chain_id = tr.client_order_id
+                                               and tr.client_order_id = tag_10707
+                                             limit 1))
+                                       as lifecycleorderid
+                            from dash360.get_repeating_tags(
+                                    in_fix_message_id := tr.order_fix_message_id,
+                                    in_date_id := tr.date_id,
+                                    in_client_order_id := tr.client_order_id,
+                                    in_cross_is_originator := tr.cross_is_originator)) fmjo
+                   on true
+
+where tr.date_id = :in_date_id
+  and tr.trade_record_id in (2348462849, 2348462850);
