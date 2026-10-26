@@ -1,5 +1,12 @@
 -- https://dashfinancial.atlassian.net/browse/DS-12217
-with occ_trades_filtered as (
+-- OCC positions in Dash Account (v2)
+create function occ_data.occ_position_in_dash_account()
+    returns table ()
+    language plpgsql
+    as $fx$
+begin
+
+    with occ_trades_filtered as (
 select *
 from occ_data.occ_trade_data as otd
 where otd.date_id = {date_id} and
@@ -153,4 +160,6 @@ from occ_trades otd
 	cross join date_time_now dtn
 order by i.display_instrument_id2 asc,
          otd.customer_acct_originator asc,
-         otd.open_close desc
+         otd.open_close desc;
+    end;
+$fx$
