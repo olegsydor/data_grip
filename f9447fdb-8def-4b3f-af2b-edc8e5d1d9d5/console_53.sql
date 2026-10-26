@@ -16,3 +16,6 @@ from
 	staging.trade_record_missed_lp
 where
 	symbol_sfx is not null
+
+
+select symbol_sfx from staging.trade_record_blaze7
