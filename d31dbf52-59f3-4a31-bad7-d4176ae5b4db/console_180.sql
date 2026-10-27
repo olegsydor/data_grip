@@ -98,7 +98,7 @@ create or replace function dash360.get_ofp_trade_message_information(in_rfr_id v
                 volume                      int4,
                 price                       numeric(16, 8),
                 open_close                  char,
-                exchange                    int2,
+                exchange                    varchar(128),
                 trade_time                  timestamp(6),
                 contra_broker               char(5),
                 contra_trader               char(5),
@@ -131,7 +131,7 @@ begin
                ofp.volume,
                ofp.price,
                ofp.open_close,
-               ofp.exchange,
+               cme.exchange_name as exchange,
                ofp.trade_time,
                ofp.contra_broker,
                ofp.contra_trader,
@@ -143,7 +143,7 @@ begin
                ofp.contra_clearing_account,
                ofp.contra_market_maker
         from consolidator.ofp_trade as ofp
-                 join lateral ( select cm.request_number
+                 join lateral ( select cm.request_number, cons_message_id
                                 from consolidator.consolidator_message cm
                                 where cm.cons_message_id = ofp.cons_message_id
                                   and cm.date_id = ofp.date_id
@@ -152,8 +152,77 @@ begin
                                   and cm.date_id between l_start_date_id and l_end_date_id
                                   and cm.message_type = 13
                                 limit 1) cm on true
+                 left join lateral ( select exchange_name
+                                     from consolidator.routed_order_information roi
+                                              join consolidator.cons_message_exchange cme
+                                                   on roi.exchange = cme.exchange_number
+                                     where ofp.date_id = roi.date_id
+                                       and cm.cons_message_id = roi.cons_message_id
+                                     limit 1) cme on true
         where true
           and ofp.date_id between l_start_date_id and l_end_date_id;
 
 end;
 $fx$;
+
+
+
+select ofp.trade_id,
+               cm.request_number,
+               ofp.security_type,
+               ofp.symbol,
+               ofp.call_put_identifier,
+               ofp.expiration,
+               ofp.strike,
+               ofp.side,
+               ofp.volume,
+               ofp.price,
+               ofp.open_close,
+               cme.exchange_name as exchange,
+               ofp.trade_time,
+               ofp.contra_broker,
+               ofp.contra_trader,
+               ofp.contra_capacity,
+               ofp.contra_open_close,
+               ofp.contra_cross_type,
+               ofp.contra_time_in_force,
+               ofp.contra_covered_or_uncovered,
+               ofp.contra_clearing_account,
+               ofp.contra_market_maker
+        from consolidator.ofp_trade as ofp
+                 join lateral ( select cm.request_number, cons_message_id
+                                from consolidator.consolidator_message cm
+                                where cm.cons_message_id = ofp.cons_message_id
+--                                   and cm.date_id = ofp.date_id
+--                                   and cm.rfr_id = in_rfr_id
+--                                   and cm.request_number = in_request_number
+                                  and cm.date_id = :in_date_id
+--                                   and cm.message_type = 13
+                                limit 1) cm on true
+                 left join lateral ( select exchange_name
+                                     from consolidator.routed_order_information roi
+                                              join consolidator.cons_message_exchange cme
+                                                   on roi.exchange = cme.exchange_number
+                                     where ofp.date_id = roi.date_id
+                                       and cm.cons_message_id = roi.cons_message_id
+                                     limit 1) cme on true
+        where true
+          and ofp.date_id = :in_date_id
+
+
+select cm.request_number, cons_message_id, cm.date_id, cm.rfr_id, cm.request_number
+from consolidator.consolidator_message cm
+where true
+  and cm.date_id = 20261027
+   and cm.message_type != 0
+limit 10
+
+select * from
+dash360.get_ofp_trade_message_information(in_rfr_id := '7100540497155', in_request_number := 0::int2,
+                                                                     in_start_date_id := 20261027,
+                                                                     in_end_date_id := 20261027)
+
+select *
+  from consolidator.ofp_trade as ofp
+where true
+  and date_id >= 20261001
