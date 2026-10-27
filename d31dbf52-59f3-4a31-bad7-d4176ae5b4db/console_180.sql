@@ -82,7 +82,7 @@ $fx$;
 
 
 drop function if exists dash360.get_ofp_trade_message_information;
-create or replace function dash360.get_ofp_trade_message_information(in_rfr_id varchar(128), in_cons_message_id int8,
+create or replace function dash360.get_ofp_trade_message_information(in_rfr_id varchar(128), in_request_number int2,
                                                                      in_start_date_id int4 default null,
                                                                      in_end_date_id int4 default null)
     returns table
@@ -148,11 +148,11 @@ begin
                                 where cm.cons_message_id = ofp.cons_message_id
                                   and cm.date_id = ofp.date_id
                                   and cm.rfr_id = in_rfr_id
-                                  and cm.cons_message_id = in_cons_message_id
+                                  and cm.request_number = in_request_number
                                   and cm.date_id between l_start_date_id and l_end_date_id
                                   and cm.message_type = 13
                                 limit 1) cm on true
-        where ofp.cons_message_id = in_cons_message_id
+        where true
           and ofp.date_id between l_start_date_id and l_end_date_id;
 
 end;
