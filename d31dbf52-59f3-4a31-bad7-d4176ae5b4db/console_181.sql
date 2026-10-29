@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION dash360.report_surveillance_qcc_reporting(in_start_da
 AS
 $function$
     -- 2024-12-17 OS https://dashfinancial.atlassian.net/browse/DEVREQ-5301
+    -- 2026-10-29 OS https://dashfinancial.atlassian.net/browse/DS-12255 Revise QCC report to correctly pick up QCC-related crosses
 declare
     l_load_id     int;
     l_step_id     int;
@@ -52,7 +53,7 @@ begin
                         where tr.date_id between :in_start_date_id and :in_end_date_id
                           and tr.is_busted = 'N'
                           and tr.is_cross_order = 'Y'
---                           and fm.fix_message->>'9202'='Q'
+                          and fm.fix_message->>'9202'='Q'
                           and tr.street_cross_type = 'Q'
                           and tr.cross_is_originator = 'O'
                           and case
@@ -93,3 +94,11 @@ begin
 end;
 $function$
 ;
+
+
+
+select regexp_replace(COALESCE(:basecode, ''::text), '\.|-'::text, ''::text,
+                                       'g'::text)
+
+
+split_part(symbol, '.', 2)
