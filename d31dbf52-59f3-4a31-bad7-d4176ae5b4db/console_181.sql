@@ -102,3 +102,54 @@ select regexp_replace(COALESCE(:basecode, ''::text), '\.|-'::text, ''::text,
 
 
 split_part(symbol, '.', 2)
+
+
+
+-- DROP FUNCTION dash360.get_repeating_tags(int8, int4, varchar, bpchar);
+
+CREATE OR REPLACE FUNCTION trash.get_repeating_tags(in_fix_message_id bigint, in_date_id integer,
+                                                    in_client_order_id character varying,
+                                                    in_cross_is_originator character)
+    RETURNS TABLE
+            (
+                tag_10707 text,
+                tag_10609 text
+            )
+    LANGUAGE plpgsql
+AS
+$function$
+    -- SO 20261016 https://dashfinancial.atlassian.net/browse/DS-12193 aux func to get the correct value of 2 tags of fix_message regarding passed input parameters
+begin
+    if in_cross_is_originator = 'N' then
+        return query
+            select fmj.fix_message_jsonb ->> '10707', fmj.fix_message_jsonb ->> '10609'
+            from staging.fix_message_json fmj
+            where fmj.date_id = in_date_id
+              and fmj.fix_message_id = in_fix_message_id;
+    else
+        select matched.obj ->> '10707' as tag_10707,
+               matched.obj ->> '10609' as tag_10609
+        --select coalesce(matched.obj ->> '10707', fmj.fix_message_jsonb ->> '10707') as tag_10707,
+--       coalesce(matched.obj ->> '10609', fmj.fix_message_jsonb ->> '10609') as tag_10609
+        from staging.fix_message_json fmj
+                 left join lateral (
+            select g.obj
+            from jsonb_array_elements(
+                         case
+                             when fmj.fix_message_jsonb ? '552' then fmj.fix_message_jsonb -> '552'
+                             else jsonb_build_array(fmj.fix_message_jsonb)
+                             end
+                 ) as g(obj)
+            where not (fmj.fix_message_jsonb ? '552')
+               or (
+                g.obj ->> '11' = in_client_order_id
+                    and g.obj ->> '10009' = in_cross_is_originator
+                )
+            ) matched on true
+        where fmj.date_id = in_date_id
+          and fmj.fix_message_id = in_fix_message_id
+        limit 1;
+    end if;
+end;
+$function$
+;
