@@ -226,3 +226,7 @@ select *
   from consolidator.ofp_trade as ofp
 where true
   and date_id >= 20261001
+;
+
+
+-- DROP FUNCTION dash360.get_ofp_trade_message_information(varchar, int4, int4, int4);
