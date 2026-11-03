@@ -387,3 +387,87 @@ CROSS JOIN LATERAL (
       AND co.order_class = 'O'::bpchar
     OFFSET 0
 ) co;
+
+
+----------
+
+create or replace view blaze7.so_price as
+WITH filtered_mdr AS MATERIALIZED (
+    SELECT mdr.*
+    FROM blaze7.market_data_report mdr
+    WHERE mdr.exec_id > :in_min_exec_id
+      AND mdr.exec_id < :max_exec_id
+
+    UNION ALL
+
+    SELECT mdr.*
+    FROM blaze7.market_data_report mdr
+    WHERE mdr.exec_id <= :in_min_exec_id
+      AND mdr.exec_id < :max_exec_id
+      AND mdr.db_create_time >
+          (:in_max_time::timestamp AT TIME ZONE 'US/Central')
+          - INTERVAL '1 hour'
+      AND date_trunc('milliseconds', mdr.db_create_time::timestamp) >
+          (:in_max_time::timestamp AT TIME ZONE 'US/Central')
+)
+SELECT mdr.*--, rep.*, co.*
+FROM filtered_mdr mdr
+CROSS JOIN LATERAL (
+    SELECT rep.*
+    FROM blaze7.order_report rep
+    WHERE rep.exec_id = mdr.exec_id
+    OFFSET 0
+) rep
+CROSS JOIN LATERAL (
+    SELECT co.*
+    FROM blaze7.client_order co
+    WHERE co.order_id = rep.order_id
+      AND co.chain_id = rep.chain_id
+      AND co.order_class <> 'O'::bpchar
+    OFFSET 0
+) co
+
+UNION ALL
+
+SELECT mdr.*, rep.*, co.*
+FROM filtered_mdr mdr
+CROSS JOIN LATERAL (
+    SELECT rep.*
+    FROM blaze7.order_report rep
+    WHERE rep.payload ->> 'ExecRefId' = mdr.exec_id::text
+    OFFSET 0
+) rep
+CROSS JOIN LATERAL (
+    SELECT co.*
+    FROM blaze7.client_order co
+    WHERE co.order_id = rep.order_id
+      AND co.chain_id = rep.chain_id
+      AND co.order_class = 'O'::bpchar
+    OFFSET 0
+) co;
+
+
+
+-- create or replace view blaze7.so_price as
+
+SELECT mdr.*
+FROM blaze7.market_data_report mdr
+         join lateral (
+    SELECT rep.*
+    FROM blaze7.order_report rep
+             join blaze7.client_order co
+                  on co.order_id = rep.order_id
+                      AND co.chain_id = rep.chain_id
+                      AND co.order_class <> 'O'::bpchar
+    WHERE rep.exec_id = mdr.exec_id
+
+    union all
+    SELECT rep.*
+    FROM blaze7.order_report rep
+             join blaze7.client_order co
+                  on co.order_id = rep.order_id
+                      AND co.chain_id = rep.chain_id
+                      AND co.order_class = 'O'::bpchar
+    WHERE rep.payload ->> 'ExecRefId' = mdr.exec_id::text
+
+    ) rep on true
