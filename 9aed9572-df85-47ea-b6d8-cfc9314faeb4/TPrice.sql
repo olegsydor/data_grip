@@ -717,7 +717,8 @@ FROM blaze7.market_data_report mdr
 
 
 WHERE (mdr.exec_id > :in_min_exec_id
-      AND mdr.exec_id < :max_exec_id)
+      AND mdr.exec_id < :max_exec_id
+    )
       or
       (mdr.exec_id <= :in_min_exec_id
       AND mdr.exec_id < :max_exec_id
