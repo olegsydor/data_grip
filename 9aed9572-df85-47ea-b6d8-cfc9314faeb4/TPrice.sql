@@ -727,3 +727,8 @@ WHERE (mdr.exec_id > :in_min_exec_id
           - INTERVAL '1 hour'
       AND date_trunc('milliseconds', mdr.db_create_time::timestamp) >
           (:in_max_time::timestamp AT TIME ZONE 'US/Central'))
+
+
+select * from blaze7.so_tprice
+where _db_create_time::date = '2026-11-04'
+
