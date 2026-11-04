@@ -1,4 +1,4 @@
-create view blaze7.so_tprice as
+create drop view blaze7.so_tprice as
 SELECT rep.exec_type                                                               AS status,
        mdr.exec_id                                                                 AS reportid,
        rep.cl_ord_id                                                               AS orderid,
