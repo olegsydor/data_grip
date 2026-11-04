@@ -1,4 +1,4 @@
-create drop view blaze7.so_tprice as
+create view blaze7.so_tprices_edw as
 SELECT rep.exec_type                                                               AS status,
        mdr.exec_id                                                                 AS reportid,
        rep.cl_ord_id                                                               AS orderid,
@@ -732,3 +732,28 @@ WHERE (mdr.exec_id > :in_min_exec_id
 select * from blaze7.so_tprice
 where _db_create_time::date = '2026-11-04'
 
+
+select * from blaze7.so_tprices_edw mdr
+WHERE (mdr.reportid > :in_min_exec_id
+      AND mdr.reportid < :max_exec_id
+    )
+      or
+      (mdr.reportid <= :in_min_exec_id
+      AND mdr.reportid < :max_exec_id
+      AND mdr._db_create_time >
+          (:in_max_time::timestamp AT TIME ZONE 'US/Central')
+          - INTERVAL '1 hour'
+      AND date_trunc('milliseconds', mdr._db_create_time::timestamp) >
+          (:in_max_time::timestamp AT TIME ZONE 'US/Central'))
+
+
+select *
+from blaze7.so_tprices_edw x
+where x._db_create_time >= to_date(%(date_id)s::text, 'YYYYMMDD')
+  and x._db_create_time < to_date(%(date_id)s::text, 'YYYYMMDD') + interval '1 day'
+  and (mdr.reportid > % (max_exec_id)s
+      or
+      (mdr.reportid <= %(max_exec_id)s
+      AND mdr._db_create_time >
+          (%(max_processed_time_price)s::timestamp AT TIME ZONE 'US/Central') - INTERVAL '1 hour'
+      AND date_trunc('milliseconds', mdr._db_create_time::timestamp) > (%(max_processed_time_price)s::timestamp AT TIME ZONE 'US/Central'))
