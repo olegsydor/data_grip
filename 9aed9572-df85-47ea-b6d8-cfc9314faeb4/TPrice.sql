@@ -757,3 +757,21 @@ where x._db_create_time >= to_date(%(date_id)s::text, 'YYYYMMDD')
       AND mdr._db_create_time >
           (%(max_processed_time_price)s::timestamp AT TIME ZONE 'US/Central') - INTERVAL '1 hour'
       AND date_trunc('milliseconds', mdr._db_create_time::timestamp) > (%(max_processed_time_price)s::timestamp AT TIME ZONE 'US/Central'))
+
+
+
+select * from (
+ select pid, state, application_name, user, wait_event, query_start::timestamp as query_start, age(clock_timestamp(), query_start) as age, usename, query, state
+	from pg_stat_activity
+	where true
+	and state in ('active', 'idle in transaction')
+	and query not ilike '%pg_stat_activity%'
+--	and query not ilike '%vacuum%'
+--	and query not ilike '%replicat%'
+--	and query ilike '%data_marts.run_f_parent_order_process%'
+	union all
+	select null, null, null as application_name, null, null, null as query_start, null as age, null, null, null) x
+	order by case when coalesce(application_name, 'Sydor') ilike '%Sydor%' then 0 else 1 end,  query_start nulls last;
+
+select pg_cancel_backend(1452738)
+select pg_terminate_backend(1454927);
