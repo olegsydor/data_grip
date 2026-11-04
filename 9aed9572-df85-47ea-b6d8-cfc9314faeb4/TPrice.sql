@@ -775,3 +775,12 @@ select * from (
 
 select pg_cancel_backend(1452738)
 select pg_terminate_backend(1454927);
+
+SELECT
+    COUNT(*) AS total_rows,
+    COUNT(*) FILTER (
+        WHERE account_alias ~ E'[\\t\\r\\n|]'
+           OR reference_alias_id ~ E'[\\t\\r\\n|]'
+           OR account ~ E'[\\t\\r\\n|]'
+    ) AS rows_with_special_chars
+FROM blaze7.tdash_oms_aliases
