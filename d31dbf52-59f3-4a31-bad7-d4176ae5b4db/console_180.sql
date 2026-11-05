@@ -235,4 +235,8 @@ where true
 select *
 from trash.report_compliance_avg_parent_order_count(in_start_date_id := 20260901, in_end_date_id := 20260930,
                                                     in_account_ids := '{76235,76236,49775,49769,49770,49771,49772,49773,49774,49776,49777,49778,49779,49883,49884,49885,49886,49887,49889,49890,52475,61729,61789,62407,62621,63067,80313,69007,69748,69749,69753,69754,69763,72828,73112,73436,78054,69750,49768,69747,69752,69751,69755,49888,69761,70645}',
-                                                    in_instrument_type_id := null)
+                                                    in_instrument_type_id := null);
+
+select * from client_order
+where create_date_id = 20261105
+and case when 1=1 then true else 1/0 = 0 end
