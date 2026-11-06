@@ -247,7 +247,7 @@ AS SELECT NULL::text AS id,
             ELSE NULL::text
         END AS ordernotes,
     cl.payload ->> 'CboeEquityBroker'::text AS cboeequitybroker,
-    lst.order_trade_date_id,
+    cl.order_trade_date AS order_trade_date_id,
     (cl.payload ->> 'AutoRouteRuleId'::text)::integer AS autorouteruleid,
     cl.payload ->> 'AutoRouteRuleName'::text AS autorouterulename,
     (cl.payload ->> 'IsAutoAccepted'::text)::bpchar AS isautoaccepted,
