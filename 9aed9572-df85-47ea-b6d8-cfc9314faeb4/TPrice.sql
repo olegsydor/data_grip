@@ -783,4 +783,8 @@ SELECT
            OR reference_alias_id ~ E'[\\t\\r\\n|]'
            OR account ~ E'[\\t\\r\\n|]'
     ) AS rows_with_special_chars
-FROM blaze7.tdash_oms_aliases
+FROM blaze7.tdash_oms_aliases;
+
+
+select * from blaze7.tlegs_edw
+where _order_id = 968043397279399936

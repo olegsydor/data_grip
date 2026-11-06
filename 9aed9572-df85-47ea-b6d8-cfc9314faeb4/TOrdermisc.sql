@@ -15,6 +15,20 @@ where order_trade_date_id between 20261103 and public.get_dateid(public.get_busi
            '2026-11-03 08:07:49.952'::timestamp at time zone 'US/Central' - interval '10 second')
 ;
 
+select *
+FROM blaze7.so_tordermisc1_edw as x
+where order_trade_date_id between %(date_id)s and public.get_dateid(public.get_business_date(%(date_id)s::text::date, 1))
+AND x.last_mod_time::timestamp >  %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second'
+ and x.db_create_time > (%(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '1 hour 10 second')
+  AND (
+    x.db_create_time::timestamp > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second'
+        or x.org_db_create_time::timestamp >
+           %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second'
+        or x.rep_db_create_time::timestamp >
+           %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second')
+;
+
+
 CREATE OR REPLACE VIEW blaze7.so_tordermisc1_edw
 AS
 SELECT NULL::text                                                                         AS id,
