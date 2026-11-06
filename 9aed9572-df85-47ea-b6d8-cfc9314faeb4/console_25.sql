@@ -1,3 +1,13 @@
+create temp table t_new as
+select * from blaze7.so_tordermisc1_edw
+where order_trade_date_id = 20261106;
+
+
+create temp table t_old as
+select * from blaze7.tordermisc1_edw
+where order_trade_date_id = 20261106;
+
+
 select order_id, chain_id, parent_order_id, orig_order_id, record_type, db_create_time, cl_ord_id, crossing_side, order_class, secondary_order_id, cross_order_id, route_destination from t_01
 except
 select order_id, chain_id, parent_order_id, orig_order_id, record_type, db_create_time, cl_ord_id, crossing_side, order_class, secondary_order_id, cross_order_id, route_destination from t_02
