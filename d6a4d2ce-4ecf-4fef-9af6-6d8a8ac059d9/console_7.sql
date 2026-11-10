@@ -1165,3 +1165,114 @@ FROM blaze7.market_data_report mdr
     WHERE rep.payload ->> 'ExecRefId' = mdr.exec_id::text
 
     ) rep on true
+
+
+
+---------------
+
+
+select     v.exec_id AS reportid,
+    v.cl_ord_id AS orderid,
+    v.order_id,
+    v.db_create_time
+     FROM ( SELECT rep.exec_id,
+            mdr.payload AS mdr_payload,
+            rep.leg_ref_id,
+            rep.payload AS rep_payload,
+            rep.exec_type,
+            co.order_id,
+            co.chain_id,
+            co.payload AS co_payload,
+            mdr.db_create_time,
+            co.cl_ord_id,
+            co.crossing_side,
+            co.route_type,
+                CASE
+                    WHEN rep.leg_ref_id IS NULL THEN co.instrument_type::text
+                    ELSE ( SELECT leg.payload ->> 'LegInstrumentType'::text
+                       FROM blaze7.client_order_leg leg
+                      WHERE leg.order_id = co.order_id AND leg.chain_id = co.chain_id AND leg.leg_ref_id::text = rep.leg_ref_id::text)
+                END AS act_instrument_type
+           FROM blaze7.market_data_report mdr
+             JOIN blaze7.order_report rep ON rep.exec_id::text = mdr.exec_id::text
+             JOIN blaze7.client_order co ON co.order_id = rep.order_id AND co.chain_id = rep.chain_id
+          WHERE co.order_class <> 'O'::bpchar
+        UNION ALL
+         SELECT rep.exec_id,
+            mdr.payload AS mdr_payload,
+            rep.leg_ref_id,
+            rep.payload AS rep_payload,
+            rep.exec_type,
+            co.order_id,
+            co.chain_id,
+            co.payload AS co_payload,
+            mdr.db_create_time,
+            co.cl_ord_id,
+            co.crossing_side,
+            co.route_type,
+                CASE
+                    WHEN rep.leg_ref_id IS NULL THEN co.instrument_type::text
+                    ELSE ( SELECT leg.payload ->> 'LegInstrumentType'::text
+                       FROM blaze7.client_order_leg leg
+                      WHERE leg.order_id = co.order_id AND leg.chain_id = co.chain_id AND leg.leg_ref_id::text = rep.leg_ref_id::text)
+                END AS act_instrument_type
+           FROM blaze7.market_data_report mdr
+             JOIN blaze7.order_report rep ON (rep.payload ->> 'ExecRefId'::text) = mdr.exec_id::text
+             JOIN blaze7.client_order co ON co.order_id = rep.order_id AND co.chain_id = rep.chain_id
+          WHERE co.order_class = 'O'::bpchar) v
+where v.order_id = 848860674154037249
+and v.db_create_time::date = '2026-11-09'::date;
+
+select mdr.exec_id   AS reportid,
+       rep.cl_ord_id AS orderid,
+       rep.order_id,
+       mdr.db_create_time
+FROM blaze7.market_data_report mdr
+         JOIN LATERAL ( SELECT rep_1.leg_ref_id,
+                               rep_1.payload AS rep_payload,
+                               rep_1.exec_type,
+                               co.order_id,
+                               co.chain_id,
+                               co.payload    AS co_payload,
+                               co.cl_ord_id,
+                               co.crossing_side,
+                               co.route_type,
+                               CASE
+                                   WHEN rep_1.leg_ref_id IS NULL THEN co.instrument_type::text
+                                   ELSE (SELECT leg.payload ->> 'LegInstrumentType'::text
+                                         FROM blaze7.client_order_leg leg
+                                         WHERE leg.order_id = co.order_id
+                                           AND leg.chain_id = co.chain_id
+                                           AND leg.leg_ref_id::text = rep_1.leg_ref_id::text)
+                                   END       AS act_instrument_type
+                        FROM blaze7.order_report rep_1
+                                 JOIN blaze7.client_order co
+                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
+                                         co.order_class <> 'O'::bpchar
+                        WHERE rep_1.exec_id::text = mdr.exec_id::text
+                        UNION ALL
+                        SELECT rep_1.leg_ref_id,
+                               rep_1.payload AS rep_payload,
+                               rep_1.exec_type,
+                               co.order_id,
+                               co.chain_id,
+                               co.payload    AS co_payload,
+                               co.cl_ord_id,
+                               co.crossing_side,
+                               co.route_type,
+                               CASE
+                                   WHEN rep_1.leg_ref_id IS NULL THEN co.instrument_type::text
+                                   ELSE (SELECT leg.payload ->> 'LegInstrumentType'::text
+                                         FROM blaze7.client_order_leg leg
+                                         WHERE leg.order_id = co.order_id
+                                           AND leg.chain_id = co.chain_id
+                                           AND leg.leg_ref_id::text = rep_1.leg_ref_id::text)
+                                   END       AS act_instrument_type
+                        FROM blaze7.order_report rep_1
+                                 JOIN blaze7.client_order co
+                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
+                                         co.order_class = 'O'::bpchar
+                        WHERE (rep_1.payload ->> 'ExecRefId'::text) = mdr.exec_id::text
+    ) rep ON true
+where rep.order_id = 848860674154037249
+  and mdr.db_create_time::date = '2026-11-09'::date;
