@@ -241,53 +241,5 @@ select * from client_order
 where create_date_id = 20261105
 and case when 1=1 then true else 1/0 = 0 end
 
-
-create table db_management.db_size_for_xlsx
-(
-    date_id int, dwh
-    .
-    client_order
-    int8, fix_capture
-    .
-    fix_message_json
-    int8, dwh
-    .
-    execution
-    int8, dwh
-    .
-    l1_snapshot
-    int8, data_marts
-    .
-    f_yield_capture
-    int8, data_marts
-    .
-    f_ats_cons_details
-    int8, dwh
-    .
-    historic_order_details_storage
-    int8, dwh
-    .
-    order_algo_parameters
-    int8, dwh
-    .
-    flat_trade_record
-    int8, market_data
-    .
-    trade
-    int8, dwh
-    .
-    client_order2auction
-    int8, consolidator
-    .
-    consolidator_message
-    int8, data_marts
-    .
-    f_parent_order
-    int8, compliance_recovery
-    .
-    fix_message_json_today_hist
-    int8, reporting_606
-    .
-    orders_street
-    int8
-)
+select
+    '2026-03-15 14:32:51.123456789'::timestamp as sql_timestamp;
