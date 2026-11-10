@@ -1312,7 +1312,7 @@ where true
 
 
 
-select mdr.exec_id   AS reportid,
+select rep.exec_id   AS reportid,
        rep.cl_ord_id AS orderid,
        rep.order_id,
        mdr.db_create_time
@@ -1326,42 +1326,7 @@ FROM blaze7.market_data_report mdr
                                       ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
                                          co.order_class <> 'O'::bpchar
                         WHERE true
-                        and rep_1.exec_id::text in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
---                         and rep_1.exec_id::text = mdr.exec_id::text
---                         and co.order_id = 848860674154037249
-                        UNION ALL
-                        SELECT co.order_id,
-                               co.chain_id,
-                               co.cl_ord_id,
-                               rep_1.exec_id
-                        FROM blaze7.order_report rep_1
-                                 JOIN blaze7.client_order co
-                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
-                                         co.order_class = 'O'::bpchar
-                        WHERE true
-and (rep_1.payload ->> 'ExecRefId'::text) in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
---     and (rep_1.payload ->> 'ExecRefId'::text) = mdr.exec_id::text
---              and co.order_id = 848860674154037249
-
-    ) rep ON true and rep.exec_id = mdr.exec_id
-where true
---     and rep.order_id = 848860674154037248
-  and mdr.exec_id = 'r16qmbhg0001'
-  and mdr.db_create_time::date = '2026-11-09'::date;
-
-
-select *
-FROM blaze7.market_data_report mdr
- JOIN LATERAL ( SELECT co.order_id,
-                               co.chain_id,
-                               co.cl_ord_id,
-                               rep_1.exec_id
-                        FROM blaze7.order_report rep_1
-                                 JOIN blaze7.client_order co
-                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
-                                         co.order_class <> 'O'::bpchar
-                        WHERE true
-                        and rep_1.exec_id::text in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
+--                         and rep_1.exec_id::text in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
                         and rep_1.exec_id::text = mdr.exec_id::text
 --                         and co.order_id = 848860674154037249
                         UNION ALL
@@ -1377,11 +1342,52 @@ FROM blaze7.market_data_report mdr
 -- and (rep_1.payload ->> 'ExecRefId'::text) in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
     and (rep_1.payload ->> 'ExecRefId'::text) = mdr.exec_id::text
 --              and co.order_id = 848860674154037249
-     offset 0
 
-    ) rep ON true and rep.exec_id = mdr.exec_id
+    ) rep ON true --and rep.exec_id = mdr.exec_id
 where true
-  and mdr.exec_id = 'r16qmbhg0001';
+--     and rep.order_id = 848860674154037248
+  and rep.exec_id = 'r16qmbhg0001'
+  and mdr.db_create_time::date = '2026-11-09'::date;
+
+SELECT now() - query_start as "runtime", usename, datname, state, query
+  FROM  pg_stat_activity
+  WHERE now() - query_start > '2 minutes'::interval
+  and state = 'active'
+ ORDER BY runtime DESC;
+
+select *
+FROM blaze7.market_data_report mdr
+         JOIN LATERAL ( SELECT co.order_id,
+                               co.chain_id,
+                               co.cl_ord_id,
+                               rep_1.exec_id
+                        FROM blaze7.order_report rep_1
+                                 JOIN blaze7.client_order co
+                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
+                                         co.order_class <> 'O'::bpchar
+                        WHERE true
+--                         and rep_1.exec_id::text in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
+                          and rep_1.exec_id::text = mdr.exec_id::text
+--                         and co.order_id = 848860674154037249
+                        UNION ALL
+                        SELECT co.order_id,
+                               co.chain_id,
+                               co.cl_ord_id,
+                               rep_1.exec_id
+                        FROM blaze7.order_report rep_1
+                                 JOIN blaze7.client_order co
+                                      ON co.order_id = rep_1.order_id AND co.chain_id = rep_1.chain_id AND
+                                         co.order_class = 'O'::bpchar
+                        WHERE true
+-- and (rep_1.payload ->> 'ExecRefId'::text) in ('r16qmbhg0000', 'r16qmbhg0001')--= mdr.exec_id::text
+                          and (rep_1.payload ->> 'ExecRefId'::text) = mdr.exec_id::text
+--              and co.order_id = 848860674154037249
+                        offset 0
+
+    ) rep ON true --and rep.exec_id = mdr.exec_id
+where true
+  and rep.exec_id = 'r16qmbhg0001'
+  and mdr.db_create_time::date = '2026-11-09'::date;
 
 
 SELECT mdr.*
@@ -1397,16 +1403,17 @@ FROM blaze7.market_data_report mdr
 
     UNION ALL
 
-    SELECT rep.*
+    SELECT rep.payload ->> 'ExecRefId', rep.*
     FROM blaze7.order_report rep
              JOIN blaze7.client_order co
                   ON co.order_id = rep.order_id
                       AND co.chain_id = rep.chain_id
---     WHERE rep.payload ->> 'ExecRefId' = mdr.exec_id::text
+    WHERE true
+-- and rep.payload ->> 'ExecRefId' = mdr.exec_id::text
       AND co.order_class = 'O'::bpchar
     and rep.exec_id = 'r16qmbhg0001'
 
     OFFSET 0
-    ) rep ON true and rep.exec_id = mdr.exec_id
+    ) rep ON true --and rep.exec_id = mdr.exec_id
 where true
-  and mdr.exec_id = 'r16qmbhg0001';
+  and mdr.exec_id = 'r16qmbhg0000';
