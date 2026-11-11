@@ -37,8 +37,7 @@ begin
 
         update genesis2.sg_allocation_configuration
         set is_deleted  = 'Y',
-            delete_time = clock_timestamp(),
-            operation   = case when l_new_json ->> 'is_deleted' = 'Y' then 'D' else 'U' end
+            delete_time = clock_timestamp()
         where sg_alloc_config_id = in_sg_alloc_config_id
           and is_deleted = 'N';
         get diagnostics l_row_count = row_count;
@@ -57,7 +56,7 @@ begin
                                               sg_bdr, sg_opt_brid, sg_equity_brid, user_id, orig_sg_alloc_config_id,
                                               sg_sales_trader,
                                               sg_fund_id,
-                                              sg_portfolio_id, is_deleted, operation)
+                                              sg_portfolio_id, is_deleted, operation, delete_time)
     select sg_parent_account_id,
            sg_alloc_config_nickname,
            market_type,
@@ -76,8 +75,10 @@ begin
            coalesce(is_deleted, 'N'),
            case
                when in_sg_alloc_config_id is not null and is_deleted = 'Y' then 'D'
-               when in_sg_alloc_config_id is not null  and is_deleted = 'N' then 'U'
-               else 'C' end
+               when in_sg_alloc_config_id is not null  and coalesce(is_deleted, 'N') = 'N' then 'U'
+               else 'C' end,
+           case
+               when is_deleted = 'Y' then clock_timestamp() end
     from jsonb_populate_record(null::genesis2.sg_allocation_configuration, l_new_json)
     returning sg_alloc_config_id into l_sg_alloc_config_id;
 
@@ -142,4 +143,4 @@ end;
 $function$
 ;
 
-COMMENT ON FUNCTION dash360.delete_sg_alloc_config(int4, int4) IS 'Deleting an existing SG Allocation Config record';
+comment on function dash360.delete_sg_alloc_config(int4, int4) is 'Deleting an existing SG Allocation Config record';
