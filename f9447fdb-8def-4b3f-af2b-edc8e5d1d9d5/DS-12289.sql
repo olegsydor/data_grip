@@ -1,3 +1,5 @@
+
+
 create function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_ids varchar(9)[] default null[],
                                                                 in_account_ids int8 default null[],
                                                                 in_start_date_id int4 default null,
