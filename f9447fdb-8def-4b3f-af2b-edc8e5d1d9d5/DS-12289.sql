@@ -75,3 +75,8 @@ begin
 
 end ;
 $fx$;
+
+select regexp_replace(:client_name, '["/]', '', 'g');
+select translate(:client_name, $$["/\']$$, '');
+
+select concat_ws(', ',translate(:client_name, $$["/\']$$, ''), :t_text);
