@@ -75,8 +75,8 @@ begin
            sg_portfolio_id,
            coalesce(is_deleted, 'N'),
            case
-               when in_sg_alloc_config_id is null and is_deleted = 'Y' then 'D'
-               when is_deleted = 'Y' then 'U'
+               when in_sg_alloc_config_id is not null and is_deleted = 'Y' then 'D'
+               when in_sg_alloc_config_id is not null  and is_deleted = 'N' then 'U'
                else 'C' end
     from jsonb_populate_record(null::genesis2.sg_allocation_configuration, l_new_json)
     returning sg_alloc_config_id into l_sg_alloc_config_id;
@@ -120,7 +120,7 @@ declare
     l_row_cnt            int4;
     l_json               jsonb;
 begin
-    select row_to_json()
+    select row_to_json(sa.*)
     into l_json
     from genesis2.sg_allocation_configuration sa
     where sa.sg_alloc_config_id = in_sg_alloc_config_id;
@@ -132,7 +132,6 @@ begin
                                        "is_deleted": "Y"
                                      }'::jsonb,
                                      in_user_id);
-
     --     update genesis2.sg_allocation_configuration;
     --     set is_deleted  = 'Y',
     --         delete_time = clock_timestamp(),

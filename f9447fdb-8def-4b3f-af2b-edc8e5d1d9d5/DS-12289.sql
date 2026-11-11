@@ -63,9 +63,9 @@ begin
                sac.clearing_firm,
                sac.sg_equity_brid,
                sac.sg_fund_id,
-               to_char(sac.db_create_time, 'DD/Mon/YYYY HH12:MI:SS AM'),--??
+               to_char(coalesce(sac.delete_time, sac.db_create_time), 'DD/Mon/YYYY HH12:MI:SS AM'),
                ui.user_name,
-               ''
+               sac.operation
 --         select sg_alloc_config_id, orig_sg_alloc_config_id, *
         from genesis2.sg_allocation_configuration sac
                  join genesis2.account a on sac.sg_parent_account_id = a.account_id
@@ -78,14 +78,3 @@ begin
 
 end ;
 $fx$;
-
-
-
-        select sg_alloc_config_id, orig_sg_alloc_config_id, db_create_time, delete_time, is_deleted, *
-        from genesis2.sg_allocation_configuration sac
---         where sg_parent_account_id = 267645
-        order by sg_parent_account_id, sg_alloc_config_nickname, sg_alloc_config_id, orig_sg_alloc_config_id;
-
-        select sg_alloc_config_id, orig_sg_alloc_config_id, db_create_time, delete_time, is_deleted, *
-        from genesis2.sg_allocation_configuration sac
-            where orig_sg_alloc_config_id = 3292
