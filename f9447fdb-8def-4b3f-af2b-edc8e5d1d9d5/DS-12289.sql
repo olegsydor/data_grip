@@ -64,7 +64,7 @@ begin
                to_char(sac.db_create_time, 'DD/Mon/YYYY HH12:MI:SS AM'),--??
                ui.user_name,
                ''
-        select *
+--         select sg_alloc_config_id, orig_sg_alloc_config_id, *
         from genesis2.sg_allocation_configuration sac
                  join genesis2.account a on sac.sg_parent_account_id = a.account_id
                  join genesis2.trading_firm tf on tf.trading_firm_id = a.trading_firm_id
@@ -77,7 +77,13 @@ begin
 end ;
 $fx$;
 
-select regexp_replace(:client_name, '["/]', '', 'g');
-select translate(:client_name, $$["/\']$$, '');
 
-select concat_ws(', ',translate(:client_name, $$["/\']$$, ''), :t_text);
+
+        select sg_alloc_config_id, orig_sg_alloc_config_id, db_create_time, delete_time, is_deleted, *
+        from genesis2.sg_allocation_configuration sac
+--         where sg_parent_account_id = 267645
+        order by sg_parent_account_id, sg_alloc_config_nickname, sg_alloc_config_id, orig_sg_alloc_config_id;
+
+        select sg_alloc_config_id, orig_sg_alloc_config_id, db_create_time, delete_time, is_deleted, *
+        from genesis2.sg_allocation_configuration sac
+            where orig_sg_alloc_config_id = 3292
