@@ -37,7 +37,8 @@ begin
 
         update genesis2.sg_allocation_configuration
         set is_deleted  = 'Y',
-            delete_time = clock_timestamp()
+            delete_time = clock_timestamp(),
+            operation   = case when l_new_json ->> 'is_deleted' = 'Y' then 'D' else 'U' end
         where sg_alloc_config_id = in_sg_alloc_config_id
           and is_deleted = 'N';
         get diagnostics l_row_count = row_count;
@@ -76,7 +77,7 @@ begin
            case
                when in_sg_alloc_config_id is null and is_deleted = 'Y' then 'D'
                when is_deleted = 'Y' then 'U'
-               else 'U' end
+               else 'C' end
     from jsonb_populate_record(null::genesis2.sg_allocation_configuration, l_new_json)
     returning sg_alloc_config_id into l_sg_alloc_config_id;
 
@@ -105,26 +106,38 @@ COMMENT ON FUNCTION dash360.set_sg_alloc_config(int4, text, int4) IS 'Creates\Up
 
 
 
-select jsonb_a
+
 -- DROP FUNCTION dash360.delete_sg_alloc_config(int4, int4);
 
-CREATE OR REPLACE FUNCTION dash360.delete_sg_alloc_config(in_sg_alloc_config_id integer, in_user_id integer)
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
+create or replace function dash360.delete_sg_alloc_config(in_sg_alloc_config_id integer, in_user_id integer)
+    returns integer
+    language plpgsql
+as
+$function$
 -- SO 20261111 https://dashfinancial.atlassian.net/browse/DS-12315 Add operation column and refactor delete/set logic for SG_ALLOCATION_CONFIGURATION
 declare
     l_sg_alloc_config_id int4;
-    l_row_cnt int4;
-    l_json jsonb;
+    l_row_cnt            int4;
+    l_json               jsonb;
 begin
-    l_json
-    select count(*) into l_row_cnt from dash360.set_sg_alloc_config
-    update genesis2.sg_allocation_configuration
-    set is_deleted  = 'Y',
-        delete_time = clock_timestamp(),
-        user_id     = in_user_id
-    where sg_alloc_config_id = in_sg_alloc_config_id;
+    select row_to_json()
+    into l_json
+    from genesis2.sg_allocation_configuration sa
+    where sa.sg_alloc_config_id = in_sg_alloc_config_id;
+
+    select count(*)
+    into l_row_cnt
+    from dash360.set_sg_alloc_config(in_sg_alloc_config_id,
+                                     l_json::jsonb || '{
+                                       "is_deleted": "Y"
+                                     }'::jsonb,
+                                     in_user_id);
+
+    --     update genesis2.sg_allocation_configuration;
+    --     set is_deleted  = 'Y',
+    --         delete_time = clock_timestamp(),
+    --         user_id     = in_user_id
+    --     where sg_alloc_config_id = in_sg_alloc_config_id;
     return l_sg_alloc_config_id;
 end;
 $function$
