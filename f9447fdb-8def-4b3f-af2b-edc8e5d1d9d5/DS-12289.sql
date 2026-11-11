@@ -64,6 +64,7 @@ begin
                to_char(sac.db_create_time, 'DD/Mon/YYYY HH12:MI:SS AM'),--??
                ui.user_name,
                ''
+        select *
         from genesis2.sg_allocation_configuration sac
                  join genesis2.account a on sac.sg_parent_account_id = a.account_id
                  join genesis2.trading_firm tf on tf.trading_firm_id = a.trading_firm_id
