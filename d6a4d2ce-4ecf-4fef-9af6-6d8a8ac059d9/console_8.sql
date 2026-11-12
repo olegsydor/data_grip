@@ -1,4 +1,7 @@
-SELECT NULL::text AS id,
+drop view blaze7.tordermisc1_edw;
+
+CREATE OR REPLACE VIEW blaze7.tordermisc1_edw
+AS SELECT NULL::text AS id,
     co.cl_ord_id AS orderid,
     NULL::text AS systemid,
     NULL::text AS client,
@@ -262,12 +265,12 @@ SELECT NULL::text AS id,
         END AS haslinkedorders,
     co.payload #>> '{AlgoDetails,OptionsSessionEligibility}'::text[] AS optionssessioneligibility,
     co.payload #>> '{AlgoDetails,EquitiesSessionEligibility}'::text[] AS equitiessessioneligibility,
-        CASE
-            WHEN co.crossing_side IS NULL THEN co.big_payload #>> '{CATDetails,DoNotReportCAT}'::text[]
-            WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,CATDetails,DoNotReportCAT}'::text[]
-            WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,CATDetails,DoNotReportCAT}'::text[]
-            ELSE NULL::text
-        END AS donotreportcat,
+--         CASE
+--             WHEN co.crossing_side IS NULL THEN co.big_payload #>> '{CATDetails,DoNotReportCAT}'::text[]
+--             WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,CATDetails,DoNotReportCAT}'::text[]
+--             WHEN co.crossing_side = 'C'::bpchar THEN co.payload #>> '{ContraOrder,CATDetails,DoNotReportCAT}'::text[]
+--             ELSE NULL::text
+--         END AS donotreportcat,
         CASE
             WHEN co.crossing_side IS NULL THEN co.payload #>> '{SocGenSourceTimestamp}'::text[]
             WHEN co.crossing_side = 'O'::bpchar THEN co.payload #>> '{OriginatorOrder,SocGenSourceTimestamp}'::text[]
