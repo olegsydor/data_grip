@@ -109,7 +109,7 @@ COMMENT ON FUNCTION dash360.set_sg_alloc_config(int4, text, int4) IS 'Creates\Up
 
 
 -- DROP FUNCTION dash360.delete_sg_alloc_config(int4, int4);
-ash360.set_sg_alloc_config
+
 create or replace function dash360.delete_sg_alloc_config(in_sg_alloc_config_id integer, in_user_id integer)
     returns integer
     language plpgsql
@@ -121,18 +121,19 @@ declare
     l_row_cnt            int4;
     l_json               jsonb;
 begin
-    select row_to_json(sa.*)
-    into l_json
+    select row_to_json(sa.*), sa.sg_alloc_config_id
+    into l_json, l_sg_alloc_config_id
     from genesis2.sg_allocation_configuration sa
-    where sa.sg_alloc_config_id = in_sg_alloc_config_id;
+    where sa.sg_alloc_config_id = in_sg_alloc_config_id
+      and is_deleted <> 'Y';
 
     select count(*)
     into l_row_cnt
-    from dash360.set_sg_alloc_config(in_sg_alloc_config_id,
-                                     (l_json::jsonb || '{
+    from dash360.set_sg_alloc_config(in_sg_alloc_config_id := in_sg_alloc_config_id,
+                                     in_json := (l_json::jsonb || '{
                                        "is_deleted": "Y"
                                      }'::jsonb)::text,
-                                     in_user_id);
+                                     in_user_id := in_user_id);
     --     update genesis2.sg_allocation_configuration;
     --     set is_deleted  = 'Y',
     --         delete_time = clock_timestamp(),
@@ -144,3 +145,9 @@ $function$
 ;
 
 comment on function dash360.delete_sg_alloc_config(int4, int4) is 'Deleting an existing SG Allocation Config record';
+
+
+select * from genesis2.sg_allocation_configuration
+where sg_alloc_config_id = 5108;
+
+select * from dash360.delete_sg_alloc_config(5108, 10107)
