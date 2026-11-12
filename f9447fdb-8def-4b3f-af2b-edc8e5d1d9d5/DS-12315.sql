@@ -109,7 +109,7 @@ COMMENT ON FUNCTION dash360.set_sg_alloc_config(int4, text, int4) IS 'Creates\Up
 
 
 -- DROP FUNCTION dash360.delete_sg_alloc_config(int4, int4);
-
+ash360.set_sg_alloc_config
 create or replace function dash360.delete_sg_alloc_config(in_sg_alloc_config_id integer, in_user_id integer)
     returns integer
     language plpgsql
@@ -129,9 +129,9 @@ begin
     select count(*)
     into l_row_cnt
     from dash360.set_sg_alloc_config(in_sg_alloc_config_id,
-                                     l_json::jsonb || '{
+                                     (l_json::jsonb || '{
                                        "is_deleted": "Y"
-                                     }'::jsonb,
+                                     }'::jsonb)::text,
                                      in_user_id);
     --     update genesis2.sg_allocation_configuration;
     --     set is_deleted  = 'Y',
