@@ -346,3 +346,7 @@ AS SELECT NULL::text AS id,
           WHERE org_1.orig_order_id IS NOT NULL AND org_1.orig_order_id = cl.order_id AND org_1.db_create_time >= cl.db_create_time
          LIMIT 1) org ON true
   WHERE true AND (cl.record_type = ANY (ARRAY['0'::bpchar, '2'::bpchar]));
+
+
+--
+
