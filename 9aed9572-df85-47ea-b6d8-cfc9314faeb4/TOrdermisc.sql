@@ -350,3 +350,21 @@ AS SELECT NULL::text AS id,
 
 --
 
+
+select
+socgensourcetimestamp
+FROM blaze7.so_tordermisc1_edw as x
+where x.order_trade_date_id between % (date_id)s and public.get_dateid(public.get_business_date(%(date_id)s::text::date, 1))
+
+  AND (
+       (x.db_create_time::timestamp > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second'
+    and x.db_create_time > (%(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '1 hour 10 second'))
+        or
+           (x.org_db_create_time::timestamp > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second'
+        and x.org_db_create_time > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '1 hour 10 second'
+        )
+        or
+           (x.rep_db_create_time::timestamp > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '10 second')
+        and x.rep_db_create_time > %(max_processed_time_misc)s::timestamp at time zone 'US/Central' - interval '1 hour 10 second'
+        )
+;
