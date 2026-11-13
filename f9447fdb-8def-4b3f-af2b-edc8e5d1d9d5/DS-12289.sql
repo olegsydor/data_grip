@@ -1,9 +1,7 @@
-
-
-create function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_ids varchar(9)[] default null[],
-                                                                in_account_ids int8 default null[],
-                                                                in_start_date_id int4 default null,
-                                                                in_end_date_id int4 default null)
+create or replace function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_ids varchar(9)[] default null::varchar(9)[],
+                                                                           in_account_ids int8[] default null::int8[],
+                                                                           in_start_date_id int4 default null::int4,
+                                                                           in_end_date_id int4 default null::int4)
     returns table
             (
                 "Account"                varchar,
@@ -21,7 +19,7 @@ create function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_
                 "Fund ID"                varchar,
                 "Time"                   text,
                 "User Name"              varchar,
-                "Change Type"            varchar
+                "Change Type"            char
             )
     language plpgsql
 as
@@ -44,7 +42,7 @@ begin
                       then trading_firm_id = ANY (in_trading_firm_ids)
                   else true end
           and case
-                  when coalesce(in_account_ids, '{}'::integer[]) <> '{}'::integer[]
+                  when coalesce(in_account_ids, '{}'::integer[]) <> '{}'::int8[]
                       then account_id = ANY (in_account_ids)
                   else true end;
     end if;
@@ -63,7 +61,7 @@ begin
                sac.clearing_firm,
                sac.sg_equity_brid,
                sac.sg_fund_id,
-               to_char(coalesce(sac.delete_time, sac.db_create_time), 'DD/Mon/YYYY HH12:MI:SS AM'),
+               to_char(coalesce(/*sac.delete_time, */sac.db_create_time), 'DD/Mon/YYYY HH12:MI:SS AM'),
                ui.user_name,
                sac.operation
 --         select sg_alloc_config_id, orig_sg_alloc_config_id, *
@@ -72,9 +70,14 @@ begin
                  join genesis2.trading_firm tf on tf.trading_firm_id = a.trading_firm_id
                  join genesis2.user_identifier ui on ui.user_id = sac.user_id
         where sac.is_deleted = 'N'
-          and case when l_account_ids = '{}' then true else sac.sg_parent_account_id = any (l_account_ids) end --check performance
+          and case
+                  when l_account_ids = '{}' then true
+                  else sac.sg_parent_account_id = any (l_account_ids) end --check performance
           and db_create_time between l_start_date_id and l_end_date_id;
-    ;
 
 end ;
 $fx$;
+
+select *
+from dash360.report_sg_allocation_config_audit_trail(in_account_ids := '{263455,263774}', in_start_date_id := 20260101,
+                                                     in_end_date_id := 20261112)
