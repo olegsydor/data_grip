@@ -1,7 +1,7 @@
 -- https://dashfinancial.atlassian.net/browse/DS-12237
 -- DROP FUNCTION dash360.allocations_clearing_accounts_by_account_id(int8, bpchar);
 
-CREATE FUNCTION dash360.allocations_clearing_accounts_by_account_id_vers2(in_account_id bigint, in_market_type character)
+CREATE FUNCTION dash360.allocations_clearing_accounts_by_account_id(in_account_id bigint, in_market_type character)
     RETURNS TABLE
             (
                 clearing_account_id              integer,
@@ -53,7 +53,7 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_get_accounts_config(bpchar, _int8);
 
-CREATE FUNCTION dash360.allocations_get_accounts_config_vers2(in_market_type character DEFAULT 'O'::character(1),
+CREATE FUNCTION dash360.allocations_get_accounts_config(in_market_type character DEFAULT 'O'::character(1),
                                                                    in_account_ids bigint[] DEFAULT '{}'::bigint[])
     RETURNS TABLE
             (
@@ -108,7 +108,7 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_set_account_config(int8, text, bpchar, bpchar, int4, bpchar);
 
-CREATE FUNCTION dash360.allocations_set_account_config_vers2(in_account_id bigint, in_clearing_accounts text,
+CREATE FUNCTION dash360.allocations_set_account_config(in_account_id bigint, in_clearing_accounts text,
                                                                   in_is_auto_allocate character DEFAULT NULL::character(1),
                                                                   in_instrumnt_type_id character DEFAULT 'O'::bpchar,
                                                                   in_user_id integer DEFAULT NULL::integer,
@@ -217,7 +217,7 @@ $function$
 
 -- DROP FUNCTION dash360.allocations_instruction_entries(int4, int4);
 
-CREATE FUNCTION dash360.allocations_instruction_entries_vers2(in_alloc_instr_id integer, in_date_id integer)
+CREATE FUNCTION dash360.allocations_instruction_entries(in_alloc_instr_id integer, in_date_id integer)
     RETURNS TABLE
             (
                 clearing_account_number         character varying,
@@ -270,3 +270,8 @@ begin
 end;
 $function$
 ;
+
+drop function dash360.allocations_clearing_accounts_by_account_id_vers2;
+drop function dash360.allocations_get_accounts_config_vers2;
+drop function dash360.allocations_set_account_config_vers2;
+drop function dash360.allocations_instruction_entries_vers2;
