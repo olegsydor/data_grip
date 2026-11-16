@@ -80,7 +80,7 @@ begin
                             and mr.trade_id = tr.trade_id)
 
         group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), os.root_symbol, oc.maturity_day, oc.maturity_month,
-                 oc.maturity_year, oc.strike_price, oc.put_call, tr.account_type, tr.customer_acct_originator
+                 oc.maturity_year, oc.strike_price, oc.put_call, tr.account_type--, tr.customer_acct_originator
         having sum(case when tr.side = '1' then 1 else -1 end * tr.last_qty) != 0;
 
     get diagnostics l_row_cnt = row_count;
