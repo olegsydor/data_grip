@@ -1,7 +1,9 @@
 --https://dashfinancial.atlassian.net/browse/DS-12300
 -- DROP FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(int4, int4);
 
-CREATE OR REPLACE FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(in_start_date_id integer, in_end_date_id integer)
+select * from dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new2(20261101, 20261115)
+
+CREATE OR REPLACE FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck(in_start_date_id integer, in_end_date_id integer)
  RETURNS TABLE(ret_row text)
  LANGUAGE plpgsql
 AS $function$
@@ -69,7 +71,7 @@ begin
                           where cnc.rpt_id = tr.rpt_id
                             and cnc.date_id = tr.date_id
                             and cnc.side = tr.side
-                            and cnc.account_type tr.account_type
+                            and cnc.account_type = tr.account_type
                             and cnc.trans_type = '1')
           and not exists (select null
                           from genesis2.occ_data.occ_matched_trade_record mr
@@ -77,7 +79,7 @@ begin
                             and mr.trade_id = tr.trade_id)
 
         group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), os.root_symbol, oc.maturity_day, oc.maturity_month,
-                 oc.maturity_year, oc.strike_price, oc.put_call, tr.account_type, otd.customer_acct_originator
+                 oc.maturity_year, oc.strike_price, oc.put_call, tr.account_type, tr.customer_acct_originator
         having sum(case when tr.side = '1' then 1 else -1 end * tr.last_qty) != 0;
 
     get diagnostics l_row_cnt = row_count;
