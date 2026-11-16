@@ -1,7 +1,8 @@
 --https://dashfinancial.atlassian.net/browse/DS-12300
 -- DROP FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(int4, int4);
 
-select * from dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new2(20261101, 20261115)
+select *
+from dash360.report_fintech_adh_occ_portfolio_cboe_hanweck(20261101, 20261115);
 
 CREATE OR REPLACE FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck(in_start_date_id integer, in_end_date_id integer)
  RETURNS TABLE(ret_row text)
