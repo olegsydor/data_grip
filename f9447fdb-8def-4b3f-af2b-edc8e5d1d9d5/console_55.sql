@@ -1,0 +1,102 @@
+--https://dashfinancial.atlassian.net/browse/DS-12300
+-- DROP FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(int4, int4);
+
+CREATE OR REPLACE FUNCTION dash360.report_fintech_adh_occ_portfolio_cboe_hanweck_new(in_start_date_id integer, in_end_date_id integer)
+ RETURNS TABLE(ret_row text)
+ LANGUAGE plpgsql
+AS $function$
+    -- 2025-05-20 SO: https://dashfinancial.atlassian.net/browse/DEVREQ-6115
+    -- 2026-05-27 SO: https://dashfinancial.atlassian.net/browse/DS-11570 Change the Source of Data for OCC Portfolio - CBOE Hanweck Report
+    -- 2026-07-02 SO: https://dashfinancial.atlassian.net/browse/DS-11570 Change the source of porfolio_id from mapping table to mnemonic value from trading firm
+    -- 2026-11-16 SO: https://dashfinancial.atlassian.net/browse/DS-12300 OCC Portfolio CBOE Hanweck Report Enhancements - introduce grouping by Account Type, refactor PortfolioID and SubPortfolioID
+declare
+    l_load_id int;
+    l_step_id int;
+    l_row_cnt int;
+
+begin
+
+    select nextval('public.load_timing_seq') into l_load_id;
+    l_step_id := 1;
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_occ_portfolio_cboe_hanweck_new for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' STARTED ====', 0, 'O')
+    into l_step_id;
+
+
+    return query
+        select 'Date,PortfolioId,SubPortfolioId,Symbols,Expiration,Strike,PutCall,InstType,PositionType,Exchange,Quantity,PosSettleDate,Cash,ClientInfo';
+
+    return query
+        select array_to_string(ARRAY [
+                                   to_char(tr.trade_record_time, 'MM/dd/yyyy'),
+                                   tr.account_type ,-- as portfolio_id,
+                                   max(coalesce(portfolio_id, 'A000')) ,-- as "SubPortfolioId",
+                                   os.root_symbol ,-- as "Symbol",
+                                   to_char(oc.maturity_month, 'FM00') || to_char(oc.maturity_day, 'FM00') ||
+                                   to_char(oc.maturity_year, 'FM0000') ,-- as "Expiration",
+                                   oc.strike_price::text ,-- as "Strike",
+                                   case
+                                       when oc.put_call = '0' then 'P'
+                                       when oc.put_call = '1' then 'C'
+                                       end ,-- as "PutCall",
+                                   'O' ,-- as "InstType",
+                                   'O' ,-- as "PositionType",
+                                   null ,-- as "Exchange",
+                                   sum(case when tr.side = '1' then 1 else -1 end * tr.last_qty)::text ,-- as "Quantity",
+                                   null ,-- as "PosSettleDate",
+                                   null ,-- as "Cash",
+                                   null -- as "ClientInfo"
+                                   ], ',', '')
+        from occ_data.occ_trade_data tr
+                 inner join genesis2.option_contract oc on (oc.instrument_id = tr.instrument_id)
+                 inner join genesis2.option_series os on (oc.option_series_id = os.option_series_id)
+                 left join lateral ( select tf.trading_firm_demo_mnemonic as portfolio_id --coalesce(hpm.portfolio_id, ac.trading_firm_id) as portfolio_id
+                                     from occ_data.occ_trade_data_matching mtr
+                                              join genesis2.account ac using (account_id)
+                                              join genesis2.trading_firm tf using (trading_firm_id)
+                                     where mtr.date_id = tr.date_id
+                                       and mtr.trade_id = tr.trade_id
+                                       and mtr.side = tr.side
+                                       and mtr.trade_record_id != -1
+                                     limit 1) pf on true
+        where tr.date_id between in_start_date_id and in_end_date_id
+          and clearing_member_number in ('00333', '00733', '333', '733')
+          and gup_clearing_firm_originator is null
+          and trade_type = '0'
+          and not exists (select null
+                          from genesis2.occ_data.occ_trade_data cnc
+                          where cnc.rpt_id = tr.rpt_id
+                            and cnc.date_id = tr.date_id
+                            and cnc.side = tr.side
+                            and cnc.account_type tr.account_type
+                            and cnc.trans_type = '1')
+          and not exists (select null
+                          from genesis2.occ_data.occ_matched_trade_record mr
+                          where mr.date_id = tr.date_id
+                            and mr.trade_id = tr.trade_id)
+
+        group by to_char(tr.trade_record_time, 'MM/dd/yyyy'), os.root_symbol, oc.maturity_day, oc.maturity_month,
+                 oc.maturity_year, oc.strike_price, oc.put_call, tr.account_type, otd.customer_acct_originator
+        having sum(case when tr.side = '1' then 1 else -1 end * tr.last_qty) != 0;
+
+    get diagnostics l_row_cnt = row_count;
+
+    select public.load_log(l_load_id, l_step_id,
+                           'report_fintech_adh_occ_portfolio_cboe_hanweck_new for ' || in_start_date_id::text ||
+                           '-' || in_end_date_id::text || ' COMPLETED ====', l_row_cnt, 'O')
+    into l_step_id;
+
+end ;
+$function$
+;
+
+
+select tf.trading_firm_demo_mnemonic as portfolio_id , *
+                                     from occ_data.occ_trade_data_matching mtr
+                                              join genesis2.account ac using (account_id)
+                                              join genesis2.trading_firm tf using (trading_firm_id)
+                                     where mtr.date_id = 20261113
+                                       and mtr.trade_id = 20261113
+                                       and mtr.side = tr.side
+                                       and mtr.trade_record_id != -1
