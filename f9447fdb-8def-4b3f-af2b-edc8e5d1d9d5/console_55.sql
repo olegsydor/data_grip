@@ -103,3 +103,6 @@ select tf.trading_firm_demo_mnemonic as portfolio_id , *
                                        and mtr.trade_id = 20261113
                                        and mtr.side = tr.side
                                        and mtr.trade_record_id != -1
+
+
+
