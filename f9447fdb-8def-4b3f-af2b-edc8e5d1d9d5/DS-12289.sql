@@ -81,3 +81,6 @@ $fx$;
 select *
 from dash360.report_sg_allocation_config_audit_trail(in_account_ids := '{263455,263774}', in_start_date_id := 20260101,
                                                      in_end_date_id := 20261112)
+
+
+select * from external_data.oc   occ_member_directory
