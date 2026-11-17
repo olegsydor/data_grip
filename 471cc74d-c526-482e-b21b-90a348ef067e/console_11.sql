@@ -8,3 +8,5 @@ select OrderID, SystemID, Client, Trader, IsCTBOverridden, StockQuantity, StockP
 from Blaze7.[dbo].[TOrderMisc1_EDW]
 where date_id = 20261117
 -- and pg_order_id = 977116562488033280
+
+select * from
