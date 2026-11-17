@@ -83,4 +83,32 @@ from dash360.report_sg_allocation_config_audit_trail(in_account_ids := '{263455,
                                                      in_end_date_id := 20261112)
 
 
-select * from external_data.oc   occ_member_directory
+)
+SERVER postgresbig_data
+OPTIONS (schema_name 'dwh', table_name 'd_account');
+
+
+select distinct t.table_schema
+                , t.table_name
+--                , c.column_name
+--                , data_type
+from information_schema.tables t
+         inner join information_schema.columns c on (c.table_name = t.table_name and c.table_schema = t.table_schema)
+where true
+and t.table_schema not in
+      ('trash', 'information_schema', 'pg_catalog', 'dm_partitions', 'ot_partitions', 'partitions', 'cmp_partitions',
+       'md_partitions', 'fc_partitions', 'fc_partitions_tmp_hft', 'external_data_partitions', 'daily_partitions', 'billing_partition', 'exchange_data_partition')
+  and t.table_name ilike '%occ_member%'
+
+select * from external_data.occ_members_2_billingcustomer;
+
+
+SERVER
+OPTIONS (schema_name 'dwh', table_name 'd_option_series');
+
+
+IMPORT FOREIGN SCHEMA external_data LIMIT TO (occ_member_directory)
+FROM SERVER postgres_big_data
+into staging;
+
+select * from staging.occ_member_directory
