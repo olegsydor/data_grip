@@ -1,29 +1,31 @@
-create or replace function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_ids varchar(9)[] default null::varchar(9)[],
-                                                                           in_account_ids int8[] default null::int8[],
-                                                                           in_start_date_id int4 default null::int4,
-                                                                           in_end_date_id int4 default null::int4)
+-- DROP FUNCTION dash360.report_sg_allocation_config_audit_trail(_varchar, _int8, int4, int4);
+
+create or replace function dash360.report_sg_allocation_config_audit_trail(in_trading_firm_ids character varying[] default null::character varying(9)[],
+                                                                           in_account_ids bigint[] default null::bigint[],
+                                                                           in_start_date_id integer default null::integer,
+                                                                           in_end_date_id integer default null::integer)
     returns table
             (
-                "Account"                varchar,
-                "AccountID"              int8,
-                "Trading Firm"           varchar,
-                "Configuration Nickname" varchar,
-                "Mint Account"           varchar,
-                "BDR"                    varchar,
-                "Sales Trader"           varchar,
+                "Account"                character varying,
+                "AccountID"              bigint,
+                "Trading Firm"           character varying,
+                "Configuration Nickname" character varying,
+                "Mint Account"           character varying,
+                "BDR"                    character varying,
+                "Sales Trader"           character varying,
                 "Security Type"          text,
-                "OCC AID"                varchar,
-                "Option BRID"            varchar,
-                "CMTA"                   varchar,
-                "Equity BRID"            varchar,
-                "Fund ID"                varchar,
+                "OCC AID"                character varying,
+                "Option BRID"            character varying,
+                "CMTA"                   character varying,
+                "Equity BRID"            character varying,
+                "Fund ID"                character varying,
                 "Time"                   text,
-                "User Name"              varchar,
-                "Change Type"            char
+                "User Name"              character varying,
+                "Change Type"            character
             )
     language plpgsql
 as
-$fx$
+$function$
     -- 20261110 SO https://dashfinancial.atlassian.net/browse/DS-12289
 declare
     l_account_ids   int8[];
@@ -59,7 +61,7 @@ begin
                sac.occ_actionable_id,
                sac.sg_opt_brid,
                sac.clearing_firm,
-               sac.sg_equity_brid,
+               concat_ws('-', sac.sg_equity_brid, firm_name)::character varying,
                sac.sg_fund_id,
                to_char(coalesce(/*sac.delete_time, */sac.db_create_time), 'DD/Mon/YYYY HH12:MI:SS AM'),
                ui.user_name,
@@ -69,6 +71,7 @@ begin
                  join genesis2.account a on sac.sg_parent_account_id = a.account_id
                  join genesis2.trading_firm tf on tf.trading_firm_id = a.trading_firm_id
                  join genesis2.user_identifier ui on ui.user_id = sac.user_id
+        left join lateral (select firm_name from staging.occ_member_directory omd where omd.firm_num = sac.clearing_firm limit 1) omd on true
         where sac.is_deleted = 'N'
           and case
                   when l_account_ids = '{}' then true
@@ -76,7 +79,9 @@ begin
           and db_create_time between l_start_date_id and l_end_date_id;
 
 end ;
-$fx$;
+$function$
+;
+
 
 select *
 from dash360.report_sg_allocation_config_audit_trail(in_account_ids := '{263455,263774}', in_start_date_id := 20260101,
