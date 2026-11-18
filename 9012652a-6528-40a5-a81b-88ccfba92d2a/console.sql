@@ -1,23 +1,23 @@
 select OrderID, SystemID, Client, Trader, IsCTBOverridden, StockQuantity, StockPrice, AcctComm, IsSplitPrice, Post, Station, IsSPXCombo, ExtTTS, NoCOA, RejectOrderID, FTID, ExecInst, ulTransaction64, IsAutoQCTChild, AutoQCTOrderID, CrossingTypeID, StopLimit, CATID, dashaliasid, MinQuantity, MinDisplayQty, MaxDisplayQty, OBOUser, StockFloorBroker, FDID, SenderIMID, AffiliateFlag, AccountHolderType, BrokerDealer, ReceiveTime, ResendParentID, Representative, CXLClOrdID, GoodTillDate, ActionID, sales_traders, fixclordid, optionrefprice, stockrefprice, workingdelta, intparentorderid, pg_order_id, pg_chain_id, date_id, pg_entity, CATParentID, OrderSource, OBOOrderRefId, OwnerCompanyID, SystemCrossID, Transaction64CrossOrderID, RepresentativeOrderID, CATUpdate, HasRepresentedOrder, CBOESessionEligibility, ImpliedVolatility, Cabinet, Transaction64ParentCrossOrderID, CallTime, ElectronicOrderId, ElectronicOrderTime, ClientInfo, BoxQOOAnnouncedTime, OrderEventTime, OrderNotes, CboeEquityBroker, order_trade_date_id, AutoRouteRuleId, AutoRouteRuleName, IsAutoAccepted, IsAutoRouted, NumberOfLinkedOrders, IsTiedToCombo, IsMerged, MergedOrderID
 from so_Blaze_7.[dbo].[TOrderMisc1_EDW]
-where date_id = 20261116
+where date_id = 20261117
 -- and pg_order_id = 977116562488033280
 except
 -- union all
 select OrderID, SystemID, Client, Trader, IsCTBOverridden, StockQuantity, StockPrice, AcctComm, IsSplitPrice, Post, Station, IsSPXCombo, ExtTTS, NoCOA, RejectOrderID, FTID, ExecInst, ulTransaction64, IsAutoQCTChild, AutoQCTOrderID, CrossingTypeID, StopLimit, CATID, dashaliasid, MinQuantity, MinDisplayQty, MaxDisplayQty, OBOUser, StockFloorBroker, FDID, SenderIMID, AffiliateFlag, AccountHolderType, BrokerDealer, ReceiveTime, ResendParentID, Representative, CXLClOrdID, GoodTillDate, ActionID, sales_traders, fixclordid, optionrefprice, stockrefprice, workingdelta, intparentorderid, pg_order_id, pg_chain_id, date_id, pg_entity, CATParentID, OrderSource, OBOOrderRefId, OwnerCompanyID, SystemCrossID, Transaction64CrossOrderID, RepresentativeOrderID, CATUpdate, HasRepresentedOrder, CBOESessionEligibility, ImpliedVolatility, Cabinet, Transaction64ParentCrossOrderID, CallTime, ElectronicOrderId, ElectronicOrderTime, ClientInfo, BoxQOOAnnouncedTime, OrderEventTime, OrderNotes, CboeEquityBroker, order_trade_date_id, AutoRouteRuleId, AutoRouteRuleName, IsAutoAccepted, IsAutoRouted, NumberOfLinkedOrders, IsTiedToCombo, IsMerged, MergedOrderID
 from Blaze7.[dbo].[TOrderMisc1_EDW]
-where date_id = 20261116
+where date_id = 20261117
 -- and pg_order_id = 977116562488033280
 ;
 
 select Status, orderidint, reportidint, OrderID, ReportID, LegNumber, DashSecurityId, ContractID, UserID, ExchangeConnectionID, ExchangeName, Destination, SystemID, Generation, ULBid, ULAsk, ULBidSz, ULAskSz, NBBOBid, NBBOAsk, NBBOBidSz, NBBOAskSz, BidA, AskA, BidSzA, AskSzA, BidB, AskB, BidSzB, AskSzB, BidC, AskC, BidSzC, AskSzC, BidI, AskI, BidSzI, AskSzI, BidP, AskP, BidSzP, AskSzP, BidX, AskX, BidSzX, AskSzX, BidQ, AskQ, BidSzQ, AskSzQ, BidZ, AskZ, BidSzZ, AskSzZ, BidW, AskW, BidSzW, AskSzW, BidT, AskT, BidSzT, AskSzT, BidM, AskM, BidSzM, AskSzM, BidH, AskH, BidSzH, AskSzH, BidJ, AskJ, BidSzJ, AskSzJ, BidE, AskE, BidSzE, AskSzE, BidR, AskR, BidSzR, AskSzR, BidD, AskD, BidSzD, AskSzD, bidea, askea, bidszea, askszea, bidep, askep, bidszep, askszep, bidez, askez, bidszez, askszez, bidey, askey, bidszey, askszey, bidej, askej, bidszej, askszej, bidek, askek, bidszek, askszek, bideq, askeq, bidszeq, askszeq, bideb, askeb, bidszeb, askszeb, biden, asken, bidszen, askszen, bidex, askex, bidszex, askszex, bidei, askei, bidszei, askszei, bidec, askec, bidszec, askszec, bidem, askem, bidszem, askszem, bideu, askeu, bidszeu, askszeu, bided, asked, bidszed, askszed, pg_order_id, pg_chain_id, exec_id, date_id, pg_entity, BidU, AskU, BidSzU, AskSzU, BidS, AskS, BidSzS, AskSzS, BidG, AskG, BidSzG, AskSzG, BidV, AskV, BidSzV, AskSzV, BidEF, AskEF, BidSzEF, AskSzEF, BidEG, AskEG, BidSzEG, AskSzEG
 from [so_Blaze_7].[dbo].[Tprices_EDW]
-where date_id = 20261116
-and pg_order_id = 977021725478748160
+where date_id = 20261117
+-- and pg_order_id = 977021725478748160
 except
 select Status, orderidint, reportidint, OrderID, ReportID, LegNumber, DashSecurityId, ContractID, UserID, ExchangeConnectionID, ExchangeName, Destination, SystemID, Generation, ULBid, ULAsk, ULBidSz, ULAskSz, NBBOBid, NBBOAsk, NBBOBidSz, NBBOAskSz, BidA, AskA, BidSzA, AskSzA, BidB, AskB, BidSzB, AskSzB, BidC, AskC, BidSzC, AskSzC, BidI, AskI, BidSzI, AskSzI, BidP, AskP, BidSzP, AskSzP, BidX, AskX, BidSzX, AskSzX, BidQ, AskQ, BidSzQ, AskSzQ, BidZ, AskZ, BidSzZ, AskSzZ, BidW, AskW, BidSzW, AskSzW, BidT, AskT, BidSzT, AskSzT, BidM, AskM, BidSzM, AskSzM, BidH, AskH, BidSzH, AskSzH, BidJ, AskJ, BidSzJ, AskSzJ, BidE, AskE, BidSzE, AskSzE, BidR, AskR, BidSzR, AskSzR, BidD, AskD, BidSzD, AskSzD, bidea, askea, bidszea, askszea, bidep, askep, bidszep, askszep, bidez, askez, bidszez, askszez, bidey, askey, bidszey, askszey, bidej, askej, bidszej, askszej, bidek, askek, bidszek, askszek, bideq, askeq, bidszeq, askszeq, bideb, askeb, bidszeb, askszeb, biden, asken, bidszen, askszen, bidex, askex, bidszex, askszex, bidei, askei, bidszei, askszei, bidec, askec, bidszec, askszec, bidem, askem, bidszem, askszem, bideu, askeu, bidszeu, askszeu, bided, asked, bidszed, askszed, pg_order_id, pg_chain_id, exec_id, date_id, pg_entity, BidU, AskU, BidSzU, AskSzU, BidS, AskS, BidSzS, AskSzS, BidG, AskG, BidSzG, AskSzG, BidV, AskV, BidSzV, AskSzV, BidEF, AskEF, BidSzEF, AskSzEF, BidEG, AskEG, BidSzEG, AskSzEG
 from [Blaze7].[dbo].[Tprices_EDW]
-where 1=1 --date_id = 20261116
-and pg_order_id = 977021725478748160;
+where date_id = 20261117
+-- and pg_order_id = 977021725478748160;
 
 
