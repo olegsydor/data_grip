@@ -1,29 +1,69 @@
-create temp table tmp_acc
-as select *
-    from genesis2.account ac
-    where true
-      and ac.is_deleted <> 'Y'
-      and ac.opt_report_to_mpid = 'MLCB'
-      and ac.trading_firm_id <> 'cantor';
+-- https://dashfinancial.atlassian.net/browse/DS-12262
+dash360.delete_broker_comm_all_rates
+dash360.delete_broker_comm_rates
+dash360.delete_manual_broker
+dash360.set_broker_comm_rates
+dash360.update_broker_comm_symbol_list
+dash360.update_manual_broker
+genesis2.load_broker_commission_for_trade -- NO
+dash360.delete_broker_comm_symbol_list -- ??
 
-create temp table t_trade_record_to_report as
-SELECT ftr.date_id AS date_id,
-       ftr.trade_record_id,
-       orig.*
-FROM genesis2.trade_record ftr
-         join genesis2.instrument gi on gi.instrument_id = ftr.instrument_id
-         JOIN genesis2.account acc ON (acc.account_id = ftr.account_id)
-         LEFT JOIN LATERAL (
-    SELECT staging.all_orig_trade_record_id_today(
-                   ftr.trade_record_id,
-                   ftr.date_id
-           ) AS orig_ids
-    WHERE ftr.orig_trade_record_id IS NOT NULL
-    OFFSET 0
-    ) orig ON true
-WHERE ftr.date_id between :in_start_date_id and :in_end_date_id
-  and gi.instrument_type_id = 'O'
-  and ftr.orig_trade_record_id is not null
-  and ftr.exec_broker = '733';
 
-select * from t_trade_record_to_report
+-- DROP FUNCTION dash360.delete_broker_comm_all_rates(text, int4);
+
+CREATE OR REPLACE FUNCTION dash360.delete_broker_comm_all_rates(in_broker_code text, in_user_id integer)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+-- PD: 20260618 https://dashfinancial.atlassian.net/browse/DS-11567 Initial creation
+-- OS: 20261124 https://dashfinancial.atlassian.net/browse/DS-12262 Preserve original creator's user_id when soft-deleting/updating configuration rows
+DECLARE
+	l_row_count int;
+
+BEGIN
+    IF in_broker_code IS NULL OR btrim(in_broker_code) = '' THEN
+        RAISE EXCEPTION 'in_broker_code is required';
+    END IF;
+
+    PERFORM 1
+    FROM genesis2.manual_brokers mb
+    WHERE mb.broker_code = in_broker_code
+      AND mb.is_deleted = 'N';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Active manual broker % was not found.', in_broker_code;
+    END IF;
+
+    insert into broker_comm_rate (rate_id, broker_unq_id, broker_code, symbol_list_unq_id, symbol_list_id,
+                                  instrument_type_id, commission_type, tier_type_id, min_price, min_qty, scope_type,
+                                  rate_type_id, rate, user_id, is_deleted)
+    select rate_id,
+           broker_unq_id,
+           broker_code,
+           symbol_list_unq_id,
+           symbol_list_id,
+           instrument_type_id,
+           commission_type,
+           tier_type_id,
+           min_price,
+           min_qty,
+           scope_type,
+           rate_type_id,
+           rate,
+           in_user_id,
+           'Y'
+    from broker_comm_rate
+    where broker_code = in_broker_code
+      and is_deleted = 'N';
+
+	update broker_comm_rate set is_deleted = 'Y', update_time = CURRENT_TIMESTAMP
+	where broker_code = in_broker_code
+	and is_deleted = 'N';
+
+	GET DIAGNOSTICS l_row_count = ROW_COUNT;
+
+    RETURN 'Updated rows: ' || l_row_count::varchar;
+
+END
+$function$
+;
