@@ -204,3 +204,4 @@ WHERE ftr.date_id BETWEEN :in_start_date_id AND :in_end_date_id
 select * from t_trade_record_to_report
 except
 select * from t_trade_record_to_report_new
+where to_del is not null
