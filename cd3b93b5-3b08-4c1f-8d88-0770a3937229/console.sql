@@ -1,8 +1,8 @@
-create or replace function staging.cleanup_event_eod(
+call staging.cleanup_event_eod(in_dry_run:=false);
+create or replace procedure staging.cleanup_event_eod(
     in_dry_run boolean default true
 )
-    returns void
-    language plpgsql
+language plpgsql
 as
 $function$
 declare
@@ -38,7 +38,7 @@ begin
           and c.relkind in ('r', 'p')
           and c.relname ~ '^hft_fix_message_event_[0-9]{8}_eod$'
         order by c.relname desc
-        offset 1
+        offset 2
         loop
             l_checked_cnt := l_checked_cnt + 1;
             -- compare eod and inc metrics.
@@ -79,7 +79,7 @@ begin
             l_eligible_cnt := l_eligible_cnt + 1;
 
             if in_dry_run then
-                raise notice '%: DRY RUN. Would drop table',
+                raise notice 'DRY RUN. Would drop table: %',
                     l_rec.table_name;
             else
                 execute format(
@@ -105,3 +105,80 @@ begin
 END;
 $function$
     SET lock_timeout = '5s';
+
+CREATE TABLE partitions.hft_fix_message_event_20261124_eod (
+	date_id int4 NULL,
+	fix_date varchar(32) NULL,
+	msg_type varchar(3) NULL,
+	sub_system_id varchar(32) NULL,
+	sender_comp_id varchar(32) NULL,
+	target_comp_id varchar(32) NULL,
+	account_name varchar(32) NULL,
+	cl_ord_id varchar(128) NULL,
+	parent_cl_ord_id varchar(128) NULL,
+	secondary_ord_id varchar(32) NULL,
+	exch_exec_id varchar(128) NULL,
+	sec_exch_exec_id varchar(128) NULL,
+	exch_ord_id varchar(128) NULL,
+	session_id varchar(32) NULL,
+	orig_cl_ord_id varchar(128) NULL,
+	security_type varchar(10) NULL,
+	leg_cfi_code varchar(10) NULL,
+	fix_msg_json jsonb NULL,
+	load_batch_id int8 NULL,
+	exec_type varchar(8) NULL,
+	leg_ref_id varchar(30) NULL,
+	alternative_cl_ord_id varchar(128) NULL
+);
+CREATE TABLE partitions.hft_fix_message_event_20261123_eod (
+	date_id int4 NULL,
+	fix_date varchar(32) NULL,
+	msg_type varchar(3) NULL,
+	sub_system_id varchar(32) NULL,
+	sender_comp_id varchar(32) NULL,
+	target_comp_id varchar(32) NULL,
+	account_name varchar(32) NULL,
+	cl_ord_id varchar(128) NULL,
+	parent_cl_ord_id varchar(128) NULL,
+	secondary_ord_id varchar(32) NULL,
+	exch_exec_id varchar(128) NULL,
+	sec_exch_exec_id varchar(128) NULL,
+	exch_ord_id varchar(128) NULL,
+	session_id varchar(32) NULL,
+	orig_cl_ord_id varchar(128) NULL,
+	security_type varchar(10) NULL,
+	leg_cfi_code varchar(10) NULL,
+	fix_msg_json jsonb NULL,
+	load_batch_id int8 NULL,
+	exec_type varchar(8) NULL,
+	leg_ref_id varchar(30) NULL,
+	alternative_cl_ord_id varchar(128) NULL
+);
+CREATE TABLE partitions.hft_fix_message_event_20261120_eod (
+	date_id int4 NULL,
+	fix_date varchar(32) NULL,
+	msg_type varchar(3) NULL,
+	sub_system_id varchar(32) NULL,
+	sender_comp_id varchar(32) NULL,
+	target_comp_id varchar(32) NULL,
+	account_name varchar(32) NULL,
+	cl_ord_id varchar(128) NULL,
+	parent_cl_ord_id varchar(128) NULL,
+	secondary_ord_id varchar(32) NULL,
+	exch_exec_id varchar(128) NULL,
+	sec_exch_exec_id varchar(128) NULL,
+	exch_ord_id varchar(128) NULL,
+	session_id varchar(32) NULL,
+	orig_cl_ord_id varchar(128) NULL,
+	security_type varchar(10) NULL,
+	leg_cfi_code varchar(10) NULL,
+	fix_msg_json jsonb NULL,
+	load_batch_id int8 NULL,
+	exec_type varchar(8) NULL,
+	leg_ref_id varchar(30) NULL,
+	alternative_cl_ord_id varchar(128) NULL
+);
+
+alter TABLE partitions.hft_fix_message_event_20261122_eod rename to hft_fix_message_event_20261120_eod
+
+
